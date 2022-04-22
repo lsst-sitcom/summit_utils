@@ -1,0 +1,8 @@
+# -*- python -*-
+import os
+
+from lsst.sconsUtils import env, scripts
+scripts.BasicSConscript.tests(pyList=[])
+
+if "DAF_BUTLER_REPOSITORY_INDEX" in os.environ:
+    env["ENV"]["DAF_BUTLER_REPOSITORY_INDEX"] = os.environ["DAF_BUTLER_REPOSITORY_INDEX"]
