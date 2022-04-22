@@ -26,9 +26,9 @@ from lsst.ip.isr import IsrTask
 import lsst.daf.butler as dafButler
 from lsst.daf.butler.registry import ConflictingDefinitionError
 
-from lsst.rapid.analysis.quickLook import QuickLookIsrTask
-from lsst.rapid.analysis.butlerUtils import (LATISS_DEFAULT_COLLECTIONS, LATISS_SUPPLEMENTAL_COLLECTIONS,
-                                             _repoDirToLocation)
+from lsst.summit.utils.quickLook import QuickLookIsrTask
+from lsst.summit.utils.butlerUtils import (LATISS_DEFAULT_COLLECTIONS, LATISS_SUPPLEMENTAL_COLLECTIONS,
+                                           _repoDirToLocation)
 
 # TODO: add attempt for fringe once registry & templates are fixed
 

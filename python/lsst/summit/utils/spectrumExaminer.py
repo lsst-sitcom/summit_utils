@@ -34,7 +34,7 @@ from lsst.atmospec.processStar import ProcessStarTask
 from lsst.pipe.tasks.quickFrameMeasurement import QuickFrameMeasurementTask, QuickFrameMeasurementTaskConfig
 
 from lsst.obs.lsst.translators.lsst import FILTER_DELIMITER
-from lsst.rapid.analysis.utils import getImageStats
+from lsst.summit.utils.utils import getImageStats
 from astro_metadata_translator import ObservationInfo
 
 

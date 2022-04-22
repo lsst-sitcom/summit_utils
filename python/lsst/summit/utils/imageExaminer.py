@@ -36,7 +36,7 @@ import matplotlib.patches as patches
 import lsst.geom as geom
 from scipy.optimize import curve_fit
 from lsst.pipe.tasks.quickFrameMeasurement import QuickFrameMeasurementTask, QuickFrameMeasurementTaskConfig
-from lsst.rapid.analysis.utils import getImageStats, argMax2d, countPixels, quickSmooth
+from lsst.summit.utils.utils import getImageStats, argMax2d, countPixels, quickSmooth
 
 
 SIGMATOFWHM = 2.0*np.sqrt(2.0*np.log(2.0))
