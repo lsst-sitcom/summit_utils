@@ -1,0 +1,6 @@
+description: rapid_analysis QuickLookTask definition.
+tasks:
+  quickLookTask:
+    class: lsst.rapid.analysis.quickLook.QuickLookIsrTask
+    config:
+      doRepairCosmics: true
