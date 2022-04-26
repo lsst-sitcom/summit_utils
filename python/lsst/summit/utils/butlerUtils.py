@@ -79,7 +79,15 @@ def makeDefaultLatissButler(*, extraCollections=None, writeable=False):
     collections = LATISS_DEFAULT_COLLECTIONS
     if extraCollections:
         collections.extend(extraCollections)
-    return dafButler.Butler('LATISS', collections=collections, writeable=writeable, instrument='LATISS')
+    try:
+        butler = dafButler.Butler('LATISS', collections=collections, writeable=writeable, instrument='LATISS')
+    except(FileNotFoundError, RuntimeError):
+        # Depending on the value of DAF_BUTLER_REPOSITORY_INDEX and whether
+        # it is present and blank, or just not set, both these exception
+        # types can be raised, see tests/test_butlerUtils.py:ButlerInitTestCase
+        # for details and tests which confirm these have not changed
+        raise FileNotFoundError  # unify exception type
+    return butler
 
 
 # TODO: DM-32940 can remove this whole function once this ticket merges.

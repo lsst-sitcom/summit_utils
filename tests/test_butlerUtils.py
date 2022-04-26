@@ -19,6 +19,7 @@
 # You should have received a copy of the GNU General Public License
 # along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
+import os
 import unittest
 from typing import Iterable
 import datetime
@@ -348,6 +349,53 @@ class ButlerUtilsTestCase(lsst.utils.tests.TestCase):
         dataId = {'missing': 123}
         self.assertTrue(_get_expid_key(dataId) is None)
         return
+
+
+class ButlerInitTestCase(lsst.utils.tests.TestCase):
+    """Separately test whether we can make a butler with the env var set
+    and that the expected error type is raised and passed through when it is
+    not, as this is relied upon to correctly skip tests when butler init is
+    not possible.
+    """
+
+    def test_dafButlerRaiseTypes(self):
+        # If DAF_BUTLER_REPOSITORY_INDEX is not set *at all* then
+        # using an instrument label raises a FileNotFoundError
+        with unittest.mock.patch.dict('os.environ'):
+            del os.environ['DAF_BUTLER_REPOSITORY_INDEX']
+            with self.assertRaises(FileNotFoundError):
+                dafButler.Butler('LATISS')
+
+        # If DAF_BUTLER_REPOSITORY_INDEX is present but is just an empty
+        # string then using a label raises a RuntimeError
+        with unittest.mock.patch.dict(os.environ, {"DAF_BUTLER_REPOSITORY_INDEX": ''}):
+            with self.assertRaises(RuntimeError):
+                dafButler.Butler('LATISS')
+
+        # If DAF_BUTLER_REPOSITORY_INDEX _is_ set, we can't rely on any given
+        # camera existing, but we can check that we get the expected error
+        # when trying to init an instrument which definitely won't be defined.
+        if os.getenv('DAF_BUTLER_REPOSITORY_INDEX'):
+            with self.assertRaises(FileNotFoundError):
+                dafButler.Butler('NotAValidCameraName')
+
+    def test_makeDefaultLatissButlerRaiseTypes(self):
+        """makeDefaultLatissButler unifies the mixed exception types from
+        butler inits, so test all available possibilities here.
+        """
+        with unittest.mock.patch.dict('os.environ'):
+            del os.environ['DAF_BUTLER_REPOSITORY_INDEX']
+            with self.assertRaises(FileNotFoundError):
+                makeDefaultLatissButler()
+
+        with unittest.mock.patch.dict(os.environ, {"DAF_BUTLER_REPOSITORY_INDEX": ''}):
+            with self.assertRaises(FileNotFoundError):
+                makeDefaultLatissButler()
+
+        fakeFile = '/path/to/a/file/which/does/not_exist.yaml'
+        with unittest.mock.patch.dict(os.environ, {"DAF_BUTLER_REPOSITORY_INDEX": fakeFile}):
+            with self.assertRaises(FileNotFoundError):
+                makeDefaultLatissButler()
 
 
 class TestMemory(lsst.utils.tests.MemoryTestCase):
