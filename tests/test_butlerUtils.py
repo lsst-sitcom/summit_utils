@@ -23,7 +23,6 @@ import unittest
 from typing import Iterable
 import datetime
 
-import os
 import lsst.utils.tests
 from lsst.summit.utils.butlerUtils import (makeDefaultLatissButler,
                                            sanitize_day_obs,
@@ -52,9 +51,8 @@ from lsst.summit.utils.butlerUtils import (makeDefaultLatissButler,
                                            _assureDict,
                                            LATISS_DEFAULT_COLLECTIONS,
                                            RECENT_DAY,
-                                           LATISS_REPO_LOCATION_MAP,
-                                           LATISS_SUPPLEMENTAL_COLLECTIONS)
-from lsst.summit.utils.butlerUtils import removeDataProduct, _repoDirToLocation  # noqa: F401
+                                           )
+from lsst.summit.utils.butlerUtils import removeDataProduct  # noqa: F401
 import lsst.daf.butler as dafButler
 
 
@@ -66,22 +64,8 @@ class ButlerUtilsTestCase(lsst.utils.tests.TestCase):
         # well catch the butler once it's made so it can be reused if needed,
         # given how hard it is to made it robustly
 
-        # TODO: if/when RFC-811 passes, update this to use the env var
-        possiblePaths = LATISS_REPO_LOCATION_MAP.values()
-        paths = [path for path in possiblePaths if os.path.exists(path)]
-        # can only be in one place, will need changing if we ever have repo
-        # paths that are the same in the repo map
-        assert len(paths) == 1
-        butlerPath = paths[0]
-        LATISS_REPO_LOCATION_MAP_INVERSE = {v: k for (k, v) in LATISS_REPO_LOCATION_MAP.items()}
-        location = LATISS_REPO_LOCATION_MAP_INVERSE[butlerPath]
-
-        with self.assertRaises(RuntimeError):
-            makeDefaultLatissButler('')
-            makeDefaultLatissButler('ThisIsNotAvalidLocation')
-
         # butler stuff
-        butler = makeDefaultLatissButler(location)
+        butler = makeDefaultLatissButler()
         self.assertIsInstance(butler, dafButler.Butler)
         self.butler = butler
 
@@ -118,12 +102,6 @@ class ButlerUtilsTestCase(lsst.utils.tests.TestCase):
         # at present there isn't a good alternative
         viewType = dafButler.core.dimensions._coordinate._DataCoordinateFullView
         self.assertIsInstance(self.dataCoordFullView, viewType)
-
-    def test_LATISS_REPO_LOCATION_MAP(self):
-        self.assertTrue(LATISS_REPO_LOCATION_MAP is not None)
-        self.assertTrue(LATISS_REPO_LOCATION_MAP != [])
-        self.assertTrue(len(LATISS_REPO_LOCATION_MAP) >= 1)
-        self.assertTrue(len(LATISS_REPO_LOCATION_MAP) >= len(LATISS_SUPPLEMENTAL_COLLECTIONS))
 
     def test_LATISS_DEFAULT_COLLECTIONS(self):
         self.assertTrue(LATISS_DEFAULT_COLLECTIONS is not None)
@@ -334,13 +312,6 @@ class ButlerUtilsTestCase(lsst.utils.tests.TestCase):
         self.assertTrue(_dayobs_present(testId))
         self.assertTrue(_seqnum_present(testId))
         self.assertTrue(_expid_present(testId))
-        return
-
-    def test__repoDirToLocation(self):
-        # TODO: DM-34238 Remove this test and all mentions of repoDirToLocation
-        # Actually pretty sure this whole method is going away
-        # it's pretty gross, and only used by bestEffortIsr because I didn't
-        # want to change its API in the middle of the last run.
         return
 
     def test__assureDict(self):

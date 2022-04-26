@@ -43,19 +43,9 @@ __all__ = ["makeDefaultLatissButler",
            "getDayObsSeqNumFromExposureId",
            "removeDataProduct",
            "getLatissOnSkyDataIds",
-           "_repoDirToLocation"]
+           ]
 
-# TODO: DM-33864 Unify these now that DM-32742 is done.
 LATISS_DEFAULT_COLLECTIONS = ['LATISS/raw/all', 'LATISS/calib', "LATISS/runs/quickLook"]
-LATISS_SUPPLEMENTAL_COLLECTIONS = {'NCSA': ['LATISS/calib/DM-32209'],
-                                   'summit': ['u/czw/DM-28920/calib.20210720']}
-
-LATISS_REPO_LOCATION_MAP = {'NCSA': '/repo/main',
-                            'NTS': '/readonly/repo/main',
-                            'summit': '/repo/LATISS'}
-
-_LOCATIONS = list(LATISS_REPO_LOCATION_MAP.keys())
-_REPO_PATHS = list(LATISS_REPO_LOCATION_MAP.values())
 
 # RECENT_DAY must be in the past, to speed up queries by restricting
 # them significantly, but data must definitely been taken since. Should
@@ -70,14 +60,11 @@ def _update_RECENT_DAY(day):
     RECENT_DAY = max(day-1, RECENT_DAY)
 
 
-def makeDefaultLatissButler(location, *, extraCollections=None, writeable=False):
+def makeDefaultLatissButler(*, extraCollections=None, writeable=False):
     """Create a butler for LATISS using the default collections.
 
     Parameters
     ----------
-    location : `str`
-        The location for which to create the default butler. Valid values are
-        'NCSA', 'NTS' and 'summit'.
     extraCollections : `list` of `str`
         Extra input collections to supply to the butler init.
     writable : `bool`, optional
@@ -88,26 +75,11 @@ def makeDefaultLatissButler(location, *, extraCollections=None, writeable=False)
     butler : `lsst.daf.butler.Butler`
         The butler.
     """
-    # TODO: DM-33849 remove this once we can use the butler API.
     # TODO: Add logging to which collections are going in
-    if location not in _LOCATIONS:
-        raise RuntimeError(f'Default butler location only supported for {_LOCATIONS}, got {location}')
-    repodir = LATISS_REPO_LOCATION_MAP[location]
-    LSC = LATISS_SUPPLEMENTAL_COLLECTIONS  # grrr, line lengths
-    collections = (LSC[location] if location in LSC.keys() else []) + LATISS_DEFAULT_COLLECTIONS
+    collections = LATISS_DEFAULT_COLLECTIONS
     if extraCollections:
         collections.extend(extraCollections)
-    return dafButler.Butler(repodir, collections=collections, writeable=writeable, instrument='LATISS')
-
-
-def _repoDirToLocation(repoPath):
-    assert(repoPath in _REPO_PATHS)
-    # can only be in one place, will need changing if we ever have repo
-    # paths that are the same in the repo map
-    repoLocationInverse = {v: k for (k, v) in LATISS_REPO_LOCATION_MAP.items()}
-    assert len(LATISS_REPO_LOCATION_MAP) == len(repoLocationInverse)  # make sure we didn't drop dupes
-    location = repoLocationInverse[repoPath]
-    return location
+    return dafButler.Butler('LATISS', collections=collections, writeable=writeable, instrument='LATISS')
 
 
 # TODO: DM-32940 can remove this whole function once this ticket merges.

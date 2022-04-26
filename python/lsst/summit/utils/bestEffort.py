@@ -27,8 +27,7 @@ import lsst.daf.butler as dafButler
 from lsst.daf.butler.registry import ConflictingDefinitionError
 
 from lsst.summit.utils.quickLook import QuickLookIsrTask
-from lsst.summit.utils.butlerUtils import (LATISS_DEFAULT_COLLECTIONS, LATISS_SUPPLEMENTAL_COLLECTIONS,
-                                           _repoDirToLocation)
+from lsst.summit.utils.butlerUtils import LATISS_DEFAULT_COLLECTIONS
 
 # TODO: add attempt for fringe once registry & templates are fixed
 
@@ -69,18 +68,14 @@ class BestEffortIsr():
     """
     _datasetName = 'quickLookExp'
 
-    def __init__(self, repodir, *,
+    def __init__(self, *,
                  extraCollections=[], defaultExtraIsrOptions={}, doRepairCosmics=True, doWrite=True):
-        if repodir not in ALLOWED_REPOS:
-            raise RuntimeError('Currently only NCSA and summit repos are supported')
         self.log = logging.getLogger(__name__)
 
-        location = _repoDirToLocation(repodir)
-        collections = (LATISS_SUPPLEMENTAL_COLLECTIONS[location] if location in
-                       LATISS_SUPPLEMENTAL_COLLECTIONS.keys() else []) + LATISS_DEFAULT_COLLECTIONS
+        collections = LATISS_DEFAULT_COLLECTIONS
         self.collections = extraCollections + collections
         self.log.info(f'Instantiating butler with collections={self.collections}')
-        self.butler = dafButler.Butler(repodir, collections=self.collections,
+        self.butler = dafButler.Butler('LATISS', collections=self.collections,
                                        instrument='LATISS',
                                        run=CURRENT_RUN if doWrite else None)
 
