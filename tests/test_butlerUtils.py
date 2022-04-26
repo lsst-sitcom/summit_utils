@@ -66,13 +66,15 @@ class ButlerUtilsTestCase(lsst.utils.tests.TestCase):
         # given how hard it is to made it robustly
 
         # butler stuff
-        butler = makeDefaultLatissButler()
-        self.assertIsInstance(butler, dafButler.Butler)
-        self.butler = butler
+        try:
+            self.butler = makeDefaultLatissButler()
+        except FileNotFoundError:
+            raise unittest.SkipTest("Skipping tests that require the LATISS butler repo.")
+        self.assertIsInstance(self.butler, dafButler.Butler)
 
         # dict-like dataIds
         self.rawDataId = getMostRecentDataId(self.butler)
-        self.fullId = fillDataId(butler, self.rawDataId)
+        self.fullId = fillDataId(self.butler, self.rawDataId)
         self.assertIn('exposure', self.fullId)
         self.assertIn('day_obs', self.fullId)
         self.assertIn('seq_num', self.fullId)
@@ -96,8 +98,9 @@ class ButlerUtilsTestCase(lsst.utils.tests.TestCase):
         if seqNumKey := _get_seqnum_key(rawDataIdNoDayObSeqNum):
             rawDataIdNoDayObSeqNum.pop(seqNumKey)
         self.rawDataIdNoDayObSeqNum = rawDataIdNoDayObSeqNum
-        self.dataCoordMinimal = butler.registry.expandDataId(self.rawDataIdNoDayObSeqNum, detector=0)
-        self.dataCoordFullView = butler.registry.expandDataId(self.rawDataIdNoDayObSeqNum, detector=0).full
+        self.dataCoordMinimal = self.butler.registry.expandDataId(self.rawDataIdNoDayObSeqNum, detector=0)
+        self.dataCoordFullView = self.butler.registry.expandDataId(self.rawDataIdNoDayObSeqNum,
+                                                                   detector=0).full
         self.assertIsInstance(self.dataCoordMinimal, dafButler.dimensions.DataCoordinate)
         # NB the type check below is currently using a non-public API, but
         # at present there isn't a good alternative
