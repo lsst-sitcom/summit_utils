@@ -1,6 +1,6 @@
-description: rapid_analysis QuickLookTask definition.
+description: summit_utils QuickLookTask definition.
 tasks:
   quickLookTask:
-    class: lsst.rapid.analysis.quickLook.QuickLookIsrTask
+    class: lsst.summit.utils.quickLook.QuickLookIsrTask
     config:
       doRepairCosmics: true
