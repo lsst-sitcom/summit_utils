@@ -27,8 +27,7 @@ import lsst.daf.butler as dafButler
 from lsst.daf.butler.registry import ConflictingDefinitionError
 
 from lsst.summit.utils.quickLook import QuickLookIsrTask
-from lsst.summit.utils.butlerUtils import (LATISS_DEFAULT_COLLECTIONS, LATISS_SUPPLEMENTAL_COLLECTIONS,
-                                           _repoDirToLocation)
+from lsst.summit.utils.butlerUtils import LATISS_DEFAULT_COLLECTIONS
 
 # TODO: add attempt for fringe once registry & templates are fixed
 
@@ -66,23 +65,33 @@ class BestEffortIsr():
         Repair cosmic ray hits?
     doWrite : `bool`, optional
         Write the outputs to the quickLook rerun/collection?
+
+    Raises
+    ------
+    FileNotFoundError:
+        Raised when a butler cannot be automatically instantiated using
+        the DAF_BUTLER_REPOSITORY_INDEX environment variable.
     """
     _datasetName = 'quickLookExp'
 
-    def __init__(self, repodir, *,
+    def __init__(self, *,
                  extraCollections=[], defaultExtraIsrOptions={}, doRepairCosmics=True, doWrite=True):
-        if repodir not in ALLOWED_REPOS:
-            raise RuntimeError('Currently only NCSA and summit repos are supported')
         self.log = logging.getLogger(__name__)
 
-        location = _repoDirToLocation(repodir)
-        collections = (LATISS_SUPPLEMENTAL_COLLECTIONS[location] if location in
-                       LATISS_SUPPLEMENTAL_COLLECTIONS.keys() else []) + LATISS_DEFAULT_COLLECTIONS
+        collections = LATISS_DEFAULT_COLLECTIONS
         self.collections = extraCollections + collections
         self.log.info(f'Instantiating butler with collections={self.collections}')
-        self.butler = dafButler.Butler(repodir, collections=self.collections,
-                                       instrument='LATISS',
-                                       run=CURRENT_RUN if doWrite else None)
+        try:
+            self.butler = dafButler.Butler('LATISS', collections=self.collections,
+                                           instrument='LATISS',
+                                           run=CURRENT_RUN if doWrite else None)
+        except(FileNotFoundError, RuntimeError):
+            # Depending on the value of DAF_BUTLER_REPOSITORY_INDEX and whether
+            # it is present and blank, or just not set, both these exception
+            # types can be raised, see
+            # tests/test_butlerUtils.py:ButlerInitTestCase
+            # for details and tests which confirm these have not changed
+            raise FileNotFoundError  # unify exception type
 
         quickLookIsrConfig = QuickLookIsrTask.ConfigClass()
         quickLookIsrConfig.doRepairCosmics = doRepairCosmics

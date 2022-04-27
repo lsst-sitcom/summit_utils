@@ -19,11 +19,11 @@
 # You should have received a copy of the GNU General Public License
 # along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
+import os
 import unittest
 from typing import Iterable
 import datetime
 
-import os
 import lsst.utils.tests
 from lsst.summit.utils.butlerUtils import (makeDefaultLatissButler,
                                            sanitize_day_obs,
@@ -52,9 +52,8 @@ from lsst.summit.utils.butlerUtils import (makeDefaultLatissButler,
                                            _assureDict,
                                            LATISS_DEFAULT_COLLECTIONS,
                                            RECENT_DAY,
-                                           LATISS_REPO_LOCATION_MAP,
-                                           LATISS_SUPPLEMENTAL_COLLECTIONS)
-from lsst.summit.utils.butlerUtils import removeDataProduct, _repoDirToLocation  # noqa: F401
+                                           )
+from lsst.summit.utils.butlerUtils import removeDataProduct  # noqa: F401
 import lsst.daf.butler as dafButler
 
 
@@ -66,28 +65,16 @@ class ButlerUtilsTestCase(lsst.utils.tests.TestCase):
         # well catch the butler once it's made so it can be reused if needed,
         # given how hard it is to made it robustly
 
-        # TODO: if/when RFC-811 passes, update this to use the env var
-        possiblePaths = LATISS_REPO_LOCATION_MAP.values()
-        paths = [path for path in possiblePaths if os.path.exists(path)]
-        # can only be in one place, will need changing if we ever have repo
-        # paths that are the same in the repo map
-        assert len(paths) == 1
-        butlerPath = paths[0]
-        LATISS_REPO_LOCATION_MAP_INVERSE = {v: k for (k, v) in LATISS_REPO_LOCATION_MAP.items()}
-        location = LATISS_REPO_LOCATION_MAP_INVERSE[butlerPath]
-
-        with self.assertRaises(RuntimeError):
-            makeDefaultLatissButler('')
-            makeDefaultLatissButler('ThisIsNotAvalidLocation')
-
         # butler stuff
-        butler = makeDefaultLatissButler(location)
-        self.assertIsInstance(butler, dafButler.Butler)
-        self.butler = butler
+        try:
+            self.butler = makeDefaultLatissButler()
+        except FileNotFoundError:
+            raise unittest.SkipTest("Skipping tests that require the LATISS butler repo.")
+        self.assertIsInstance(self.butler, dafButler.Butler)
 
         # dict-like dataIds
         self.rawDataId = getMostRecentDataId(self.butler)
-        self.fullId = fillDataId(butler, self.rawDataId)
+        self.fullId = fillDataId(self.butler, self.rawDataId)
         self.assertIn('exposure', self.fullId)
         self.assertIn('day_obs', self.fullId)
         self.assertIn('seq_num', self.fullId)
@@ -111,19 +98,14 @@ class ButlerUtilsTestCase(lsst.utils.tests.TestCase):
         if seqNumKey := _get_seqnum_key(rawDataIdNoDayObSeqNum):
             rawDataIdNoDayObSeqNum.pop(seqNumKey)
         self.rawDataIdNoDayObSeqNum = rawDataIdNoDayObSeqNum
-        self.dataCoordMinimal = butler.registry.expandDataId(self.rawDataIdNoDayObSeqNum, detector=0)
-        self.dataCoordFullView = butler.registry.expandDataId(self.rawDataIdNoDayObSeqNum, detector=0).full
+        self.dataCoordMinimal = self.butler.registry.expandDataId(self.rawDataIdNoDayObSeqNum, detector=0)
+        self.dataCoordFullView = self.butler.registry.expandDataId(self.rawDataIdNoDayObSeqNum,
+                                                                   detector=0).full
         self.assertIsInstance(self.dataCoordMinimal, dafButler.dimensions.DataCoordinate)
         # NB the type check below is currently using a non-public API, but
         # at present there isn't a good alternative
         viewType = dafButler.core.dimensions._coordinate._DataCoordinateFullView
         self.assertIsInstance(self.dataCoordFullView, viewType)
-
-    def test_LATISS_REPO_LOCATION_MAP(self):
-        self.assertTrue(LATISS_REPO_LOCATION_MAP is not None)
-        self.assertTrue(LATISS_REPO_LOCATION_MAP != [])
-        self.assertTrue(len(LATISS_REPO_LOCATION_MAP) >= 1)
-        self.assertTrue(len(LATISS_REPO_LOCATION_MAP) >= len(LATISS_SUPPLEMENTAL_COLLECTIONS))
 
     def test_LATISS_DEFAULT_COLLECTIONS(self):
         self.assertTrue(LATISS_DEFAULT_COLLECTIONS is not None)
@@ -336,13 +318,6 @@ class ButlerUtilsTestCase(lsst.utils.tests.TestCase):
         self.assertTrue(_expid_present(testId))
         return
 
-    def test__repoDirToLocation(self):
-        # TODO: DM-34238 Remove this test and all mentions of repoDirToLocation
-        # Actually pretty sure this whole method is going away
-        # it's pretty gross, and only used by bestEffortIsr because I didn't
-        # want to change its API in the middle of the last run.
-        return
-
     def test__assureDict(self):
         for item in [self.rawDataId, self.fullId, self.expIdOnly,
                      self.expRecordNoDetector, self.dataCoordFullView,
@@ -377,6 +352,53 @@ class ButlerUtilsTestCase(lsst.utils.tests.TestCase):
         dataId = {'missing': 123}
         self.assertTrue(_get_expid_key(dataId) is None)
         return
+
+
+class ButlerInitTestCase(lsst.utils.tests.TestCase):
+    """Separately test whether we can make a butler with the env var set
+    and that the expected error type is raised and passed through when it is
+    not, as this is relied upon to correctly skip tests when butler init is
+    not possible.
+    """
+
+    def test_dafButlerRaiseTypes(self):
+        # If DAF_BUTLER_REPOSITORY_INDEX is not set *at all* then
+        # using an instrument label raises a FileNotFoundError
+        with unittest.mock.patch.dict('os.environ'):
+            del os.environ['DAF_BUTLER_REPOSITORY_INDEX']
+            with self.assertRaises(FileNotFoundError):
+                dafButler.Butler('LATISS')
+
+        # If DAF_BUTLER_REPOSITORY_INDEX is present but is just an empty
+        # string then using a label raises a RuntimeError
+        with unittest.mock.patch.dict(os.environ, {"DAF_BUTLER_REPOSITORY_INDEX": ''}):
+            with self.assertRaises(RuntimeError):
+                dafButler.Butler('LATISS')
+
+        # If DAF_BUTLER_REPOSITORY_INDEX _is_ set, we can't rely on any given
+        # camera existing, but we can check that we get the expected error
+        # when trying to init an instrument which definitely won't be defined.
+        if os.getenv('DAF_BUTLER_REPOSITORY_INDEX'):
+            with self.assertRaises(FileNotFoundError):
+                dafButler.Butler('NotAValidCameraName')
+
+    def test_makeDefaultLatissButlerRaiseTypes(self):
+        """makeDefaultLatissButler unifies the mixed exception types from
+        butler inits, so test all available possibilities here.
+        """
+        with unittest.mock.patch.dict('os.environ'):
+            del os.environ['DAF_BUTLER_REPOSITORY_INDEX']
+            with self.assertRaises(FileNotFoundError):
+                makeDefaultLatissButler()
+
+        with unittest.mock.patch.dict(os.environ, {"DAF_BUTLER_REPOSITORY_INDEX": ''}):
+            with self.assertRaises(FileNotFoundError):
+                makeDefaultLatissButler()
+
+        fakeFile = '/path/to/a/file/which/does/not_exist.yaml'
+        with unittest.mock.patch.dict(os.environ, {"DAF_BUTLER_REPOSITORY_INDEX": fakeFile}):
+            with self.assertRaises(FileNotFoundError):
+                makeDefaultLatissButler()
 
 
 class TestMemory(lsst.utils.tests.MemoryTestCase):
