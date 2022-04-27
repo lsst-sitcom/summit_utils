@@ -24,7 +24,6 @@ import unittest
 import lsst.utils.tests
 
 from lsst.summit.utils.bestEffort import BestEffortIsr
-from lsst.summit.utils.butlerUtils import makeDefaultLatissButler, getMostRecentDataId
 import lsst.afw.image as afwImage
 
 
@@ -33,12 +32,15 @@ class BestEffortIsrTestCase(lsst.utils.tests.TestCase):
     @classmethod
     def setUpClass(cls):
         try:
-            cls.butler = makeDefaultLatissButler()
+            cls.bestEffortIsr = BestEffortIsr()
         except FileNotFoundError:
             raise unittest.SkipTest("Skipping tests that require the LATISS butler repo.")
 
-        cls.dataId = getMostRecentDataId(cls.butler)
-        cls.bestEffortIsr = BestEffortIsr()
+        # chosen as this is available in the following locations - collections:
+        # NCSA - LATISS/raw/all
+        # TTS - LATISS-test-data-tts
+        # summit - LATISS_test_data
+        cls.dataId = {'day_obs': 20210121, 'seq_num': 743, 'detector': 0}
 
     def test_getExposure(self):
         exp = self.bestEffortIsr.getExposure(self.dataId)
