@@ -25,6 +25,7 @@ import lsst.afw.detection as afwDetect
 import lsst.afw.math as afwMath
 import lsst.pipe.base as pipeBase
 import lsst.utils.packages as packageUtils
+from lsst.daf.butler.cli.cliLog import CliLog
 
 from lsst.obs.lsst.translators.lsst import FILTER_DELIMITER
 from lsst.obs.lsst.translators.latiss import AUXTEL_LOCATION
@@ -34,7 +35,7 @@ from astro_metadata_translator import ObservationInfo
 __all__ = ["SIGMATOFWHM", "FWHMTOSIGMA", "EFD_CLIENT_MISSING_MSG", "GOOGLE_CLOUD_MISSING_MSG",
            "AUXTEL_LOCATION", "countPixels", "quickSmooth", "argMax2d", "getImageStats", "detectObjectsInExp",
            "humanNameForCelestialObject", "getFocusFromHeader",
-           "dayObsIntToString", "dayObsSeqNumToVisitId"]
+           "dayObsIntToString", "dayObsSeqNumToVisitId", "setupLogging"]
 
 
 SIGMATOFWHM = 2.0*np.sqrt(2.0*np.log(2.0))
@@ -390,3 +391,15 @@ def checkStackSetup():
             print(f"{package:<{maxLen}s} at {path}")
     else:
         print("\nNo locally setup packages (using a vanilla stack)")
+
+
+def setupLogging(longlog=False):
+    """Setup logging in the same way as one would get from pipetask run.
+
+    Code that isn't run through the butler CLI defaults to WARNING level
+    messages and no logger names. This sets the behaviour to follow whatever
+    the pipeline default is, currently
+        <logger_name> <level>: <message> e.g.
+        lsst.isr INFO: Masking defects.
+    """
+    CliLog.initLog(longlog=longlog)
