@@ -65,6 +65,12 @@ class BestEffortIsr():
         Repair cosmic ray hits?
     doWrite : `bool`, optional
         Write the outputs to the quickLook rerun/collection?
+
+    Raises
+    ------
+    FileNotFoundError:
+        Raised when a butler cannot be automatically instantiated using
+        the DAF_BUTLER_REPOSITORY_INDEX environment variable.
     """
     _datasetName = 'quickLookExp'
 
@@ -75,9 +81,17 @@ class BestEffortIsr():
         collections = LATISS_DEFAULT_COLLECTIONS
         self.collections = extraCollections + collections
         self.log.info(f'Instantiating butler with collections={self.collections}')
-        self.butler = dafButler.Butler('LATISS', collections=self.collections,
-                                       instrument='LATISS',
-                                       run=CURRENT_RUN if doWrite else None)
+        try:
+            self.butler = dafButler.Butler('LATISS', collections=self.collections,
+                                           instrument='LATISS',
+                                           run=CURRENT_RUN if doWrite else None)
+        except(FileNotFoundError, RuntimeError):
+            # Depending on the value of DAF_BUTLER_REPOSITORY_INDEX and whether
+            # it is present and blank, or just not set, both these exception
+            # types can be raised, see
+            # tests/test_butlerUtils.py:ButlerInitTestCase
+            # for details and tests which confirm these have not changed
+            raise FileNotFoundError  # unify exception type
 
         quickLookIsrConfig = QuickLookIsrTask.ConfigClass()
         quickLookIsrConfig.doRepairCosmics = doRepairCosmics
