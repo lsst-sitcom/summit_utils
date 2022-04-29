@@ -56,6 +56,7 @@ from lsst.summit.utils.butlerUtils import (makeDefaultLatissButler,
                                            )
 from lsst.summit.utils.butlerUtils import removeDataProduct  # noqa: F401
 import lsst.daf.butler as dafButler
+from lsst.resources import ResourcePath
 
 
 class ButlerUtilsTestCase(lsst.utils.tests.TestCase):
@@ -412,6 +413,13 @@ class ButlerInitTestCase(lsst.utils.tests.TestCase):
         with unittest.mock.patch.dict(os.environ, {"DAF_BUTLER_REPOSITORY_INDEX": fakeFile}):
             with self.assertRaises(FileNotFoundError):
                 makeDefaultLatissButler()
+
+    def test_DAF_BUTLER_REPOSITORY_INDEX_value(self):
+        # If DAF_BUTLER_REPOSITORY_INDEX is truthy then we expect it to point
+        # to an actual file
+        repoFile = os.getenv('DAF_BUTLER_REPOSITORY_INDEX')
+        if repoFile:
+            self.assertTrue(ResourcePath(repoFile).exists())
 
 
 class TestMemory(lsst.utils.tests.MemoryTestCase):
