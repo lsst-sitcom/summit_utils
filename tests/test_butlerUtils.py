@@ -400,6 +400,13 @@ class ButlerInitTestCase(lsst.utils.tests.TestCase):
             with self.assertRaises(FileNotFoundError):
                 makeDefaultLatissButler()
 
+    def test_DAF_BUTLER_REPOSITORY_INDEX_value(self):
+        # If DAF_BUTLER_REPOSITORY_INDEX is truthy then we expect it to point
+        # to an actual file
+        repoFile = os.getenv('DAF_BUTLER_REPOSITORY_INDEX')
+        if repoFile:
+            self.assertTrue(os.path.isfile(repoFile))
+
 
 class TestMemory(lsst.utils.tests.MemoryTestCase):
     pass
