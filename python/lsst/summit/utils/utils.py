@@ -27,7 +27,6 @@ import lsst.pipe.base as pipeBase
 import lsst.utils.packages as packageUtils
 from lsst.daf.butler.cli.cliLog import CliLog
 import datetime
-from datetime import timedelta
 from dateutil.tz import gettz
 
 from lsst.obs.lsst.translators.lsst import FILTER_DELIMITER
@@ -35,10 +34,25 @@ from lsst.obs.lsst.translators.latiss import AUXTEL_LOCATION
 
 from astro_metadata_translator import ObservationInfo
 
-__all__ = ["SIGMATOFWHM", "FWHMTOSIGMA", "EFD_CLIENT_MISSING_MSG", "GOOGLE_CLOUD_MISSING_MSG",
-           "AUXTEL_LOCATION", "countPixels", "quickSmooth", "argMax2d", "getImageStats", "detectObjectsInExp",
-           "humanNameForCelestialObject", "getFocusFromHeader",
-           "dayObsIntToString", "dayObsSeqNumToVisitId", "setupLogging"]
+__all__ = ["SIGMATOFWHM",
+           "FWHMTOSIGMA",
+           "EFD_CLIENT_MISSING_MSG",
+           "GOOGLE_CLOUD_MISSING_MSG",
+           "AUXTEL_LOCATION",
+           "countPixels",
+           "quickSmooth",
+           "argMax2d",
+           "getImageStats",
+           "detectObjectsInExp",
+           "humanNameForCelestialObject",
+           "getFocusFromHeader",
+           "dayObsIntToString",
+           "dayObsSeqNumToVisitId",
+           "setupLogging",
+           "getCurrentDayObs_datetime",
+           "getCurrentDayObs_int",
+           "getCurrentDayObs_humanStr",
+           ]
 
 
 SIGMATOFWHM = 2.0*np.sqrt(2.0*np.log(2.0))
@@ -415,7 +429,7 @@ def getCurrentDayObs_datetime():
     """
     utc = gettz("UTC")
     nowUtc = datetime.datetime.now().astimezone(utc)
-    offset = timedelta(hours=-12)
+    offset = datetime.timedelta(hours=-12)
     dayObs = (nowUtc + offset).date()
     return dayObs
 
