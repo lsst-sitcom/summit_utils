@@ -26,6 +26,9 @@ import lsst.afw.math as afwMath
 import lsst.pipe.base as pipeBase
 import lsst.utils.packages as packageUtils
 from lsst.daf.butler.cli.cliLog import CliLog
+import datetime
+from datetime import timedelta
+from dateutil.tz import gettz
 
 from lsst.obs.lsst.translators.lsst import FILTER_DELIMITER
 from lsst.obs.lsst.translators.latiss import AUXTEL_LOCATION
@@ -403,3 +406,27 @@ def setupLogging(longlog=False):
         lsst.isr INFO: Masking defects.
     """
     CliLog.initLog(longlog=longlog)
+
+
+def getCurrentDayObs_datetime():
+    """Get the current day_obs - the observatory rolls the date over at UTC-12
+
+    Returned as datetime.date(2022, 4, 28)
+    """
+    utc = gettz("UTC")
+    nowUtc = datetime.datetime.now().astimezone(utc)
+    offset = timedelta(hours=-12)
+    dayObs = (nowUtc + offset).date()
+    return dayObs
+
+
+def getCurrentDayObs_int():
+    """Return the current dayObs as an int in the form 20220428
+    """
+    return int(getCurrentDayObs_datetime().strftime("%Y%m%d"))
+
+
+def getCurrentDayObs_humanStr():
+    """Return the current dayObs as a string in the form '2022-04-28'
+    """
+    return dayObsIntToString(getCurrentDayObs_int())
