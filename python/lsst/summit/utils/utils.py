@@ -26,16 +26,33 @@ import lsst.afw.math as afwMath
 import lsst.pipe.base as pipeBase
 import lsst.utils.packages as packageUtils
 from lsst.daf.butler.cli.cliLog import CliLog
+import datetime
+from dateutil.tz import gettz
 
 from lsst.obs.lsst.translators.lsst import FILTER_DELIMITER
 from lsst.obs.lsst.translators.latiss import AUXTEL_LOCATION
 
 from astro_metadata_translator import ObservationInfo
 
-__all__ = ["SIGMATOFWHM", "FWHMTOSIGMA", "EFD_CLIENT_MISSING_MSG", "GOOGLE_CLOUD_MISSING_MSG",
-           "AUXTEL_LOCATION", "countPixels", "quickSmooth", "argMax2d", "getImageStats", "detectObjectsInExp",
-           "humanNameForCelestialObject", "getFocusFromHeader",
-           "dayObsIntToString", "dayObsSeqNumToVisitId", "setupLogging"]
+__all__ = ["SIGMATOFWHM",
+           "FWHMTOSIGMA",
+           "EFD_CLIENT_MISSING_MSG",
+           "GOOGLE_CLOUD_MISSING_MSG",
+           "AUXTEL_LOCATION",
+           "countPixels",
+           "quickSmooth",
+           "argMax2d",
+           "getImageStats",
+           "detectObjectsInExp",
+           "humanNameForCelestialObject",
+           "getFocusFromHeader",
+           "dayObsIntToString",
+           "dayObsSeqNumToVisitId",
+           "setupLogging",
+           "getCurrentDayObs_datetime",
+           "getCurrentDayObs_int",
+           "getCurrentDayObs_humanStr",
+           ]
 
 
 SIGMATOFWHM = 2.0*np.sqrt(2.0*np.log(2.0))
@@ -403,3 +420,27 @@ def setupLogging(longlog=False):
         lsst.isr INFO: Masking defects.
     """
     CliLog.initLog(longlog=longlog)
+
+
+def getCurrentDayObs_datetime():
+    """Get the current day_obs - the observatory rolls the date over at UTC-12
+
+    Returned as datetime.date(2022, 4, 28)
+    """
+    utc = gettz("UTC")
+    nowUtc = datetime.datetime.now().astimezone(utc)
+    offset = datetime.timedelta(hours=-12)
+    dayObs = (nowUtc + offset).date()
+    return dayObs
+
+
+def getCurrentDayObs_int():
+    """Return the current dayObs as an int in the form 20220428
+    """
+    return int(getCurrentDayObs_datetime().strftime("%Y%m%d"))
+
+
+def getCurrentDayObs_humanStr():
+    """Return the current dayObs as a string in the form '2022-04-28'
+    """
+    return dayObsIntToString(getCurrentDayObs_int())
