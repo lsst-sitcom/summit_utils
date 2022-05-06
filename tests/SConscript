@@ -6,3 +6,5 @@ scripts.BasicSConscript.tests(pyList=[])
 
 if "DAF_BUTLER_REPOSITORY_INDEX" in os.environ:
     env["ENV"]["DAF_BUTLER_REPOSITORY_INDEX"] = os.environ["DAF_BUTLER_REPOSITORY_INDEX"]
+if "EXTERNAL_URL" in os.environ:
+    env["ENV"]["EXTERNAL_URL"] = os.environ["EXTERNAL_URL"]
