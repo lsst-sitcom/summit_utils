@@ -22,7 +22,8 @@
 import lsst.daf.butler as dafButler
 import itertools
 import copy
-import os
+
+from lsst.summit.utils.utils import getSite
 
 
 __all__ = ["makeDefaultLatissButler",
@@ -46,7 +47,7 @@ __all__ = ["makeDefaultLatissButler",
            "getLatissOnSkyDataIds",
            ]
 
-LATISS_DEFAULT_COLLECTIONS = ['LATISS/raw/all', 'LATISS/calib', "LATISS/runs/quickLook"]
+_LATISS_DEFAULT_COLLECTIONS = ['LATISS/raw/all', 'LATISS/calib', "LATISS/runs/quickLook"]
 
 # RECENT_DAY must be in the past *and have data* (otherwise some tests are
 # no-ops), to speed up queries by restricting them significantly,
@@ -54,9 +55,28 @@ LATISS_DEFAULT_COLLECTIONS = ['LATISS/raw/all', 'LATISS/calib', "LATISS/runs/qui
 # also not be more than 2 months in the past due to 60 day lookback time on the
 # summit. All this means it should be updated by an informed human.
 RECENT_DAY = 20220503
-if os.getenv('EXTERNAL_URL') == "https://tucson-teststand.lsst.codes":
-    RECENT_DAY = 20211104  # TTS has limited data, so use this day
-    LATISS_DEFAULT_COLLECTIONS.append("LATISS-test-data-tts")
+
+
+def _configureForSite():
+    site = getSite()
+    if site == 'tucson':
+        global RECENT_DAY
+        RECENT_DAY = 20211104  # TTS has limited data, so use this day
+
+
+_configureForSite()
+
+
+def getLatissDefaultCollections():
+    collections = _LATISS_DEFAULT_COLLECTIONS
+    site = getSite()
+    if site == 'tucson':
+        collections.append("LATISS-test-data-tts")
+        return collections
+    if site == 'summit':
+        collections.append("LATISS_test_data")
+        return collections
+    return collections
 
 
 def _update_RECENT_DAY(day):
@@ -81,7 +101,7 @@ def makeDefaultLatissButler(*, extraCollections=None, writeable=False):
         The butler.
     """
     # TODO: Add logging to which collections are going in
-    collections = LATISS_DEFAULT_COLLECTIONS
+    collections = getLatissDefaultCollections()
     if extraCollections:
         collections.extend(extraCollections)
     try:

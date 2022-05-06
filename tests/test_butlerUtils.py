@@ -51,7 +51,7 @@ from lsst.summit.utils.butlerUtils import (makeDefaultLatissButler,
                                            getDayObsSeqNumFromExposureId,
                                            getLatissOnSkyDataIds,
                                            _assureDict,
-                                           LATISS_DEFAULT_COLLECTIONS,
+                                           getLatissDefaultCollections,
                                            RECENT_DAY,
                                            )
 from lsst.summit.utils.butlerUtils import removeDataProduct  # noqa: F401
@@ -108,10 +108,11 @@ class ButlerUtilsTestCase(lsst.utils.tests.TestCase):
         viewType = dafButler.core.dimensions._coordinate._DataCoordinateFullView
         self.assertIsInstance(self.dataCoordFullView, viewType)
 
-    def test_LATISS_DEFAULT_COLLECTIONS(self):
-        self.assertTrue(LATISS_DEFAULT_COLLECTIONS is not None)
-        self.assertTrue(LATISS_DEFAULT_COLLECTIONS != [])
-        self.assertTrue(len(LATISS_DEFAULT_COLLECTIONS) >= 1)
+    def test_getLatissDefaultCollections(self):
+        defaultCollections = getLatissDefaultCollections()
+        self.assertTrue(defaultCollections is not None)
+        self.assertTrue(defaultCollections != [])
+        self.assertTrue(len(defaultCollections) >= 1)
 
     def test_RECENT_DAY(self):
         todayInt = int(datetime.date.today().strftime("%Y%m%d"))
