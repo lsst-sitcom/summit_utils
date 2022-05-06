@@ -647,7 +647,7 @@ def getLatissOnSkyDataIds(butler, skipTypes=('bias', 'dark', 'flat'), checkObjec
     if startDate:
         days = [d for d in days if d >= startDate]
     if endDate:
-        days = [d for d in days if d <= startDate]
+        days = [d for d in days if d <= endDate]
     days = sorted(set(days))
 
     where = "exposure.day_obs=day_obs"
