@@ -22,6 +22,7 @@
 import lsst.daf.butler as dafButler
 import itertools
 import copy
+import os
 
 
 __all__ = ["makeDefaultLatissButler",
@@ -53,6 +54,9 @@ LATISS_DEFAULT_COLLECTIONS = ['LATISS/raw/all', 'LATISS/calib', "LATISS/runs/qui
 # also not be more than 2 months in the past due to 60 day lookback time on the
 # summit. All this means it should be updated by an informed human.
 RECENT_DAY = 20220503
+if os.getenv('EXTERNAL_URL') == "https://tucson-teststand.lsst.codes":
+    RECENT_DAY = 20211104  # TTS has limited data, so use this day
+    LATISS_DEFAULT_COLLECTIONS.append("LATISS-test-data-tts")
 
 
 def _update_RECENT_DAY(day):
