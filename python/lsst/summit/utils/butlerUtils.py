@@ -68,6 +68,14 @@ _configureForSite()
 
 
 def getLatissDefaultCollections():
+    """Get the default set of LATISS collections, updated for the site at
+    which the code is being run.
+
+    Returns
+    -------
+    collections : `list` of `str`
+        The default collections for the site.
+    """
     collections = _LATISS_DEFAULT_COLLECTIONS
     site = getSite()
     if site == 'tucson':
@@ -239,7 +247,7 @@ def sortRecordsByDayObsThenSeqNum(records):
     ------
     ValueError
         Raised if the recordSet contains duplicate records, or if it contains
-        (dayObs, seqNum) collisions
+        (dayObs, seqNum) collisions.
     """
     records = list(records)  # must call list in case we have a generator
     recordSet = set(records)

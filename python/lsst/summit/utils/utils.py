@@ -458,7 +458,7 @@ def getSite():
     Raises
     ------
     ValueError
-        Raised if location cannot be determined
+        Raised if location cannot be determined.
     """
     # All nublado instances guarantee that EXTERNAL_URL is set and uniquely
     # identifies it.
