@@ -34,7 +34,7 @@ __all__ = ["makeDefaultLatissButler",
            "getSeqNum",
            "getExpId",
            "datasetExists",
-           "sortRecordsByAttribute",
+           "sortRecordsByDayObsThenSeqNum",
            "getDaysWithData",
            "getExpIdFromDayObsSeqNum",
            "updateDataIdOrDataCord",
@@ -47,11 +47,12 @@ __all__ = ["makeDefaultLatissButler",
 
 LATISS_DEFAULT_COLLECTIONS = ['LATISS/raw/all', 'LATISS/calib', "LATISS/runs/quickLook"]
 
-# RECENT_DAY must be in the past, to speed up queries by restricting
-# them significantly, but data must definitely been taken since. Should
+# RECENT_DAY must be in the past *and have data* (otherwise some tests are
+# no-ops), to speed up queries by restricting them significantly,
+# but data must definitely been taken since. Should
 # also not be more than 2 months in the past due to 60 day lookback time on the
 # summit. All this means it should be updated by an informed human.
-RECENT_DAY = 20220201
+RECENT_DAY = 20220503
 
 
 def _update_RECENT_DAY(day):
@@ -196,37 +197,38 @@ def getSeqNumsForDayObs(butler, day_obs, extraWhere=''):
     return sorted([r.seq_num for r in records])
 
 
-def sortRecordsByAttribute(records, attribute):
-    """Sort a set of records by a given attribute.
+def sortRecordsByDayObsThenSeqNum(records):
+    """Sort a set of records by dayObs, then seqNum to get the order in which
+    they were taken.
 
     Parameters
     ----------
     records : `list` of `dict`
         The records to be sorted.
-    attribute : `str`
-        The attribute to sort by.
 
     Returns
     -------
     sortedRecords : `list` of `dict`
         The sorted records
 
-    Notes
-    -----
-    TODO: DM-34240 Does this even work?! What happens when you have several
-    dayObs, and the seqNums therefore collide? The initial set() won't catch
-    that, so how does this then behave?!
+    Raises
+    ------
+    ValueError
+        Raised if the recordSet contains duplicate records, or if it contains
+        (dayObs, seqNum) collisions
     """
-    records = list(records)  # must call list, otherwise can't check length later
+    records = list(records)  # must call list in case we have a generator
     recordSet = set(records)
-    if len(records) != len(recordSet):  # must call set *before* sorting!
-        raise RuntimeError("Record set contains duplicates, and therefore cannot be sorted unambiguously")
+    if len(records) != len(recordSet):
+        raise ValueError("Record set contains duplicate records and therefore cannot be sorted unambiguously")
 
-    sortedRecords = [r for (s, r) in sorted([(getattr(r, attribute), r) for r in recordSet])]
+    daySeqTuples = [(r.day_obs, r.seq_num) for r in records]
+    if len(daySeqTuples) != len(set(daySeqTuples)):
+        raise ValueError("Record set contains dayObs/seqNum collisions, and therefore cannot be sorted "
+                         "unambiguously")
 
-    if len(sortedRecords) != len(list(records)):
-        raise RuntimeError(f'Ambiguous sort! Key {attribute} did not uniquely sort the records')
-    return sortedRecords
+    records.sort(key=lambda r: (r.day_obs, r.seq_num))
+    return records
 
 
 def getDaysWithData(butler):
@@ -658,7 +660,7 @@ def getLatissOnSkyDataIds(butler, skipTypes=('bias', 'dark', 'flat'), checkObjec
                                                         where=where,
                                                         bind={'day_obs': day},
                                                         datasets='raw')
-        recordSets.append(sortRecordsByAttribute(records, 'seq_num'))
+        recordSets.append(sortRecordsByDayObsThenSeqNum(records))
 
     dataIds = [r.dataId for r in filter(isOnSky, itertools.chain(*recordSets))]
     if full:
