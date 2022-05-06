@@ -23,6 +23,7 @@ import os
 import unittest
 from typing import Iterable
 import datetime
+import random
 
 import lsst.utils.tests
 from lsst.summit.utils.butlerUtils import (makeDefaultLatissButler,
@@ -41,7 +42,7 @@ from lsst.summit.utils.butlerUtils import (makeDefaultLatissButler,
                                            getSeqNum,
                                            getExpId,
                                            datasetExists,
-                                           sortRecordsByAttribute,
+                                           sortRecordsByDayObsThenSeqNum,
                                            getDaysWithData,
                                            getExpIdFromDayObsSeqNum,
                                            updateDataIdOrDataCord,
@@ -50,7 +51,7 @@ from lsst.summit.utils.butlerUtils import (makeDefaultLatissButler,
                                            getDayObsSeqNumFromExposureId,
                                            getLatissOnSkyDataIds,
                                            _assureDict,
-                                           LATISS_DEFAULT_COLLECTIONS,
+                                           getLatissDefaultCollections,
                                            RECENT_DAY,
                                            )
 from lsst.summit.utils.butlerUtils import removeDataProduct  # noqa: F401
@@ -107,15 +108,20 @@ class ButlerUtilsTestCase(lsst.utils.tests.TestCase):
         viewType = dafButler.core.dimensions._coordinate._DataCoordinateFullView
         self.assertIsInstance(self.dataCoordFullView, viewType)
 
-    def test_LATISS_DEFAULT_COLLECTIONS(self):
-        self.assertTrue(LATISS_DEFAULT_COLLECTIONS is not None)
-        self.assertTrue(LATISS_DEFAULT_COLLECTIONS != [])
-        self.assertTrue(len(LATISS_DEFAULT_COLLECTIONS) >= 1)
+    def test_getLatissDefaultCollections(self):
+        defaultCollections = getLatissDefaultCollections()
+        self.assertTrue(defaultCollections is not None)
+        self.assertTrue(defaultCollections != [])
+        self.assertTrue(len(defaultCollections) >= 1)
 
     def test_RECENT_DAY(self):
         todayInt = int(datetime.date.today().strftime("%Y%m%d"))
         self.assertTrue(RECENT_DAY <= todayInt)  # in the past
         self.assertTrue(RECENT_DAY >= 20200101)  # not too far in the past
+
+        # check that the value of RECENT_DAY has data
+        daysWithData = getDaysWithData(self.butler)
+        self.assertIn(RECENT_DAY, daysWithData)
 
         # no test here, but print a warning if it hasn't been updated recently
         recentDay_datetime = datetime.datetime.strptime(str(RECENT_DAY), "%Y%m%d")
@@ -226,20 +232,25 @@ class ButlerUtilsTestCase(lsst.utils.tests.TestCase):
         self.assertTrue(datasetExists(self.butler, 'raw', self.dayObsSeqNumIdOnly))
         return
 
-    def test_sortRecordsByAttribute(self):
+    def test_sortRecordsByDayObsThenSeqNum(self):
         where = "exposure.day_obs=day_obs"
         expRecords = self.butler.registry.queryDimensionRecords("exposure", where=where,
                                                                 bind={'day_obs': RECENT_DAY})
-        sortedIds = sortRecordsByAttribute(expRecords, 'seq_num')
+        expRecords = list(expRecords)
+        self.assertGreaterEqual(len(expRecords), 1)  # just ensure we're not doing a no-op test
+        random.shuffle(expRecords)  # they are often already in order, so make sure they're not
+        sortedIds = sortRecordsByDayObsThenSeqNum(expRecords)
         for i, _id in enumerate(sortedIds[:-1]):
             self.assertTrue(_id.seq_num < sortedIds[i+1].seq_num)
 
-        # XXX deal with ambiguous sorts
-        # with self.assertRaises(RuntimeError):
-        #     expRecords = self.butler.registry.queryDimensionRecords
-        # ("exposure", where=where, bind={'day_obs': RECENT_DAY})
-        #     ids = itertools.chain(expRecords, expRecords)
-        #     sortedIds = sortRecordsByAttribute(ids, 'seq_num')
+        # Check that ambiguous sorts raise as expected
+        with self.assertRaises(ValueError):
+            expRecords = self.butler.registry.queryDimensionRecords("exposure", where=where,
+                                                                    bind={'day_obs': RECENT_DAY})
+            expRecords = list(expRecords)
+            self.assertGreaterEqual(len(expRecords), 1)  # just ensure we're not doing a no-op test
+            expRecords.append(expRecords[0])  # add a duplicate
+            sortedIds = sortRecordsByDayObsThenSeqNum(expRecords)
         return
 
     def test_getDaysWithData(self):

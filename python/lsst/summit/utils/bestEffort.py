@@ -27,7 +27,7 @@ import lsst.daf.butler as dafButler
 from lsst.daf.butler.registry import ConflictingDefinitionError
 
 from lsst.summit.utils.quickLook import QuickLookIsrTask
-from lsst.summit.utils.butlerUtils import LATISS_DEFAULT_COLLECTIONS
+from lsst.summit.utils.butlerUtils import getLatissDefaultCollections
 
 # TODO: add attempt for fringe once registry & templates are fixed
 
@@ -78,7 +78,7 @@ class BestEffortIsr():
                  extraCollections=[], defaultExtraIsrOptions={}, doRepairCosmics=True, doWrite=True):
         self.log = logging.getLogger(__name__)
 
-        collections = LATISS_DEFAULT_COLLECTIONS
+        collections = getLatissDefaultCollections()
         self.collections = extraCollections + collections
         self.log.info(f'Instantiating butler with collections={self.collections}')
         try:

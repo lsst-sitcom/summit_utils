@@ -23,6 +23,8 @@ import lsst.daf.butler as dafButler
 import itertools
 import copy
 
+from lsst.summit.utils.utils import getSite
+
 
 __all__ = ["makeDefaultLatissButler",
            "sanitize_day_obs",
@@ -34,7 +36,7 @@ __all__ = ["makeDefaultLatissButler",
            "getSeqNum",
            "getExpId",
            "datasetExists",
-           "sortRecordsByAttribute",
+           "sortRecordsByDayObsThenSeqNum",
            "getDaysWithData",
            "getExpIdFromDayObsSeqNum",
            "updateDataIdOrDataCord",
@@ -45,13 +47,44 @@ __all__ = ["makeDefaultLatissButler",
            "getLatissOnSkyDataIds",
            ]
 
-LATISS_DEFAULT_COLLECTIONS = ['LATISS/raw/all', 'LATISS/calib', "LATISS/runs/quickLook"]
+_LATISS_DEFAULT_COLLECTIONS = ['LATISS/raw/all', 'LATISS/calib', "LATISS/runs/quickLook"]
 
-# RECENT_DAY must be in the past, to speed up queries by restricting
-# them significantly, but data must definitely been taken since. Should
+# RECENT_DAY must be in the past *and have data* (otherwise some tests are
+# no-ops), to speed up queries by restricting them significantly,
+# but data must definitely been taken since. Should
 # also not be more than 2 months in the past due to 60 day lookback time on the
 # summit. All this means it should be updated by an informed human.
-RECENT_DAY = 20220201
+RECENT_DAY = 20220503
+
+
+def _configureForSite():
+    site = getSite()
+    if site == 'tucson':
+        global RECENT_DAY
+        RECENT_DAY = 20211104  # TTS has limited data, so use this day
+
+
+_configureForSite()
+
+
+def getLatissDefaultCollections():
+    """Get the default set of LATISS collections, updated for the site at
+    which the code is being run.
+
+    Returns
+    -------
+    collections : `list` of `str`
+        The default collections for the site.
+    """
+    collections = _LATISS_DEFAULT_COLLECTIONS
+    site = getSite()
+    if site == 'tucson':
+        collections.append("LATISS-test-data-tts")
+        return collections
+    if site == 'summit':
+        collections.append("LATISS_test_data")
+        return collections
+    return collections
 
 
 def _update_RECENT_DAY(day):
@@ -76,7 +109,7 @@ def makeDefaultLatissButler(*, extraCollections=None, writeable=False):
         The butler.
     """
     # TODO: Add logging to which collections are going in
-    collections = LATISS_DEFAULT_COLLECTIONS
+    collections = getLatissDefaultCollections()
     if extraCollections:
         collections.extend(extraCollections)
     try:
@@ -196,37 +229,38 @@ def getSeqNumsForDayObs(butler, day_obs, extraWhere=''):
     return sorted([r.seq_num for r in records])
 
 
-def sortRecordsByAttribute(records, attribute):
-    """Sort a set of records by a given attribute.
+def sortRecordsByDayObsThenSeqNum(records):
+    """Sort a set of records by dayObs, then seqNum to get the order in which
+    they were taken.
 
     Parameters
     ----------
     records : `list` of `dict`
         The records to be sorted.
-    attribute : `str`
-        The attribute to sort by.
 
     Returns
     -------
     sortedRecords : `list` of `dict`
         The sorted records
 
-    Notes
-    -----
-    TODO: DM-34240 Does this even work?! What happens when you have several
-    dayObs, and the seqNums therefore collide? The initial set() won't catch
-    that, so how does this then behave?!
+    Raises
+    ------
+    ValueError
+        Raised if the recordSet contains duplicate records, or if it contains
+        (dayObs, seqNum) collisions.
     """
-    records = list(records)  # must call list, otherwise can't check length later
+    records = list(records)  # must call list in case we have a generator
     recordSet = set(records)
-    if len(records) != len(recordSet):  # must call set *before* sorting!
-        raise RuntimeError("Record set contains duplicates, and therefore cannot be sorted unambiguously")
+    if len(records) != len(recordSet):
+        raise ValueError("Record set contains duplicate records and therefore cannot be sorted unambiguously")
 
-    sortedRecords = [r for (s, r) in sorted([(getattr(r, attribute), r) for r in recordSet])]
+    daySeqTuples = [(r.day_obs, r.seq_num) for r in records]
+    if len(daySeqTuples) != len(set(daySeqTuples)):
+        raise ValueError("Record set contains dayObs/seqNum collisions, and therefore cannot be sorted "
+                         "unambiguously")
 
-    if len(sortedRecords) != len(list(records)):
-        raise RuntimeError(f'Ambiguous sort! Key {attribute} did not uniquely sort the records')
-    return sortedRecords
+    records.sort(key=lambda r: (r.day_obs, r.seq_num))
+    return records
 
 
 def getDaysWithData(butler):
@@ -243,10 +277,13 @@ def getDaysWithData(butler):
         A sorted list of the day_obs values for which mountain-top data exists.
     """
     # 20200101 is a day between shipping LATISS and going on sky
-    # exposure.seq_num<50 massively reduces the number of returned records
-    # whilst being large enough to ensure that no days are missed because early
-    # seq_nums were skipped
-    where = "exposure.day_obs>20200101 and exposure.seq_num<50"
+    # We used to constrain on exposure.seq_num<50 to massively reduce the
+    # number of returned records whilst being large enough to ensure that no
+    # days are missed because early seq_nums were skipped. However, because
+    # we have test datasets like LATISS-test-data-tts where we only kept
+    # seqNums from 950 on one day, we can no longer assume this so don't be
+    # tempted to add such a constraint back in here for speed.
+    where = "exposure.day_obs>20200101"
     records = butler.registry.queryDimensionRecords("exposure", where=where, datasets='raw')
     return sorted(set([r.day_obs for r in records]))
 
@@ -647,7 +684,7 @@ def getLatissOnSkyDataIds(butler, skipTypes=('bias', 'dark', 'flat'), checkObjec
     if startDate:
         days = [d for d in days if d >= startDate]
     if endDate:
-        days = [d for d in days if d <= startDate]
+        days = [d for d in days if d <= endDate]
     days = sorted(set(days))
 
     where = "exposure.day_obs=day_obs"
@@ -658,7 +695,7 @@ def getLatissOnSkyDataIds(butler, skipTypes=('bias', 'dark', 'flat'), checkObjec
                                                         where=where,
                                                         bind={'day_obs': day},
                                                         datasets='raw')
-        recordSets.append(sortRecordsByAttribute(records, 'seq_num'))
+        recordSets.append(sortRecordsByDayObsThenSeqNum(records))
 
     dataIds = [r.dataId for r in filter(isOnSky, itertools.chain(*recordSets))]
     if full:
