@@ -249,10 +249,13 @@ def getDaysWithData(butler):
         A sorted list of the day_obs values for which mountain-top data exists.
     """
     # 20200101 is a day between shipping LATISS and going on sky
-    # exposure.seq_num<50 massively reduces the number of returned records
-    # whilst being large enough to ensure that no days are missed because early
-    # seq_nums were skipped
-    where = "exposure.day_obs>20200101 and exposure.seq_num<50"
+    # We used to constrain on exposure.seq_num<50 to massively reduce the
+    # number of returned records whilst being large enough to ensure that no
+    # days are missed because early seq_nums were skipped. However, because
+    # we have test datasets like LATISS-test-data-tts where we only kept
+    # seqNums from 950 on one day, we can no longer assume this so don't be
+    # tempted to add such a constraint back in here for speed.
+    where = "exposure.day_obs>20200101"
     records = butler.registry.queryDimensionRecords("exposure", where=where, datasets='raw')
     return sorted(set([r.day_obs for r in records]))
 
