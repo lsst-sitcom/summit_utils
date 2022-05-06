@@ -19,6 +19,7 @@
 # You should have received a copy of the GNU General Public License
 # along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
+import os
 import numpy as np
 from scipy.ndimage.filters import gaussian_filter
 import lsst.afw.detection as afwDetect
@@ -444,3 +445,36 @@ def getCurrentDayObs_humanStr():
     """Return the current dayObs as a string in the form '2022-04-28'
     """
     return dayObsIntToString(getCurrentDayObs_int())
+
+
+def getSite():
+    """Returns where the code is running.
+
+    Returns
+    -------
+    location : `str`
+        One of ['tucson', 'summit', 'base', 'lsst-dev']
+
+    Raises
+    ------
+    ValueError
+        Raised if location cannot be determined
+    """
+    # All nublado instances guarantee that EXTERNAL_URL is set and uniquely
+    # identifies it.
+    location = os.getenv('EXTERNAL_URL', "")
+    if location == "https://tucson-teststand.lsst.codes":
+        return 'tucson'
+    elif location == "https://summit-lsp.lsst.codes":
+        return 'summit'
+    elif location == "https://base-lsp.lsst.codes":
+        return 'base'
+
+    # if no EXTERNAL_URL, try HOSTNAME to see if we're on the dev nodes
+    # it is expected that this will be extensible to SLAC
+    hostname = os.getenv('HOSTNAME', "")
+    if hostname.startswith('lsst-dev'):
+        return 'lsst-dev'
+
+    # we have failed
+    raise ValueError('Location could not be determined')
