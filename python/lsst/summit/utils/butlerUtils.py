@@ -58,7 +58,14 @@ RECENT_DAY = 20220503
 
 
 def _configureForSite():
-    site = getSite()
+    try:
+        site = getSite()
+    except ValueError:
+        # this method is run automatically on module import, so
+        # don't fail for k8s where this cannot yet be determined
+        print("WARNING: failed to automatically determine site")
+        site = None
+
     if site == 'tucson':
         global RECENT_DAY
         RECENT_DAY = 20211104  # TTS has limited data, so use this day
