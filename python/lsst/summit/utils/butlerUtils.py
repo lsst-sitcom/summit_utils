@@ -84,7 +84,11 @@ def getLatissDefaultCollections():
         The default collections for the site.
     """
     collections = _LATISS_DEFAULT_COLLECTIONS
-    site = getSite()
+    try:
+        site = getSite()
+    except ValueError:
+        site = ''
+
     if site == 'tucson':
         collections.append("LATISS-test-data-tts")
         return collections
