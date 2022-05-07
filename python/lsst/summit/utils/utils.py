@@ -53,6 +53,7 @@ __all__ = ["SIGMATOFWHM",
            "getCurrentDayObs_datetime",
            "getCurrentDayObs_int",
            "getCurrentDayObs_humanStr",
+           "getSite",
            ]
 
 
