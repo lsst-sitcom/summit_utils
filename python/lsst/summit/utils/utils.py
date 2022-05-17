@@ -454,7 +454,7 @@ def getSite():
     Returns
     -------
     location : `str`
-        One of ['tucson', 'summit', 'base', 'lsst-dev']
+        One of ['tucson', 'summit', 'base', 'rsp', 'lsst-dev']
 
     Raises
     ------
@@ -470,6 +470,8 @@ def getSite():
         return 'summit'
     elif location == "https://base-lsp.lsst.codes":
         return 'base'
+    elif location == "https://lsst-lsp-stable.ncsa.illinois.edu":
+        return 'rsp'
 
     # if no EXTERNAL_URL, try HOSTNAME to see if we're on the dev nodes
     # it is expected that this will be extensible to SLAC
