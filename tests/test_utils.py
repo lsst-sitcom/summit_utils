@@ -36,6 +36,7 @@ from lsst.obs.base import createInitialSkyWcsFromBoresight
 from lsst.obs.base.makeRawVisitInfoViaObsInfo import MakeRawVisitInfoViaObsInfo
 from lsst.obs.lsst.latiss import Latiss
 from lsst.summit.utils.utils import getExpPositionOffset
+from lsst.obs.lsst.translators.latiss import AUXTEL_LOCATION
 
 
 class ExpSkyPositionOffsetTestCase(lsst.utils.tests.TestCase):
@@ -53,6 +54,7 @@ class ExpSkyPositionOffsetTestCase(lsst.utils.tests.TestCase):
                                observation_type="science",
                                exposure_time=5*u.ks,
                                detector_num=32,
+                               location=AUXTEL_LOCATION,
                                )
 
     def test_getExpPositionOffset(self):

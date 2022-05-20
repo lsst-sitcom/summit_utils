@@ -36,6 +36,7 @@ from lsst.obs.lsst.translators.latiss import AUXTEL_LOCATION
 
 from astro_metadata_translator import ObservationInfo
 from astropy.coordinates import SkyCoord, AltAz
+from astropy.coordinates.earth import EarthLocation
 import astropy.units as u
 
 __all__ = ["SIGMATOFWHM",
@@ -504,15 +505,13 @@ def getAltAzFromSkyPosition(skyPos, visitInfo):
         The altitude.
     az : `lsst.geom.Angle`
         The azimuth.
-
-    Notes
-    -----
-    Currently, as only the AuxTel is on-sky, the location is assumed to be
-    ``AUXTEL_LOCATION``. When these utils are extended to the main telescope,
-    this will need correcting.
     """
     skyLocation = SkyCoord(skyPos.getRa().asRadians(), skyPos.getDec().asRadians(), unit=u.rad)
-    altAz = AltAz(obstime=visitInfo.date.toPython(), location=AUXTEL_LOCATION)
+    long = visitInfo.observatory.getLongitude()
+    lat = visitInfo.observatory.getLatitude()
+    ele = visitInfo.observatory.getElevation()
+    earthLocation = EarthLocation.from_geodetic(long.asDegrees(), lat.asDegrees(), ele)
+    altAz = AltAz(obstime=visitInfo.date.toPython(), location=earthLocation)
     obsAltAz = skyLocation.transform_to(altAz)
     alt = geom.Angle(obsAltAz.alt.degree, geom.degrees)
     az = geom.Angle(obsAltAz.az.degree, geom.degrees)
