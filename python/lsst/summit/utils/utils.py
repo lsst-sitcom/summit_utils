@@ -530,9 +530,7 @@ def getExpPositionOffset(exp1, exp2, useWcs=True):
     values that for a given pointing the ra/dec will be ~identical, regardless
     of whether astrometric fitting has been performed.
 
-    Values are given as exp1-exp2, are directional, and *not* given mod 360
-    so large values should be expected for small offsets depending on the
-    direction.
+    Values are given as exp1-exp2.
 
     Parameters
     ----------
@@ -547,17 +545,17 @@ def getExpPositionOffset(exp1, exp2, useWcs=True):
     Returns
     -------
     offsets : `lsst.pipe.base.Struct`
-        A struct contain the offsets:
-            - deltaRa
-            - deltaDec
-            - deltaAlt
-            - deltaAz
-            - deltaPixels
-
-    Notes
-    -----
-    Care has *not* been taken to deal with things mod 360, so beware of large
-    offsets being reported for small results.
+        A struct containing the offsets:
+            ``deltaRa``
+                The diference in ra (`lsst.geom.Angle`)
+            ``deltaDec``
+                The diference in dec (`lsst.geom.Angle`)
+            ``deltaAlt``
+                The diference in alt (`lsst.geom.Angle`)
+            ``deltaAz``
+                The diference in az (`lsst.geom.Angle`)
+            ``deltaPixels``
+                The diference in pixels (`float`)
     """
 
     wcs1 = exp1.getWcs()
@@ -592,10 +590,10 @@ def getExpPositionOffset(exp1, exp2, useWcs=True):
     angular_offset = p1.separation(p2).asArcseconds()
     deltaPixels = angular_offset / pixScaleArcSec
 
-    ret = pipeBase.Struct(deltaRa=ra1-ra2,
+    ret = pipeBase.Struct(deltaRa=(ra1-ra2).wrapNear(geom.Angle(0.0)),
                           deltaDec=dec1-dec2,
                           deltaAlt=alt1-alt2,
-                          deltaAz=az1-az2,
+                          deltaAz=(az1-az2).wrapNear(geom.Angle(0.0)),
                           deltaPixels=deltaPixels
                           )
 
