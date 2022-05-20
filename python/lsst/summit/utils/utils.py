@@ -24,6 +24,7 @@ import numpy as np
 from scipy.ndimage.filters import gaussian_filter
 import lsst.afw.detection as afwDetect
 import lsst.afw.math as afwMath
+import lsst.geom as geom
 import lsst.pipe.base as pipeBase
 import lsst.utils.packages as packageUtils
 from lsst.daf.butler.cli.cliLog import CliLog
@@ -34,6 +35,9 @@ from lsst.obs.lsst.translators.lsst import FILTER_DELIMITER
 from lsst.obs.lsst.translators.latiss import AUXTEL_LOCATION
 
 from astro_metadata_translator import ObservationInfo
+from astropy.coordinates import SkyCoord, AltAz
+from astropy.coordinates.earth import EarthLocation
+import astropy.units as u
 
 __all__ = ["SIGMATOFWHM",
            "FWHMTOSIGMA",
@@ -54,6 +58,7 @@ __all__ = ["SIGMATOFWHM",
            "getCurrentDayObs_int",
            "getCurrentDayObs_humanStr",
            "getSite",
+           "getExpPositionOffset",
            ]
 
 
@@ -481,3 +486,114 @@ def getSite():
 
     # we have failed
     raise ValueError('Location could not be determined')
+
+
+def getAltAzFromSkyPosition(skyPos, visitInfo):
+    """Get the alt/az from the position on the sky and the time and location
+    of the observation.
+
+    Parameters
+    ----------
+    skyPos : `lsst.geom.SpherePoint`
+        The position on the sky.
+    visitInfo : `lsst.afw.image.VisitInfo`
+        The visit info containing the time of the observation.
+
+    Returns
+    -------
+    alt : `lsst.geom.Angle`
+        The altitude.
+    az : `lsst.geom.Angle`
+        The azimuth.
+    """
+    skyLocation = SkyCoord(skyPos.getRa().asRadians(), skyPos.getDec().asRadians(), unit=u.rad)
+    long = visitInfo.observatory.getLongitude()
+    lat = visitInfo.observatory.getLatitude()
+    ele = visitInfo.observatory.getElevation()
+    earthLocation = EarthLocation.from_geodetic(long.asDegrees(), lat.asDegrees(), ele)
+    altAz = AltAz(obstime=visitInfo.date.toPython(), location=earthLocation)
+    obsAltAz = skyLocation.transform_to(altAz)
+    alt = geom.Angle(obsAltAz.alt.degree, geom.degrees)
+    az = geom.Angle(obsAltAz.az.degree, geom.degrees)
+
+    return alt, az
+
+
+def getExpPositionOffset(exp1, exp2, useWcs=True):
+    """Get the change in sky position between two exposures.
+
+    Given two exposures, calculate the offset on the sky between the images.
+    If useWcs then use the (fitted or unfitted) skyOrigin from their WCSs, and
+    calculate the alt/az from the observation times, otherwise use the nominal
+    values in the exposures' visitInfos. Note that if using the visitInfo
+    values that for a given pointing the ra/dec will be ~identical, regardless
+    of whether astrometric fitting has been performed.
+
+    Values are given as exp1-exp2.
+
+    Parameters
+    ----------
+    exp1 : `lsst.afw.image.Exposure`
+        The first exposure.
+    exp2 : `lsst.afw.image.Exposure`
+        The second exposure.
+    useWcs : `bool`
+        Use the WCS for the ra/dec and alt/az if True, else use the nominal/
+        boresight values from the exposures' visitInfos.
+
+    Returns
+    -------
+    offsets : `lsst.pipe.base.Struct`
+        A struct containing the offsets:
+            ``deltaRa``
+                The diference in ra (`lsst.geom.Angle`)
+            ``deltaDec``
+                The diference in dec (`lsst.geom.Angle`)
+            ``deltaAlt``
+                The diference in alt (`lsst.geom.Angle`)
+            ``deltaAz``
+                The diference in az (`lsst.geom.Angle`)
+            ``deltaPixels``
+                The diference in pixels (`float`)
+    """
+
+    wcs1 = exp1.getWcs()
+    wcs2 = exp2.getWcs()
+    pixScaleArcSec = wcs1.getPixelScale().asArcseconds()
+    assert np.isclose(pixScaleArcSec, wcs2.getPixelScale().asArcseconds()), \
+           "Pixel scales in the exposures differ."
+
+    if useWcs:
+        p1 = wcs1.getSkyOrigin()
+        p2 = wcs2.getSkyOrigin()
+        alt1, az1 = getAltAzFromSkyPosition(p1, exp1.getInfo().getVisitInfo())
+        alt2, az2 = getAltAzFromSkyPosition(p2, exp2.getInfo().getVisitInfo())
+        ra1 = p1[0]
+        ra2 = p2[0]
+        dec1 = p1[1]
+        dec2 = p2[1]
+    else:
+        az1 = exp1.visitInfo.boresightAzAlt[0]
+        az2 = exp2.visitInfo.boresightAzAlt[0]
+        alt1 = exp1.visitInfo.boresightAzAlt[1]
+        alt2 = exp2.visitInfo.boresightAzAlt[1]
+
+        ra1 = exp1.visitInfo.boresightRaDec[0]
+        ra2 = exp2.visitInfo.boresightRaDec[0]
+        dec1 = exp1.visitInfo.boresightRaDec[1]
+        dec2 = exp2.visitInfo.boresightRaDec[1]
+
+        p1 = exp1.visitInfo.boresightRaDec
+        p2 = exp2.visitInfo.boresightRaDec
+
+    angular_offset = p1.separation(p2).asArcseconds()
+    deltaPixels = angular_offset / pixScaleArcSec
+
+    ret = pipeBase.Struct(deltaRa=(ra1-ra2).wrapNear(geom.Angle(0.0)),
+                          deltaDec=dec1-dec2,
+                          deltaAlt=alt1-alt2,
+                          deltaAz=(az1-az2).wrapNear(geom.Angle(0.0)),
+                          deltaPixels=deltaPixels
+                          )
+
+    return ret
