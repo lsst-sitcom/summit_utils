@@ -475,7 +475,9 @@ def getExpRecordFromDataId(butler, dataId):
                                                            datasets='raw')
 
     expRecords = list(expRecords)
-    assert len(expRecords) == 1, f'Found more than one exposure record for {dataId}'
+    if not expRecords:
+        raise LookupError(f"No exposure records found for {dataId}")
+    assert len(expRecords) == 1, f'Found {len(expRecords)} exposure records for {dataId}'
     return expRecords[0]
 
 
@@ -512,7 +514,9 @@ def getDayObsSeqNumFromExposureId(butler, dataId):
                                                        bind={'expId': expId},
                                                        datasets='raw')
     expRecords = list(expRecords)
-    assert len(expRecords) == 1, f'Found more than one exposure record for {dataId}'
+    if not expRecords:
+        raise LookupError(f"No exposure records found for {dataId}")
+    assert len(expRecords) == 1, f'Found {len(expRecords)} exposure records for {dataId}'
     return {'day_obs': expRecords[0].day_obs, 'seq_num': expRecords[0].seq_num}
 
 
