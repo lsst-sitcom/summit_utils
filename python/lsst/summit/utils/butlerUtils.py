@@ -202,7 +202,7 @@ def getMostRecentDayObs(butler):
     day_obs : `int`
         The day_obs.
     """
-    where = "exposure.day_obs>RECENT_DAY"
+    where = "exposure.day_obs>=RECENT_DAY"
     records = butler.registry.queryDimensionRecords('exposure', where=where, datasets='raw',
                                                     bind={'RECENT_DAY': RECENT_DAY})
     recentDay = max(r.day_obs for r in records)

@@ -121,7 +121,7 @@ class ButlerUtilsTestCase(lsst.utils.tests.TestCase):
 
         # check that the value of RECENT_DAY is before the end of the data.
         daysWithData = getDaysWithData(self.butler)
-        self.assertLess(RECENT_DAY, max(daysWithData))
+        self.assertLessEqual(RECENT_DAY, max(daysWithData))
 
         # no test here, but print a warning if it hasn't been updated recently
         recentDay_datetime = datetime.datetime.strptime(str(RECENT_DAY), "%Y%m%d")
