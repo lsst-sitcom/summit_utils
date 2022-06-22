@@ -202,7 +202,10 @@ class SpectrumExaminer():
         ax2.axvline(minVal, ls='dashed', color='k', alpha=0.2)
         ax2.axvline(maxVal, ls='dashed', color='k', alpha=0.2)
         ymin = max(np.nanmin(fwhmValues)-5, 0)
-        ymax = medianFwhm*2
+        if not np.isnan(medianFwhm):
+            ymax = medianFwhm*2
+        else:
+            ymax = 5*ymin
         ax2.set_ylim(ymin, ymax)
         ax2.set_ylabel('FWHM (pixels)')
         ax2.set_xlabel('Spectrum position (pixels)')
