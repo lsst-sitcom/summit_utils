@@ -474,11 +474,11 @@ def getExpRecordFromDataId(butler, dataId):
                                                            bind={'day_obs': dayObs, 'seq_num': seqNum},
                                                            datasets='raw')
 
-    expRecords = list(expRecords)
+    expRecords = set(expRecords)
     if not expRecords:
         raise LookupError(f"No exposure records found for {dataId}")
     assert len(expRecords) == 1, f'Found {len(expRecords)} exposure records for {dataId}'
-    return expRecords[0]
+    return expRecords.pop()
 
 
 def getDayObsSeqNumFromExposureId(butler, dataId):
@@ -513,11 +513,12 @@ def getDayObsSeqNumFromExposureId(butler, dataId):
                                                        where=where,
                                                        bind={'expId': expId},
                                                        datasets='raw')
-    expRecords = list(expRecords)
+    expRecords = set(expRecords)
     if not expRecords:
         raise LookupError(f"No exposure records found for {dataId}")
     assert len(expRecords) == 1, f'Found {len(expRecords)} exposure records for {dataId}'
-    return {'day_obs': expRecords[0].day_obs, 'seq_num': expRecords[0].seq_num}
+    record = expRecords.pop()
+    return {'day_obs': record.day_obs, 'seq_num': record.seq_num}
 
 
 def getDatasetRefForDataId(butler, datasetType, dataId):
