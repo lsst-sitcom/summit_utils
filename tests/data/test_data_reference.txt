@@ -1,0 +1,4 @@
+{'instrument': 'LATISS', 'day_obs': 20200101, 'seq_num': 123} ~ (321.123, 123.321)
+{'instrument': 'LATISS', 'day_obs': 20200101, 'seq_num': 124} ~ (432.123, 234.321)
+{'instrument': 'LATISS', 'day_obs': 20200101, 'seq_num': 125} ~ (543.123, 345.321)
+{'instrument': 'LSSTComCam', 'day_obs': 20200101, 'seq_num': 123} ~ (9999.0000, -123.321)
