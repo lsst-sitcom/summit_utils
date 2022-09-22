@@ -249,8 +249,7 @@ class QuickLookIsrTask(pipeBase.PipelineTask):
                              bfKernel=bfKernel,
                              bfGains=bfGains,
                              ptc=ptc,
-                             crosstalkSources=crosstalkSources,
-                             isGen3=True,)
+                             crosstalkSources=crosstalkSources,)
 
         postIsr = result.exposure
 
