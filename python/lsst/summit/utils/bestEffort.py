@@ -158,8 +158,12 @@ class BestEffortIsr():
         """
         self._cache = {}
 
-    def getExposure(self, expIdOrDataId, extraIsrOptions={}, skipCosmics=False, **kwargs):
+    def getExposure(self, expIdOrDataId, extraIsrOptions={}, skipCosmics=False, forceRemake=False,
+                    **kwargs):
         """Get the postIsr and cosmic-repaired image for this dataId.
+
+        Note that when using the forceRemake option the image will not be
+        written to the repo for reuse.
 
         Parameters
         ----------
@@ -170,6 +174,13 @@ class BestEffortIsr():
             image only.
         skipCosmics : `bool`, optional  # XXX THIS CURRENTLY DOESN'T WORK!
             Skip doing cosmic ray repair for this image?
+        forceRemake : `bool`
+            Remake the exposure even if there is a pre-existing one in the
+            repo. Images that are force-remade are never written, as this is
+            assumed to be used for testing/debug purposes, as opposed to normal
+            operation. For updating individual images, removal from the
+            registry can be used, and for bulk-updates the overall run number
+            can be incremented.
 
         Returns
         -------
@@ -178,12 +189,13 @@ class BestEffortIsr():
         """
         dataId = self._parseExpIdOrDataId(expIdOrDataId, **kwargs)
 
-        try:
-            exp = self.butler.get(self._datasetName, dataId=dataId)
-            self.log.info("Found a ready-made quickLookExp in the repo. Returning that.")
-            return exp
-        except LookupError:
-            pass
+        if not forceRemake:
+            try:
+                exp = self.butler.get(self._datasetName, dataId=dataId)
+                self.log.info("Found a ready-made quickLookExp in the repo. Returning that.")
+                return exp
+            except LookupError:
+                pass
 
         try:
             raw = self.butler.get('raw', dataId=dataId)
@@ -227,7 +239,7 @@ class BestEffortIsr():
 
         quickLookExp = self.quickLookIsrTask.run(raw, **isrDict, isrBaseConfig=isrConfig).outputExposure
 
-        if self.doWrite:
+        if self.doWrite and not forceRemake:
             try:
                 self.butler.put(quickLookExp, self._datasetName, dataId)
                 self.log.info(f'Put {self._datasetName} for {dataId}')
