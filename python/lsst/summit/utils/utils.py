@@ -211,9 +211,8 @@ def getImageStats(exp):
     vi = info.getVisitInfo()
     expTime = vi.getExposureTime()
     md = exp.getMetadata()
-    obsInfo = ObservationInfo(md, subset={'object'})
 
-    obj = obsInfo.object
+    obj = vi.object
     mjd = vi.getDate().get()
     result.object = obj
     result.mjd = mjd
