@@ -104,7 +104,7 @@ def _update_RECENT_DAY(day):
     RECENT_DAY = max(day-1, RECENT_DAY)
 
 
-def makeDefaultLatissButler(*, extraCollections=None, writeable=False):
+def makeDefaultLatissButler(*, extraCollections=None, writeable=False, oga=False):
     """Create a butler for LATISS using the default collections.
 
     Parameters
@@ -113,6 +113,9 @@ def makeDefaultLatissButler(*, extraCollections=None, writeable=False):
         Extra input collections to supply to the butler init.
     writable : `bool`, optional
         Whether to make a writable butler.
+    oga : `bool`, optional
+        Use the OGA repo instead of the main one. Needed to access embargoed
+        data.
 
     Returns
     -------
@@ -124,7 +127,11 @@ def makeDefaultLatissButler(*, extraCollections=None, writeable=False):
     if extraCollections:
         collections.extend(extraCollections)
     try:
-        butler = dafButler.Butler('LATISS', collections=collections, writeable=writeable, instrument='LATISS')
+        repoString = "LATISS" if not oga else "/repo/oga"
+        butler = dafButler.Butler(repoString,
+                                  collections=collections,
+                                  writeable=writeable,
+                                  instrument='LATISS')
     except(FileNotFoundError, RuntimeError):
         # Depending on the value of DAF_BUTLER_REPOSITORY_INDEX and whether
         # it is present and blank, or just not set, both these exception
