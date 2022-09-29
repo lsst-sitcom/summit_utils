@@ -20,11 +20,13 @@
 # along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
 import os
+from typing import Iterable
 import numpy as np
 import logging
 from scipy.ndimage import gaussian_filter
 import lsst.afw.image as afwImage
 import lsst.afw.detection as afwDetect
+from lsst.afw.detection import Footprint, FootprintSet
 import lsst.afw.math as afwMath
 import lsst.daf.base as dafBase
 import lsst.geom as geom
@@ -306,6 +308,80 @@ def detectObjectsInExp(exp, nSigma=10, nPixMin=10, grow=0):
 
     exp.image += median  # add back in to leave background unchanged
     return footPrintSet
+
+
+def fluxesFromFootprints(footprints, parentImage, subtractImageMedian=False):
+    """Calculate the flux from a set of footprints, given the parent image,
+    optionally subtracting the whole-image median from each pixel as a very
+    rough background subtraction.
+
+    Parameters
+    ----------
+    footprints : `lsst.afw.detection.FootprintSet` or
+                 `lsst.afw.detection.Footprint` or
+                 `iterable` of `lsst.afw.detection.Footprint`
+        The footprints to measure.
+    parentImage : `lsst.afw.image.Exposure`
+        The parent exposure.
+    subtractImageMedian : `bool`, optional
+        Subtract a whole-image median from each pixel in the footprint when
+        summing as a very crude background subtraction. Does not change the
+        original image.
+
+    Returns
+    -------
+    fluxes : `list` of `float`
+        The fluxes for each footprint.
+
+    Raises
+    ------
+    ValueError : raise for unsupported types.
+    """
+    median = 0
+    if subtractImageMedian:
+        median = np.nanmedian(parentImage.image.array)
+
+    # poor person's single dispatch
+    badTypeMsg = ("This function works with FootprintSets, single Footprints, and iterables of Footprints. "
+                  f"Got {type(footprints)}: {footprints}")
+    if isinstance(footprints, FootprintSet):
+        fps = footprints.getFootprints()
+    elif isinstance(footprints, Iterable):
+        if not isinstance(footprints[0], Footprint):
+            raise ValueError(badTypeMsg)
+        fps = footprints
+    elif isinstance(footprints, Footprint):
+        fps = [footprints]
+    else:
+        raise ValueError(badTypeMsg)
+
+    return [fluxFromFootprint(fp, parentImage, backgroundValue=median) for fp in fps]
+
+
+def fluxFromFootprint(footprint, parentImage, backgroundValue=0):
+    """Calculate the flux from a footprint, given the parent image, optionally
+    subtracting a single value from each pixel as a very rough background
+    subtraction, e.g. the image median.
+
+    Parameters
+    ----------
+    footprint : `lsst.afw.detection.Footprint`
+        The footprint to measure.
+    parentImage : `lsst.afw.image.Exposure`
+        The parent exposure.
+    backgroundValue : `bool`, optional
+        The value to subtract from each pixel in the footprint when summing
+        as a very crude background subtraction. Does not change the original
+        image.
+
+    Returns
+    -------
+    flux : `float`
+        The flux in the footprint
+    """
+    if backgroundValue:  # only do the subtraction if non-zero for speed
+        return footprint.getSpans().flatten(parentImage.image.array - backgroundValue).sum()
+    return footprint.getSpans().flatten(parentImage.image.array).sum()
 
 
 def humanNameForCelestialObject(objName):
