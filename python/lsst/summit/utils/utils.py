@@ -458,7 +458,7 @@ def getSite():
     Returns
     -------
     location : `str`
-        One of ['tucson', 'summit', 'base', 'staff-rsp', 'lsst-dev']
+        One of ['tucson', 'summit', 'base', 'staff-rsp', 'rubin-devl']
 
     Raises
     ------
@@ -474,14 +474,14 @@ def getSite():
         return 'summit'
     elif location == "https://base-lsp.lsst.codes":
         return 'base'
-    elif location == "https://lsst-lsp-stable.ncsa.illinois.edu":
+    elif location == "https://usdf-rsp.slac.stanford.edu":
         return 'staff-rsp'
 
     # if no EXTERNAL_URL, try HOSTNAME to see if we're on the dev nodes
     # it is expected that this will be extensible to SLAC
     hostname = os.getenv('HOSTNAME', "")
-    if hostname.startswith('lsst-dev'):
-        return 'lsst-dev'
+    if hostname.startswith('sdfrome'):
+        return 'rubin-devl'
 
     # we have failed
     raise ValueError('Location could not be determined')
