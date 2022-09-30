@@ -35,7 +35,6 @@ from lsst.pipe.tasks.quickFrameMeasurement import QuickFrameMeasurementTask, Qui
 
 from lsst.obs.lsst.translators.lsst import FILTER_DELIMITER
 from lsst.summit.utils.utils import getImageStats
-from astro_metadata_translator import ObservationInfo
 
 
 class SpectrumExaminer():
@@ -271,9 +270,7 @@ class SpectrumExaminer():
         az = azAlt[0].asDegrees()
         el = azAlt[1].asDegrees()
 
-        md = self.exp.getMetadata()
-        obsInfo = ObservationInfo(md, subset={'object'})
-        obj = obsInfo.object
+        obj = self.exp.visitInfo.object
 
         lines = []
 
