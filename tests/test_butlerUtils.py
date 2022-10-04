@@ -376,7 +376,8 @@ class ButlerInitTestCase(lsst.utils.tests.TestCase):
         # If DAF_BUTLER_REPOSITORY_INDEX is not set *at all* then
         # using an instrument label raises a FileNotFoundError
         with unittest.mock.patch.dict('os.environ'):
-            del os.environ['DAF_BUTLER_REPOSITORY_INDEX']
+            if 'DAF_BUTLER_REPOSITORY_INDEX' in os.environ:  # can't del unless it's already there
+                del os.environ['DAF_BUTLER_REPOSITORY_INDEX']
             with self.assertRaises(FileNotFoundError):
                 dafButler.Butler('LATISS')
 
@@ -398,7 +399,8 @@ class ButlerInitTestCase(lsst.utils.tests.TestCase):
         butler inits, so test all available possibilities here.
         """
         with unittest.mock.patch.dict('os.environ'):
-            del os.environ['DAF_BUTLER_REPOSITORY_INDEX']
+            if 'DAF_BUTLER_REPOSITORY_INDEX' in os.environ:  # can't del unless it's already there
+                del os.environ['DAF_BUTLER_REPOSITORY_INDEX']
             with self.assertRaises(FileNotFoundError):
                 makeDefaultLatissButler()
 
