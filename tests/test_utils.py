@@ -23,6 +23,7 @@
 
 import copy
 import itertools
+from typing import Iterable
 import unittest
 
 import astropy.time
@@ -35,14 +36,21 @@ from astro_metadata_translator import makeObservationInfo
 from lsst.obs.base import createInitialSkyWcsFromBoresight
 from lsst.obs.base.makeRawVisitInfoViaObsInfo import MakeRawVisitInfoViaObsInfo
 from lsst.obs.lsst import Latiss
+
 from lsst.summit.utils.utils import (getExpPositionOffset,
                                      getFieldNameAndTileNumber,
                                      getAirmassSeeingCorrection,
                                      getFilterSeeingCorrection,
                                      quickSmooth,
                                      getQuantiles,
+                                     fluxesFromFootprints,
+                                     detectObjectsInExp,
                                      )
+from lsst.summit.utils.bestEffort import BestEffortIsr
+from lsst.summit.utils.butlerUtils import makeDefaultLatissButler
+
 from lsst.obs.lsst.translators.latiss import AUXTEL_LOCATION
+from lsst.afw.detection import FootprintSet
 
 
 class ExpSkyPositionOffsetTestCase(lsst.utils.tests.TestCase):
@@ -205,6 +213,45 @@ class QuantileTestCase(lsst.utils.tests.TestCase):
             edges1 = getQuantiles(data, nColors)
             edges2 = np.nanquantile(data, np.linspace(0, 1, nColors + 1))  # must check with nanquantile
             np.testing.assert_almost_equal(edges1, edges2, decimal=decimal)
+
+
+class ImageBasedTestCase(lsst.utils.tests.TestCase):
+    """A test case for testing sky position offsets for exposures."""
+
+    @classmethod
+    def setUpClass(cls):
+        try:
+            cls.butler = makeDefaultLatissButler()
+        except FileNotFoundError:
+            raise unittest.SkipTest("Skipping tests that require the LATISS butler repo.")
+
+        cls.dataId = {'day_obs': 20200315, 'seq_num': 120, 'detector': 0}
+        cls.bestEffort = BestEffortIsr()  # should always succeed if makeDefaultLatissButler works
+        cls.exp = cls.bestEffort.getExposure(cls.dataId)
+
+    def test_fluxFromFootprint(self):
+        footPrintSet = detectObjectsInExp(self.exp)
+        allFootprints = footPrintSet.getFootprints()
+        self.assertGreaterEqual(len(allFootprints), 3)
+        singleFootprint = allFootprints[0]
+        twoFootprints = allFootprints[0:2]
+
+        # check it can accept a footprintSet, and single and iterables of
+        # footprints
+        for obj in (footPrintSet, singleFootprint, twoFootprints):
+            fluxes = fluxesFromFootprints(obj, self.exp)
+            if isinstance(obj, FootprintSet):
+                expectedLength = len(footPrintSet.getFootprints())
+                self.assertEqual(len(fluxes), expectedLength)  # always one flux per footprint
+
+            self.assertIsInstance(fluxes, Iterable)
+            self.assertIsInstance(fluxes[0], np.floating)  # always returns floats
+
+        # ensure that subtracting the image median from fluxes leave image
+        # functionally unchanged
+        oldExpArray = copy.deepcopy(self.exp.image.array)
+        fluxes = fluxesFromFootprints(obj, self.exp, subtractImageMedian=True)
+        self.assertTrue(np.allclose(self.exp.image.array, oldExpArray))
 
 
 class TestMemory(lsst.utils.tests.MemoryTestCase):
