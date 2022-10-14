@@ -254,12 +254,11 @@ class SpectrumExaminer():
 
     def generateStatsTextboxContent(self, section, doPrint=True):
         x, y = self.qfmResult.brightestObjCentroid
-        exptime = self.exp.getInfo().getVisitInfo().getExposureTime()
 
-        info = self.exp.getInfo()
-        vi = info.getVisitInfo()
+        vi = self.exp.visitInfo
+        exptime = vi.exposureTime
 
-        fullFilterString = info.getFilterLabel().physicalLabel
+        fullFilterString = self.exp.filterLabel.physicalLabel
         filt = fullFilterString.split(FILTER_DELIMITER)[0]
         grating = fullFilterString.split(FILTER_DELIMITER)[1]
 
