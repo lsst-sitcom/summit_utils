@@ -258,7 +258,7 @@ class SpectrumExaminer():
         vi = self.exp.visitInfo
         exptime = vi.exposureTime
 
-        fullFilterString = self.exp.filterLabel.physicalLabel
+        fullFilterString = self.exp.filter.physicalLabel
         filt = fullFilterString.split(FILTER_DELIMITER)[0]
         grating = fullFilterString.split(FILTER_DELIMITER)[1]
 
