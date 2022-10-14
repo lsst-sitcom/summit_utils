@@ -146,7 +146,7 @@ class SpectrumExaminer():
         parameters[:, 2] = np.abs(parameters[:, 2])
         self.parameters = parameters
 
-    def plot(self, saveAs=None):
+    def plot(self):
         fig = plt.figure(figsize=(10, 10))
 
         # spectrum
@@ -252,7 +252,7 @@ class SpectrumExaminer():
     def init(self):
         pass
 
-    def generateStatsTextboxContent(self, section, doPrint=True):
+    def generateStatsTextboxContent(self, section):
         x, y = self.qfmResult.brightestObjCentroid
 
         vi = self.exp.visitInfo
