@@ -207,9 +207,8 @@ def getImageStats(exp):
     """
     result = pipeBase.Struct()
 
-    info = exp.getInfo()
-    vi = info.getVisitInfo()
-    expTime = vi.getExposureTime()
+    vi = exp.visitInfo
+    expTime = vi.exposureTime
     md = exp.getMetadata()
 
     obj = vi.object
@@ -217,7 +216,7 @@ def getImageStats(exp):
     result.object = obj
     result.mjd = mjd
 
-    fullFilterString = info.getFilterLabel().physicalLabel
+    fullFilterString = exp.filter.physicalLabel
     filt = fullFilterString.split(FILTER_DELIMITER)[0]
     grating = fullFilterString.split(FILTER_DELIMITER)[1]
 

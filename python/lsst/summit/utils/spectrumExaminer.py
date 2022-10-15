@@ -146,7 +146,7 @@ class SpectrumExaminer():
         parameters[:, 2] = np.abs(parameters[:, 2])
         self.parameters = parameters
 
-    def plot(self, saveAs=None):
+    def plot(self):
         fig = plt.figure(figsize=(10, 10))
 
         # spectrum
@@ -252,14 +252,13 @@ class SpectrumExaminer():
     def init(self):
         pass
 
-    def generateStatsTextboxContent(self, section, doPrint=True):
+    def generateStatsTextboxContent(self, section):
         x, y = self.qfmResult.brightestObjCentroid
-        exptime = self.exp.getInfo().getVisitInfo().getExposureTime()
 
-        info = self.exp.getInfo()
-        vi = info.getVisitInfo()
+        vi = self.exp.visitInfo
+        exptime = vi.exposureTime
 
-        fullFilterString = info.getFilterLabel().physicalLabel
+        fullFilterString = self.exp.filter.physicalLabel
         filt = fullFilterString.split(FILTER_DELIMITER)[0]
         grating = fullFilterString.split(FILTER_DELIMITER)[1]
 
