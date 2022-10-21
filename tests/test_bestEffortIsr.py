@@ -43,7 +43,12 @@ class BestEffortIsrTestCase(lsst.utils.tests.TestCase):
         cls.dataId = {'day_obs': 20210121, 'seq_num': 743, 'detector': 0}
 
     def test_getExposure(self):
+        # in most locations this will load a pre-made image
         exp = self.bestEffortIsr.getExposure(self.dataId)
+        self.assertIsInstance(exp, afwImage.Exposure)
+
+        # this will always actually run isr with whatever calibs are available
+        exp = self.bestEffortIsr.getExposure(self.dataId, forceRemake=True)
         self.assertIsInstance(exp, afwImage.Exposure)
 
 
