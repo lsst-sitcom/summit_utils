@@ -345,17 +345,16 @@ def fluxesFromFootprints(footprints, parentImage, subtractImageMedian=False):
     badTypeMsg = ("This function works with FootprintSets, single Footprints, and iterables of Footprints. "
                   f"Got {type(footprints)}: {footprints}")
     if isinstance(footprints, FootprintSet):
-        fps = footprints.getFootprints()
+        footprints = footprints.getFootprints()
     elif isinstance(footprints, Iterable):
         if not isinstance(footprints[0], Footprint):
             raise TypeError(badTypeMsg)
-        fps = footprints
     elif isinstance(footprints, Footprint):
-        fps = [footprints]
+        footprints = [footprints]
     else:
         raise TypeError(badTypeMsg)
 
-    return [fluxFromFootprint(fp, parentImage, backgroundValue=median) for fp in fps]
+    return [fluxFromFootprint(fp, parentImage, backgroundValue=median) for fp in footprints]
 
 
 def fluxFromFootprint(footprint, parentImage, backgroundValue=0):
