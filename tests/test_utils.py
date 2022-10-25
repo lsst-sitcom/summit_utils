@@ -251,7 +251,7 @@ class ImageBasedTestCase(lsst.utils.tests.TestCase):
         # functionally unchanged
         oldExpArray = copy.deepcopy(self.exp.image.array)
         fluxes = fluxesFromFootprints(obj, self.exp, subtractImageMedian=True)
-        self.assertTrue(np.allclose(self.exp.image.array, oldExpArray))
+        self.assertTrue(np.alltrue(np.equal(self.exp.image.array, oldExpArray)))
 
 
 class TestMemory(lsst.utils.tests.MemoryTestCase):
