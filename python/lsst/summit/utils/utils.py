@@ -335,7 +335,7 @@ def fluxesFromFootprints(footprints, parentImage, subtractImageMedian=False):
 
     Raises
     ------
-    ValueError : raise for unsupported types.
+    TypeError : raise for unsupported types.
     """
     median = 0
     if subtractImageMedian:
@@ -348,12 +348,12 @@ def fluxesFromFootprints(footprints, parentImage, subtractImageMedian=False):
         fps = footprints.getFootprints()
     elif isinstance(footprints, Iterable):
         if not isinstance(footprints[0], Footprint):
-            raise ValueError(badTypeMsg)
+            raise TypeError(badTypeMsg)
         fps = footprints
     elif isinstance(footprints, Footprint):
         fps = [footprints]
     else:
-        raise ValueError(badTypeMsg)
+        raise TypeError(badTypeMsg)
 
     return [fluxFromFootprint(fp, parentImage, backgroundValue=median) for fp in fps]
 
