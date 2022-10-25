@@ -50,7 +50,6 @@ from lsst.summit.utils.bestEffort import BestEffortIsr
 from lsst.summit.utils.butlerUtils import makeDefaultLatissButler
 
 from lsst.obs.lsst.translators.latiss import AUXTEL_LOCATION
-from lsst.afw.detection import FootprintSet
 
 
 class ExpSkyPositionOffsetTestCase(lsst.utils.tests.TestCase):
@@ -238,19 +237,32 @@ class ImageBasedTestCase(lsst.utils.tests.TestCase):
 
         # check it can accept a footprintSet, and single and iterables of
         # footprints
-        for obj in (footPrintSet, singleFootprint, twoFootprints):
-            fluxes = fluxesFromFootprints(obj, self.exp)
-            if isinstance(obj, FootprintSet):
-                expectedLength = len(footPrintSet.getFootprints())
-                self.assertEqual(len(fluxes), expectedLength)  # always one flux per footprint
 
-            self.assertIsInstance(fluxes, Iterable)
-            self.assertIsInstance(fluxes[0], np.floating)  # always returns floats
+        # check the footPrintSet
+        fluxes = fluxesFromFootprints(footPrintSet, self.exp)
+        expectedLength = len(footPrintSet.getFootprints())
+        self.assertEqual(len(fluxes), expectedLength)  # always one flux per footprint
+        self.assertIsInstance(fluxes, Iterable)
+        self.assertIsInstance(fluxes[0], np.floating)  # always returns floats
+
+        # check the singleFootprint
+        fluxes = fluxesFromFootprints(singleFootprint, self.exp)
+        expectedLength = 1
+        self.assertEqual(len(fluxes), expectedLength)  # always one flux per footprint
+        self.assertIsInstance(fluxes, Iterable)
+        self.assertIsInstance(fluxes[0], np.floating)  # always returns floats
+
+        # check the list of twoFootprints
+        fluxes = fluxesFromFootprints(twoFootprints, self.exp)
+        expectedLength = 2
+        self.assertEqual(len(fluxes), expectedLength)  # always one flux per footprint
+        self.assertIsInstance(fluxes, Iterable)
+        self.assertIsInstance(fluxes[0], np.floating)  # always returns floats
 
         # ensure that subtracting the image median from fluxes leave image
         # functionally unchanged
         oldExpArray = copy.deepcopy(self.exp.image.array)
-        fluxes = fluxesFromFootprints(obj, self.exp, subtractImageMedian=True)
+        fluxes = fluxesFromFootprints(footPrintSet, self.exp, subtractImageMedian=True)
         self.assertTrue(np.alltrue(np.equal(self.exp.image.array, oldExpArray)))
 
 
