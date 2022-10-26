@@ -33,7 +33,6 @@ import lsst.geom as geom
 from lsst.afw.geom import SkyWcs
 from lsst.daf.base import PropertySet
 from lsst.pipe.tasks.characterizeImage import CharacterizeImageTask, CharacterizeImageConfig
-from lsst.pipe.tasks.quickFrameMeasurement import QuickFrameMeasurementTask, QuickFrameMeasurementTaskConfig
 
 from lsst.obs.lsst.translators.latiss import AUXTEL_LOCATION
 from lsst.summit.utils.utils import quickSmooth
