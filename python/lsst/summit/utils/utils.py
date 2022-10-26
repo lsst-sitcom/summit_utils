@@ -517,7 +517,7 @@ def getAltAzFromSkyPosition(skyPos, visitInfo):
     return alt, az
 
 
-def getExpPositionOffset(exp1, exp2, useWcs=True):
+def getExpPositionOffset(exp1, exp2, useWcs=True, allowDifferentPlateScales=False):
     """Get the change in sky position between two exposures.
 
     Given two exposures, calculate the offset on the sky between the images.
@@ -538,6 +538,11 @@ def getExpPositionOffset(exp1, exp2, useWcs=True):
     useWcs : `bool`
         Use the WCS for the ra/dec and alt/az if True, else use the nominal/
         boresight values from the exposures' visitInfos.
+    allowDifferentPlateScales : `bool`, optional
+        Use to disbale checking that plate scales are the same. Generally,
+        differing plate scales would indicate an error, but where blind-solving
+        has been undertaken during commissioning plate scales can be different
+        enough to warrant setting this to ``True``.
 
     Returns
     -------
@@ -558,8 +563,9 @@ def getExpPositionOffset(exp1, exp2, useWcs=True):
     wcs1 = exp1.getWcs()
     wcs2 = exp2.getWcs()
     pixScaleArcSec = wcs1.getPixelScale().asArcseconds()
-    assert np.isclose(pixScaleArcSec, wcs2.getPixelScale().asArcseconds()), \
-           "Pixel scales in the exposures differ."
+    if not allowDifferentPlateScales:
+        assert np.isclose(pixScaleArcSec, wcs2.getPixelScale().asArcseconds()), \
+            "Pixel scales in the exposures differ."
 
     if useWcs:
         p1 = wcs1.getSkyOrigin()
