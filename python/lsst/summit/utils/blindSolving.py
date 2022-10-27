@@ -183,7 +183,7 @@ def plot(exp, icSrc, filteredSources=None, saveAs=None):
              'AZ',
              color='cyan', fontsize=fontsize, weight='bold')
 
-    plt.ylim(0, 4000)
+    plt.ylim(0, height)
     plt.tight_layout()
 
     if saveAs:
@@ -199,6 +199,7 @@ def _filterSourceCatalog(srcCat, brightSourceFraction, minSources=15):
                          brightestSource['base_SdssCentroid_y'][0])
     filteredCatalog = srcCat.subset(srcCat['base_CircularApertureFlux_3_0_instFlux'] > maxFlux * 0.001)
 
+    # TODO: make these into log messages?
     print(f"Found {len(srcCat)} sources, {len(filteredCatalog)} bright sources")
     print(f"Brightest centroid at {brightestCentroid}")
 
