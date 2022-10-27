@@ -28,6 +28,8 @@ from matplotlib.colors import LogNorm
 from astropy.coordinates import Angle
 import astropy.units as u
 from astroquery.astrometry_net import AstrometryNet
+from astropy.time import Time
+from astropy.coordinates import AltAz, EarthLocation, SkyCoord
 
 import lsst.geom as geom
 from lsst.afw.geom import SkyWcs
@@ -269,14 +271,24 @@ def blindSolve(exp, *,
             The change in dec in arcseconds, as a float.
         ``astrometry_net_wcs_header`` : `dict`
             The fitted wcs, as a header dict.
+
+    Raises
+    ------
+    RuntimeError
+        Raised if the fit fails.
     """
     # fail early if this isn't present
     adn = AstrometryNet()
     adn.api_key = getApiKey()
+    nominalWcs = exp.getWcs()
+    if not nominalWcs:
+        print('Trying to process image with None wcs - good luck!')
 
     imCharResult = runImchar(exp)
 
     sourceCatalog = imCharResult.sourceCat
+    if not sourceCatalog:
+        raise RuntimeError('Failed to find any sources in image')
     filteredSources = _filterSourceCatalog(sourceCatalog, brightSourceFraction)
 
     if doPlot:
@@ -284,6 +296,13 @@ def blindSolve(exp, *,
 
     vi = exp.getInfo().getVisitInfo()
     ra, dec = vi.boresightRaDec
+    if np.isnan(ra.asDegrees()) or np.isnan(dec.asDegrees()):
+        print('Got nan for ra/dec from visitInfo, using ra/dec from wcs...')
+        if not nominalWcs:
+            raise RuntimeError('No wcs for failing over to.')
+        ra, dec = nominalWcs.getSkyOrigin()
+        if np.isnan(ra.asDegrees()) or np.isnan(dec.asDegrees()):
+            raise RuntimeError('Failed to get ra/dec from both visitInfo and wcs')
 
     if not scaleEstimate:
         nominalWcs = exp.getWcs()
@@ -312,6 +331,8 @@ def blindSolve(exp, *,
 
     nominalRa, nominalDec = exp.getInfo().getVisitInfo().getBoresightRaDec()
 
+    if 'CRVAL1' not in wcs_header:
+        raise RuntimeError("Astrometric fit failed.")
     calculatedRa = geom.Angle(wcs_header['CRVAL1'], geom.degrees)
     calculatedDec = geom.Angle(wcs_header['CRVAL2'], geom.degrees)
 
@@ -346,3 +367,95 @@ def headerToWcs(header):
     """
     wcsPropSet = PropertySet.from_mapping(header)
     return SkyWcs(wcsPropSet)
+
+
+def getIcrsAtZenith(lon, lat, height, utc):
+    """Get the icrs at zenith given a lat/long/height/time in UTC.
+
+    Parameters
+    ----------
+    lon : `float`
+        The longitude, in degrees.
+    lat : `float`
+        The latitude, in degrees.
+    height : `float`
+        The height above sea level in meters.
+    utc : `str`
+        The time in UTC as an ISO string, e.g. '2022-05-27 20:41:02'
+
+    Returns
+    -------
+    skyCoordAtZenith : `astropy.coordinates.SkyCoord`
+        The skyCoord at zenith.
+    """
+    location = EarthLocation.from_geodetic(lon=lon*u.deg,
+                                           lat=lat*u.deg,
+                                           height=height)
+    obsTime = Time(utc, format='iso', scale='utc')
+    skyCoord = SkyCoord(AltAz(obstime=obsTime,
+                              alt=90.0*u.deg,
+                              az=180.0*u.deg,
+                              location=location))
+    return skyCoord.transform_to('icrs')
+
+
+def chuckHeaderToWcs(exp, nominalRa=None, nominalDec=None):
+    """Given an exposure taken by Chuck at his house, construct a wcs
+    with the ra/dec set to zenith unless a better guess is supplied.
+
+    Automatically sets the platescale depending on the lens.
+
+    Parameters
+    ----------
+    exp : `lsst.afw.image.Exposure`
+        The exposure to construct the wcs for.
+    nominalRa : `float`, optional
+        The guess for the ra.
+    nominalDec : `float`, optional
+        The guess for the Dec.
+
+    Returns
+    -------
+    wcs : `lsst.afw.geom.SkyWcs`
+        The constructed wcs.
+    """
+    header = exp.getMetadata().toDict()
+
+    # set the plate scale depending on the lens and put into CD matrix
+    # plate scale info from:
+    # https://confluence.lsstcorp.org/pages/viewpage.action?pageId=191987725
+    lens = header['INSTLEN']
+    if '135mm' in lens:
+        arcSecPerPix = 8.64
+    elif '375mm' in lens:
+        arcSecPerPix = 3.11
+    elif '750mm' in lens:
+        arcSecPerPix = 1.56
+    else:
+        raise ValueError(f'Unrecognised lens: {lens}')
+
+    header['CD1_1'] = arcSecPerPix / 3600
+    header['CD1_2'] = 0
+    header['CD2_1'] = 0
+    header['CD2_2'] = arcSecPerPix / 3600
+
+    # calculate the ra/dec at zenith and assume Chuck pointed it vertically
+    icrs = getIcrsAtZenith(float(header['OBSLON']),
+                           float(header['OBSLAT']),
+                           float(header['OBSHGT']),
+                           header['UTC'])
+    header['CRVAL1'] = nominalRa if nominalRa else icrs.ra.degree
+    header['CRVAL2'] = nominalDec if nominalDec else icrs.dec.degree
+
+    # just use the nomimal chip centre, not that it matters
+    # given radec = zenith
+    width, height = exp.image.array.shape
+    header['CRPIX1'] = width/2
+    header['CRPIX2'] = height/2
+
+    header['CTYPE1'] = 'RA---TAN-SIP'
+    header['CTYPE2'] = 'DEC--TAN-SIP'
+
+    wcsPropSet = PropertySet.from_mapping(header)
+    wcs = SkyWcs(wcsPropSet)
+    return wcs
