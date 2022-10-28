@@ -328,6 +328,7 @@ def blindSolve(exp, *,
                                             center_dec=center_dec,
                                             radius=radiusInDegrees,
                                             solve_timeout=240)
+    print('Finished solving!')
 
     nominalRa, nominalDec = exp.getInfo().getVisitInfo().getBoresightRaDec()
 
