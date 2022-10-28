@@ -62,13 +62,17 @@ def getApiKey():
         raise RuntimeError(msg) from e
 
 
-def runImchar(exp):
+def runImchar(exp, snr, minPix):
     """Run the image characterization task, finding only bright sources.
 
     Parameters
     ----------
     exp : `lsst.afw.image.Exposure`
         The exposure to characterize.
+    snr : `float`
+        The SNR threshold for detection.
+    minPix : `int`
+        The minimum number of pixels to count as a source.
 
     Returns
     -------
@@ -81,8 +85,8 @@ def runImchar(exp):
     charConfig.doDeblend = False
     charConfig.repair.doCosmicRay = False
     charConfig.repair.doInterpolate = True
-    charConfig.detection.minPixels = 25  # set low as we do a cut anyway
-    charConfig.detection.thresholdValue = 3  # set low as we do a cut anyway
+    charConfig.detection.minPixels = minPix
+    charConfig.detection.thresholdValue = snr
 
     charTask = CharacterizeImageTask(config=charConfig)
 
@@ -226,6 +230,8 @@ def _filterSourceCatalog(srcCat, brightSourceFraction, minSources=15):
 def blindSolve(exp, *,
                radiusInDegrees=5,
                brightSourceFraction=0.1,
+               snr=5,
+               minPix=25,
                scaleEstimate=None,
                doPlot=False,
                savePlotAs=None):
@@ -239,6 +245,10 @@ def blindSolve(exp, *,
         The maximum radius to search out to from the nominal wcs.
     brightSourceFraction : ``, optional
         Take only this top-most fraction of sources from the image.
+    snr : `float`
+        The SNR threshold for detection.
+    minPix : `int`
+        The minimum number of pixels to count as a source.
     scaleEstimate : ``, optional
         An estimate of the platescale to use, in arcseconds per pixel. It is
         always used if supplied, but if not, the nominal platescale from the
@@ -284,7 +294,7 @@ def blindSolve(exp, *,
     if not nominalWcs:
         print('Trying to process image with None wcs - good luck!')
 
-    imCharResult = runImchar(exp)
+    imCharResult = runImchar(exp, snr, minPix)
 
     sourceCatalog = imCharResult.sourceCat
     if not sourceCatalog:
