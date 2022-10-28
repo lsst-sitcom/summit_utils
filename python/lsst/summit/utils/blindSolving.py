@@ -224,7 +224,7 @@ def _filterSourceCatalog(srcCat, brightSourceFraction, minSources=15):
 
 
 def blindSolve(exp, *,
-               radiusInDegrees=1,
+               radiusInDegrees=5,
                brightSourceFraction=0.1,
                scaleEstimate=None,
                doPlot=False,
