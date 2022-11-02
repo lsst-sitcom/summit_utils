@@ -75,14 +75,19 @@ class BestEffortIsr():
     _datasetName = 'quickLookExp'
 
     def __init__(self, *,
-                 extraCollections=[], defaultExtraIsrOptions={}, doRepairCosmics=True, doWrite=True):
+                 extraCollections=[],
+                 defaultExtraIsrOptions={},
+                 doRepairCosmics=True,
+                 doWrite=True,
+                 oga=False):
         self.log = logging.getLogger(__name__)
 
         collections = getLatissDefaultCollections()
         self.collections = extraCollections + collections
         self.log.info(f'Instantiating butler with collections={self.collections}')
         try:
-            self.butler = dafButler.Butler('LATISS', collections=self.collections,
+            repoString = "LATISS" if not oga else "/repo/oga"
+            self.butler = dafButler.Butler(repoString, collections=self.collections,
                                            instrument='LATISS',
                                            run=CURRENT_RUN if doWrite else None)
         except(FileNotFoundError, RuntimeError):
