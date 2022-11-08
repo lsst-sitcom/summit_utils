@@ -79,14 +79,14 @@ class BestEffortIsr():
                  defaultExtraIsrOptions={},
                  doRepairCosmics=True,
                  doWrite=True,
-                 oga=False):
+                 embargo=False):
         self.log = logging.getLogger(__name__)
 
         collections = getLatissDefaultCollections()
         self.collections = extraCollections + collections
         self.log.info(f'Instantiating butler with collections={self.collections}')
         try:
-            repoString = "LATISS" if not oga else "/repo/oga"
+            repoString = "LATISS" if not embargo else "/repo/embargo"
             self.butler = dafButler.Butler(repoString, collections=self.collections,
                                            instrument='LATISS',
                                            run=CURRENT_RUN if doWrite else None)
