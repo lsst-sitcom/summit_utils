@@ -104,7 +104,7 @@ def _update_RECENT_DAY(day):
     RECENT_DAY = max(day-1, RECENT_DAY)
 
 
-def makeDefaultLatissButler(*, extraCollections=None, writeable=False, oga=False):
+def makeDefaultLatissButler(*, extraCollections=None, writeable=False, embargo=False):
     """Create a butler for LATISS using the default collections.
 
     Parameters
@@ -113,9 +113,9 @@ def makeDefaultLatissButler(*, extraCollections=None, writeable=False, oga=False
         Extra input collections to supply to the butler init.
     writable : `bool`, optional
         Whether to make a writable butler.
-    oga : `bool`, optional
-        Use the OGA repo instead of the main one. Needed to access embargoed
-        data.
+    embargo : `bool`, optional
+        Use the embargo repo instead of the main one. Needed to access
+        embargoed data.
 
     Returns
     -------
@@ -127,7 +127,7 @@ def makeDefaultLatissButler(*, extraCollections=None, writeable=False, oga=False
     if extraCollections:
         collections.extend(extraCollections)
     try:
-        repoString = "LATISS" if not oga else "/repo/oga"
+        repoString = "LATISS" if not embargo else "/repo/embargo"
         butler = dafButler.Butler(repoString,
                                   collections=collections,
                                   writeable=writeable,
