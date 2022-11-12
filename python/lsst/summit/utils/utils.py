@@ -35,6 +35,11 @@ import lsst.utils.packages as packageUtils
 from lsst.daf.butler.cli.cliLog import CliLog
 import datetime
 from dateutil.tz import gettz
+from lsst.pipe.base import Struct
+
+import scarlet
+from scarlet.detect_pybind11 import get_footprints
+import matplotlib.pyplot as plt
 
 from lsst.obs.lsst.translators.lsst import FILTER_DELIMITER
 from lsst.obs.lsst.translators.latiss import AUXTEL_LOCATION
@@ -1039,3 +1044,101 @@ def digitizeData(data, nColors=256):
     scale = (maxVal - minVal)/len(cdf)
     bins = np.floor((data*scale - minVal)).astype(np.int64)
     return cdf[bins]
+
+
+def detectSources(image, variance, SNR=5, scale=3, edge_width=50, heavy_export=False):
+    """Detect sources in an image
+
+    This function is based on the Starck and Murtagh 1998 algorithm
+    to detect sources in an image in wavelet space.
+
+    The function first determines the variance at each wavelet
+    scale by iteratively removing pixels below the variance and
+    ensuring that the image can be reconstructed with the
+    remaining pixels.
+
+    Next a set of unique scarlet footprints are created for
+    each source at the detection scale. This assumes that at
+    the chosen scale there is no deblending,
+    which will be true in general except for very close sources.
+    In that case, the hope is that the centroid of
+    a blended pair of detections will still accurately reflect the
+    jitter in the image.
+
+    Parameters
+    ----------
+    image: `numpy.array`
+        The 2D image used for detection.
+    variance: `numpy.array`
+        The per-pixel variance of the image.
+    SNR: `float`
+        The signal to noise ratio required for pixels to be relvant
+        in a given wavelet scale.
+        The default value performed best on the test image,
+        but this might need to be slightly raised or lowered.
+    scale: `int`
+        The wavelet scale used for detection.
+        This is also likely to be fixed, but some tweaking might
+        be necessary to figure out the optimal scale to use.
+    edge_width: `int`
+        Number of pixels around the image to include in the `edge`
+        region.
+        This will be dependent on the wavelet scale, as higher scales
+        have larger artifacts on the edges.
+        The default value is needed for `scale=3`.
+    heavy_export: `bool`
+        Whether or not to include the bounding box and heavy footprint
+        image in the results.
+
+    Returns
+    -------
+    detections: `list` of `lsst.pipe.base.Struct`
+        A list of the sources detected by the algorithm.
+    """
+    # Select only the pixels above the desired SNR
+    sigma = np.nanmedian(np.sqrt(variance))
+    starlets = scarlet.wavelet.starlet_transform(image, scales=scale+1)
+    M = scarlet.wavelet.get_multiresolution_support(
+        image.copy(),
+        starlets,
+        sigma,
+        K=SNR,
+        epsilon=1e-1,
+        max_iter=20
+    )
+    coeffs = starlets * M
+
+    # Use the specified wavelet scale for detection
+    detect = coeffs[scale]
+    # remove edge pixels containing fourier artifacts
+    detect[:edge_width,:] = 0
+    detect[-edge_width:, :] = 0
+    detect[:, :edge_width] = 0
+    detect[:, -edge_width:] = 0
+
+    # Get the footprints for each source above the threshold
+    footprints = get_footprints(detect>0, 4, 6, 0, False)
+
+    detections = []
+    for footprint in footprints:
+        # convert the bounds into a scarlet bounding box
+        bbox = scarlet.detect.bounds_to_bbox(footprint.bounds)
+        # Get the origin (xy0) of the box containing the footprint
+        y0, x0 = bbox.origin
+        fp_img = footprint.footprint * image[bbox.slices]
+
+        # Calculate the centroid
+        x = np.arange(fp_img.shape[1])
+        y = np.arange(fp_img.shape[0])
+        x, y = np.meshgrid(x, y)
+        cx = np.sum((x*fp_img)/np.sum(fp_img))
+        cy = np.sum((y*fp_img)/np.sum(fp_img))
+
+        # Add the detection object
+        detection = Struct(x=cx+x0, y=cy+y0, flux=np.sum(fp_img))
+        if heavy_export:
+            # Include data that is potentially useful to cull spurious detections
+            detection.bbox = bbox
+            detection.foot_img = fp_img
+        detections.append(detection)
+    return detections
