@@ -39,7 +39,6 @@ from lsst.pipe.base import Struct
 
 import scarlet
 from scarlet.detect_pybind11 import get_footprints
-import matplotlib.pyplot as plt
 
 from lsst.obs.lsst.translators.lsst import FILTER_DELIMITER
 from lsst.obs.lsst.translators.latiss import AUXTEL_LOCATION
@@ -1111,13 +1110,13 @@ def detectSources(image, variance, SNR=5, scale=3, edge_width=50, heavy_export=F
     # Use the specified wavelet scale for detection
     detect = coeffs[scale]
     # remove edge pixels containing fourier artifacts
-    detect[:edge_width,:] = 0
+    detect[:edge_width, :] = 0
     detect[-edge_width:, :] = 0
     detect[:, :edge_width] = 0
     detect[:, -edge_width:] = 0
 
     # Get the footprints for each source above the threshold
-    footprints = get_footprints(detect>0, 4, 6, 0, False)
+    footprints = get_footprints(detect > 0, 4, 6, 0, False)
 
     detections = []
     for footprint in footprints:
@@ -1136,8 +1135,7 @@ def detectSources(image, variance, SNR=5, scale=3, edge_width=50, heavy_export=F
 
         # Add the detection object
         detection = Struct(x=cx+x0, y=cy+y0, flux=np.sum(fp_img))
-        if heavy_export:
-            # Include data that is potentially useful to cull spurious detections
+        if heavy_export:  # Include data that is potentially useful to cull spurious detections
             detection.bbox = bbox
             detection.foot_img = fp_img
         detections.append(detection)
