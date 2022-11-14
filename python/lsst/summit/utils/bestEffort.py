@@ -191,6 +191,14 @@ class BestEffortIsr():
         -------
         exp : `lsst.afw.image.Exposure`
             The postIsr exposure
+
+        Notes
+        -----
+        A function can be monkey-patched in called _rawHook which will be
+        called with the raw exposure before it is passed to the isrTask. It
+        must be kept extremely fast, and must deal with all its own imports
+        etc. It is called with a catch-all try block but any exceptions raised
+        will warn.
         """
         dataId = self._parseExpIdOrDataId(expIdOrDataId, **kwargs)
 
@@ -204,6 +212,11 @@ class BestEffortIsr():
 
         try:
             raw = self.butler.get('raw', dataId=dataId)
+            if hasattr(self, '_rawHook'):  # must be kept fast and must never fail
+                try:
+                    self._rawHook(raw=raw)
+                except Exception as e:
+                    self.log.warning(f"Failed to run raw hook: {e}")
         except LookupError:
             raise RuntimeError(f"Failed to retrieve raw for exp {dataId}") from None
 
