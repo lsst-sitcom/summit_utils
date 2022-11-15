@@ -119,7 +119,6 @@ def plot(exp, icSrc=None, filteredSources=None, saveAs=None):
     clipVal = 1
     arr = np.clip(arr, clipVal, 1000000)  # This image has some negative values, and this removes them
     arr = quickSmooth(arr)
-    vmax = np.percentile(exp.image.array, 99.9)
     plt.imshow(np.arcsinh(arr)/10,
                interpolation='None', cmap='gray', origin='lower')
 
@@ -359,7 +358,10 @@ def blindSolve(exp, *,
               'deltaDec': deltaDec,
               'deltaRaArcsec': deltaRa.asArcseconds(),
               'deltaDecArcsec': deltaDec.asArcseconds(),
-              'astrometry_net_wcs_header': wcs_header}
+              'astrometry_net_wcs_header': wcs_header,
+              'nFilteredSources': len(filteredSources),
+              'nRawSources': len(sourceCatalog),
+              }
 
     return result
 
