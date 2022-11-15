@@ -24,7 +24,6 @@ import math
 
 import numpy as np
 import matplotlib.pyplot as plt
-from matplotlib.colors import LogNorm
 from astropy.coordinates import Angle
 import astropy.units as u
 from astroquery.astrometry_net import AstrometryNet
