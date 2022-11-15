@@ -94,7 +94,7 @@ def runImchar(exp, snr, minPix):
     return charResult
 
 
-def plot(exp, icSrc, filteredSources=None, saveAs=None):
+def plot(exp, icSrc=None, filteredSources=None, saveAs=None):
     """Plot an exposure, overlaying the selected sources and compass arrows.
 
     Plots the exposure on a logNorm scale, with the brightest sources, as
@@ -120,8 +120,8 @@ def plot(exp, icSrc, filteredSources=None, saveAs=None):
     arr = np.clip(arr, clipVal, 1000000)  # This image has some negative values, and this removes them
     arr = quickSmooth(arr)
     vmax = np.percentile(exp.image.array, 99.9)
-    plt.imshow(arr, norm=LogNorm(vmin=clipVal, vmax=vmax),
-               interpolation='Nearest', cmap='gray', origin='lower')
+    plt.imshow(np.arcsinh(arr)/10,
+               interpolation='None', cmap='gray', origin='lower')
 
     height, width = exp.image.array.shape
     leftFraction = .15  # fraction into the image to start the N/E compass
@@ -141,7 +141,8 @@ def plot(exp, icSrc, filteredSources=None, saveAs=None):
     dec = Angle(dec.asDegrees(), u.deg)
     rotpa = Angle(rotpa.asDegrees(), u.deg)
 
-    plt.scatter(icSrc['base_SdssCentroid_x'], icSrc['base_SdssCentroid_y'], color='red', marker='x')
+    if icSrc:
+        plt.scatter(icSrc['base_SdssCentroid_x'], icSrc['base_SdssCentroid_y'], color='red', marker='x')
     if filteredSources:
         markerStyle = dict(marker='o', linestyle='', markersize=20, linewidth=10, color='green',
                            markeredgecolor='green', fillstyle='none')
