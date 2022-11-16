@@ -472,3 +472,72 @@ def chuckHeaderToWcs(exp, nominalRa=None, nominalDec=None):
     wcsPropSet = PropertySet.from_mapping(header)
     wcs = SkyWcs(wcsPropSet)
     return wcs
+
+
+# don't be tempted to get cute and try to combine these 4 functions. It would
+# be a easy to do but it's not unlikley they will diverge in the future.
+def getAverageRaFromHeader(header):
+    raStart = header.get('RASTART')
+    raEnd = header.get('RAEND')
+    if not raStart or not raEnd:
+        raise RuntimeError(f'Failed to get RA from header due to missing RASTART/END {raStart} {raEnd}')
+    raStart = float(raStart)
+    raEnd = float(raEnd)
+    return (raStart + raEnd) / 2
+
+
+def getAverageDecFromHeader(header):
+    decStart = header.get('DECSTART')
+    decEnd = header.get('DECEND')
+    if not decStart or not decEnd:
+        raise RuntimeError(f'Failed to get DEC from header due to missing DECSTART/END {decStart} {decEnd}')
+    decStart = float(decStart)
+    decEnd = float(decEnd)
+    return (decStart + decEnd) / 2
+
+
+def getAverageAzFromHeader(header):
+    azStart = header.get('AZSTART')
+    azEnd = header.get('AZEND')
+    if not azStart or not azEnd:
+        raise RuntimeError(f'Failed to get az from header due to missing AZSTART/END {azStart} {azEnd}')
+    azStart = float(azStart)
+    azEnd = float(azEnd)
+    return (azStart + azEnd) / 2
+
+
+def getAverageElFromHeader(header):
+    elStart = header.get('ELSTART')
+    elEnd = header.get('ELEND')
+    if not elStart or not elEnd:
+        raise RuntimeError(f'Failed to get el from header due to missing ELSTART/END {elStart} {elEnd}')
+    elStart = float(elStart)
+    elEnd = float(elEnd)
+    return (elStart + elEnd) / 2
+
+
+def genericCameraHeaderToWcs(exp):
+    header = exp.getMetadata().toDict()
+    width, height = exp.image.array.shape
+    header['CRPIX1'] = width/2
+    header['CRPIX2'] = height/2
+
+    header['CTYPE1'] = 'RA---TAN-SIP'
+    header['CTYPE2'] = 'DEC--TAN-SIP'
+
+    header['CRVAL1'] = getAverageRaFromHeader(header)
+    header['CRVAL2'] = getAverageDecFromHeader(header)
+
+    plateScale = header.get('SECPIX')
+    if not plateScale:
+        raise RuntimeError('Failed to find platescale in header')
+    plateScale = float(plateScale)
+
+    header['CD1_1'] = plateScale / 3600
+    header['CD1_2'] = 0
+    header['CD2_1'] = 0
+    header['CD2_2'] = plateScale / 3600
+
+    wcsPropSet = PropertySet.from_mapping(header)
+    wcs = SkyWcs(wcsPropSet)
+    return wcs
