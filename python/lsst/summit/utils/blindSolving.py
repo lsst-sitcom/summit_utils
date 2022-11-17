@@ -21,8 +21,13 @@
 
 import os
 import math
-
+import subprocess
+import tempfile
 import numpy as np
+from astropy.io import fits
+import time
+import uuid
+
 import matplotlib.pyplot as plt
 from astropy.coordinates import Angle
 import astropy.units as u
@@ -541,3 +546,107 @@ def genericCameraHeaderToWcs(exp):
     wcsPropSet = PropertySet.from_mapping(header)
     wcs = SkyWcs(wcsPropSet)
     return wcs
+
+
+class CommandLineSolver():
+    def __init__(self,
+                 indexFiles=None,
+                 checkInParallel=True,
+                 timeout=300,
+                 binary='solve-field',
+                 ):
+        self.indexFiles = indexFiles
+        self.checkInParallel = checkInParallel
+        self.timeout = timeout
+        self.binary = binary
+
+    def writeConfigFile(self):
+        """Write a temporary config file for astrometry.net.
+        """
+        if not self.indexFiles:
+            raise RuntimeError("No index files specified, you must specify indexFiles "
+                               "in the constructor (or on the instance)")
+
+        lines = []
+        if self.checkInParallel:
+            lines.append('inparallel')
+
+        lines.append(f"cpulimit {self.timeout}")
+        lines.append(f"add_path {self.indexFiles}")
+        lines.append("autoindex")
+        filename = tempfile.mktemp(suffix='.cfg')
+        with open(filename, 'w') as f:
+            f.writelines(line + '\n' for line in lines)
+        return filename
+
+    def writeFitsTable(self, sourceCat):
+        """Write the source table to a FITS file and return the filename.
+        """
+        fluxArray = sourceCat.columns.getGaussianInstFlux()
+        fluxFinite = np.logical_and(np.isfinite(fluxArray), fluxArray > 0)
+        fluxArray = fluxArray[fluxFinite]
+        args = np.argsort(fluxArray)
+        x = sourceCat.getColumnView().getX()[fluxFinite]
+        y = sourceCat.getColumnView().getY()[fluxFinite]
+        fluxArray = fluxArray[args][::-1]  # brightest finite flux
+        xArray = x[args][::-1]
+        yArray = y[args][::-1]
+        x = fits.Column(name='X', format='D', array=xArray)
+        y = fits.Column(name='Y', format='D', array=yArray)
+        flux = fits.Column(name='FLUX', format='D', array=fluxArray)
+        hdu = fits.BinTableHDU.from_columns([flux, x, y])
+
+        filename = tempfile.mktemp(suffix='.fits')
+        hdu.writeto(filename)
+        return filename
+
+    def run(self, exp, sourceCat, percentageScaleError=10, radius=None, silent=True):
+        configFile = self.writeConfigFile()
+        fitsFile = self.writeFitsTable(sourceCat)
+        wcs = exp.getWcs()
+        if not wcs:
+            raise ValueError("No WCS in exposure")
+        plateScale = wcs.getPixelScale().asArcseconds()
+        scaleMin = plateScale*(1 - percentageScaleError/100)
+        scaleMax = plateScale*(1 + percentageScaleError/100)
+
+        ra, dec = wcs.getSkyOrigin()
+
+        # do not use tempfile.TemporaryDirectory() because it must not exist,
+        # it is made by the solve-field binary and barfs if it exists already!
+        mainTempDir = tempfile.gettempdir()
+        tempDirSuffix = str(uuid.uuid1()).split('-')[0]
+        tempDir = os.path.join(mainTempDir, tempDirSuffix)
+
+        cmd = (f"solve-field {fitsFile} "  # the data
+               f"--width {exp.getWidth()} "  # image dimensions
+               f"--height {exp.getHeight()} "  # image dimensions
+               f"-3 {ra.asDegrees()} "
+               f"-4 {dec.asDegrees()} "
+               f"-5 {radius if radius else 180} "
+               "-X X -Y Y -v -z 2 -t 2 "  # the parts of the bintable to use
+               f"--scale-low {scaleMin:.3f} "  # the scale range
+               f"--scale-high {scaleMax:.3f} "  # the scale range
+               f"--scale-units arcsecperpix "
+               "--crpix-center "  # the CRPIX is always the center of the image
+               f"--config {configFile} "
+               f"-D {tempDir} "
+               "--overwrite "  # shouldn't matter as we're using temp files
+               )
+
+        t0 = time.time()
+        with open(os.devnull, 'w') as devnull:
+            result = subprocess.run(cmd, shell=True, check=True, stdout=devnull if silent else None)
+        t1 = time.time()
+
+        if isinstance(result, subprocess.CompletedProcess):
+            print(f"Found solution in {(t1-t0):.2f} seconds")
+            basename = os.path.basename(fitsFile).removesuffix('.fits')
+            wcsFile = os.path.join(tempDir, basename + ".wcs")
+            with fits.open(wcsFile) as f:
+                header = f[0].header
+            wcs = headerToWcs(header)
+            return wcs
+        else:
+            print("Fit failed")
+        return False
