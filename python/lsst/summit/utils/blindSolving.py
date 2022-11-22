@@ -548,6 +548,64 @@ def genericCameraHeaderToWcs(exp):
     return wcs
 
 
+class AstrometryNetResult():
+    """Minimal wrapper class to construct and return results from the command
+    line fitter.
+
+    Constructs a DM wcs from the output of the command line fitter, and sets
+    the plate scale on the class for use in the scatter measurement.
+
+    Parameters
+    ----------
+    wcsFile : `str`
+        The path to the wcs file from the fit.
+    corrFile : `str`
+        The path to the corr file from the fit.
+    """
+    wcs = None
+    scatterPixels = None
+    scatterArcseconds = None
+
+    def __init__(self, wcsFile, corrFile=None):
+        self.wcsFile = wcsFile
+        self._buildWcs()  # create the DM wcs from the a.net wcs file. Sets self.plateScale from fitted wcs
+
+        self.corrFile = corrFile
+        self._calcScatter()  # sets self.scatterPixels and self.scatterArcseconds
+
+    def _buildWcs(self):
+        with fits.open(self.wcsFile) as f:
+            header = f[0].header
+        wcs = headerToWcs(header)
+        self.wcs = wcs
+        self.plateScale = wcs.getPixelScale().asArcseconds()
+
+    def _calcScatter(self):
+        if not self.corrFile:
+            return None
+
+        try:
+            with fits.open(self.corrFile) as f:
+                data = f[1].data
+
+            meanSqErr = 0.0
+            count = 0
+            for i in range(data.shape[0]):
+                row = data[i]
+                count += 1
+                error = (row[0] - row[4])**2 + (row[1] - row[5])**2  # square error in pixels
+                error *= row[10]  # multiply by weight
+                meanSqErr += error
+            meanSqErr /= count  # divide by number of stars
+            rmsErrorPixels = np.sqrt(meanSqErr)
+            rmsErrorArsec = rmsErrorPixels * self.plateScale
+
+            self.scatterPixels = rmsErrorPixels
+            self.scatterArcseconds = rmsErrorArsec
+        except Exception as e:
+            print(f'Failed for calculate astrometric scatter: {repr(e)}')
+
+
 class CommandLineSolver():
     def __init__(self,
                  indexFiles=None,
@@ -639,14 +697,16 @@ class CommandLineSolver():
             result = subprocess.run(cmd, shell=True, check=True, stdout=devnull if silent else None)
         t1 = time.time()
 
-        if isinstance(result, subprocess.CompletedProcess):
+        if result.returncode == 0:
             print(f"Found solution in {(t1-t0):.2f} seconds")
+            # output template is /tmpdirname/fitstempname + various suffixes for each obj
             basename = os.path.basename(fitsFile).removesuffix('.fits')
-            wcsFile = os.path.join(tempDir, basename + ".wcs")
-            with fits.open(wcsFile) as f:
-                header = f[0].header
-            wcs = headerToWcs(header)
-            return wcs
+            outputTemplate = os.path.join(tempDir, basename)
+            wcsFile = outputTemplate + '.wcs'
+            corrFile = outputTemplate + '.corr'
+
+            result = AstrometryNetResult(wcsFile, corrFile)
+            return result
         else:
             print("Fit failed")
-        return False
+        return None
