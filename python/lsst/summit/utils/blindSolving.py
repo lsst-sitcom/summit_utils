@@ -20,7 +20,6 @@
 # along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
 import os
-import math
 import subprocess
 import tempfile
 import numpy as np
@@ -201,34 +200,39 @@ def plot(exp, icSrc=None, filteredSources=None, saveAs=None):
     plt.show()
 
 
-def _filterSourceCatalog(srcCat, brightSourceFraction, minSources=15):
-    maxFlux = np.nanmax(srcCat['base_CircularApertureFlux_3_0_instFlux'])
-    selectBrightestSource = srcCat['base_CircularApertureFlux_3_0_instFlux'] > maxFlux * 0.99
-    brightestSource = srcCat.subset(selectBrightestSource)
-    brightestCentroid = (brightestSource['base_SdssCentroid_x'][0],
-                         brightestSource['base_SdssCentroid_y'][0])
-    filteredCatalog = srcCat.subset(srcCat['base_CircularApertureFlux_3_0_instFlux'] > maxFlux * 0.001)
+def filterOnBrightest(catalog, brightFraction, minSources=15,
+                      flux_field="base_CircularApertureFlux_3_0_instFlux"):
+    """Return a catalog containing the brightest sources in the input,
+    making an initial coarse cut, keeping those above 0.1% of the maximum
+    finite flux.
 
-    # TODO: make these into log messages?
-    print(f"Found {len(srcCat)} sources, {len(filteredCatalog)} bright sources")
-    print(f"Brightest centroid at {brightestCentroid}")
+    Parameters
+    ----------
+    catalog : `lsst.afw.table.SourceCatalog`
+        Catalog to be filtered.
+    brightFraction : `float`
+        Return this fraction of the brightest sources.
+    minSources : `int`, optional
+        Always return at least this many sources.
+    flux_field : `str`, optional
+        Name of flux field to filter on.
 
-    if not filteredCatalog.isContiguous():
-        filteredCatalog = filteredCatalog.copy(deep=True)
-    sources = filteredCatalog.asAstropy()
-    sources.keep_columns(['base_SdssCentroid_x',
-                          'base_SdssCentroid_y',
-                          'base_CircularApertureFlux_3_0_instFlux'])
-    sources.sort('base_CircularApertureFlux_3_0_instFlux', reverse=True)
+    Returns
+    -------
+    result : `lsst.afw.table.SourceCatalog`
+        Brightest sources in the input image, in ascending order of brightness.
+    """
+    maxFlux = np.nanmax(catalog[flux_field])
+    result = catalog.subset(catalog[flux_field] > maxFlux * 0.001)
 
-    nSources = len(sources)
-    if nSources <= minSources:
-        return sources
+    print(f"Catalog had {len(catalog)} sources, of which {len(result)} were above 0.1% of max")
 
-    startPos = 0
-    endPos = math.ceil(nSources*brightSourceFraction)
-    sources.remove_rows([i for i in range(startPos, endPos+1)])
-    return sources
+    item = catalog.schema.find(flux_field)
+    result = catalog.copy(deep=True)  # sort() is in place; copy so we don't modify the original
+    result.sort(item.key)
+    result = result.copy(deep=True)  # make it memory contiguous
+    end = np.ceil(len(result)*brightFraction)
+    return result[-min(end, minSources):]
 
 
 def blindSolve(exp, *,
@@ -303,7 +307,7 @@ def blindSolve(exp, *,
     sourceCatalog = imCharResult.sourceCat
     if not sourceCatalog:
         raise RuntimeError('Failed to find any sources in image')
-    filteredSources = _filterSourceCatalog(sourceCatalog, brightSourceFraction)
+    filteredSources = filterOnBrightest(sourceCatalog, brightSourceFraction)
 
     if doPlot:
         plot(exp, sourceCatalog, filteredSources, saveAs=savePlotAs)
