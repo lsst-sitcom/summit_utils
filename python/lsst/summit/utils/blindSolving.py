@@ -698,12 +698,17 @@ class CommandLineSolver():
         t1 = time.time()
 
         if result.returncode == 0:
-            print(f"Found solution in {(t1-t0):.2f} seconds")
-            # output template is /tmpdirname/fitstempname + various suffixes for each obj
+            print(f"Fitting code ran in {(t1-t0):.2f} seconds")
+            # output template is /tmpdirname/fitstempname + various suffixes
+            # for each obj
             basename = os.path.basename(fitsFile).removesuffix('.fits')
             outputTemplate = os.path.join(tempDir, basename)
             wcsFile = outputTemplate + '.wcs'
             corrFile = outputTemplate + '.corr'
+
+            if not os.path.exists(wcsFile):
+                print("but failed to find a solution.")
+                return None
 
             result = AstrometryNetResult(wcsFile, corrFile)
             return result
