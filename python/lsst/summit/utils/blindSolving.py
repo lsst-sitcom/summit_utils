@@ -231,8 +231,8 @@ def filterOnBrightest(catalog, brightFraction, minSources=15,
     result = catalog.copy(deep=True)  # sort() is in place; copy so we don't modify the original
     result.sort(item.key)
     result = result.copy(deep=True)  # make it memory contiguous
-    end = np.ceil(len(result)*brightFraction)
-    return result[-min(end, minSources):]
+    end = int(np.ceil(len(result)*brightFraction))
+    return result[-max(end, minSources):]
 
 
 def blindSolve(exp, *,
