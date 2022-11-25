@@ -650,3 +650,19 @@ def starTrackerFileToExposure(filename, logger=None):
         logger.warning(f"Failed to set date from header: {e}")
 
     return exp
+
+
+def obsInfoToDict(obsInfo):
+    """Convert an ObservationInfo to a dict.
+
+    Parameters
+    ----------
+    obsInfo : `XXX`
+        The ObservationInfo to convert.
+
+    Returns
+    -------
+    obsInfoDict : `dict`
+        The ObservationInfo as a dict.
+    """
+    return {prop: getattr(obsInfo, prop) for prop in obsInfo.all_properties.keys()}
