@@ -76,7 +76,9 @@ class NightReport():
         obsInfosToLoad = set(seqNums) - self._obsInfosLoaded
         if obsInfosToLoad:
             print(f"Loading {len(obsInfosToLoad)} obsInfo(s)")
-        for seqNum in obsInfosToLoad:
+        for i, seqNum in enumerate(obsInfosToLoad):
+            if i+1 % 200 == 0:
+                print(f"Loaded {i+1} obsInfos")
             obsInfo, metadata = self.getObsInfoAndMetadataForSeqNum(seqNum)
             obsInfoDict = obsInfoToDict(obsInfo)
             records[seqNum].update(obsInfoDict)
@@ -85,7 +87,7 @@ class NightReport():
             records[seqNum]['_raw_metadata'] = metadata
             self._obsInfosLoaded.add(seqNum)
 
-        self.data = self.getSortedData(records)
+        self.data = self.getSortedData(self.data)  # make sure we stay sorted
         self.stars = self.getObservedObjects()
         self.cMap = self.makeStarColorAndMarkerMap(self.stars)
 
@@ -147,30 +149,103 @@ class NightReport():
             markerMap[star] = ColorAndMarker(colors[colorIndex], MARKER_SEQUENCE[markerIndex])
         return markerMap
 
-    # def plotPerObjectAirMass(self, objects=None, airmassOneAtTop=True, filterFunc=None):
-    #     """filterFunc is self as the first argument and seqNum as second."""
-    #     if not objects:
-    #         objects = self.stars
+    @staticmethod
+    def _ensureList(arg):
+        if type(arg) == str:
+            return [arg]
+        assert(type(arg) == list), f"Expect list, got {type(arg)}: {arg}"
+        return arg
 
-    #     objects = self._safeListArg(objects)
+    def calcShutterOpenEfficiency(self, seqMin=0, seqMax=0):
+        raise NotImplementedError("This is not yet implemented")
+        # if seqMin == 0:
+        #     seqMin = min(self.data.keys())
+        # if seqMax == 0:
+        #     seqMax = max(self.data.keys())
+        # assert seqMax > seqMin
+        # assert (seqMin in self.data.keys())
+        # assert (seqMax in self.data.keys())
 
-    #     # lazy to always recalculate but it's not *that* slow
-    #     # and optionally passing around can be messy
-    #     # TODO: keep some of this in class state
-    #     airMasses = self._calcObjectAirmasses(objects, filterFunc=filterFunc)
+        # timeStart = self.data[seqMin]['ObservationInfo'].datetime_begin
+        # timeEnd = self.data[seqMax]['ObservationInfo'].datetime_end
+        # expTimeSum = 0
+        # for seqNum in range(seqMin, seqMax+1):
+        #     if seqNum not in self.data.keys():
+        #         print(f"Warning! No data found for seqNum {seqNum}")
+        #         continue
+        #     expTimeSum += self.data[seqNum]['ObservationInfo'].exposure_time.value
 
-    #     _ = plt.figure(figsize=(10, 6))
-    #     for star in objects:
-    #         if airMasses[star]:  # skip stars fully filtered out by callbacks
-    #             ams, times = np.asarray(airMasses[star])[:, 0], np.asarray(airMasses[star])[:, 1]
-    #         else:
-    #             continue
-    #         color = self.cMap[star].color
-    #         marker = self.cMap[star].marker
-    #         plt.plot(times, ams, color=color, marker=marker, label=star, ms=10, ls='')
+        # timeOnSky = (timeEnd - timeStart).sec
+        # efficiency = expTimeSum/timeOnSky
+        # print(f"{100*efficiency:.2f}% shutter open in seqNum range {seqMin} and {seqMax}")
+        # print(f"Total integration time = {expTimeSum:.1f}s")
+        # return efficiency
 
-    #     plt.ylabel('Airmass', fontsize=20)
-    #     if airmassOneAtTop:
-    #         ax = plt.gca()
-    #         ax.set_ylim(ax.get_ylim()[::-1])
-    #     _ = plt.legend(bbox_to_anchor=(1, 1.025), prop={'size': 15}, loc='upper left')
+    def printObsTable(self, imageType=None, tailNumber=0):
+        """Print a table of the days observations.
+
+        Parameters
+        ----------
+        imageType : str
+            Only consider images with this image type
+        tailNumber : int
+            Only print out the last n entries in the night
+        """
+        raise NotImplementedError("This is not yet implemented")
+        # lines = []
+        # if not imageType:
+        #     seqNums = self.data.keys()
+        # else:
+        #     seqNums = [s for s in self.data.keys()
+        #                if self.data[s]['ObservationInfo'].observation_type == imageType]
+
+        # seqNums = sorted(seqNums)
+        # for i, seqNum in enumerate(seqNums):
+        #     try:
+        #         expTime = self.data[seqNum]['ObservationInfo'].exposure_time.value
+        #         filt = self.data[seqNum]['ObservationInfo'].physical_filter
+        #         imageType = self.data[seqNum]['ObservationInfo'].observation_type
+        #         d1 = self.data[seqNum]['ObservationInfo'].datetime_begin
+        #         obj = self.data[seqNum]['ObservationInfo'].object
+        #         if i == 0:
+        #             d0 = d1
+        #         dt = (d1-d0)
+        #         d0 = d1
+        #         timeOfDay = d1.isot.split('T')[1]
+        #         msg = f'{seqNum:4} {imageType:9} {obj:10} {timeOfDay} {filt:25} {dt.sec:6.1f}  {expTime:2.2f}'
+        #     except KeyError:
+        #         msg = f'{seqNum:4} - error parsing headers/observation info! Check the file'
+        #     lines.append(msg)
+
+        # print(r"{seqNum} {imageType} {obj} {timeOfDay} {filt} {timeSinceLastExp} {expTime}")
+        # for line in lines[-tailNumber:]:
+        #     print(line)
+
+    def getExposureMidpoint(self, seqNum):
+        """Return the midpoint of the exposure as a float in MJD.
+        """
+        timespan = self.data[seqNum]['timespan']
+        return (timespan.begin.mjd + timespan.begin.mjd) / 2
+
+    def plotPerObjectAirMass(self, objects=None, airmassOneAtTop=True):
+        """XXX
+        """
+        if not objects:
+            objects = self.stars
+
+        objects = self._ensureList(objects)
+
+        _ = plt.figure(figsize=(10, 6))
+        for star in objects:
+            seqNums = self.getSeqNumsMatching(target_name=star)
+            airMasses = [self.data[seqNum]['boresight_airmass'] for seqNum in seqNums]
+            obsTimes = [self.getExposureMidpoint(self, seqNum) for seqNum in seqNums]
+            color = self.cMap[star].color
+            marker = self.cMap[star].marker
+            plt.plot(obsTimes, airMasses, color=color, marker=marker, label=star, ms=10, ls='')
+
+        plt.ylabel('Airmass', fontsize=20)
+        if airmassOneAtTop:
+            ax = plt.gca()
+            ax.set_ylim(ax.get_ylim()[::-1])
+        _ = plt.legend(bbox_to_anchor=(1, 1.025), prop={'size': 15}, loc='upper left')
