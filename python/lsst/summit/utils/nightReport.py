@@ -77,7 +77,7 @@ class NightReport():
         if obsInfosToLoad:
             print(f"Loading {len(obsInfosToLoad)} obsInfo(s)")
         for i, seqNum in enumerate(obsInfosToLoad):
-            if i+1 % 200 == 0:
+            if (i+1) % 200 == 0:
                 print(f"Loaded {i+1} obsInfos")
             obsInfo, metadata = self.getObsInfoAndMetadataForSeqNum(seqNum)
             obsInfoDict = obsInfoToDict(obsInfo)
@@ -228,7 +228,7 @@ class NightReport():
         return (timespan.begin.mjd + timespan.begin.mjd) / 2
 
     def plotPerObjectAirMass(self, objects=None, airmassOneAtTop=True):
-        """XXX
+        """XXX docs
         """
         if not objects:
             objects = self.stars
@@ -249,3 +249,46 @@ class NightReport():
             ax = plt.gca()
             ax.set_ylim(ax.get_ylim()[::-1])
         _ = plt.legend(bbox_to_anchor=(1, 1.025), prop={'size': 15}, loc='upper left')
+
+    def _makePolarPlot(self, azimuthsInDegrees, zenithAngles, marker="*-",
+                       title=None, makeFig=True, color=None, objName=None):
+        if makeFig:
+            _ = plt.figure(figsize=(10, 10))
+        ax = plt.subplot(111, polar=True)
+        ax.plot([a*np.pi/180 for a in azimuthsInDegrees], zenithAngles, marker, c=color, label=objName)
+        if title:
+            ax.set_title(title, va='bottom')
+        ax.set_theta_zero_location("N")
+        ax.set_theta_direction(-1)
+        ax.set_rlim(0, 90)
+        return ax
+
+    def makePolarPlotForObjects(self, objects=None, withLines=False):
+        if not objects:
+            objects = self.stars
+        objects = self._ensureList(objects)
+
+        _ = plt.figure(figsize=(10, 10))
+
+        for i, obj in enumerate(objects):
+            seqNums = self.getSeqNumsMatching(target_name=obj)
+            altAzes = [self.data[seqNum]['altaz_begin'] for seqNum in seqNums]
+            alts = [altAz.alt.deg for altAz in altAzes if altAz is not None]
+            azes = [altAz.az.deg for altAz in altAzes if altAz is not None]
+            assert(len(alts) == len(azes))
+            if len(azes) == 0:
+                print(f"WARNING: found no alt/az data for {obj}")
+            zens = [90 - alt for alt in alts]
+            color = self.cMap[obj].color
+            marker = self.cMap[obj].marker
+            if withLines:
+                marker += '-'
+
+            ax = self._makePolarPlot(azes, zens, marker=marker, title=None, makeFig=False,
+                                     color=color, objName=obj)
+        lgnd = ax.legend(bbox_to_anchor=(1.05, 1), prop={'size': 15}, loc='upper left')
+        for h in lgnd.legendHandles:
+            size = 14
+            if '-' in marker:
+                size += 5
+            h.set_markersize(size)
