@@ -59,7 +59,12 @@ class NightReport():
         md = self.butler.get('raw.metadata', dataId)
         return ObservationInfo(md), md
 
-    def rebuild(self):
+    def rebuild(self, full=False):
+        if full:
+            self.data = dict()
+            self._expRecordsLoaded = set()
+            self._obsInfosLoaded = set()
+
         records = self.getExpRecordDictForDayObs(self.dayObs)
         if len(records) == len(self.data):  # nothing to do
             print('No new records found')
