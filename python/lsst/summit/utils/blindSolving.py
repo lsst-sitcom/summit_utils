@@ -20,6 +20,7 @@
 # along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
 import os
+import shutil
 import subprocess
 import tempfile
 import numpy as np
@@ -621,6 +622,9 @@ class CommandLineSolver():
         self.checkInParallel = checkInParallel
         self.timeout = timeout
         self.binary = binary
+        if not shutil.which(binary):
+            raise RuntimeError(f"Could not find {binary} in path, please install 'solve-field' and either"
+                               " put it on your PATH or specify the full path to it in the 'binary' argument")
 
     def writeConfigFile(self):
         """Write a temporary config file for astrometry.net.
