@@ -27,12 +27,13 @@ import numpy as np
 from astropy.io import fits
 import time
 import uuid
+import warnings
 
 import lsst.geom as geom
 
 from .utils import headerToWcs
 
-__all__ = ['AstrometryNetResult', 'CommandLineSolver']
+__all__ = ['AstrometryNetResult', 'CommandLineSolver', 'OnlineSolver']
 
 
 class AstrometryNetResult():
@@ -189,8 +190,11 @@ class CommandLineSolver():
         hdu.writeto(filename)
         return filename
 
+    # try to keep this call sig and the defaults as similar as possible
+    # to the run method on the OnlineSolver
     def run(self, exp, sourceCat, isWideField, *, percentageScaleError=10, radius=None, silent=True):
-        """XXX DOCS
+        """Get the astrometric solution for an image using astrometry.net using
+        the binary ``solve-field`` and a set of index files.
 
         Parameters
         ----------
@@ -275,20 +279,21 @@ class CommandLineSolver():
 
 
 class OnlineSolver():
-    """A class to solve an image using the Astrometry.net service.
-
-    Parameters
-    ----------
-    api_key
+    """A class to solve an image using the Astrometry.net online service.
     """
 
     def __init__(self):
-        from astroquery.astrometry_net import AstrometryNet  # spews warning if no key so protect import
+        # import seems to spew warnings even if the required key is present
+        # so we swallow them, and raise on init if the key is missing
+        with warnings.catch_warnings():
+            warnings.simplefilter("ignore")
+            from astroquery.astrometry_net import AstrometryNet
 
-        self.apiKey = self.getApiKey()  # raises if not present so do first
-        self.adn = AstrometryNet()
-        self.adn.api_key = self.apiKey
+            self.apiKey = self.getApiKey()  # raises if not present so do first
+            self.adn = AstrometryNet()
+            self.adn.api_key = self.apiKey
 
+    @staticmethod
     def getApiKey():
         """Get the astrometry.net API key if possible.
 
@@ -310,8 +315,11 @@ class OnlineSolver():
             msg = "No AstrometryNet API key found. Sign up and get one, set it to $ASTROMETRY_NET_API_KEY"
             raise RuntimeError(msg) from e
 
-    def run(self, exp, sourceCat, *, percentageScaleError=5, radius=None, scaleEstimate=None):
-        """Get the astrometric solution for an image using astrometry.net.
+    # try to keep this call sig and the defaults as similar as possible
+    # to the run method on the CommandLineSolver
+    def run(self, exp, sourceCat, *, percentageScaleError=10, radius=None, scaleEstimate=None):
+        """Get the astrometric solution for an image using the astrometry.net
+        online solver.
 
         Parameters
         ----------
@@ -360,22 +368,17 @@ class OnlineSolver():
                 The fitted wcs, as a header dict.
         """
         nominalWcs = exp.getWcs()
-        if not nominalWcs:
-            print('Trying to process image with None wcs - good luck!')
-
-        vi = exp.getInfo().getVisitInfo()
-        ra, dec = vi.boresightRaDec
-        if np.isnan(ra.asDegrees()) or np.isnan(dec.asDegrees()):
-            print('Got nan for ra/dec from visitInfo, using ra/dec from wcs...')
-            if not nominalWcs:
-                raise RuntimeError('No wcs for failing over to.')
+        if nominalWcs is not None:
             ra, dec = nominalWcs.getSkyOrigin()
-            if np.isnan(ra.asDegrees()) or np.isnan(dec.asDegrees()):
-                raise RuntimeError('Failed to get ra/dec from both visitInfo and wcs')
-
-        if nominalWcs:
             scaleEstimate = nominalWcs.getPixelScale().asArcseconds()
-        if not scaleEstimate:
+        else:
+            print('Trying to process image with None wcs - good luck!')
+            vi = exp.getInfo().getVisitInfo()
+            ra, dec = vi.boresightRaDec
+            if np.isnan(ra.asDegrees()) or np.isnan(dec.asDegrees()):
+                raise RuntimeError('Exposure has no wcs and did not find nominal ra/dec in visitInfo')
+
+        if not scaleEstimate:  # must either have a wcs or provide via kwarg
             raise RuntimeError('Got no kwarg for scaleEstimate and failed to find one in the nominal wcs.')
 
         image_height, image_width = exp.image.array.shape
@@ -384,6 +387,7 @@ class OnlineSolver():
         scale_err = percentageScaleError  # error as percentage
         center_ra = ra.asDegrees()
         center_dec = dec.asDegrees()
+        radius = radius if radius else 180  # degrees
         try:
             wcs_header = self.adn.solve_from_source_list(sourceCat['base_SdssCentroid_x'],
                                                          sourceCat['base_SdssCentroid_y'],
@@ -395,6 +399,7 @@ class OnlineSolver():
                                                          center_ra=center_ra,
                                                          center_dec=center_dec,
                                                          radius=radius,
+                                                         crpix_center=True,  # the CRPIX is always the center
                                                          solve_timeout=240)
         except RuntimeError:
             print('Failed to find a solution')
