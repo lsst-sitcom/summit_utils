@@ -38,7 +38,7 @@ __all__ = [
     'genericCameraHeaderToWcs',
     'getIcrsAtZenith',
     'headerToWcs',
-    'runImchar',
+    'runCharactierizeImage',
     'filterSourceCatOnBrightest',
 ]
 
@@ -221,7 +221,7 @@ def headerToWcs(header):
     return SkyWcs(wcsPropSet)
 
 
-def runImchar(exp, snr, minPix):
+def runCharactierizeImage(exp, snr, minPix):
     """Run the image characterization task, finding only bright sources.
 
     Parameters
