@@ -336,13 +336,6 @@ class OnlineSolver():
             An estimate of the scale in arcseconds per pixel. Only used if
             (and required when) the exposure has no wcs.
 
-        # Returns
-        # -------
-        # result : `AstrometryNetResult` or `None`
-        #     The result of the fit. If the fit was successful, the result will
-        #     contain a valid DM wcs, a scatter in arcseconds and a scatter in
-        #     pixels. If the fit failed, ``None`` is returned.
-
         Returns
         -------
         result : `dict` or `None`
