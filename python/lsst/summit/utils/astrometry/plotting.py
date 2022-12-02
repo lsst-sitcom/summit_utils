@@ -53,9 +53,7 @@ def plot(exp, icSrc=None, filteredSources=None, saveAs=None):
     """
     plt.figure(figsize=(16, 16))
     arr = exp.image.array
-    clipVal = 1
-    arr = np.clip(arr, clipVal, 1000000)  # This image has some negative values, and this removes them
-    arr = quickSmooth(arr)
+    arr = quickSmooth(arr)  # smooth slightly to help visualize
     plt.imshow(np.arcsinh(arr)/10,
                interpolation='None', cmap='gray', origin='lower')
 
