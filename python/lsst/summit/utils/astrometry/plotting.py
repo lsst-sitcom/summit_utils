@@ -53,6 +53,7 @@ def plot(exp, icSrc=None, filteredSources=None, saveAs=None):
     """
     plt.figure(figsize=(16, 16))
     arr = exp.image.array
+    arr = np.clip(arr, 1, 1000000)
     arr = quickSmooth(arr)  # smooth slightly to help visualize
     plt.imshow(np.arcsinh(arr)/10,
                interpolation='None', cmap='gray', origin='lower')
