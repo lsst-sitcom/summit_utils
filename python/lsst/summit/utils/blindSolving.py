@@ -558,18 +558,21 @@ class AstrometryNetResult():
     line fitter.
 
     Constructs a DM wcs from the output of the command line fitter, and sets
-    the plate scale on the class for use in the scatter measurement.
+    the plate scale on the class for use in the scatter measurement. This loads
+    the corr files from the fit and calculates the scatter in pixels and
+    arcseconds.
 
     Parameters
     ----------
     wcsFile : `str`
-        The path to the wcs file from the fit.
+        The path to the .wcs file from the fit.
     corrFile : `str`
-        The path to the corr file from the fit.
+        The path to the .corr file from the fit.
     """
     wcs = None
     scatterPixels = None
     scatterArcseconds = None
+    plateScale = None
 
     def __init__(self, wcsFile, corrFile=None):
         self.wcsFile = wcsFile
@@ -612,13 +615,29 @@ class AstrometryNetResult():
 
 
 class CommandLineSolver():
+    """An interface for the solve-field command line tool from astrometry.net.
+
+    Parameters
+    ----------
+    indexFilePath : `str`
+        The path to the index files. Do not include the 4100 or 4200 etc. in
+        the path. This is selected automatically depending on the `isWideField`
+        flag when calling `run()`.
+    checkInParallel : `bool`, optional
+        Do the checks in parallel. Default is True.
+    timeout : `float`, optional
+        The timeout for the solve-field command. Default is 300 seconds.
+    binary : `str`, optional
+        The path to the solve-field binary. Default is 'solve-field', i.e. it
+        is assumed to be on the path.
+    """
     def __init__(self,
-                 indexFiles=None,
+                 indexFilePath=None,
                  checkInParallel=True,
                  timeout=300,
                  binary='solve-field',
                  ):
-        self.indexFiles = indexFiles
+        self.indexFilePath = indexFilePath
         self.checkInParallel = checkInParallel
         self.timeout = timeout
         self.binary = binary
@@ -626,27 +645,49 @@ class CommandLineSolver():
             raise RuntimeError(f"Could not find {binary} in path, please install 'solve-field' and either"
                                " put it on your PATH or specify the full path to it in the 'binary' argument")
 
-    def writeConfigFile(self):
+    def _writeConfigFile(self, wide):
         """Write a temporary config file for astrometry.net.
+
+        Parameters
+        ----------
+        wide : `bool`
+            Is this a wide field image? Used to select the 4100 vs 4200 dir in
+            the index file path.
+
+        Returns
+        -------
+        filename : `str`
+            The filename to which the config file was written.
         """
-        if not self.indexFiles:
-            raise RuntimeError("No index files specified, you must specify indexFiles "
-                               "in the constructor (or on the instance)")
+        indexFiles = os.path.join(self.indexFilePath, ('4100' if wide else '4200'))
+        if not os.path.exists(indexFiles):
+            raise RuntimeError(f"No index files found at {self.indexFilePath}, in {indexFiles} (you need a"
+                               " 4100 dir for wide field and 4200 dir for narrow field images).")
 
         lines = []
         if self.checkInParallel:
             lines.append('inparallel')
 
         lines.append(f"cpulimit {self.timeout}")
-        lines.append(f"add_path {self.indexFiles}")
+        lines.append(f"add_path {indexFiles}")
         lines.append("autoindex")
         filename = tempfile.mktemp(suffix='.cfg')
         with open(filename, 'w') as f:
             f.writelines(line + '\n' for line in lines)
         return filename
 
-    def writeFitsTable(self, sourceCat):
+    def _writeFitsTable(self, sourceCat):
         """Write the source table to a FITS file and return the filename.
+
+        Parameters
+        ----------
+        sourceCat : `lsst.afw.table.SourceCatalog`
+            The source catalog to write to a FITS file for the solver.
+
+        Returns
+        -------
+        filename : `str`
+            The filename to which the catalog was written.
         """
         fluxArray = sourceCat.columns.getGaussianInstFlux()
         fluxFinite = np.logical_and(np.isfinite(fluxArray), fluxArray > 0)
@@ -666,9 +707,35 @@ class CommandLineSolver():
         hdu.writeto(filename)
         return filename
 
-    def run(self, exp, sourceCat, percentageScaleError=10, radius=None, silent=True):
-        configFile = self.writeConfigFile()
-        fitsFile = self.writeFitsTable(sourceCat)
+    def run(self, exp, sourceCat, isWideField, percentageScaleError=10, radius=None, silent=True):
+        """
+
+        Parameters
+        ----------
+        exp : `lsst.afw.image.Exposure`
+            The input exposure. Only used for its wcs.
+        sourceCat : `lsst.afw.table.SourceCatalog`
+            The detected source catalog for the exposure. One produced by a
+            default run of CharacterizeImageTask is suitable.
+        isWideField : `bool`
+            Is this a wide field image? Used to select the correct index files.
+        percentageScaleError : `float`, optional
+            The percentage scale error to allow in the astrometric solution.
+        radius : `float`, optional
+            The search radius from the nominal wcs in degrees.
+        silent : `bool`, optional
+            Swallow the output from the command line? The solver is *very*
+            chatty, so this is recommended.
+
+        Returns
+        -------
+        result : `AstrometryNetResult` or `None`
+            The result of the fit. If the fit was successful, the result will
+            contain a valid DM wcs, a scatter in arcseconds and a scatter in
+            pixels. If the fit failed, ``None`` is returned.
+        """
+        configFile = self._writeConfigFile(wide=isWideField)
+        fitsFile = self._writeFitsTable(sourceCat)
         wcs = exp.getWcs()
         if not wcs:
             raise ValueError("No WCS in exposure")
@@ -684,7 +751,7 @@ class CommandLineSolver():
         tempDirSuffix = str(uuid.uuid1()).split('-')[0]
         tempDir = os.path.join(mainTempDir, tempDirSuffix)
 
-        cmd = (f"solve-field {fitsFile} "  # the data
+        cmd = (f"{self.binary} {fitsFile} "  # the data
                f"--width {exp.getWidth()} "  # image dimensions
                f"--height {exp.getHeight()} "  # image dimensions
                f"-3 {ra.asDegrees()} "
