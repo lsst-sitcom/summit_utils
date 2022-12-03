@@ -31,12 +31,13 @@ from .. import quickSmooth
 
 # TODO: Add some of Craig's nice overlay stuff here
 
-def plot(exp, icSrc=None, filteredSources=None, saveAs=None):
+def plot(exp, icSrc=None, filteredSources=None, saveAs=None,
+         clipMin=1, clipMax=1000000):
     """Plot an exposure, overlaying the selected sources and compass arrows.
 
     Plots the exposure on a logNorm scale, with the brightest sources, as
     selected by the configuration, overlaid with an x. Plots compass arrows
-    for both north/east and az/el. Optionally saves the output to a file is
+    for both north/east and az/el. Optionally saves the output to a file if
     ``saveAs`` is supplied.
 
     Parameters
@@ -50,10 +51,14 @@ def plot(exp, icSrc=None, filteredSources=None, saveAs=None):
         selected.
     saveAs : `str`, optional
         Saves the plot to this filename if specified.
+    clipMin : `float`
+        Clip values in the image below this value to ``clipMin``.
+    clipMax : `float`
+        Clip values in the image above this value to ``clipMax``.
     """
     plt.figure(figsize=(16, 16))
     arr = exp.image.array
-    arr = np.clip(arr, 1, 1000000)
+    arr = np.clip(arr, clipMin, clipMax)
     arr = quickSmooth(arr)  # smooth slightly to help visualize
     plt.imshow(np.arcsinh(arr)/10,
                interpolation='None', cmap='gray', origin='lower')
@@ -65,7 +70,7 @@ def plot(exp, icSrc=None, filteredSources=None, saveAs=None):
     compassSize = 500
     textDistance = 650
     compassCenter = (leftFraction*width, leftFraction*height)
-    compassAzElCent = ((1-rightFraction)*width, rightFraction*height)
+    compassAzElCent = ((1 - rightFraction)*width, rightFraction*height)
 
     vi = exp.getInfo().getVisitInfo()
     az, _ = vi.boresightAzAlt
@@ -89,8 +94,8 @@ def plot(exp, icSrc=None, filteredSources=None, saveAs=None):
               -compassSize*np.sin(rotpa),
               compassSize*np.cos(rotpa),
               color='green', width=20)
-    plt.text(compassCenter[0]-textDistance*np.sin(rotpa),
-             compassCenter[1]+textDistance*np.cos(rotpa),
+    plt.text(compassCenter[0] - textDistance*np.sin(rotpa),
+             compassCenter[1] + textDistance*np.cos(rotpa),
              'N',
              color='green', fontsize=fontsize, weight='bold')
     plt.arrow(compassCenter[0],
@@ -98,12 +103,12 @@ def plot(exp, icSrc=None, filteredSources=None, saveAs=None):
               compassSize*np.cos(rotpa),
               compassSize*np.sin(rotpa),
               color='green', width=20)
-    plt.text(compassCenter[0]+textDistance*np.cos(rotpa),
-             compassCenter[1]+textDistance*np.sin(rotpa),
+    plt.text(compassCenter[0] + textDistance*np.cos(rotpa),
+             compassCenter[1] + textDistance*np.sin(rotpa),
              'E',
              color='green', fontsize=fontsize, weight='bold')
 
-    sinTheta = np.cos(AUXTEL_LOCATION.lat) / np.cos(dec) * np.sin(az)
+    sinTheta = np.cos(AUXTEL_LOCATION.lat)/np.cos(dec)*np.sin(az)
     theta = Angle(np.arcsin(sinTheta))
     rotAzEl = rotpa - theta - Angle(90.0 * u.deg)
     plt.arrow(compassAzElCent[0],
@@ -111,8 +116,8 @@ def plot(exp, icSrc=None, filteredSources=None, saveAs=None):
               -compassSize*np.sin(rotAzEl),
               compassSize*np.cos(rotAzEl),
               color='cyan', width=20)
-    plt.text(compassAzElCent[0]-textDistance*np.sin(rotAzEl),
-             compassAzElCent[1]+textDistance*np.cos(rotAzEl),
+    plt.text(compassAzElCent[0] - textDistance*np.sin(rotAzEl),
+             compassAzElCent[1] + textDistance*np.cos(rotAzEl),
              'EL',
              color='cyan', fontsize=fontsize, weight='bold')
     plt.arrow(compassAzElCent[0],
@@ -120,8 +125,8 @@ def plot(exp, icSrc=None, filteredSources=None, saveAs=None):
               compassSize*np.cos(rotAzEl),
               compassSize*np.sin(rotAzEl),
               color='cyan', width=20)
-    plt.text(compassAzElCent[0]+textDistance*np.cos(rotAzEl),
-             compassAzElCent[1]+textDistance*np.sin(rotAzEl),
+    plt.text(compassAzElCent[0] + textDistance*np.cos(rotAzEl),
+             compassAzElCent[1] + textDistance*np.sin(rotAzEl),
              'AZ',
              color='cyan', fontsize=fontsize, weight='bold')
 

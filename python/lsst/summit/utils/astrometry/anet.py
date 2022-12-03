@@ -142,9 +142,9 @@ class CommandLineSolver():
         filename : `str`
             The filename to which the config file was written.
         """
-        indexFiles = os.path.join(self.indexFilePath, ('4100' if wide else '4200'))
-        if not os.path.exists(indexFiles):
-            raise RuntimeError(f"No index files found at {self.indexFilePath}, in {indexFiles} (you need a"
+        indexFileDir = os.path.join(self.indexFilePath, ('4100' if wide else '4200'))
+        if not os.path.isdir(indexFileDir):
+            raise RuntimeError(f"No index files found at {self.indexFilePath}, in {indexFileDir} (you need a"
                                " 4100 dir for wide field and 4200 dir for narrow field images).")
 
         lines = []
@@ -152,7 +152,7 @@ class CommandLineSolver():
             lines.append('inparallel')
 
         lines.append(f"cpulimit {self.timeout}")
-        lines.append(f"add_path {indexFiles}")
+        lines.append(f"add_path {indexFileDir}")
         lines.append("autoindex")
         filename = tempfile.mktemp(suffix='.cfg')
         with open(filename, 'w') as f:
@@ -175,12 +175,12 @@ class CommandLineSolver():
         fluxArray = sourceCat.columns.getGaussianInstFlux()
         fluxFinite = np.logical_and(np.isfinite(fluxArray), fluxArray > 0)
         fluxArray = fluxArray[fluxFinite]
-        args = np.argsort(fluxArray)
+        indices = np.argsort(fluxArray)
         x = sourceCat.getColumnView().getX()[fluxFinite]
         y = sourceCat.getColumnView().getY()[fluxFinite]
-        fluxArray = fluxArray[args][::-1]  # brightest finite flux
-        xArray = x[args][::-1]
-        yArray = y[args][::-1]
+        fluxArray = fluxArray[indices][::-1]  # brightest finite flux
+        xArray = x[indices][::-1]
+        yArray = y[indices][::-1]
         x = fits.Column(name='X', format='D', array=xArray)
         y = fits.Column(name='Y', format='D', array=yArray)
         flux = fits.Column(name='FLUX', format='D', array=fluxArray)
@@ -199,7 +199,7 @@ class CommandLineSolver():
         Parameters
         ----------
         exp : `lsst.afw.image.Exposure`
-            The input exposure. Only used for its wcs.
+            The input exposure. Only used for its wcs and its dimensions.
         sourceCat : `lsst.afw.table.SourceCatalog`
             The detected source catalog for the exposure. One produced by a
             default run of CharacterizeImageTask is suitable.
@@ -220,11 +220,13 @@ class CommandLineSolver():
             contain a valid DM wcs, a scatter in arcseconds and a scatter in
             pixels. If the fit failed, ``None`` is returned.
         """
-        configFile = self._writeConfigFile(wide=isWideField)
-        fitsFile = self._writeFitsTable(sourceCat)
         wcs = exp.getWcs()
         if not wcs:
             raise ValueError("No WCS in exposure")
+
+        configFile = self._writeConfigFile(wide=isWideField)
+        fitsFile = self._writeFitsTable(sourceCat)
+
         plateScale = wcs.getPixelScale().asArcseconds()
         scaleMin = plateScale*(1 - percentageScaleError/100)
         scaleMax = plateScale*(1 + percentageScaleError/100)
@@ -410,8 +412,8 @@ class OnlineSolver():
         deltaRa = geom.Angle(wcs_header['CRVAL1'] - nominalRa.asDegrees(), geom.degrees)
         deltaDec = geom.Angle(wcs_header['CRVAL2'] - nominalDec.asDegrees(), geom.degrees)
 
-        # TODO: change this to return an AstrometryNetResult class like the
-        # CommandLineSolver does?
+        # TODO: DM-37213 change this to return an AstrometryNetResult class
+        # like the CommandLineSolver does.
 
         result = {'nominalRa': nominalRa,
                   'nominalDec': nominalDec,

@@ -539,7 +539,7 @@ def getExpPositionOffset(exp1, exp2, useWcs=True, allowDifferentPlateScales=Fals
         Use the WCS for the ra/dec and alt/az if True, else use the nominal/
         boresight values from the exposures' visitInfos.
     allowDifferentPlateScales : `bool`, optional
-        Use to disbale checking that plate scales are the same. Generally,
+        Use to disable checking that plate scales are the same. Generally,
         differing plate scales would indicate an error, but where blind-solving
         has been undertaken during commissioning plate scales can be different
         enough to warrant setting this to ``True``.

@@ -30,7 +30,7 @@ from lsst.daf.base import PropertySet
 from lsst.pipe.tasks.characterizeImage import CharacterizeImageTask, CharacterizeImageConfig
 
 __all__ = [
-    'chuckHeaderToWcs',
+    'claverHeaderToWcs',
     'getAverageRaFromHeader',
     'getAverageDecFromHeader',
     'getAverageAzFromHeader',
@@ -43,8 +43,8 @@ __all__ = [
 ]
 
 
-def chuckHeaderToWcs(exp, nominalRa=None, nominalDec=None):
-    """Given an exposure taken by Chuck at his house, construct a wcs
+def claverHeaderToWcs(exp, nominalRa=None, nominalDec=None):
+    """Given an exposure taken by Chuck Claver at his house, construct a wcs
     with the ra/dec set to zenith unless a better guess is supplied.
 
     Automatically sets the platescale depending on the lens.
@@ -106,7 +106,7 @@ def chuckHeaderToWcs(exp, nominalRa=None, nominalDec=None):
 
 
 # don't be tempted to get cute and try to combine these 4 functions. It would
-# be a easy to do but it's not unlikley they will diverge in the future.
+# be easy to do but it's not unlikley they will diverge in the future.
 def getAverageRaFromHeader(header):
     raStart = header.get('RASTART')
     raEnd = header.get('RAEND')
@@ -255,9 +255,12 @@ def runCharactierizeImage(exp, snr, minPix):
 
 def filterSourceCatOnBrightest(catalog, brightFraction, minSources=15,
                                flux_field="base_CircularApertureFlux_3_0_instFlux"):
-    """Return a catalog containing the brightest sources in the input,
-    making an initial coarse cut, keeping those above 0.1% of the maximum
-    finite flux.
+    """Filter a sourceCat on the brightness, leaving only the top fraction.
+
+    Return a catalog containing the brightest sources in the input. Makes an
+    initial coarse cut, keeping those above 0.1% of the maximum finite flux,
+    and then returning the specified fraction of the remaining sources,
+    or minSources, whichever is greater.
 
     Parameters
     ----------
@@ -275,6 +278,8 @@ def filterSourceCatOnBrightest(catalog, brightFraction, minSources=15,
     result : `lsst.afw.table.SourceCatalog`
         Brightest sources in the input image, in ascending order of brightness.
     """
+    assert minSources > 0
+    assert brightFraction > 0 and brightFraction <= 1
     maxFlux = np.nanmax(catalog[flux_field])
     result = catalog.subset(catalog[flux_field] > maxFlux * 0.001)
 
