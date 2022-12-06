@@ -29,6 +29,9 @@ import time
 import uuid
 import warnings
 
+from dataclasses import dataclass
+from functools import cached_property
+
 import lsst.geom as geom
 
 from .utils import headerToWcs
@@ -36,42 +39,43 @@ from .utils import headerToWcs
 __all__ = ['AstrometryNetResult', 'CommandLineSolver', 'OnlineSolver']
 
 
-class AstrometryNetResult():
+@dataclass(frozen=True)
+class AstrometryNetResult:
     """Minimal wrapper class to construct and return results from the command
     line fitter.
 
-    Constructs a DM wcs from the output of the command line fitter, and sets
-    the plate scale on the class for use in the scatter measurement. This loads
-    the corr files from the fit and calculates the scatter in pixels and
-    arcseconds.
+    Constructs a DM wcs from the output of the command line fitter, and
+    calculates the plate scale and astrometric scatter measurement in arcsec
+    and pixels.
 
     Parameters
     ----------
     wcsFile : `str`
         The path to the .wcs file from the fit.
-    corrFile : `str`
+    corrFile : `str`, optional
         The path to the .corr file from the fit.
     """
-    wcs = None
-    scatterPixels = None
-    scatterArcseconds = None
-    plateScale = None
+    wcsFile: str
+    corrFile: str = None
 
-    def __init__(self, wcsFile, corrFile=None):
-        self.wcsFile = wcsFile
-        self._buildWcs()  # create the DM wcs from the a.net wcs file. Sets self.plateScale from fitted wcs
+    def __post_init__(self):
+        # touch these properties to ensure the files needed to calculate them
+        # are read immediately, in case they are deleted from temp
+        self.wcs
+        self.rmsErrorArsec
 
-        self.corrFile = corrFile
-        self._calcScatter()  # sets self.scatterPixels and self.scatterArcseconds
-
-    def _buildWcs(self):
+    @cached_property
+    def wcs(self):
         with fits.open(self.wcsFile) as f:
             header = f[0].header
-        wcs = headerToWcs(header)
-        self.wcs = wcs
-        self.plateScale = wcs.getPixelScale().asArcseconds()
+        return headerToWcs(header)
 
-    def _calcScatter(self):
+    @cached_property
+    def plateScale(self):
+        return self.wcs.getPixelScale().asArcseconds()
+
+    @cached_property
+    def meanSqErr(self):
         if not self.corrFile:
             return None
 
@@ -88,13 +92,17 @@ class AstrometryNetResult():
                 error *= row[10]  # multiply by weight
                 meanSqErr += error
             meanSqErr /= count  # divide by number of stars
-            rmsErrorPixels = np.sqrt(meanSqErr)
-            rmsErrorArsec = rmsErrorPixels * self.plateScale
-
-            self.scatterPixels = rmsErrorPixels
-            self.scatterArcseconds = rmsErrorArsec
+            return meanSqErr
         except Exception as e:
             print(f'Failed for calculate astrometric scatter: {repr(e)}')
+
+    @cached_property
+    def rmsErrorPixels(self):
+        return np.sqrt(self.meanSqErr)
+
+    @cached_property
+    def rmsErrorArsec(self):
+        return self.rmsErrorPixels * self.plateScale
 
 
 class CommandLineSolver():
