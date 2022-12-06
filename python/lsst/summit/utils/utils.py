@@ -21,9 +21,12 @@
 
 import os
 import numpy as np
+import logging
 from scipy.ndimage.filters import gaussian_filter
+import lsst.afw.image as afwImage
 import lsst.afw.detection as afwDetect
 import lsst.afw.math as afwMath
+import lsst.daf.base as dafBase
 import lsst.geom as geom
 import lsst.pipe.base as pipeBase
 import lsst.utils.packages as packageUtils
@@ -38,6 +41,8 @@ from astro_metadata_translator import ObservationInfo
 from astropy.coordinates import SkyCoord, AltAz
 from astropy.coordinates.earth import EarthLocation
 import astropy.units as u
+
+from .astrometry.utils import genericCameraHeaderToWcs
 
 __all__ = ["SIGMATOFWHM",
            "FWHMTOSIGMA",
@@ -601,3 +606,46 @@ def getExpPositionOffset(exp1, exp2, useWcs=True, allowDifferentPlateScales=Fals
                           )
 
     return ret
+
+
+def starTrackerFileToExposure(filename, logger=None):
+    """Read the exposure from the file and set the wcs from the header.
+
+    Parameters
+    ----------
+    filename : `str`
+        The full path to the file.
+    logger : `logging.Logger`, optional
+        The logger to use for errors, created if not supplied.
+
+    Returns
+    -------
+    exp : `lsst.afw.image.Exposure`
+        The exposure.
+    """
+    if not logger:
+        logger = logging.getLogger(__name__)
+    exp = afwImage.ExposureF(filename)
+    try:
+        wcs = genericCameraHeaderToWcs(exp)
+        exp.setWcs(wcs)
+    except Exception as e:
+        logger.warning(f"Failed to set wcs from header: {e}")
+
+    # for some reason the date isn't being set correctly
+    # DATE-OBS is present in the original header, but it's being
+    # stripped out and somehow not set (plus it doesn't give the midpoint
+    # of the exposure), so set it manually from the midpoint here
+    try:
+        md = exp.getMetadata()
+        begin = datetime.datetime.fromisoformat(md['DATE-BEG'])
+        end = datetime.datetime.fromisoformat(md['DATE-END'])
+        duration = end - begin
+        mid = begin + duration/2
+        newTime = dafBase.DateTime(mid.isoformat(), dafBase.DateTime.Timescale.TAI)
+        newVi = exp.visitInfo.copyWith(date=newTime)
+        exp.info.setVisitInfo(newVi)
+    except Exception as e:
+        logger.warning(f"Failed to set date from header: {e}")
+
+    return exp
