@@ -19,6 +19,8 @@
 # You should have received a copy of the GNU General Public License
 # along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
+import pickle
+import logging
 
 from dataclasses import dataclass
 import numpy as np
@@ -48,7 +50,8 @@ class ColorAndMarker:
 
 
 class NightReport():
-    def __init__(self, butler, dayObs):
+    def __init__(self, butler, dayObs, loadFromFile=None):
+        self.log = logging.getLogger('lsst.summit.utils.NightReport')
         self.butler = butler
         self.dayObs = dayObs
         self.data = dict()
@@ -56,7 +59,24 @@ class NightReport():
         self._obsInfosLoaded = set()  # set of the seqNums loaded
         self.stars = None
         self.cMap = None
+        if loadFromFile is not None:
+            self.load(loadFromFile)
         self.rebuild()
+
+    def save(self, filename):
+        toSave = (self.data, self._expRecordsLoaded, self._obsInfosLoaded, self.dayObs)
+        with open(filename, "wb") as f:
+            pickle.dump(toSave, f, pickle.HIGHEST_PROTOCOL)
+
+    def load(self, filename):
+        with open(filename, "rb") as f:
+            loaded = pickle.load(f)
+        self.data, self._expRecordsLoaded, self._obsInfosLoaded, dayObs = loaded
+        if dayObs != self.dayObs:
+            raise RuntimeError(f"Loaded data is for {dayObs} but current dayObs is {self.dayObs}")
+        assert len(self.data) == len(self._expRecordsLoaded)
+        assert len(self.data) == len(self._obsInfosLoaded)
+        self.log.info(f"Loaded {len(self.data)} records from {filename}")
 
     @staticmethod
     def getSortedData(data):
