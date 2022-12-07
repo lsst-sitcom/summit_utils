@@ -666,3 +666,40 @@ def obsInfoToDict(obsInfo):
         The ObservationInfo as a dict.
     """
     return {prop: getattr(obsInfo, prop) for prop in obsInfo.all_properties.keys()}
+
+
+def getFieldNameAndTileNumber(field, logger=None):
+    """Get the tile name and number of an observed field.
+
+    It is assumed to always be appended, with an underscore, to the rest of the
+    field name. Returns the name and number as a tuple, or the name unchanged
+    if no tile number is found.
+
+    Parameters
+    ----------
+    field : `str`
+        The name of the field
+
+    Returns
+    -------
+    fieldName : `str`
+        The name of the field without the trailing tile number, if present.
+    tileNum : `int`
+        The number of the tile, as an integer, or ``None`` if not found.
+    """
+    if not logger:
+        logger = logging.getLogger('lsst.summit.utils.getFieldNameAndTileNumber')
+
+    if '_' not in field:
+        logger.warning(f"Field {field} does not contain an underscore, so cannot determine the tile number.")
+        return field, None
+
+    try:
+        fieldParts = field.split("_")
+        fieldNum = int(fieldParts[-1])
+    except ValueError:
+        logger.warning(f"Field {field} does not contain only an integer after the final underscore"
+                       " so cannot determine the tile number.")
+        return field, None
+
+    return "_".join(fieldParts[:-1]), fieldNum

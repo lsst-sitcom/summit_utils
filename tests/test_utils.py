@@ -35,7 +35,9 @@ from astro_metadata_translator import makeObservationInfo
 from lsst.obs.base import createInitialSkyWcsFromBoresight
 from lsst.obs.base.makeRawVisitInfoViaObsInfo import MakeRawVisitInfoViaObsInfo
 from lsst.obs.lsst import Latiss
-from lsst.summit.utils.utils import getExpPositionOffset
+from lsst.summit.utils.utils import (getExpPositionOffset,
+                                     getFieldNameAndTileNumber,
+                                     )
 from lsst.obs.lsst.translators.latiss import AUXTEL_LOCATION
 
 
@@ -115,6 +117,45 @@ class ExpSkyPositionOffsetTestCase(lsst.utils.tests.TestCase):
 
             self.assertAlmostEqual(result.deltaRa.asDegrees(), deltaRa, 6)
             self.assertAlmostEqual(result.deltaDec.asDegrees(), deltaDec, 6)
+
+
+class MiscUtilsTestCase(lsst.utils.tests.TestCase):
+
+    def setUp(self) -> None:
+        return super().setUp()
+
+    def test_getFieldNameAndTileNumber(self):
+        field, num = getFieldNameAndTileNumber('simple')
+        self.assertEqual(field, 'simple')
+        self.assertIsNone(num)
+
+        field, num = getFieldNameAndTileNumber('_simple')
+        self.assertEqual(field, '_simple')
+        self.assertIsNone(num)
+
+        field, num = getFieldNameAndTileNumber('simple_321')
+        self.assertEqual(field, 'simple')
+        self.assertEqual(num, 321)
+
+        field, num = getFieldNameAndTileNumber('_simple_321')
+        self.assertEqual(field, '_simple')
+        self.assertEqual(num, 321)
+
+        field, num = getFieldNameAndTileNumber('test_321a_123')
+        self.assertEqual(field, 'test_321a')
+        self.assertEqual(num, 123)
+
+        field, num = getFieldNameAndTileNumber('test_321a_123_')
+        self.assertEqual(field, 'test_321a_123_')
+        self.assertIsNone(num)
+
+        field, num = getFieldNameAndTileNumber('test_321a_123a')
+        self.assertEqual(field, 'test_321a_123a')
+        self.assertIsNone(num)
+
+        field, num = getFieldNameAndTileNumber('test_321a:asd_asd-dsa_321')
+        self.assertEqual(field, 'test_321a:asd_asd-dsa')
+        self.assertEqual(num, 321)
 
 
 class TestMemory(lsst.utils.tests.MemoryTestCase):
