@@ -64,6 +64,7 @@ __all__ = ["SIGMATOFWHM",
            "getCurrentDayObs_humanStr",
            "getSite",
            "getExpPositionOffset",
+           "starTrackerFileToExposure",
            ]
 
 
