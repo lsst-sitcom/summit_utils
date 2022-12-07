@@ -668,7 +668,7 @@ def obsInfoToDict(obsInfo):
     return {prop: getattr(obsInfo, prop) for prop in obsInfo.all_properties.keys()}
 
 
-def getFieldNameAndTileNumber(field, logger=None):
+def getFieldNameAndTileNumber(field, warn=True, logger=None):
     """Get the tile name and number of an observed field.
 
     It is assumed to always be appended, with an underscore, to the rest of the
@@ -687,18 +687,20 @@ def getFieldNameAndTileNumber(field, logger=None):
     tileNum : `int`
         The number of the tile, as an integer, or ``None`` if not found.
     """
-    if not logger:
+    if warn and not logger:
         logger = logging.getLogger('lsst.summit.utils.getFieldNameAndTileNumber')
 
     if '_' not in field:
-        logger.warning(f"Field {field} does not contain an underscore, so cannot determine the tile number.")
+        if warn:
+            logger.warning(f"Field {field} does not contain an underscore, so cannot determine the tile number.")
         return field, None
 
     try:
         fieldParts = field.split("_")
         fieldNum = int(fieldParts[-1])
     except ValueError:
-        logger.warning(f"Field {field} does not contain only an integer after the final underscore"
+        if warn:
+            logger.warning(f"Field {field} does not contain only an integer after the final underscore"
                        " so cannot determine the tile number.")
         return field, None
 
