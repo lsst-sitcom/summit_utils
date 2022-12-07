@@ -238,7 +238,7 @@ class NightReport():
         # print(f"Total integration time = {expTimeSum:.1f}s")
         # return efficiency
 
-    def printObsTable(self, imageType=None, tailNumber=0):
+    def printObsTable(self, **kwargs):
         """Print a table of the days observations.
 
         Parameters
@@ -248,35 +248,32 @@ class NightReport():
         tailNumber : int
             Only print out the last n entries in the night
         """
-        raise NotImplementedError("This is not yet implemented")
-        # lines = []
-        # if not imageType:
-        #     seqNums = self.data.keys()
-        # else:
-        #     seqNums = [s for s in self.data.keys()
-        #                if self.data[s]['ObservationInfo'].observation_type == imageType]
+        seqNums = self.data.keys() if not kwargs else self.getSeqNumsMatching(**kwargs)
+        seqNums = sorted(seqNums)  # should always be sorted, but is a totaly disaster here if not
 
-        # seqNums = sorted(seqNums)
-        # for i, seqNum in enumerate(seqNums):
-        #     try:
-        #         expTime = self.data[seqNum]['ObservationInfo'].exposure_time.value
-        #         filt = self.data[seqNum]['ObservationInfo'].physical_filter
-        #         imageType = self.data[seqNum]['ObservationInfo'].observation_type
-        #         d1 = self.data[seqNum]['ObservationInfo'].datetime_begin
-        #         obj = self.data[seqNum]['ObservationInfo'].object
-        #         if i == 0:
-        #             d0 = d1
-        #         dt = (d1-d0)
-        #         d0 = d1
-        #         timeOfDay = d1.isot.split('T')[1]
-        #         msg = f'{seqNum:4} {imageType:9} {obj:10} {timeOfDay} {filt:25} {dt.sec:6.1f}  {expTime:2.2f}'
-        #     except KeyError:
-        #         msg = f'{seqNum:4} - error parsing headers/observation info! Check the file'
-        #     lines.append(msg)
+        lines = []
+        for i, seqNum in enumerate(seqNums):
+            try:
+                expTime = self.data[seqNum]['exposure_time'].value
+                filt = self.data[seqNum]['physical_filter']
+                imageType = self.data[seqNum]['observation_type']
 
-        # print(r"{seqNum} {imageType} {obj} {timeOfDay} {filt} {timeSinceLastExp} {expTime}")
-        # for line in lines[-tailNumber:]:
-        #     print(line)
+                if i == 0:
+                    deadtime = 0
+                else:
+                    thisBegin = self.data[seqNum]['datetime_begin']
+                    prevEnd = self.data[seqNum-1]['datetime_end']
+                    deadtime = (thisBegin - prevEnd).sec
+
+                msg = f'{seqNum} {deadtime:.02f}'
+            except Exception:
+                msg = f"Error parsing {seqNum}!"
+            lines.append(msg)
+
+        print(r"seqNum imageType obj timeOfDay filt timeSinceLastExp expTime")
+        print(r"------ --------- --- --------- ---- ---------------- -----")
+        for line in lines:
+            print(line)
 
     def getExposureMidpoint(self, seqNum):
         """Return the midpoint of the exposure as a float in MJD.
