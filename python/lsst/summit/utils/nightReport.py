@@ -28,7 +28,9 @@ import matplotlib.pyplot as plt
 from matplotlib.pyplot import cm
 
 from astro_metadata_translator import ObservationInfo
-from lsst.summit.utils.utils import obsInfoToDict  # change to .utils later XXX
+from lsst.summit.utils.utils import (obsInfoToDict,  # change to .utils later XXX
+                                     getFieldNameAndTileNumber
+                                     )
 
 __all__ = ['NightReport']
 
@@ -41,6 +43,7 @@ SOUTHPOLESTAR = 'HD 185975'
 
 CALIB_VALUES = ['FlatField position', 'Park position', 'azel_target']
 # TODO: add skips for calib values
+
 
 @dataclass
 class ColorAndMarker:
@@ -140,8 +143,13 @@ class NightReport():
         self.stars = self.getObservedObjects()
         self.cMap = self.makeStarColorAndMarkerMap(self.stars)
 
-    def getObservedObjects(self):
-        return sorted({record['target_name'] for record in self.data.values()})
+    def getObservedObjects(self, ignoreTileNum=True):
+        allTargets = sorted({record['target_name'] for record in self.data.values()})
+        if not ignoreTileNum:
+            return allTargets
+        # need to call set and sorted again here because what is unique now
+        # wasn't before, because of the tile numbers
+        return sorted(set([getFieldNameAndTileNumber(target, warn=False)[0] for target in allTargets]))
 
     def getSeqNumsMatching(self, invert=False, subset=None, **kwargs):
         """Get seqNums which match/don't match all kwargs provided, e.g.
