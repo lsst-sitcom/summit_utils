@@ -1,3 +1,25 @@
+# This file is part of summit_utils.
+#
+# Developed for the LSST Data Management System.
+# This product includes software developed by the LSST Project
+# (https://www.lsst.org).
+# See the COPYRIGHT file at the top-level directory of this distribution
+# for details of code ownership.
+#
+# This program is free software: you can redistribute it and/or modify
+# it under the terms of the GNU General Public License as published by
+# the Free Software Foundation, either version 3 of the License, or
+# (at your option) any later version.
+#
+# This program is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU General Public License for more details.
+#
+# You should have received a copy of the GNU General Public License
+# along with this program.  If not, see <https://www.gnu.org/licenses/>.
+
+
 from dataclasses import dataclass
 import numpy as np
 import matplotlib.pyplot as plt
@@ -15,6 +37,8 @@ MARKER_SEQUENCE = ['*', 'o', "D", 'P', 'v', "^", 's', '.', ',', 'o', 'v', '^',
                    'H', '+', 'x', 'X', 'D', 'd', '|', '_']
 SOUTHPOLESTAR = 'HD 185975'
 
+CALIB_VALUES = ['FlatField position', 'Park position', 'azel_target']
+# TODO: add skips for calib values
 
 @dataclass
 class ColorAndMarker:
@@ -244,7 +268,7 @@ class NightReport():
         for star in objects:
             seqNums = self.getSeqNumsMatching(target_name=star)
             airMasses = [self.data[seqNum]['boresight_airmass'] for seqNum in seqNums]
-            obsTimes = [self.getExposureMidpoint(self, seqNum) for seqNum in seqNums]
+            obsTimes = [self.getExposureMidpoint(seqNum) for seqNum in seqNums]
             color = self.cMap[star].color
             marker = self.cMap[star].marker
             plt.plot(obsTimes, airMasses, color=color, marker=marker, label=star, ms=10, ls='')
