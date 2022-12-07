@@ -180,7 +180,7 @@ class NightReport():
 
         return sorted(local.keys())
 
-    def printAvailableKeys(self, includeRaw=False):
+    def printAvailableKeys(self, sample=False, includeRaw=False):
         """Print all the keys available to query on, optionally including the
         full set of header keys.
 
@@ -188,8 +188,11 @@ class NightReport():
         but some are astropy quantities.
         """
         for seqNum, recordDict in self.data.items():  # loop + break because we don't know the first seqNum
-            for k in recordDict.keys():
-                print(k)
+            for k, v in recordDict.items():
+                if sample:
+                    print(f"{k}: {v}")
+                else:
+                    print(k)
             if includeRaw:
                 print("\nRaw header keys in _raw_metadata:")
                 for k in recordDict['_raw_metadata']:
@@ -237,6 +240,17 @@ class NightReport():
         # print(f"{100*efficiency:.2f}% shutter open in seqNum range {seqMin} and {seqMax}")
         # print(f"Total integration time = {expTimeSum:.1f}s")
         # return efficiency
+
+    def getNightStartSeqNum(self, method='heuristic'):
+        allowedMethods = ['heuristic', 'safe']
+        if method not in allowedMethods:
+            raise ValueError(f"Method must be one of {allowedMethods}")
+
+        if method == 'safe':
+            # take the first cwfs image and return that
+            seqNums = self.getSeqNumsMatching(observation_type='cwfs')
+            return min(seqNums)
+
 
     def printObsTable(self, **kwargs):
         """Print a table of the days observations.
