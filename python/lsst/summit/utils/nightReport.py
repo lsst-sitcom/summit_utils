@@ -26,6 +26,7 @@ from dataclasses import dataclass
 import numpy as np
 import matplotlib.pyplot as plt
 from matplotlib.pyplot import cm
+from humanize.time import precisedelta
 
 from astro_metadata_translator import ObservationInfo
 from lsst.summit.utils.utils import (obsInfoToDict,  # change to .utils later XXX
@@ -217,30 +218,52 @@ class NightReport():
         assert(type(arg) == list), f"Expect list, got {type(arg)}: {arg}"
         return arg
 
-    def calcShutterOpenEfficiency(self, seqMin=0, seqMax=0):
-        raise NotImplementedError("This is not yet implemented")
-        # if seqMin == 0:
-        #     seqMin = min(self.data.keys())
-        # if seqMax == 0:
-        #     seqMax = max(self.data.keys())
-        # assert seqMax > seqMin
-        # assert (seqMin in self.data.keys())
-        # assert (seqMax in self.data.keys())
+    def calcShutterTimes(self):
+        result = {}
 
-        # timeStart = self.data[seqMin]['ObservationInfo'].datetime_begin
-        # timeEnd = self.data[seqMax]['ObservationInfo'].datetime_end
-        # expTimeSum = 0
-        # for seqNum in range(seqMin, seqMax+1):
-        #     if seqNum not in self.data.keys():
-        #         print(f"Warning! No data found for seqNum {seqNum}")
-        #         continue
-        #     expTimeSum += self.data[seqNum]['ObservationInfo'].exposure_time.value
+        firstObs = self.getNightStartSeqNum(method='safe')
+        lastObs = max(self.data.keys())
 
-        # timeOnSky = (timeEnd - timeStart).sec
-        # efficiency = expTimeSum/timeOnSky
-        # print(f"{100*efficiency:.2f}% shutter open in seqNum range {seqMin} and {seqMax}")
-        # print(f"Total integration time = {expTimeSum:.1f}s")
-        # return efficiency
+        begin = self.data[firstObs]['datetime_begin']
+        end = self.data[lastObs]['datetime_end']
+
+        READOUT_TIME = 2.0
+        shutterOpenTime = sum([self.data[s]['exposure_time'] for s in range(firstObs, lastObs+1)])
+        readoutTime = sum([READOUT_TIME for _ in range(firstObs, lastObs+1)])
+
+        sciSeqNums = self.getSeqNumsMatching(observation_type='science')
+        scienceIntegration = sum([self.data[s]['exposure_time'] for s in sciSeqNums])
+        scienceTimeTotal = scienceIntegration.value + (len(sciSeqNums) * READOUT_TIME)
+
+        result['firstObs'] = firstObs
+        result['lastObs'] = lastObs
+        result['startTime'] = begin
+        result['endTime'] = end
+        result['nightLength'] = (end - begin).sec  # was a datetime.timedelta
+        result['shutterOpenTime'] = shutterOpenTime.value  # was an Quantity
+        result['readoutTime'] = readoutTime
+        result['scienceIntegration'] = scienceIntegration.value  # was an Quantity
+        result['scienceTimeTotal'] = scienceTimeTotal
+
+        return result
+
+    def printShutterTimes(self):
+        timings = self.calcShutterTimes()
+
+        print(f"Observations started at: seqNum {timings['firstObs']:>3} at"
+              " {timings['startTime'].to_datetime().strftime('%H:%M:%S')} TAI")
+        print(f"Observations ended at:   seqNum {timings['lastObs']:>3} at"
+              " {timings['endTime'].to_datetime().strftime('%H:%M:%S')} TAI")
+        print(f"Total time on sky: {precisedelta(timings['nightLength'])}")
+        print()
+        print(f"Shutter open time: {precisedelta(timings['shutterOpenTime'])}")
+        print(f"Readout time: {precisedelta(timings['readoutTime'])}")
+        engEff = 100 * (timings['shutterOpenTime'] + timings['readoutTime']) / timings['nightLength']
+        print(f"Engineering shutter efficiency = {engEff:.2f}%")
+        print()
+        print(f"Science integration: {precisedelta(timings['scienceIntegration'])}")
+        sciEff = 100*(timings['scienceTimeTotal'] / timings['nightLength'])
+        print(f"Science shutter efficiency = {sciEff:.2f}%")
 
     def getNightStartSeqNum(self, method='heuristic'):
         allowedMethods = ['heuristic', 'safe']
@@ -251,7 +274,6 @@ class NightReport():
             # take the first cwfs image and return that
             seqNums = self.getSeqNumsMatching(observation_type='cwfs')
             return min(seqNums)
-
 
     def printObsTable(self, **kwargs):
         """Print a table of the days observations.
