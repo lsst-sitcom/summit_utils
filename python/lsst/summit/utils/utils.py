@@ -692,7 +692,8 @@ def getFieldNameAndTileNumber(field, warn=True, logger=None):
 
     if '_' not in field:
         if warn:
-            logger.warning(f"Field {field} does not contain an underscore, so cannot determine the tile number.")
+            logger.warning(f"Field {field} does not contain an underscore,"
+                           " so cannot determine the tile number.")
         return field, None
 
     try:
@@ -701,7 +702,7 @@ def getFieldNameAndTileNumber(field, warn=True, logger=None):
     except ValueError:
         if warn:
             logger.warning(f"Field {field} does not contain only an integer after the final underscore"
-                       " so cannot determine the tile number.")
+                           " so cannot determine the tile number.")
         return field, None
 
     return "_".join(fieldParts[:-1]), fieldNum
