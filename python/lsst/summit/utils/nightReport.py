@@ -144,7 +144,8 @@ class NightReport():
         self.cMap = self.makeStarColorAndMarkerMap(self.stars)
 
     def getObservedObjects(self, ignoreTileNum=True):
-        allTargets = sorted({record['target_name'] for record in self.data.values()})
+        allTargets = sorted({record['target_name'] if record['target_name'] is not None else ''
+                             for record in self.data.values()})
         if not ignoreTileNum:
             return allTargets
         # need to call set and sorted again here because what is unique now
