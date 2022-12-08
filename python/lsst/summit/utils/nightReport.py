@@ -248,12 +248,14 @@ class NightReport():
         return result
 
     def printShutterTimes(self):
+        """Print out the shutter efficiency stats in a human-readable format.
+        """
         timings = self.calcShutterTimes()
 
         print(f"Observations started at: seqNum {timings['firstObs']:>3} at"
-              " {timings['startTime'].to_datetime().strftime('%H:%M:%S')} TAI")
+              f" {timings['startTime'].to_datetime().strftime('%H:%M:%S')} TAI")
         print(f"Observations ended at:   seqNum {timings['lastObs']:>3} at"
-              " {timings['endTime'].to_datetime().strftime('%H:%M:%S')} TAI")
+              f" {timings['endTime'].to_datetime().strftime('%H:%M:%S')} TAI")
         print(f"Total time on sky: {precisedelta(timings['nightLength'])}")
         print()
         print(f"Shutter open time: {precisedelta(timings['shutterOpenTime'])}")
@@ -264,6 +266,41 @@ class NightReport():
         print(f"Science integration: {precisedelta(timings['scienceIntegration'])}")
         sciEff = 100*(timings['scienceTimeTotal'] / timings['nightLength'])
         print(f"Science shutter efficiency = {sciEff:.2f}%")
+
+    def getTimeDeltas(self):
+        """Returns a dict, keyed by seqNum, of the time since the end of the last integration.
+        """
+        seqNums = list(self.data.keys())  # need a list not a generator, and NB it might not be contiguous!
+        dts = [0]  # first item is zero by definition
+        for i, seqNum in enumerate(seqNums[1:]):
+            dt = self.data[seqNum]['datetime_begin'] - self.data[(seqNums[i])]['datetime_end']
+            dts.append(dt.sec)
+
+        return {s: dt for s, dt in zip(seqNums, dts)}
+
+    def printObsGaps(self):
+        """Print out the gaps between observations in a human-readable format.
+        """
+        THRESHOLD = 100
+        dts = self.getTimeDeltas()
+
+        # get the portion of the night we care about as there are and should
+        # be gaps when taking calibs and waiting to go on sky.
+        allSeqNums = list(self.data.keys())
+        firstObs = self.getNightStartSeqNum(method='safe')
+        startPoint = allSeqNums.index(firstObs)
+        seqNums = allSeqNums[startPoint:]
+
+        messages = []
+        for seqNum in seqNums:
+            dt = dts[seqNum]
+            if dt > THRESHOLD:
+                messages.append(f"seqNum {seqNum:3}: {precisedelta(dt)} gap")
+
+        if messages:
+            print(f"Gaps between observations greater than {THRESHOLD}s:")
+            for line in messages:
+                print(line)
 
     def getNightStartSeqNum(self, method='heuristic'):
         allowedMethods = ['heuristic', 'safe']
