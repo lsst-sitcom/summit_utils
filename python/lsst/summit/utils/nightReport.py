@@ -26,12 +26,21 @@ from dataclasses import dataclass
 import numpy as np
 import matplotlib.pyplot as plt
 from matplotlib.pyplot import cm
-from humanize.time import precisedelta
 
 from astro_metadata_translator import ObservationInfo
 from lsst.summit.utils.utils import (obsInfoToDict,  # change to .utils later XXX
                                      getFieldNameAndTileNumber
                                      )
+
+try:  # TODO: Remove post RFC-896: add humanize to rubin-env
+    from humanize.time import precisedelta
+    HAVE_HUMANIZE = True
+except ImportError:
+    # log a python warning about the lack of humanize
+    logging.warning("humanize not available, install it to get better time printing")
+    HAVE_HUMANIZE = False
+    precisedelta = repr
+
 
 __all__ = ['NightReport']
 
@@ -250,6 +259,8 @@ class NightReport():
     def printShutterTimes(self):
         """Print out the shutter efficiency stats in a human-readable format.
         """
+        if not HAVE_HUMANIZE:
+            self.log.warning('Please install humanize to use make this print as intended.')
         timings = self.calcShutterTimes()
 
         print(f"Observations started at: seqNum {timings['firstObs']:>3} at"
@@ -278,10 +289,11 @@ class NightReport():
 
         return {s: dt for s, dt in zip(seqNums, dts)}
 
-    def printObsGaps(self):
+    def printObsGaps(self, threshold=100):
         """Print out the gaps between observations in a human-readable format.
         """
-        THRESHOLD = 100
+        if not HAVE_HUMANIZE:
+            self.log.warning('Please install humanize to use make this print as intended.')
         dts = self.getTimeDeltas()
 
         # get the portion of the night we care about as there are and should
@@ -294,11 +306,11 @@ class NightReport():
         messages = []
         for seqNum in seqNums:
             dt = dts[seqNum]
-            if dt > THRESHOLD:
+            if dt > threshold:
                 messages.append(f"seqNum {seqNum:3}: {precisedelta(dt)} gap")
 
         if messages:
-            print(f"Gaps between observations greater than {THRESHOLD}s:")
+            print(f"Gaps between observations greater than {threshold}s:")
             for line in messages:
                 print(line)
 
