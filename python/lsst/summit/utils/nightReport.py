@@ -261,11 +261,11 @@ class NightReport():
         print(f"Shutter open time: {precisedelta(timings['shutterOpenTime'])}")
         print(f"Readout time: {precisedelta(timings['readoutTime'])}")
         engEff = 100 * (timings['shutterOpenTime'] + timings['readoutTime']) / timings['nightLength']
-        print(f"Engineering shutter efficiency = {engEff:.2f}%")
+        print(f"Engineering shutter efficiency = {engEff:.1f}%")
         print()
         print(f"Science integration: {precisedelta(timings['scienceIntegration'])}")
         sciEff = 100*(timings['scienceTimeTotal'] / timings['nightLength'])
-        print(f"Science shutter efficiency = {sciEff:.2f}%")
+        print(f"Science shutter efficiency = {sciEff:.1f}%")
 
     def getTimeDeltas(self):
         """Returns a dict, keyed by seqNum, of the time since the end of the last integration.
