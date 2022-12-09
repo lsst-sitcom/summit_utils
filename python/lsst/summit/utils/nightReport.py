@@ -288,7 +288,7 @@ class NightReport():
         # be gaps when taking calibs and waiting to go on sky.
         allSeqNums = list(self.data.keys())
         firstObs = self.getNightStartSeqNum(method='safe')
-        startPoint = allSeqNums.index(firstObs)
+        startPoint = allSeqNums.index(firstObs) + 1  # there is always a big gap before firstObs by definition
         seqNums = allSeqNums[startPoint:]
 
         messages = []
