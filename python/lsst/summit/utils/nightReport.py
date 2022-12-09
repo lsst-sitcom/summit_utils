@@ -325,27 +325,23 @@ class NightReport():
         seqNums = self.data.keys() if not kwargs else self.getSeqNumsMatching(**kwargs)
         seqNums = sorted(seqNums)  # should always be sorted, but is a totaly disaster here if not
 
+        dts = self.getTimeDeltas()
         lines = []
-        for i, seqNum in enumerate(seqNums):
+        for seqNum in seqNums:
             try:
                 expTime = self.data[seqNum]['exposure_time'].value
-                filt = self.data[seqNum]['physical_filter']
                 imageType = self.data[seqNum]['observation_type']
+                target = self.data[seqNum]['target_name']
+                deadtime = dts[seqNum]
+                filt = self.data[seqNum]['physical_filter']
 
-                if i == 0:
-                    deadtime = 0
-                else:
-                    thisBegin = self.data[seqNum]['datetime_begin']
-                    prevEnd = self.data[seqNum-1]['datetime_end']
-                    deadtime = (thisBegin - prevEnd).sec
-
-                msg = f'{seqNum} {deadtime:.02f}'
+                msg = f'{seqNum} {target} {expTime:.1f} {deadtime:.02f} {imageType} {filt}'
             except Exception:
                 msg = f"Error parsing {seqNum}!"
             lines.append(msg)
 
-        print(r"seqNum imageType obj timeOfDay filt timeSinceLastExp expTime")
-        print(r"------ --------- --- --------- ---- ---------------- -----")
+        print(r"seqNum target expTime deadtime imageType filt")
+        print(r"------ ------ ------- -------- --------- ----")
         for line in lines:
             print(line)
 
