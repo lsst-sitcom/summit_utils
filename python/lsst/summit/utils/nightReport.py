@@ -135,6 +135,11 @@ class NightReport():
     def getObsInfoAndMetadataForSeqNum(self, seqNum):
         """Get the obsInfo and metadata for a given seqNum.
 
+        TODO: Once we have a summit repo containing all this info, remove this
+        method and all scraping of headers! Probably also remove the save/load
+        functionalty there too, as the whole init will go from many minutes to
+        under a second.
+
         Notes
         -----
         Very slow, as it has to load the whole file on object store repos
