@@ -21,6 +21,7 @@
 
 import unittest
 import tempfile
+import os
 from unittest import mock
 
 import lsst.utils.tests
@@ -28,11 +29,11 @@ import lsst.utils.tests
 import matplotlib as mpl
 mpl.use('Agg')
 
-from lsst.summit.extras.nightReport import NightReporter, loadReport, saveReport  # noqa: E402
+from lsst.summit.utils.nightReport import NightReport  # noqa: E402
 import lsst.summit.utils.butlerUtils as butlerUtils  # noqa: E402
 
 
-class NightReporterTestCase(lsst.utils.tests.TestCase):
+class NightReportTestCase(lsst.utils.tests.TestCase):
 
     @classmethod
     def setUpClass(cls):
@@ -44,39 +45,44 @@ class NightReporterTestCase(lsst.utils.tests.TestCase):
         cls.dayObs = 20200314  # has 377 images and data also exists on the TTS & summit
 
         # Do the init in setUpClass because this takes about 35s for 20200314
-        cls.reporter = NightReporter(cls.dayObs)
+        cls.report = NightReport(cls.butler, cls.dayObs)
         # number of images isn't necessarily the same as the number for the
         # the dayObs in the registry becacuse of the test stands/summit
         # having partial data, so get the number of images from the length
         # of the scraped data. Not ideal, but best that can be done due to
         # only having partial days in the test datasets.
-        cls.nImages = len(cls.reporter.data.keys())
+        cls.nImages = len(cls.report.data.keys())
 
     def test_saveAndLoad(self):
-        """Test that a NightReporter can save itself, and be loaded back.
+        """Test that a NightReport can save itself, and be loaded back.
         """
         writeDir = tempfile.mkdtemp()
-        saveReport(self.reporter, writeDir)
-        loaded = loadReport(writeDir, self.dayObs)
-        self.assertIsInstance(loaded, lsst.summit.extras.nightReport.NightReporter)
+        saveFile = os.path.join(writeDir, f'testNightReport_{self.dayObs}.pickle')
+        self.report.save(saveFile)
+        self.assertTrue(os.path.exists(saveFile))
+
+        loaded = NightReport(self.butler, self.dayObs, saveFile)
+        self.assertIsInstance(loaded, lsst.summit.utils.nightReport.NightReport)
         self.assertGreaterEqual(len(loaded.data), 1)
         self.assertEqual(loaded.dayObs, self.dayObs)
 
-    def test_printObsTable(self):
-        """Test that a the printObsTable() method prints out the correct
-        number of lines.
-        """
-        with mock.patch('sys.stdout') as fake_stdout:
-            self.reporter.printObsTable()
+        # TODO: add a self.assertRaises on a mismatched dayObs
 
-        # newline for each row plus header
-        self.assertEqual(len(fake_stdout.mock_calls), 2*(self.nImages+1))
+    # def test_printObsTable(self):
+    #     """Test that a the printObsTable() method prints out the correct
+    #     number of lines.
+    #     """
+    #     with mock.patch('sys.stdout') as fake_stdout:
+    #         self.report.printObsTable()
 
-        tailNumber = 20
-        nLines = min(self.nImages, tailNumber)  # test stands have very few images on some days
-        with mock.patch('sys.stdout') as fake_stdout:
-            self.reporter.printObsTable(tailNumber=tailNumber)
-        self.assertEqual(len(fake_stdout.mock_calls), 2*(nLines+1))
+    #     # newline for each row plus header
+    #     self.assertEqual(len(fake_stdout.mock_calls), 2*(self.nImages+1))
+
+    #     tailNumber = 20
+    #     nLines = min(self.nImages, tailNumber)  # test stands have very few images on some days
+    #     with mock.patch('sys.stdout') as fake_stdout:
+    #         self.report.printObsTable(tailNumber=tailNumber)
+    #     self.assertEqual(len(fake_stdout.mock_calls), 2*(nLines+1))
 
     def test_plotPerObjectAirMass(self):
         """Test that a the per-object airmass plots runs.
@@ -85,43 +91,46 @@ class NightReporterTestCase(lsst.utils.tests.TestCase):
         # don't crash.
 
         # Default plotting:
-        self.reporter.plotPerObjectAirMass()
+        self.report.plotPerObjectAirMass()
         # plot with only one object as a str not a list of str
-        self.reporter.plotPerObjectAirMass(objects=self.reporter.stars[0])
+        self.report.plotPerObjectAirMass(objects=self.report.stars[0])
         # plot with first two objects as a list
-        self.reporter.plotPerObjectAirMass(objects=self.reporter.stars[0:2])
+        self.report.plotPerObjectAirMass(objects=self.report.stars[0:2])
         # flip y axis option
-        self.reporter.plotPerObjectAirMass(airmassOneAtTop=True)
+        self.report.plotPerObjectAirMass(airmassOneAtTop=True)
         # flip and select stars
-        self.reporter.plotPerObjectAirMass(objects=self.reporter.stars[0], airmassOneAtTop=True)  # both
+        self.report.plotPerObjectAirMass(objects=self.report.stars[0], airmassOneAtTop=True)  # both
 
-    def test_makePolarPlotForObjects(self):
+    def test_makeAltAzCoveragePlot(self):
         """Test that a the polar coverage plotting code runs.
         """
         # We assume matplotlib is making plots, so just check that these
         # don't crash.
 
         # test the default case
-        self.reporter.makePolarPlotForObjects()
+        self.report.makeAltAzCoveragePlot()
         # plot with only one object as a str not a list of str
-        self.reporter.makePolarPlotForObjects(objects=self.reporter.stars[0])
+        self.report.makeAltAzCoveragePlot(objects=self.report.stars[0])
         # plot with first two objects as a list
-        self.reporter.makePolarPlotForObjects(objects=self.reporter.stars[0:2])
+        self.report.makeAltAzCoveragePlot(objects=self.report.stars[0:2])
         # test turning lines off
-        self.reporter.makePolarPlotForObjects(objects=self.reporter.stars[0:2], withLines=False)
+        self.report.makeAltAzCoveragePlot(objects=self.report.stars[0:2], withLines=False)
 
-    def test_calcShutterOpenEfficiency(self):
-        efficiency = self.reporter.calcShutterOpenEfficiency()
+    def test_calcShutterTimes(self):
+        timings = self.report.calcShutterTimes()
+        efficiency = 100*(timings['scienceTimeTotal']/timings['nightLength'])
         self.assertGreater(efficiency, 0)
         self.assertLessEqual(efficiency, 1)
 
+        # TODO: Add more tests here
+
     def test_internals(self):
-        starsFromGetter = self.reporter.getObservedObjects()
+        starsFromGetter = self.report.getObservedObjects()
         self.assertIsInstance(starsFromGetter, list)
-        self.assertSetEqual(set(starsFromGetter), set(self.reporter.stars))
+        self.assertSetEqual(set(starsFromGetter), set(self.report.stars))
 
         # check the internal color map has the right number of items
-        self.assertEqual(len(self.reporter.cMap), len(starsFromGetter))
+        self.assertEqual(len(self.report.cMap), len(starsFromGetter))
 
 
 class TestMemory(lsst.utils.tests.MemoryTestCase):
