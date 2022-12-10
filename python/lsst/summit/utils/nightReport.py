@@ -73,15 +73,32 @@ class NightReport():
         self.stars = None
         self.cMap = None
         if loadFromFile is not None:
-            self.load(loadFromFile)
+            self._load(loadFromFile)
         self.rebuild()
 
     def save(self, filename):
+        """Save the internal data to a file.
+
+        Parameters
+        ----------
+        filename : `str`
+            The full name and path of the file to save to.
+        """
         toSave = (self.data, self._expRecordsLoaded, self._obsInfosLoaded, self.dayObs)
         with open(filename, "wb") as f:
             pickle.dump(toSave, f, pickle.HIGHEST_PROTOCOL)
 
-    def load(self, filename):
+    def _load(self, filename):
+        """Load the report data from a file.
+
+        Called on init if loadFromFile is not None. Should not be used directly
+        as other things are populated on load in the __init__.
+
+        Parameters
+        ----------
+        filename : `str`
+            The full name and path of the file to load from.
+        """
         with open(filename, "rb") as f:
             loaded = pickle.load(f)
         self.data, self._expRecordsLoaded, self._obsInfosLoaded, dayObs = loaded
@@ -92,7 +109,9 @@ class NightReport():
         self.log.info(f"Loaded {len(self.data)} records from {filename}")
 
     @staticmethod
-    def getSortedData(data):
+    def _getSortedData(data):
+        """Get a sorted copy of the internal data.
+        """
         if list(data.keys()) == sorted(data.keys()):
             return data
         else:
@@ -101,6 +120,8 @@ class NightReport():
     def getExpRecordDictForDayObs(self, dayObs):
         """Get all the exposureRecords as dicts for the current dayObs.
 
+        Notes
+        -----
         Runs in ~0.05s for 1000 records.
         """
         expRecords = self.butler.registry.queryDimensionRecords("exposure",
@@ -109,14 +130,25 @@ class NightReport():
                                                                 datasets='raw')
         expRecords = list(expRecords)
         records = {e.seq_num: e.toDict() for e in expRecords}  # not guaranteed to be in order
-        return self.getSortedData(records)
+        return self._getSortedData(records)
 
     def getObsInfoAndMetadataForSeqNum(self, seqNum):
+        """Get the obsInfo and metadata for a given seqNum.
+
+        Notes
+        -----
+        Very slow, as it has to load the whole file on object store repos
+        and access the file on regular filesystem repos.
+        """
         dataId = {'day_obs': self.dayObs, 'seq_num': seqNum, 'detector': 0}
         md = self.butler.get('raw.metadata', dataId)
         return ObservationInfo(md), md
 
     def rebuild(self, full=False):
+        """Scrape new data if there is any, otherwise is a no-op.
+
+        If full is True, then all data is reloaded.
+        """
         if full:
             self.data = dict()
             self._expRecordsLoaded = set()
@@ -149,11 +181,22 @@ class NightReport():
             records[seqNum]['_raw_metadata'] = metadata
             self._obsInfosLoaded.add(seqNum)
 
-        self.data = self.getSortedData(self.data)  # make sure we stay sorted
+        self.data = self._getSortedData(self.data)  # make sure we stay sorted
         self.stars = self.getObservedObjects()
         self.cMap = self.makeStarColorAndMarkerMap(self.stars)
 
     def getObservedObjects(self, ignoreTileNum=True):
+        """Get a list of the observed objects for the night.
+
+        Repeated observations of individual imaging fields have _NNN appended
+        to the field name. Use ``ignoreTileNum`` to remove these, collapsing
+        the observations of the field to a single target name.
+
+        Parameters
+        ----------
+        ignoreTileNum : `bool`, optional
+            Remove the trailing _NNN tile number for imaging fields?
+        """
         allTargets = sorted({record['target_name'] if record['target_name'] is not None else ''
                              for record in self.data.values()})
         if not ignoreTileNum:
@@ -173,7 +216,7 @@ class NightReport():
 
         Subset allows for repeated filtering by passing in a set of seqNums
         """
-        # make a copy data and restrict to subset if provided
+        # copy data so we can pop, and restrict to subset if provided
         local = {seqNum: rec for seqNum, rec in self.data.items() if (subset is None or seqNum in subset)}
 
         # for each kwarg, filter out items which match/don't
@@ -197,6 +240,10 @@ class NightReport():
 
         Note that there is a big mix of quantities, some are int/float/string
         but some are astropy quantities.
+
+        If sample is True, then a sample value for each key is printed too,
+        which is useful for dealing with types and seeing what each item
+        actually means.
         """
         for seqNum, recordDict in self.data.items():  # loop + break because we don't know the first seqNum
             for k, v in recordDict.items():
@@ -212,6 +259,8 @@ class NightReport():
 
     @staticmethod
     def makeStarColorAndMarkerMap(stars):
+        """Create a color/marker map for a list of observed objects.
+        """
         markerMap = {}
         colors = cm.rainbow(np.linspace(0, 1, N_STARS_PER_SYMBOL))
         for i, star in enumerate(stars):
@@ -222,14 +271,29 @@ class NightReport():
 
     @staticmethod
     def _ensureList(arg):
+        """Ensure that if a string is passed rather than a list of strings,
+        that we don't iterate over the letters in the string, but treat it as
+        a list of length 1.
+        """
         if type(arg) == str:
             return [arg]
-        assert(type(arg) == list), f"Expect list, got {type(arg)}: {arg}"
+        if type(arg) != list:
+            raise ValueError(f"Expected a list or string, got {arg}")
         return arg
 
     def calcShutterTimes(self):
-        result = {}
+        """Calculate the total time spent on science, engineering and readout.
 
+        Science and engineering time both include the time spent on readout,
+        such that if images were taken all night with no downtime and no slews
+        the efficiency would be 100%.
+
+        Returns
+        -------
+        timings : `dict`
+            Dictionary of the various calculated times, in seconds, and the
+            seqNums of the first and last observations used in the calculation.
+        """
         firstObs = self.getNightStartSeqNum(method='safe')
         lastObs = max(self.data.keys())
 
@@ -244,6 +308,7 @@ class NightReport():
         scienceIntegration = sum([self.data[s]['exposure_time'] for s in sciSeqNums])
         scienceTimeTotal = scienceIntegration.value + (len(sciSeqNums) * READOUT_TIME)
 
+        result = {}
         result['firstObs'] = firstObs
         result['lastObs'] = lastObs
         result['startTime'] = begin
@@ -279,7 +344,14 @@ class NightReport():
         print(f"Science shutter efficiency = {sciEff:.1f}%")
 
     def getTimeDeltas(self):
-        """Returns a dict, keyed by seqNum, of the time since the end of the last integration.
+        """Returns a dict, keyed by seqNum, of the time since the end of the
+        last integration. The time since does include the readout, so is always
+        greater than or equal to the readout time.
+
+        Returns
+        -------
+        timeGaps : `dict`
+            Dictionary of the time gaps, in seconds, keyed by seqNum.
         """
         seqNums = list(self.data.keys())  # need a list not a generator, and NB it might not be contiguous!
         dts = [0]  # first item is zero by definition
@@ -291,6 +363,11 @@ class NightReport():
 
     def printObsGaps(self, threshold=100):
         """Print out the gaps between observations in a human-readable format.
+
+        Parameters
+        ----------
+        threshold : `float`
+            The minimum time gap to print out, in seconds.
         """
         if not HAVE_HUMANIZE:
             self.log.warning('Please install humanize to use make this print as intended.')
@@ -314,10 +391,30 @@ class NightReport():
             for line in messages:
                 print(line)
 
-    def getNightStartSeqNum(self, method='heuristic'):
+    def getNightStartSeqNum(self, method='safe'):
+        """Get the seqNum at which on-sky observations started.
+
+        Parameters
+        ----------
+        method : `str`
+            The calculation method to use. Options are:
+            - 'safe': Use the first seqNum with an observation_type of
+              'science'.
+            - 'heuristic': Use a heuristic to find the first seqNum. Not yet
+               implemented.
+
+        Returns
+        -------
+        startSeqNum : `int`
+            The seqNum of the start of the night's observing.
+        """
+
         allowedMethods = ['heuristic', 'safe']
         if method not in allowedMethods:
             raise ValueError(f"Method must be one of {allowedMethods}")
+
+        if method == 'heuristic':
+            raise NotImplementedError("Heuristic method not yet implemented.")
 
         if method == 'safe':
             # take the first cwfs image and return that
@@ -329,10 +426,10 @@ class NightReport():
 
         Parameters
         ----------
-        imageType : str
-            Only consider images with this image type
-        tailNumber : int
-            Only print out the last n entries in the night
+        **kwargs : `dict`
+            Filter the observation table according to seqNums which match these
+            {k: v} pairs. For example, to only print out science observations
+            pass ``observation_type='science'``.
         """
         seqNums = self.data.keys() if not kwargs else self.getSeqNumsMatching(**kwargs)
         seqNums = sorted(seqNums)  # should always be sorted, but is a totaly disaster here if not
@@ -359,12 +456,33 @@ class NightReport():
 
     def getExposureMidpoint(self, seqNum):
         """Return the midpoint of the exposure as a float in MJD.
+
+        Parameters
+        ----------
+        seqNum : `int`
+            The seqNum to get the midpoint for.
+
+        Returns
+        -------
+        midpointMjd : `float`
+            The midpoint, as an mjd float.
         """
         timespan = self.data[seqNum]['timespan']
         return (timespan.begin.mjd + timespan.begin.mjd) / 2
 
     def plotPerObjectAirMass(self, objects=None, airmassOneAtTop=True):
-        """XXX docs
+        """Plot the airmass for objects observed over the course of the night.
+
+        TODO: Add axis labels to the actual plot
+        TODO: Add option to save to file
+
+        Parameters
+        ----------
+        objects : `list` [`str`], optional
+            The objects to plot. If not provided, all objects are plotted.
+        airmassOneAtTop : `bool`, optional
+            Put the airmass of 1 at the top of the plot, like astronomers
+            expect.
         """
         if not objects:
             objects = self.stars
@@ -399,7 +517,23 @@ class NightReport():
         ax.set_rlim(0, 90)
         return ax
 
-    def makePolarPlotForObjects(self, objects=None, withLines=False):
+    def makeAltAzCoveragePlot(self, objects=None, withLines=False):
+        """Make a polar plot of the azimuth and zenith angle for each object.
+
+        Plots the azimuth on the theta axis, and zenith angle (not altitude!)
+        on the radius axis, such that 0 is at the centre, like you're looking
+        top-down on the telescope.
+
+        TODO: Add axis labels to the actual plot
+        TODO: Add option to save to file
+
+        Parameters
+        ----------
+        objects : `list` [`str`], optional
+            The objects to plot. If not provided, all objects are plotted.
+        withLines : `bool`, optional
+            Connect the points with lines?
+        """
         if not objects:
             objects = self.stars
         objects = self._ensureList(objects)
