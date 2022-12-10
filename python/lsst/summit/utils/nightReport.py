@@ -64,6 +64,7 @@ class ColorAndMarker:
 
 class NightReport():
     def __init__(self, butler, dayObs, loadFromFile=None):
+        self._supressAstroMetadataTranslatorWarnings()  # call early
         self.log = logging.getLogger('lsst.summit.utils.NightReport')
         self.butler = butler
         self.dayObs = dayObs
@@ -75,6 +76,12 @@ class NightReport():
         if loadFromFile is not None:
             self._load(loadFromFile)
         self.rebuild()
+
+    def _supressAstroMetadataTranslatorWarnings(self):
+        """NB: must be called early"""
+        logging.basicConfig()
+        _astroLogger = logging.getLogger("lsst.obs.lsst.translators.latiss")
+        _astroLogger.setLevel(logging.ERROR)
 
     def save(self, filename):
         """Save the internal data to a file.
@@ -162,7 +169,8 @@ class NightReport():
         records = self.getExpRecordDictForDayObs(self.dayObs)
         if len(records) == len(self.data):  # nothing to do
             print('No new records found')
-            return
+            # NB don't return here, because we need to rebuild the
+            # star maps etc if we came from a file.
         else:
             # still need to merge the new expRecordDicts into self.data
             # but only these, as the other items have obsInfos merged into them
