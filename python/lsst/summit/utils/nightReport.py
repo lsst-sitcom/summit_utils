@@ -307,7 +307,7 @@ class NightReport():
             Dictionary of the various calculated times, in seconds, and the
             seqNums of the first and last observations used in the calculation.
         """
-        firstObs = self.getNightStartSeqNum(method='safe')
+        firstObs = self.getObservingStartSeqNum(method='safe')
         lastObs = max(self.data.keys())
 
         begin = self.data[firstObs]['datetime_begin']
@@ -374,24 +374,29 @@ class NightReport():
 
         return {s: dt for s, dt in zip(seqNums, dts)}
 
-    def printObsGaps(self, threshold=100):
+    def printObsGaps(self, threshold=100, includeCalibs=False):
         """Print out the gaps between observations in a human-readable format.
 
         Parameters
         ----------
-        threshold : `float`
+        threshold : `float`, optional
             The minimum time gap to print out, in seconds.
+        includeCalibs : `bool`, optional
+            If True, start at the lowest seqNum, otherwise start when the
+            night's observing started.
         """
         if not HAVE_HUMANIZE:
             self.log.warning('Please install humanize to use make this print as intended.')
         dts = self.getTimeDeltas()
 
-        # get the portion of the night we care about as there are and should
-        # be gaps when taking calibs and waiting to go on sky.
         allSeqNums = list(self.data.keys())
-        firstObs = self.getNightStartSeqNum(method='safe')
-        startPoint = allSeqNums.index(firstObs) + 1  # there is always a big gap before firstObs by definition
-        seqNums = allSeqNums[startPoint:]
+        if includeCalibs:
+            seqNums = allSeqNums
+        else:
+            firstObs = self.getObservingStartSeqNum(method='safe')
+            # there is always a big gap before firstObs by definition so add 1
+            startPoint = allSeqNums.index(firstObs) + 1
+            seqNums = allSeqNums[startPoint:]
 
         messages = []
         for seqNum in seqNums:
@@ -404,32 +409,47 @@ class NightReport():
             for line in messages:
                 print(line)
 
-    def getNightStartSeqNum(self, method='safe'):
+    def getObservingStartSeqNum(self, method='safe'):
         """Get the seqNum at which on-sky observations started.
+
+        If no on-sky observations were taken ``None`` is returned.
 
         Parameters
         ----------
         method : `str`
             The calculation method to use. Options are:
-            - 'safe': Use the first seqNum with an observation_type of
-              'science'.
-            - 'heuristic': Use a heuristic to find the first seqNum. Not yet
-               implemented.
+            - 'safe': Use the first seqNum with an observation_type that is
+            explicitly not a calibration or test. This is a safe way of
+            excluding the calibs, but will include observations where we
+            take some closed dome test images, or start observing too early,
+            and fo back to taking calibs for a while before the night starts.
+            - 'heuristic': Use a heuristic to find the first seqNum. The
+            current heuristic is to find the first seqNum with an observation
+            type of CWFS, as we always do a CWFS focus before going on sky.
+            This does not work well for old days, because this wasn't always
+            the way data was taken. Note: may be updated in the future, at
+            which point this will be renamed ``cwfs``.
 
         Returns
         -------
         startSeqNum : `int`
             The seqNum of the start of the night's observing.
         """
-
         allowedMethods = ['heuristic', 'safe']
         if method not in allowedMethods:
             raise ValueError(f"Method must be one of {allowedMethods}")
 
-        if method == 'heuristic':
-            raise NotImplementedError("Heuristic method not yet implemented.")
-
         if method == 'safe':
+            # as of 20221211, the full set of observation_types ever seen is:
+            # acq, bias, cwfs, dark, engtest, flat, focus, science, stuttered,
+            # test, unknown
+            offSkyObsTypes = ['bias', 'dark', 'flat', 'test', 'unknown']
+            for seqNum in sorted(self.data.keys()):
+                if self.data[seqNum]['observation_type'] not in offSkyObsTypes:
+                    return seqNum
+            return None
+
+        if method == 'heuristic':
             # take the first cwfs image and return that
             seqNums = self.getSeqNumsMatching(observation_type='cwfs')
             return min(seqNums)
