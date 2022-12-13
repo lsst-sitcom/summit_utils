@@ -508,11 +508,8 @@ class NightReport():
         timespan = self.data[seqNum]['timespan']
         return (timespan.begin.mjd + timespan.end.mjd) / 2
 
-    def plotPerObjectAirMass(self, objects=None, airmassOneAtTop=True):
+    def plotPerObjectAirMass(self, objects=None, airmassOneAtTop=True, saveFig=''):
         """Plot the airmass for objects observed over the course of the night.
-
-        TODO: Add axis labels to the actual plot
-        TODO: Add option to save to file
 
         Parameters
         ----------
@@ -521,6 +518,8 @@ class NightReport():
         airmassOneAtTop : `bool`, optional
             Put the airmass of 1 at the top of the plot, like astronomers
             expect.
+        saveFig : `str`, optional
+            Save the figure to this file path?
         """
         if not objects:
             objects = self.stars
@@ -537,10 +536,15 @@ class NightReport():
             plt.plot(obsTimes, airMasses, color=color, marker=marker, label=star, ms=10, ls='')
 
         plt.ylabel('Airmass', fontsize=20)
+        plt.ylabel('MJD', fontsize=20)
         if airmassOneAtTop:
             ax = plt.gca()
             ax.set_ylim(ax.get_ylim()[::-1])
         _ = plt.legend(bbox_to_anchor=(1, 1.025), prop={'size': 15}, loc='upper left')
+
+        plt.tight_layout()
+        if saveFig:
+            plt.savefig(saveFig)
 
     def _makePolarPlot(self, azimuthsInDegrees, zenithAngles, marker="*-",
                        title=None, makeFig=True, color=None, objName=None):
@@ -555,15 +559,12 @@ class NightReport():
         ax.set_rlim(0, 90)
         return ax
 
-    def makeAltAzCoveragePlot(self, objects=None, withLines=False):
+    def makeAltAzCoveragePlot(self, objects=None, withLines=False, saveFig=''):
         """Make a polar plot of the azimuth and zenith angle for each object.
 
         Plots the azimuth on the theta axis, and zenith angle (not altitude!)
         on the radius axis, such that 0 is at the centre, like you're looking
         top-down on the telescope.
-
-        TODO: Add axis labels to the actual plot
-        TODO: Add option to save to file
 
         Parameters
         ----------
@@ -571,21 +572,23 @@ class NightReport():
             The objects to plot. If not provided, all objects are plotted.
         withLines : `bool`, optional
             Connect the points with lines?
+        saveFig : `str`, optional
+            Save the figure to this file path?
         """
         if not objects:
             objects = self.stars
         objects = ensure_iterable(objects)
 
-        _ = plt.figure(figsize=(10, 10))
+        _ = plt.figure(figsize=(14, 10))
 
-        for i, obj in enumerate(objects):
+        for obj in objects:
             seqNums = self.getSeqNumsMatching(target_name_short=obj)
             altAzes = [self.data[seqNum]['altaz_begin'] for seqNum in seqNums]
             alts = [altAz.alt.deg for altAz in altAzes if altAz is not None]
             azes = [altAz.az.deg for altAz in altAzes if altAz is not None]
             assert(len(alts) == len(azes))
             if len(azes) == 0:
-                self.log.warning(f"WARNING: found no alt/az data for {obj}")
+                self.log.warning(f"Found no alt/az data for {obj}")
             zens = [90 - alt for alt in alts]
             color = self.cMap[obj].color
             marker = self.cMap[obj].marker
@@ -595,8 +598,13 @@ class NightReport():
             ax = self._makePolarPlot(azes, zens, marker=marker, title=None, makeFig=False,
                                      color=color, objName=obj)
         lgnd = ax.legend(bbox_to_anchor=(1.05, 1), prop={'size': 15}, loc='upper left')
+        ax.set_title("Axial coverage - azimuth (theta, deg) vs zenith angle (r, deg)", size=20)
         for h in lgnd.legendHandles:
             size = 14
             if '-' in marker:
                 size += 5
             h.set_markersize(size)
+
+        plt.tight_layout()
+        if saveFig:
+            plt.savefig(saveFig)
