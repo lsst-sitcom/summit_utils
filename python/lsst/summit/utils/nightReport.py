@@ -168,7 +168,7 @@ class NightReport():
 
         records = self.getExpRecordDictForDayObs(self.dayObs)
         if len(records) == len(self.data):  # nothing to do
-            print('No new records found')
+            self.log.info('No new records found')
             # NB don't return here, because we need to rebuild the
             # star maps etc if we came from a file.
         else:
@@ -182,10 +182,10 @@ class NightReport():
         seqNums = list(records.keys())
         obsInfosToLoad = set(seqNums) - self._obsInfosLoaded
         if obsInfosToLoad:
-            print(f"Loading {len(obsInfosToLoad)} obsInfo(s)")
+            self.log.info(f"Loading {len(obsInfosToLoad)} obsInfo(s)")
         for i, seqNum in enumerate(obsInfosToLoad):
             if (i+1) % 200 == 0:
-                print(f"Loaded {i+1} obsInfos")
+                self.log.info(f"Loaded {i+1} obsInfos")
             obsInfo, metadata = self.getObsInfoAndMetadataForSeqNum(seqNum)
             obsInfoDict = obsInfoToDict(obsInfo)
             records[seqNum].update(obsInfoDict)
@@ -580,7 +580,7 @@ class NightReport():
             azes = [altAz.az.deg for altAz in altAzes if altAz is not None]
             assert(len(alts) == len(azes))
             if len(azes) == 0:
-                print(f"WARNING: found no alt/az data for {obj}")
+                self.log.warning(f"WARNING: found no alt/az data for {obj}")
             zens = [90 - alt for alt in alts]
             color = self.cMap[obj].color
             marker = self.cMap[obj].marker
