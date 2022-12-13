@@ -21,8 +21,11 @@
 
 import unittest
 import tempfile
+import itertools
 import os
 from unittest import mock
+from numpy.random import shuffle
+from astro_metadata_translator import ObservationInfo
 
 import lsst.utils.tests
 
@@ -55,6 +58,7 @@ class NightReportTestCase(lsst.utils.tests.TestCase):
         # of the scraped data. Not ideal, but best that can be done due to
         # only having partial days in the test datasets.
         cls.nImages = len(cls.report.data.keys())
+        cls.seqNums = list(cls.report.data.keys())
 
     def test_saveAndLoad(self):
         """Test that a NightReport can save itself, and be loaded back.
@@ -70,6 +74,71 @@ class NightReportTestCase(lsst.utils.tests.TestCase):
         self.assertEqual(loaded.dayObs, self.dayObs)
 
         # TODO: add a self.assertRaises on a mismatched dayObs
+
+    def test_getSortedData(self):
+        """Test the _getSortedData returns the seqNums in order.
+        """
+        shuffledKeys = list(self.report.data.keys())
+        shuffle(shuffledKeys)
+        shuffledData = {k: self.report.data[k] for k in shuffledKeys}
+
+        sortedData = self.report._getSortedData(shuffledData)
+        sortedKeys = sorted(list(sortedData.keys()))
+        self.assertEqual(sortedKeys, list(self.report.data.keys()))
+        return
+
+    def test_getExpRecordDictForDayObs(self):
+        """Test getExpRecordDictForDayObs.
+
+        Test it returns a dict of dicts, keyed by integer seqNums.
+        """
+        expRecDict = self.report.getExpRecordDictForDayObs(self.dayObs)
+        self.assertIsInstance(expRecDict, dict)
+        self.assertGreaterEqual(len(expRecDict), 1)
+
+        # check all the keys are ints
+        seqNums = list(expRecDict.keys())
+        self.assertTrue(all(isinstance(s, int) for s in seqNums))
+
+        # check all the values are dicts
+        self.assertTrue(all(isinstance(expRecDict[s], dict) for s in seqNums))
+        return
+
+    def test_getObsInfoAndMetadataForSeqNum(self):
+        """Test that getObsInfoAndMetadataForSeqNum returns the correct types.
+        """
+        seqNum = self.seqNums[0]
+        obsInfo, md = self.report.getObsInfoAndMetadataForSeqNum(seqNum)
+        self.assertIsInstance(obsInfo, ObservationInfo)
+        self.assertIsInstance(md, dict)
+        return
+
+    def test_rebuild(self):
+        """Test that rebuild does nothing, as no data will be being added.
+
+        NB Do not call full=True on this, as it will double the length of the
+        tests and they're already extremely slow.
+        """
+        lenBefore = len(self.report.data)
+        self.report.rebuild()
+        self.assertEqual(len(self.report.data), lenBefore)
+        return
+
+    def test_getExposureMidpoint(self):
+        """Test the exposure midpoint calculation
+        """
+        midPoint = self.report.getExposureMidpoint(self.seqNums[0])
+        record = self.report.data[self.seqNums[0]]
+        self.assertGreater(midPoint, record['datetime_begin'].mjd)
+        self.assertLess(midPoint, record['datetime_end'].mjd)
+        return
+
+    def test_getTimeDeltas(self):
+        """
+        """
+        dts = self.report.getTimeDeltas()
+        self.assertIsInstance(dts, dict)
+        return
 
     def test_printObsTable(self):
         """Test that a the printObsTable() method prints out the correct
@@ -119,12 +188,27 @@ class NightReportTestCase(lsst.utils.tests.TestCase):
         self.assertGreater(efficiency, 0)
         self.assertLessEqual(efficiency, 100)
 
-        # TODO: Add more tests here
+    def test_doesNotRaise(self):
+        """Tests for things which are hard to test, so just make sure they run.
+        """
+        self.report.printShutterTimes()
+        for sample, includeRaw in itertools.product((True, False), (True, False)):
+            self.report.printAvailableKeys(sample=sample, includeRaw=includeRaw)
+        self.report.printObsTable()
+        for threshold, includeCalibs in itertools.product((0, 1, 10), (True, False)):
+            self.report.printObsGaps(threshold=threshold, includeCalibs=includeCalibs)
 
     def test_internals(self):
+        startNum = self.report.getObservingStartSeqNum()
+        self.assertIsInstance(startNum, int)
+        self.assertGreater(startNum, 0)  # the day starts at 1, so zero would be an error of some sort
+
         starsFromGetter = self.report.getObservedObjects()
         self.assertIsInstance(starsFromGetter, list)
         self.assertSetEqual(set(starsFromGetter), set(self.report.stars))
+
+        starsFromGetter = self.report.getObservedObjects(ignoreTileNum=True)
+        self.assertLessEqual(len(starsFromGetter), len(self.report.stars))
 
         # check the internal color map has the right number of items
         self.assertEqual(len(self.report.cMap), len(starsFromGetter))

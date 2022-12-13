@@ -76,7 +76,7 @@ class NightReport():
         self.cMap = None
         if loadFromFile is not None:
             self._load(loadFromFile)
-        self.rebuild()
+        self.rebuild()  # sets stars and cMap
 
     def _supressAstroMetadataTranslatorWarnings(self):
         """NB: must be called early"""
@@ -148,6 +148,18 @@ class NightReport():
         functionalty there too, as the whole init will go from many minutes to
         under a second.
 
+        Parameters
+        ----------
+        seqNum : `int`
+            The seqNum.
+
+        Returns
+        -------
+        obsInfo : `astro_metadata_translator.ObservationInfo`
+            The obsInfo.
+        md : `dict`
+            The raw metadata.
+
         Notes
         -----
         Very slow, as it has to load the whole file on object store repos
@@ -155,7 +167,7 @@ class NightReport():
         """
         dataId = {'day_obs': self.dayObs, 'seq_num': seqNum, 'detector': 0}
         md = self.butler.get('raw.metadata', dataId)
-        return ObservationInfo(md), md
+        return ObservationInfo(md), md.toDict()
 
     def rebuild(self, full=False):
         """Scrape new data if there is any, otherwise is a no-op.
@@ -490,7 +502,7 @@ class NightReport():
             The midpoint, as an mjd float.
         """
         timespan = self.data[seqNum]['timespan']
-        return (timespan.begin.mjd + timespan.begin.mjd) / 2
+        return (timespan.begin.mjd + timespan.end.mjd) / 2
 
     def plotPerObjectAirMass(self, objects=None, airmassOneAtTop=True):
         """Plot the airmass for objects observed over the course of the night.
