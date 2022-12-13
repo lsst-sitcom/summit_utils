@@ -32,7 +32,7 @@ import lsst.utils.tests
 import matplotlib as mpl
 mpl.use('Agg')
 
-from lsst.summit.utils.nightReport import NightReport  # noqa: E402
+from lsst.summit.utils.nightReport import NightReport, ColorAndMarker  # noqa: E402
 import lsst.summit.utils.butlerUtils as butlerUtils  # noqa: E402
 
 
@@ -134,10 +134,20 @@ class NightReportTestCase(lsst.utils.tests.TestCase):
         return
 
     def test_getTimeDeltas(self):
-        """
+        """Test the time delta calculation returns a dict.
         """
         dts = self.report.getTimeDeltas()
         self.assertIsInstance(dts, dict)
+        return
+
+    def test_makeStarColorAndMarkerMap(self):
+        """Test the color map maker returns a dict of ColorAndMarker objects.
+        """
+        cMap = self.report.makeStarColorAndMarkerMap(self.report.stars)
+        self.assertEqual(len(cMap), len(self.report.stars))
+        self.assertIsInstance(cMap, dict)
+        values = list(cMap.values())
+        self.assertTrue(all(isinstance(value, ColorAndMarker) for value in values))
         return
 
     def test_printObsTable(self):
