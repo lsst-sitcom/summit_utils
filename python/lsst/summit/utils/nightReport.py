@@ -46,9 +46,9 @@ __all__ = ['NightReport']
 
 CALIB_VALUES = ['FlatField position', 'Park position', 'azel_target']
 N_STARS_PER_SYMBOL = 6
-MARKER_SEQUENCE = ['*', 'o', "D", 'P', 'v', "^", 's', '.', ',', 'o', 'v', '^',
-                   '<', '>', '1', '2', '3', '4', '8', 's', 'p', 'P', '*', 'h',
-                   'H', '+', 'x', 'X', 'D', 'd', '|', '_']
+MARKER_SEQUENCE = ['*', 'o', "D", 'P', 'v', "^", 's', 'o', 'v', '^', '<', '>',
+                   '1', '2', '3', '4', '8', 's', 'p', 'P', '*', 'h', 'H', '+',
+                   'x', 'X', 'D', 'd', '|', '_']
 SOUTHPOLESTAR = 'HD 185975'
 
 CALIB_VALUES = ['FlatField position', 'Park position', 'azel_target']
