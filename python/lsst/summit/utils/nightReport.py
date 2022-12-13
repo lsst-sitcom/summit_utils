@@ -27,6 +27,7 @@ import numpy as np
 import matplotlib.pyplot as plt
 from matplotlib.pyplot import cm
 
+from lsst.utils.iteration import ensure_iterable
 from astro_metadata_translator import ObservationInfo
 from lsst.summit.utils.utils import (obsInfoToDict,  # change to .utils later XXX
                                      getFieldNameAndTileNumber
@@ -282,18 +283,6 @@ class NightReport():
             markerMap[star] = ColorAndMarker(colors[colorIndex], MARKER_SEQUENCE[markerIndex])
         return markerMap
 
-    @staticmethod
-    def _ensureList(arg):
-        """Ensure that if a string is passed rather than a list of strings,
-        that we don't iterate over the letters in the string, but treat it as
-        a list of length 1.
-        """
-        if type(arg) == str:
-            return [arg]
-        if type(arg) != list:
-            raise ValueError(f"Expected a list or string, got {arg}")
-        return arg
-
     def calcShutterTimes(self):
         """Calculate the total time spent on science, engineering and readout.
 
@@ -520,7 +509,7 @@ class NightReport():
         if not objects:
             objects = self.stars
 
-        objects = self._ensureList(objects)
+        objects = ensure_iterable(objects)
 
         _ = plt.figure(figsize=(10, 6))
         for star in objects:
@@ -569,7 +558,7 @@ class NightReport():
         """
         if not objects:
             objects = self.stars
-        objects = self._ensureList(objects)
+        objects = ensure_iterable(objects)
 
         _ = plt.figure(figsize=(10, 10))
 
