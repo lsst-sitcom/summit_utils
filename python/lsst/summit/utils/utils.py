@@ -688,7 +688,7 @@ def getFieldNameAndTileNumber(field, warn=True, logger=None):
         The number of the tile, as an integer, or ``None`` if not found.
     """
     if warn and not logger:
-        logger = logging.getLogger('lsst.summit.utils.getFieldNameAndTileNumber')
+        logger = logging.getLogger('lsst.summit.utils.utils.getFieldNameAndTileNumber')
 
     if '_' not in field:
         if warn:

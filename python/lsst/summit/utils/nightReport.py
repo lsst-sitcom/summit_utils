@@ -138,6 +138,13 @@ class NightReport():
                                                                 datasets='raw')
         expRecords = list(expRecords)
         records = {e.seq_num: e.toDict() for e in expRecords}  # not guaranteed to be in order
+        for record in records.values():
+            target = record['target_name'] if record['target_name'] is not None else ''
+            if target:
+                shortTarget, _ = getFieldNameAndTileNumber(target, warn=False)
+            else:
+                shortTarget = ''
+            record['target_name_short'] = shortTarget
         return self._getSortedData(records)
 
     def getObsInfoAndMetadataForSeqNum(self, seqNum):
@@ -223,13 +230,10 @@ class NightReport():
         ignoreTileNum : `bool`, optional
             Remove the trailing _NNN tile number for imaging fields?
         """
-        allTargets = sorted({record['target_name'] if record['target_name'] is not None else ''
+        key = 'target_name_short' if ignoreTileNum else 'target_name'
+        allTargets = sorted({record[key] if record[key] is not None else ''
                              for record in self.data.values()})
-        if not ignoreTileNum:
-            return allTargets
-        # need to call set and sorted again here because what is unique now
-        # wasn't before, because of the tile numbers
-        return sorted(set([getFieldNameAndTileNumber(target, warn=False)[0] for target in allTargets]))
+        return allTargets
 
     def getSeqNumsMatching(self, invert=False, subset=None, **kwargs):
         """Get seqNums which match/don't match all kwargs provided, e.g.
@@ -525,7 +529,7 @@ class NightReport():
 
         _ = plt.figure(figsize=(10, 6))
         for star in objects:
-            seqNums = self.getSeqNumsMatching(target_name=star)
+            seqNums = self.getSeqNumsMatching(target_name_short=star)
             airMasses = [self.data[seqNum]['boresight_airmass'] for seqNum in seqNums]
             obsTimes = [self.getExposureMidpoint(seqNum) for seqNum in seqNums]
             color = self.cMap[star].color
@@ -575,7 +579,7 @@ class NightReport():
         _ = plt.figure(figsize=(10, 10))
 
         for i, obj in enumerate(objects):
-            seqNums = self.getSeqNumsMatching(target_name=obj)
+            seqNums = self.getSeqNumsMatching(target_name_short=obj)
             altAzes = [self.data[seqNum]['altaz_begin'] for seqNum in seqNums]
             alts = [altAz.alt.deg for altAz in altAzes if altAz is not None]
             azes = [altAz.az.deg for altAz in altAzes if altAz is not None]
