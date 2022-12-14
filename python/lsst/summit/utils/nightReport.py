@@ -81,8 +81,10 @@ class NightReport():
     def _supressAstroMetadataTranslatorWarnings(self):
         """NB: must be called early"""
         logging.basicConfig()
-        _astroLogger = logging.getLogger("lsst.obs.lsst.translators.latiss")
-        _astroLogger.setLevel(logging.ERROR)
+        logger = logging.getLogger("lsst.obs.lsst.translators.latiss")
+        logger.setLevel(logging.ERROR)
+        logger = logging.getLogger("astro_metadata_translator.observationInfo")
+        logger.setLevel(logging.ERROR)
 
     def save(self, filename):
         """Save the internal data to a file.

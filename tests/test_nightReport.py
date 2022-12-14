@@ -46,12 +46,9 @@ class NightReportTestCase(lsst.utils.tests.TestCase):
             raise unittest.SkipTest("Skipping tests that require the LATISS butler repo.")
 
         cls.dayObs = 20200314  # has 377 images and data also exists on the TTS & summit
-        cls.dayObs = 20220630  # has 377 images and data also exists on the TTS & summit
-
-        dataFile = '/sdf/home/m/mfl/nightReports/20220630.pickle'  # XXX REMOVE OR COMMIT THIS SOMEHOW!
 
         # Do the init in setUpClass because this takes about 35s for 20200314
-        cls.report = NightReport(cls.butler, cls.dayObs, dataFile)
+        cls.report = NightReport(cls.butler, cls.dayObs)
         # number of images isn't necessarily the same as the number for the
         # the dayObs in the registry becacuse of the test stands/summit
         # having partial data, so get the number of images from the length
