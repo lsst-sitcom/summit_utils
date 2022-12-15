@@ -29,9 +29,7 @@ from matplotlib.pyplot import cm
 
 from lsst.utils.iteration import ensure_iterable
 from astro_metadata_translator import ObservationInfo
-from lsst.summit.utils.utils import (obsInfoToDict,  # change to .utils later XXX
-                                     getFieldNameAndTileNumber
-                                     )
+from .utils import obsInfoToDict, getFieldNameAndTileNumber
 
 try:  # TODO: Remove post RFC-896: add humanize to rubin-env
     from humanize.time import precisedelta
