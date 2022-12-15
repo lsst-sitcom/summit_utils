@@ -155,7 +155,7 @@ class NightReportTestCase(lsst.utils.tests.TestCase):
             self.report.printObsTable()
 
         # newline for each row plus header line, plus the line with dashes
-        self.assertEqual(len(fake_stdout.mock_calls), 2*(self.nImages+2))
+        self.assertEqual(len(fake_stdout.mock_calls), 2*(self.nImages + 2))
 
     def test_plotPerObjectAirMass(self):
         """Test that a the per-object airmass plots runs.

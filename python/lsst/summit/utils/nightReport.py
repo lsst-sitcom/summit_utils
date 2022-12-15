@@ -319,12 +319,12 @@ class NightReport():
         end = self.data[lastObs]['datetime_end']
 
         READOUT_TIME = 2.0
-        shutterOpenTime = sum([self.data[s]['exposure_time'] for s in range(firstObs, lastObs+1)])
-        readoutTime = sum([READOUT_TIME for _ in range(firstObs, lastObs+1)])
+        shutterOpenTime = sum([self.data[s]['exposure_time'] for s in range(firstObs, lastObs + 1)])
+        readoutTime = sum([READOUT_TIME for _ in range(firstObs, lastObs + 1)])
 
         sciSeqNums = self.getSeqNumsMatching(observation_type='science')
         scienceIntegration = sum([self.data[s]['exposure_time'] for s in sciSeqNums])
-        scienceTimeTotal = scienceIntegration.value + (len(sciSeqNums) * READOUT_TIME)
+        scienceTimeTotal = scienceIntegration.value + (len(sciSeqNums)*READOUT_TIME)
 
         result = {}
         result['firstObs'] = firstObs
@@ -343,7 +343,7 @@ class NightReport():
         """Print out the shutter efficiency stats in a human-readable format.
         """
         if not HAVE_HUMANIZE:
-            self.log.warning('Please install humanize to use make this print as intended.')
+            self.log.warning('Please install humanize to make this print as intended.')
         timings = self.calcShutterTimes()
 
         print(f"Observations started at: seqNum {timings['firstObs']:>3} at"
@@ -391,7 +391,7 @@ class NightReport():
             night's observing started.
         """
         if not HAVE_HUMANIZE:
-            self.log.warning('Please install humanize to use make this print as intended.')
+            self.log.warning('Please install humanize to make this print as intended.')
         dts = self.getTimeDeltas()
 
         allSeqNums = list(self.data.keys())
@@ -427,7 +427,7 @@ class NightReport():
             explicitly not a calibration or test. This is a safe way of
             excluding the calibs, but will include observations where we
             take some closed dome test images, or start observing too early,
-            and fo back to taking calibs for a while before the night starts.
+            and go back to taking calibs for a while before the night starts.
             - 'heuristic': Use a heuristic to find the first seqNum. The
             current heuristic is to find the first seqNum with an observation
             type of CWFS, as we always do a CWFS focus before going on sky.
@@ -470,7 +470,7 @@ class NightReport():
             pass ``observation_type='science'``.
         """
         seqNums = self.data.keys() if not kwargs else self.getSeqNumsMatching(**kwargs)
-        seqNums = sorted(seqNums)  # should always be sorted, but is a totaly disaster here if not
+        seqNums = sorted(seqNums)  # should always be sorted, but is a total disaster here if not
 
         dts = self.getTimeDeltas()
         lines = []
@@ -526,7 +526,7 @@ class NightReport():
 
         objects = ensure_iterable(objects)
 
-        _ = plt.figure(figsize=(10, 6))
+        plt.figure(figsize=(10, 6))
         for star in objects:
             seqNums = self.getSeqNumsMatching(target_name_short=star)
             airMasses = [self.data[seqNum]['boresight_airmass'] for seqNum in seqNums]
@@ -540,7 +540,7 @@ class NightReport():
         if airmassOneAtTop:
             ax = plt.gca()
             ax.set_ylim(ax.get_ylim()[::-1])
-        _ = plt.legend(bbox_to_anchor=(1, 1.025), prop={'size': 15}, loc='upper left')
+        plt.legend(bbox_to_anchor=(1, 1.025), prop={'size': 15}, loc='upper left')
 
         plt.tight_layout()
         if saveFig:
