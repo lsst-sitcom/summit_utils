@@ -180,6 +180,11 @@ class NightReport():
         """Scrape new data if there is any, otherwise is a no-op.
 
         If full is True, then all data is reloaded.
+
+        Parameters
+        ----------
+        full : `bool`, optional
+            Do a full reload of all the data, removing any which is pre-loaded?
         """
         if full:
             self.data = dict()
