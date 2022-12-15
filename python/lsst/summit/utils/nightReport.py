@@ -206,7 +206,7 @@ class NightReport():
         if obsInfosToLoad:
             self.log.info(f"Loading {len(obsInfosToLoad)} obsInfo(s)")
         for i, seqNum in enumerate(obsInfosToLoad):
-            if (i+1) % 200 == 0:
+            if (i + 1) % 200 == 0:
                 self.log.info(f"Loaded {i+1} obsInfos")
             obsInfo, metadata = self.getObsInfoAndMetadataForSeqNum(seqNum)
             obsInfoDict = obsInfoToDict(obsInfo)
@@ -550,6 +550,29 @@ class NightReport():
 
     def _makePolarPlot(self, azimuthsInDegrees, zenithAngles, marker="*-",
                        title=None, makeFig=True, color=None, objName=None):
+        """Private method to actually do the polar plotting.
+
+        azimuthsInDegrees : `list` [`float`]
+            The azimuth values, in degrees.
+        zenithAngles : `list` [`float`]
+            The zenith angle values, but more generally, the values on the
+            radial axis, so can be in whatever units you want.
+        marker : `str`, optional
+            The marker to use.
+        title : `str`, optional
+            The plot title.
+        makeFig : `bool`, optional
+            Make a new figure?
+        color : `str`, optional
+            The marker color.
+        objName : `str`, optional
+            The object name, for the legend.
+
+        Returns
+        -------
+        ax : `matplotlib.axes.Axes`
+            The axes on which the plot was made.
+        """
         if makeFig:
             _ = plt.figure(figsize=(10, 10))
         ax = plt.subplot(111, polar=True)

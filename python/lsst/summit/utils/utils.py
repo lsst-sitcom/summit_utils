@@ -657,7 +657,7 @@ def obsInfoToDict(obsInfo):
 
     Parameters
     ----------
-    obsInfo : `XXX`
+    obsInfo : `astro_metadata_translator.ObservationInfo`
         The ObservationInfo to convert.
 
     Returns
