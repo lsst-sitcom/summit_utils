@@ -550,6 +550,8 @@ class NightReport():
         plt.tight_layout()
         if saveFig:
             plt.savefig(saveFig)
+        plt.show()
+        plt.close()
 
     def _makePolarPlot(self, azimuthsInDegrees, zenithAngles, marker="*-",
                        title=None, makeFig=True, color=None, objName=None):
@@ -636,3 +638,5 @@ class NightReport():
         plt.tight_layout()
         if saveFig:
             plt.savefig(saveFig)
+        plt.show()
+        plt.close()
