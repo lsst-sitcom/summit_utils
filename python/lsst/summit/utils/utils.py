@@ -650,3 +650,59 @@ def starTrackerFileToExposure(filename, logger=None):
         logger.warning(f"Failed to set date from header: {e}")
 
     return exp
+
+
+def obsInfoToDict(obsInfo):
+    """Convert an ObservationInfo to a dict.
+
+    Parameters
+    ----------
+    obsInfo : `astro_metadata_translator.ObservationInfo`
+        The ObservationInfo to convert.
+
+    Returns
+    -------
+    obsInfoDict : `dict`
+        The ObservationInfo as a dict.
+    """
+    return {prop: getattr(obsInfo, prop) for prop in obsInfo.all_properties.keys()}
+
+
+def getFieldNameAndTileNumber(field, warn=True, logger=None):
+    """Get the tile name and number of an observed field.
+
+    It is assumed to always be appended, with an underscore, to the rest of the
+    field name. Returns the name and number as a tuple, or the name unchanged
+    if no tile number is found.
+
+    Parameters
+    ----------
+    field : `str`
+        The name of the field
+
+    Returns
+    -------
+    fieldName : `str`
+        The name of the field without the trailing tile number, if present.
+    tileNum : `int`
+        The number of the tile, as an integer, or ``None`` if not found.
+    """
+    if warn and not logger:
+        logger = logging.getLogger('lsst.summit.utils.utils.getFieldNameAndTileNumber')
+
+    if '_' not in field:
+        if warn:
+            logger.warning(f"Field {field} does not contain an underscore,"
+                           " so cannot determine the tile number.")
+        return field, None
+
+    try:
+        fieldParts = field.split("_")
+        fieldNum = int(fieldParts[-1])
+    except ValueError:
+        if warn:
+            logger.warning(f"Field {field} does not contain only an integer after the final underscore"
+                           " so cannot determine the tile number.")
+        return field, None
+
+    return "_".join(fieldParts[:-1]), fieldNum
