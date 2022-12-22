@@ -176,6 +176,13 @@ class ButlerUtilsTestCase(lsst.utils.tests.TestCase):
         dRef = getDatasetRefForDataId(self.butler, 'raw', self.rawDataId)
         self.assertIsInstance(dRef, lsst.daf.butler.core.datasets.ref.DatasetRef)
 
+        dRef = getDatasetRefForDataId(self.butler, 'raw', self.rawDataIdNoDayObSeqNum)
+        self.assertIsInstance(dRef, lsst.daf.butler.core.datasets.ref.DatasetRef)
+        dRef = getDatasetRefForDataId(self.butler, 'raw', self.dataCoordMinimal)
+        self.assertIsInstance(dRef, lsst.daf.butler.core.datasets.ref.DatasetRef)
+        dRef = getDatasetRefForDataId(self.butler, 'raw', self.dataCoordFullView)
+        self.assertIsInstance(dRef, lsst.daf.butler.core.datasets.ref.DatasetRef)
+
     def test__dayobs_present(self):
         goods = [{'day_obs': 123}, {'exposure.day_obs': 234}, {'day_obs': 345, 'otherkey': -1}]
         bads = [{'different_key': 123}]
