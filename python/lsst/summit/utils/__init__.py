@@ -21,6 +21,7 @@
 
 from .bestEffort import *
 from .spectrumExaminer import *
+from .nightReport import *
 from .imageExaminer import *
 from .quickLook import *
 from .butlerUtils import *
