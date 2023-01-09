@@ -139,20 +139,26 @@ class BestEffortIsr():
         Parameters
         ----------
         expIdOrDataId : `int` or `dict
-            The exposure id as an int or the dataId as as dict.
+            The exposure id as an int or the dataId as as dict, or an expRecord
+            or a dataCoordinate.
 
         Returns
         -------
         dataId : `dict`
             The sanitized dataId.
         """
-        if type(expIdOrDataId) == int:
+        if isinstance(expIdOrDataId, int):
             _dataId = {'expId': expIdOrDataId}
-        elif type(expIdOrDataId) == dict:
+            _dataId.update(kwargs)
+        elif isinstance(expIdOrDataId, dict):
             _dataId = expIdOrDataId
             _dataId.update(kwargs)
+        elif isinstance(expIdOrDataId, dafButler.DimensionRecord):
+            return expIdOrDataId.dataId
+        elif isinstance(expIdOrDataId, dafButler.DataCoordinate):
+            return expIdOrDataId
         else:
-            raise RuntimeError(f"Invalid expId or dataId type {expIdOrDataId}")
+            raise RuntimeError(f"Invalid expId or dataId type {expIdOrDataId}: {type(expIdOrDataId)}")
         return _dataId
 
     def clearCache(self):
@@ -196,14 +202,14 @@ class BestEffortIsr():
 
         if not forceRemake:
             try:
-                exp = self.butler.get(self._datasetName, dataId=dataId)
+                exp = self.butler.get(self._datasetName, dataId, **kwargs)
                 self.log.info("Found a ready-made quickLookExp in the repo. Returning that.")
                 return exp
             except LookupError:
                 pass
 
         try:
-            raw = self.butler.get('raw', dataId=dataId)
+            raw = self.butler.get('raw', dataId)
         except LookupError:
             raise RuntimeError(f"Failed to retrieve raw for exp {dataId}") from None
 
