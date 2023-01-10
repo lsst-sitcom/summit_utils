@@ -618,7 +618,7 @@ def getDayObs(dataId):
 
     Parameters
     ----------
-    dataId : `dict`
+    dataId : `dict` or `lsst.daf.butler.DimensionRecord`
         The dataId.
 
     Returns
@@ -626,6 +626,8 @@ def getDayObs(dataId):
     day_obs : `int` or `None`
         The day_obs value if present, else None.
     """
+    if hasattr(dataId, 'day_obs'):
+        return getattr(dataId, 'day_obs')
     if not _dayobs_present(dataId):
         return None
     return dataId['day_obs'] if 'day_obs' in dataId else dataId['exposure.day_obs']
@@ -636,7 +638,7 @@ def getSeqNum(dataId):
 
     Parameters
     ----------
-    dataId : `dict`
+    dataId : `dict` or `lsst.daf.butler.DimensionRecord`
         The dataId.
 
     Returns
@@ -644,6 +646,8 @@ def getSeqNum(dataId):
     seq_num : `int` or `None`
         The seq_num value if present, else None.
     """
+    if hasattr(dataId, 'seq_num'):
+        return getattr(dataId, 'seq_num')
     if not _seqnum_present(dataId):
         return None
     return dataId['seq_num'] if 'seq_num' in dataId else dataId['exposure.seq_num']
@@ -654,7 +658,7 @@ def getExpId(dataId):
 
     Parameters
     ----------
-    dataId : `dict`
+    dataId : `dict` or `lsst.daf.butler.DimensionRecord`
         The dataId.
 
     Returns
@@ -662,6 +666,8 @@ def getExpId(dataId):
     expId : `int` or `None`
         The expId value if present, else None.
     """
+    if hasattr(dataId, 'id'):
+        return getattr(dataId, 'id')
     if not _expid_present(dataId):
         return None
     return dataId['exposure'] if 'exposure' in dataId else dataId['exposure.id']
