@@ -27,6 +27,7 @@ from lsst.summit.utils.utils import getSite
 
 
 __all__ = ["makeDefaultLatissButler",
+           "updateDataId",
            "sanitize_day_obs",
            "getMostRecentDayObs",
            "getSeqNumsForDayObs",
@@ -165,6 +166,33 @@ def datasetExists(butler, dataProduct, dataId, **kwargs):
         return exists
     except (LookupError, RuntimeError):
         return False
+
+
+def updateDataId(dataId, **kwargs):
+    """Update a DataCoordinate or dataId dict with kwargs.
+
+    Provides a single interface for adding the detector key (or others) to a
+    dataId whether it's a DataCoordinate or a dict
+
+    Parameters
+    ----------
+    dataId : `dict` or `lsst.daf.butler.DataCoordinate`
+        The dataId to update.
+    kwargs : `dict`
+        The keys and values to add to the dataId.
+
+    Returns
+    -------
+    dataId : `dict` or `lsst.daf.butler.DataCoordinate`
+        The updated dataId, with the same type as the input.
+    """
+    if isinstance(dataId, dafButler.DataCoordinate):
+        return dafButler.DataCoordinate.standardize(dataId, **kwargs)
+    elif isinstance(dataId, dict):
+        dataId.update(**kwargs)
+        return dataId
+    else:
+        raise ValueError(f"Unknown dataId type {type(dataId)}")
 
 
 def sanitize_day_obs(day_obs):
