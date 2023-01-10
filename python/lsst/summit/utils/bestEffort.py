@@ -209,7 +209,7 @@ class BestEffortIsr():
                 pass
 
         try:
-            raw = self.butler.get('raw', dataId)
+            raw = self.butler.get('raw', dataId, **kwargs)
         except LookupError:
             raise RuntimeError(f"Failed to retrieve raw for exp {dataId}") from None
 
@@ -252,7 +252,7 @@ class BestEffortIsr():
 
         if self.doWrite and not forceRemake:
             try:
-                self.butler.put(quickLookExp, self._datasetName, dataId)
+                self.butler.put(quickLookExp, self._datasetName, dataId, **kwargs)
                 self.log.info(f'Put {self._datasetName} for {dataId}')
             except ConflictingDefinitionError:
                 # TODO: DM-34302 fix this message so that it's less scary for

@@ -65,6 +65,11 @@ class BestEffortIsrTestCase(lsst.utils.tests.TestCase):
         exp = self.bestEffortIsr.getExposure(expRecord.dataId, detector=0)
         self.assertIsInstance(exp, afwImage.Exposure)
 
+        # Try forceRemake with an expRecord and a detector as a kwarg
+        # as forceRemake has a different code path, as it has to get a raw
+        exp = self.bestEffortIsr.getExposure(expRecord.dataId, detector=0, forceRemake=True)
+        self.assertIsInstance(exp, afwImage.Exposure)
+
 
 class TestMemory(lsst.utils.tests.MemoryTestCase):
     pass
