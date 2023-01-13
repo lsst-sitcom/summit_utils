@@ -186,13 +186,13 @@ def updateDataId(dataId, **kwargs):
     dataId : `dict` or `lsst.daf.butler.DataCoordinate`
         The updated dataId, with the same type as the input.
     """
-    if isinstance(dataId, dafButler.DataCoordinate):
-        return dafButler.DataCoordinate.standardize(dataId, **kwargs)
-    elif isinstance(dataId, dict):
-        dataId.update(**kwargs)
-        return dataId
-    else:
-        raise ValueError(f"Unknown dataId type {type(dataId)}")
+
+    match dataId:
+        case dafButler.DataCoordinate():
+            return dafButler.DataCoordinate.standardize(dataId, **kwargs)
+        case dict() as dataId:
+            return dict(dataId, **kwargs)
+    raise ValueError(f"Unknown dataId type {type(dataId)}")
 
 
 def sanitize_day_obs(day_obs):

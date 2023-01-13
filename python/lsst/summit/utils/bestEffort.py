@@ -147,19 +147,16 @@ class BestEffortIsr():
         dataId : `dict`
             The sanitized dataId.
         """
-        if isinstance(expIdOrDataId, int):
-            _dataId = {'expId': expIdOrDataId}
-            _dataId.update(kwargs)
-        elif isinstance(expIdOrDataId, dict):
-            _dataId = expIdOrDataId
-            _dataId.update(kwargs)
-        elif isinstance(expIdOrDataId, dafButler.DimensionRecord):
-            return expIdOrDataId.dataId
-        elif isinstance(expIdOrDataId, dafButler.DataCoordinate):
-            return expIdOrDataId
-        else:
-            raise RuntimeError(f"Invalid expId or dataId type {expIdOrDataId}: {type(expIdOrDataId)}")
-        return _dataId
+        match expIdOrDataId:
+            case int() as expId:
+                return {"expId": expId}
+            case dafButler.DataCoordinate() as dataId:
+                return dataId
+            case dafButler.DimensionRecord() as record:
+                return record.dataId
+            case dict() as dataId:
+                return dataId
+        raise RuntimeError(f"Invalid expId or dataId type {expIdOrDataId}: {type(expIdOrDataId)}")
 
     def clearCache(self):
         """Clear the internal cache of loaded calibration products.
@@ -198,7 +195,7 @@ class BestEffortIsr():
         exp : `lsst.afw.image.Exposure`
             The postIsr exposure
         """
-        dataId = self._parseExpIdOrDataId(expIdOrDataId, **kwargs)
+        dataId = self._parseExpIdOrDataId(expIdOrDataId)
 
         if not forceRemake:
             try:
