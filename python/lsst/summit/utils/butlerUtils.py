@@ -27,6 +27,7 @@ from lsst.summit.utils.utils import getSite
 
 
 __all__ = ["makeDefaultLatissButler",
+           "updateDataId",
            "sanitize_day_obs",
            "getMostRecentDayObs",
            "getSeqNumsForDayObs",
@@ -165,6 +166,33 @@ def datasetExists(butler, dataProduct, dataId, **kwargs):
         return exists
     except (LookupError, RuntimeError):
         return False
+
+
+def updateDataId(dataId, **kwargs):
+    """Update a DataCoordinate or dataId dict with kwargs.
+
+    Provides a single interface for adding the detector key (or others) to a
+    dataId whether it's a DataCoordinate or a dict
+
+    Parameters
+    ----------
+    dataId : `dict` or `lsst.daf.butler.DataCoordinate`
+        The dataId to update.
+    kwargs : `dict`
+        The keys and values to add to the dataId.
+
+    Returns
+    -------
+    dataId : `dict` or `lsst.daf.butler.DataCoordinate`
+        The updated dataId, with the same type as the input.
+    """
+
+    match dataId:
+        case dafButler.DataCoordinate():
+            return dafButler.DataCoordinate.standardize(dataId, **kwargs)
+        case dict() as dataId:
+            return dict(dataId, **kwargs)
+    raise ValueError(f"Unknown dataId type {type(dataId)}")
 
 
 def sanitize_day_obs(day_obs):
@@ -618,7 +646,7 @@ def getDayObs(dataId):
 
     Parameters
     ----------
-    dataId : `dict`
+    dataId : `dict` or `lsst.daf.butler.DimensionRecord`
         The dataId.
 
     Returns
@@ -626,6 +654,8 @@ def getDayObs(dataId):
     day_obs : `int` or `None`
         The day_obs value if present, else None.
     """
+    if hasattr(dataId, 'day_obs'):
+        return getattr(dataId, 'day_obs')
     if not _dayobs_present(dataId):
         return None
     return dataId['day_obs'] if 'day_obs' in dataId else dataId['exposure.day_obs']
@@ -636,7 +666,7 @@ def getSeqNum(dataId):
 
     Parameters
     ----------
-    dataId : `dict`
+    dataId : `dict` or `lsst.daf.butler.DimensionRecord`
         The dataId.
 
     Returns
@@ -644,6 +674,8 @@ def getSeqNum(dataId):
     seq_num : `int` or `None`
         The seq_num value if present, else None.
     """
+    if hasattr(dataId, 'seq_num'):
+        return getattr(dataId, 'seq_num')
     if not _seqnum_present(dataId):
         return None
     return dataId['seq_num'] if 'seq_num' in dataId else dataId['exposure.seq_num']
@@ -654,7 +686,7 @@ def getExpId(dataId):
 
     Parameters
     ----------
-    dataId : `dict`
+    dataId : `dict` or `lsst.daf.butler.DimensionRecord`
         The dataId.
 
     Returns
@@ -662,6 +694,8 @@ def getExpId(dataId):
     expId : `int` or `None`
         The expId value if present, else None.
     """
+    if hasattr(dataId, 'id'):
+        return getattr(dataId, 'id')
     if not _expid_present(dataId):
         return None
     return dataId['exposure'] if 'exposure' in dataId else dataId['exposure.id']

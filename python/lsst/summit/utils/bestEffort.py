@@ -139,21 +139,24 @@ class BestEffortIsr():
         Parameters
         ----------
         expIdOrDataId : `int` or `dict
-            The exposure id as an int or the dataId as as dict.
+            The exposure id as an int or the dataId as as dict, or an expRecord
+            or a dataCoordinate.
 
         Returns
         -------
         dataId : `dict`
             The sanitized dataId.
         """
-        if type(expIdOrDataId) == int:
-            _dataId = {'expId': expIdOrDataId}
-        elif type(expIdOrDataId) == dict:
-            _dataId = expIdOrDataId
-            _dataId.update(kwargs)
-        else:
-            raise RuntimeError(f"Invalid expId or dataId type {expIdOrDataId}")
-        return _dataId
+        match expIdOrDataId:
+            case int() as expId:
+                return {"expId": expId}
+            case dafButler.DataCoordinate() as dataId:
+                return dataId
+            case dafButler.DimensionRecord() as record:
+                return record.dataId
+            case dict() as dataId:
+                return dataId
+        raise RuntimeError(f"Invalid expId or dataId type {expIdOrDataId}: {type(expIdOrDataId)}")
 
     def clearCache(self):
         """Clear the internal cache of loaded calibration products.
@@ -192,18 +195,18 @@ class BestEffortIsr():
         exp : `lsst.afw.image.Exposure`
             The postIsr exposure
         """
-        dataId = self._parseExpIdOrDataId(expIdOrDataId, **kwargs)
+        dataId = self._parseExpIdOrDataId(expIdOrDataId)
 
         if not forceRemake:
             try:
-                exp = self.butler.get(self._datasetName, dataId=dataId)
+                exp = self.butler.get(self._datasetName, dataId, **kwargs)
                 self.log.info("Found a ready-made quickLookExp in the repo. Returning that.")
                 return exp
             except LookupError:
                 pass
 
         try:
-            raw = self.butler.get('raw', dataId=dataId)
+            raw = self.butler.get('raw', dataId, **kwargs)
         except LookupError:
             raise RuntimeError(f"Failed to retrieve raw for exp {dataId}") from None
 
@@ -246,7 +249,7 @@ class BestEffortIsr():
 
         if self.doWrite and not forceRemake:
             try:
-                self.butler.put(quickLookExp, self._datasetName, dataId)
+                self.butler.put(quickLookExp, self._datasetName, dataId, **kwargs)
                 self.log.info(f'Put {self._datasetName} for {dataId}')
             except ConflictingDefinitionError:
                 # TODO: DM-34302 fix this message so that it's less scary for

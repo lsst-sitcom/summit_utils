@@ -24,9 +24,11 @@ import unittest
 from typing import Iterable
 import datetime
 import random
+import copy
 
 import lsst.utils.tests
 from lsst.summit.utils.butlerUtils import (makeDefaultLatissButler,
+                                           updateDataId,
                                            sanitize_day_obs,
                                            getMostRecentDayObs,
                                            getSeqNumsForDayObs,
@@ -88,6 +90,7 @@ class ButlerUtilsTestCase(lsst.utils.tests.TestCase):
         self.expRecordNoDetector = getExpRecordFromDataId(self.butler, self.rawDataId)
         self.assertIsInstance(self.expRecordNoDetector, dafButler.dimensions.DimensionRecord)
         self.assertFalse(hasattr(self.expRecordNoDetector, 'detector'))
+        self.assertFalse('detector' in self.expRecordNoDetector.dataId)
         # just a crosscheck on the above to make sure other things are correct
         self.assertTrue(hasattr(self.expRecordNoDetector, 'instrument'))
 
@@ -371,6 +374,23 @@ class ButlerUtilsTestCase(lsst.utils.tests.TestCase):
         dataId = {'missing': 123}
         self.assertTrue(_get_expid_key(dataId) is None)
         return
+
+    def test_updateDataId(self):
+        # check with a dataCoordinate
+        dataId = copy.copy(self.expRecordNoDetector.dataId)
+        self.assertTrue('detector' not in dataId)
+        dataId = updateDataId(dataId, detector=123)
+        self.assertTrue('detector' in dataId)
+        self.assertEqual(dataId['detector'], 123)
+
+        # check with a dict
+        self.assertIsInstance(self.rawDataId, dict)
+        dataId = copy.copy(self.rawDataId)
+        dataId.pop('detector')
+        self.assertTrue('detector' not in dataId)
+        dataId = updateDataId(dataId, detector=321)
+        self.assertTrue('detector' in dataId)
+        self.assertEqual(dataId['detector'], 321)
 
 
 class ButlerInitTestCase(lsst.utils.tests.TestCase):

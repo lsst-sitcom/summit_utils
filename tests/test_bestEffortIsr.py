@@ -24,6 +24,7 @@ import unittest
 import lsst.utils.tests
 
 from lsst.summit.utils.bestEffort import BestEffortIsr
+import lsst.summit.utils.butlerUtils as butlerUtils
 import lsst.afw.image as afwImage
 
 
@@ -49,6 +50,24 @@ class BestEffortIsrTestCase(lsst.utils.tests.TestCase):
 
         # this will always actually run isr with whatever calibs are available
         exp = self.bestEffortIsr.getExposure(self.dataId, forceRemake=True)
+        self.assertIsInstance(exp, afwImage.Exposure)
+
+    def test_getExposureFromExpRecord(self):
+        """Test getting with an expRecord. This requires also passing in
+        the detector number as a kwarg.
+        """
+        expRecord = butlerUtils.getExpRecordFromDataId(self.bestEffortIsr.butler, self.dataId)
+
+        exp = self.bestEffortIsr.getExposure(expRecord, detector=0)
+        self.assertIsInstance(exp, afwImage.Exposure)
+
+        # and then again with just the dataCoordinate
+        exp = self.bestEffortIsr.getExposure(expRecord.dataId, detector=0)
+        self.assertIsInstance(exp, afwImage.Exposure)
+
+        # Try forceRemake with an expRecord and a detector as a kwarg
+        # as forceRemake has a different code path, as it has to get a raw
+        exp = self.bestEffortIsr.getExposure(expRecord.dataId, detector=0, forceRemake=True)
         self.assertIsInstance(exp, afwImage.Exposure)
 
 
