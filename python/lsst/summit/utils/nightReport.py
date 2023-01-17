@@ -317,7 +317,10 @@ class NightReport():
             Dictionary of the various calculated times, in seconds, and the
             seqNums of the first and last observations used in the calculation.
         """
-        firstObs = self.getObservingStartSeqNum(method='safe')
+        firstObs = self.getObservingStartSeqNum(method='heuristic')
+        if not firstObs:
+            self.log.warning("No on-sky observations found.")
+            return None
         lastObs = max(self.data.keys())
 
         begin = self.data[firstObs]['datetime_begin']
@@ -350,6 +353,9 @@ class NightReport():
         if not HAVE_HUMANIZE:
             self.log.warning('Please install humanize to make this print as intended.')
         timings = self.calcShutterTimes()
+        if not timings:
+            print('No on-sky observations found, so no shutter efficiency stats are available yet.')
+            return
 
         print(f"Observations started at: seqNum {timings['firstObs']:>3} at"
               f" {timings['startTime'].to_datetime().strftime('%H:%M:%S')} TAI")
@@ -403,7 +409,10 @@ class NightReport():
         if includeCalibs:
             seqNums = allSeqNums
         else:
-            firstObs = self.getObservingStartSeqNum(method='safe')
+            firstObs = self.getObservingStartSeqNum(method='heuristic')
+            if not firstObs:
+                print("No on-sky observations found, so there can be no gaps in observing yet.")
+                return
             # there is always a big gap before firstObs by definition so add 1
             startPoint = allSeqNums.index(firstObs) + 1
             seqNums = allSeqNums[startPoint:]
@@ -462,6 +471,9 @@ class NightReport():
         if method == 'heuristic':
             # take the first cwfs image and return that
             seqNums = self.getSeqNumsMatching(observation_type='cwfs')
+            if not seqNums:
+                self.log.warning('No cwfs images found, observing is assumed not to have started.')
+                return None
             return min(seqNums)
 
     def printObsTable(self, **kwargs):

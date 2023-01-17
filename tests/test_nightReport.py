@@ -191,6 +191,8 @@ class NightReportTestCase(lsst.utils.tests.TestCase):
 
     def test_calcShutterTimes(self):
         timings = self.report.calcShutterTimes()
+        if not timings:
+            return  # if the day has no on-sky observations, this returns None
         efficiency = 100*(timings['scienceTimeTotal']/timings['nightLength'])
         self.assertGreater(efficiency, 0)
         self.assertLessEqual(efficiency, 100)
