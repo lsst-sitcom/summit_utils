@@ -553,7 +553,7 @@ class NightReport():
             plt.plot(obsTimes, airMasses, color=color, marker=marker, label=star, ms=10, ls='')
 
         plt.ylabel('Airmass', fontsize=20)
-        plt.ylabel('MJD', fontsize=20)
+        plt.xlabel('MJD', fontsize=20)
         if airmassOneAtTop:
             ax = plt.gca()
             ax.set_ylim(ax.get_ylim()[::-1])
