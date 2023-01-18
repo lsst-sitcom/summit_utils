@@ -393,6 +393,8 @@ class NightReport():
     def printObsGaps(self, threshold=100, includeCalibs=False):
         """Print out the gaps between observations in a human-readable format.
 
+        Prints the most recent gaps first.
+
         Parameters
         ----------
         threshold : `float`, optional
@@ -418,7 +420,7 @@ class NightReport():
             seqNums = allSeqNums[startPoint:]
 
         messages = []
-        for seqNum in seqNums:
+        for seqNum in reversed(seqNums):
             dt = dts[seqNum]
             if dt > threshold:
                 messages.append(f"seqNum {seqNum:3}: {precisedelta(dt)} gap")
