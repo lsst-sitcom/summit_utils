@@ -44,15 +44,12 @@ except ImportError:
 
 __all__ = ['NightReport']
 
-CALIB_VALUES = ['FlatField position', 'Park position', 'azel_target']
+CALIB_VALUES = ['FlatField position', 'Park position', 'azel_target', 'slew_icrs']
 N_STARS_PER_SYMBOL = 6
 MARKER_SEQUENCE = ['*', 'o', "D", 'P', 'v', "^", 's', 'o', 'v', '^', '<', '>',
                    '1', '2', '3', '4', '8', 's', 'p', 'P', '*', 'h', 'H', '+',
                    'x', 'X', 'D', 'd', '|', '_']
 SOUTHPOLESTAR = 'HD 185975'
-
-CALIB_VALUES = ['FlatField position', 'Park position', 'azel_target']
-# TODO: add skips for calib values
 
 
 @dataclass
@@ -533,8 +530,8 @@ class NightReport():
 
         Returns
         -------
-        midpointMjd : `float`
-            The midpoint, as an mjd float.
+        midpoint : `datetime.datetime`
+            The midpoint, as a python datetime object.
         """
         timespan = self.data[seqNum]['timespan']
         expTime = self.data[seqNum]['exposure_time']
@@ -560,6 +557,8 @@ class NightReport():
 
         plt.figure(figsize=(10, 6))
         for star in objects:
+            if star in CALIB_VALUES:
+                continue
             seqNums = self.getSeqNumsMatching(target_name_short=star)
             airMasses = [self.data[seqNum]['boresight_airmass'] for seqNum in seqNums]
             obsTimes = [self.getExposureMidpoint(seqNum) for seqNum in seqNums]
@@ -645,6 +644,8 @@ class NightReport():
         _ = plt.figure(figsize=(14, 10))
 
         for obj in objects:
+            if obj in CALIB_VALUES:
+                continue
             seqNums = self.getSeqNumsMatching(target_name_short=obj)
             altAzes = [self.data[seqNum]['altaz_begin'] for seqNum in seqNums]
             alts = [altAz.alt.deg for altAz in altAzes if altAz is not None]
