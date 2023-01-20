@@ -65,6 +65,8 @@ __all__ = ["SIGMATOFWHM",
            "getSite",
            "getExpPositionOffset",
            "starTrackerFileToExposure",
+           "getAirmassSeeingCorrection",
+           "getFilterSeeingCorrection",
            ]
 
 
@@ -706,3 +708,51 @@ def getFieldNameAndTileNumber(field, warn=True, logger=None):
         return field, None
 
     return "_".join(fieldParts[:-1]), fieldNum
+
+
+def getAirmassSeeingCorrection(airmass):
+    """Get the correction factor for seeing due to airmass.
+
+    Parameters
+    ----------
+    airmass : `float`
+        The airmass, greater than or equal to 1.
+
+    Returns
+    -------
+    correctionFactor : `float`
+        The correction factor to apply to the seeing.
+
+    Raises
+        ValueError raised for unphysical airmasses.
+    """
+    if airmass < 1:
+        raise ValueError(f"Invalid airmass: {airmass}")
+    return airmass**(-0.6)
+
+
+def getFilterSeeingCorrection(filterName):
+    """Get the correction factor for seeing due to a filter.
+
+    Parameters
+    ----------
+    filterName : `str`
+        The name of the filter, e.g. 'SDSSg_65mm'.
+
+    Returns
+    -------
+    correctionFactor : `float`
+        The correction factor to apply to the seeing.
+
+    Raises
+        ValueError raised for unknown filters.
+    """
+    match filterName:
+        case 'SDSSg_65mm':
+            return (477./500.)**0.2
+        case 'SDSSr_65mm':
+            return (623./500.)**0.2
+        case 'SDSSi_65mm':
+            return (762./500.)**0.2
+        case _:
+            raise ValueError(f"Unknown filter name: {filterName}")
