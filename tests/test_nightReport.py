@@ -125,10 +125,23 @@ class NightReportTestCase(lsst.utils.tests.TestCase):
     def test_getExposureMidpoint(self):
         """Test the exposure midpoint calculation
         """
-        midPoint = self.report.getExposureMidpoint(self.seqNums[0])
-        record = self.report.data[self.seqNums[0]]
-        self.assertGreater(midPoint, record['datetime_begin'].mjd)
-        self.assertLess(midPoint, record['datetime_end'].mjd)
+        # we would like a non-zero exptime exposure really
+        seqNumToUse = 0
+        for seqNum in self.report.data.keys():
+            expTime = self.report.data[seqNum]['exposure_time']
+            if expTime > 0:
+                seqNumToUse = seqNum
+                break
+
+        midPoint = self.report.getExposureMidpoint(seqNumToUse)
+        record = self.report.data[seqNumToUse]
+
+        if expTime == 0:
+            self.assertGreaterEqual(midPoint, record['datetime_begin'].to_datetime())
+            self.assertLessEqual(midPoint, record['datetime_end'].to_datetime())
+        else:
+            self.assertGreater(midPoint, record['datetime_begin'].to_datetime())
+            self.assertLess(midPoint, record['datetime_end'].to_datetime())
         return
 
     def test_getTimeDeltas(self):
