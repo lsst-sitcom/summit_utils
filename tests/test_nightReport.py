@@ -23,6 +23,7 @@ import unittest
 import tempfile
 import itertools
 import os
+import datetime
 from unittest import mock
 from numpy.random import shuffle
 from astro_metadata_translator import ObservationInfo
@@ -196,6 +197,12 @@ class NightReportTestCase(lsst.utils.tests.TestCase):
         efficiency = 100*(timings['scienceTimeTotal']/timings['nightLength'])
         self.assertGreater(efficiency, 0)
         self.assertLessEqual(efficiency, 100)
+
+    def test_getDatesForSeqNums(self):
+        dateTimeDict = self.report.getDatesForSeqNums()
+        self.assertIsInstance(dateTimeDict, dict)
+        self.assertTrue(all(isinstance(seqNum, int) for seqNum in dateTimeDict.keys()))
+        self.assertTrue(all(isinstance(seqNum, datetime.datetime) for seqNum in dateTimeDict.values()))
 
     def test_doesNotRaise(self):
         """Tests for things which are hard to test, so just make sure they run.

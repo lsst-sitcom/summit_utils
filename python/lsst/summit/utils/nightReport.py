@@ -223,6 +223,17 @@ class NightReport():
         self.stars = self.getObservedObjects()
         self.cMap = self.makeStarColorAndMarkerMap(self.stars)
 
+    def getDatesForSeqNums(self):
+        """Get a dict of {seqNum: date} for the report.
+
+        Returns
+        -------
+        dates : `dict`
+            Dict of {seqNum: date} for the current report.
+        """
+        return {seqNum: self.data[seqNum]['timespan'].begin.to_datetime()
+                for seqNum in sorted(self.data.keys())}
+
     def getObservedObjects(self, ignoreTileNum=True):
         """Get a list of the observed objects for the night.
 
