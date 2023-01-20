@@ -24,6 +24,7 @@ import logging
 
 from dataclasses import dataclass
 import numpy as np
+import matplotlib
 import matplotlib.pyplot as plt
 from matplotlib.pyplot import cm
 
@@ -536,7 +537,8 @@ class NightReport():
             The midpoint, as an mjd float.
         """
         timespan = self.data[seqNum]['timespan']
-        return (timespan.begin.mjd + timespan.end.mjd) / 2
+        expTime = self.data[seqNum]['exposure_time']
+        return ((timespan.begin) + expTime / 2).to_datetime()
 
     def plotPerObjectAirMass(self, objects=None, airmassOneAtTop=True, saveFig=''):
         """Plot the airmass for objects observed over the course of the night.
@@ -566,10 +568,16 @@ class NightReport():
             plt.plot(obsTimes, airMasses, color=color, marker=marker, label=star, ms=10, ls='')
 
         plt.ylabel('Airmass', fontsize=20)
-        plt.xlabel('MJD', fontsize=20)
+        plt.xlabel('Time (UTC)', fontsize=20)
+        plt.xticks(rotation=25, horizontalalignment='right')
+
+        ax = plt.gca()
+        xfmt = matplotlib.dates.DateFormatter('%m-%d %H:%M:%S')
+        ax.xaxis.set_major_formatter(xfmt)
+
         if airmassOneAtTop:
-            ax = plt.gca()
             ax.set_ylim(ax.get_ylim()[::-1])
+
         plt.legend(bbox_to_anchor=(1, 1.025), prop={'size': 15}, loc='upper left')
 
         plt.tight_layout()
