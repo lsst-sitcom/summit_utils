@@ -60,6 +60,8 @@ class ColorAndMarker:
 
 
 class NightReport():
+    _version = 1
+
     def __init__(self, butler, dayObs, loadFromFile=None):
         self._supressAstroMetadataTranslatorWarnings()  # call early
         self.log = logging.getLogger('lsst.summit.utils.NightReport')
@@ -90,7 +92,11 @@ class NightReport():
         filename : `str`
             The full name and path of the file to save to.
         """
-        toSave = (self.data, self._expRecordsLoaded, self._obsInfosLoaded, self.dayObs)
+        toSave = dict(data=self.data,
+                      _expRecordsLoaded=self._expRecordsLoaded,
+                      _obsInfosLoaded=self._obsInfosLoaded,
+                      dayObs=self.dayObs,
+                      version=self._version)
         with open(filename, "wb") as f:
             pickle.dump(toSave, f, pickle.HIGHEST_PROTOCOL)
 
@@ -107,9 +113,20 @@ class NightReport():
         """
         with open(filename, "rb") as f:
             loaded = pickle.load(f)
-        self.data, self._expRecordsLoaded, self._obsInfosLoaded, dayObs = loaded
+        self.data = loaded['data']
+        self._expRecordsLoaded = loaded['_expRecordsLoaded']
+        self._obsInfosLoaded = loaded['_obsInfosLoaded']
+        dayObs = loaded['dayObs']
+        loadedVersion = loaded.get('version', 0)
+
         if dayObs != self.dayObs:
             raise RuntimeError(f"Loaded data is for {dayObs} but current dayObs is {self.dayObs}")
+        if loadedVersion < self._version:
+            self.log.critical(f"Loaded version is {loadedVersion} but current version is {self._version}."
+                              " Check carefully for compatibility issues/regenerate your saved report!")
+            # update to the version on the instance in case the report is
+            # re-saved.
+            self._version = loadedVersion
         assert len(self.data) == len(self._expRecordsLoaded)
         assert len(self.data) == len(self._obsInfosLoaded)
         self.log.info(f"Loaded {len(self.data)} records from {filename}")
