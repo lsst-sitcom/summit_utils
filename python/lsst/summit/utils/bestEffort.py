@@ -19,15 +19,13 @@
 # You should have received a copy of the GNU General Public License
 # along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
-from sqlite3 import OperationalError
-
 import logging
 from lsst.ip.isr import IsrTask
 import lsst.daf.butler as dafButler
 from lsst.daf.butler.registry import ConflictingDefinitionError
 
 from lsst.summit.utils.quickLook import QuickLookIsrTask
-from lsst.summit.utils.butlerUtils import getLatissDefaultCollections
+from lsst.summit.utils.butlerUtils import getLatissDefaultCollections, datasetExists
 
 # TODO: add attempt for fringe once registry & templates are fixed
 
@@ -237,13 +235,21 @@ class BestEffortIsr():
                 self.log.info(f"Using {component} from cache...")
                 isrDict[component] = self._cache[component]
                 continue
-            try:
-                # TODO: add caching for flats
-                item = self.butler.get(component, dataId=dataId)
-                self._cache[component] = item
-                isrDict[component] = self._cache[component]
-            except (RuntimeError, LookupError, OperationalError):
-                pass
+            if datasetExists(self.butler, component, dataId):
+                try:
+                    # TODO: add caching for flats
+                    item = self.butler.get(component, dataId=dataId)
+                    self._cache[component] = item
+                    isrDict[component] = self._cache[component]
+                    self.log.info(f"Loaded {component} to cache")
+                except Exception:  # now that we log the exception, we can catch all errors
+                    # the product *should* exist but the get() failed, so log
+                    # a very loud warning inc. the traceback as this is a sign
+                    # of butler/database failures or something like that.
+                    self.log.critical(f'Failed to find expected data product {component}!')
+                    self.log.exception(f'Finding failure for {component}:')
+            else:
+                self.log.debug('No %s found for %s', component, dataId)
 
         quickLookExp = self.quickLookIsrTask.run(raw, **isrDict, isrBaseConfig=isrConfig).outputExposure
 
