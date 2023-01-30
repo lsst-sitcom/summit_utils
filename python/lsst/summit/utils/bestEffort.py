@@ -259,7 +259,7 @@ class BestEffortIsr():
 
         if self.doWrite and not forceRemake:
             try:
-                self.butler.put(quickLookExp, self._datasetName, dataId, **kwargs)
+                self.butler.put(quickLookExp, self._datasetName, dataId)
                 self.log.info(f'Put {self._datasetName} for {dataId}')
             except ConflictingDefinitionError:
                 # TODO: DM-34302 fix this message so that it's less scary for
