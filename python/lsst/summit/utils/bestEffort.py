@@ -136,9 +136,10 @@ class BestEffortIsr():
 
         Parameters
         ----------
-        expIdOrDataId : `int` or `dict
-            The exposure id as an int or the dataId as as dict, or an expRecord
-            or a dataCoordinate.
+        expIdOrDataId : `int` or `dict` or `lsst.daf.butler.DataCoordinate` or
+                        `lsst.daf.butler.DimensionRecord`
+            The exposure id as an int, or the dataId as as dict, or an
+            expRecord or a dataCoordinate.
 
         Returns
         -------
