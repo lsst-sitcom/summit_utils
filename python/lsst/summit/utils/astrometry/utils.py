@@ -247,6 +247,13 @@ def runCharactierizeImage(exp, snr, minPix):
     charConfig.detection.minPixels = minPix
     charConfig.detection.thresholdValue = snr
 
+    # fit background with the most simple thing possible as we don't need
+    # much sophistication here. weighting=False is *required* for very
+    # large binSizes.
+    charConfig.background.algorithm = 'CONSTANT'
+    charConfig.background.binSize = max(exp.getWidth(), exp.getHeight())
+    charConfig.background.weighting = False
+
     charTask = CharacterizeImageTask(config=charConfig)
 
     charResult = charTask.run(exp)
