@@ -41,6 +41,7 @@ from astro_metadata_translator import ObservationInfo
 from astropy.coordinates import SkyCoord, AltAz
 from astropy.coordinates.earth import EarthLocation
 import astropy.units as u
+from astropy.time import Time
 
 from .astrometry.utils import genericCameraHeaderToWcs
 
@@ -517,7 +518,12 @@ def getAltAzFromSkyPosition(skyPos, visitInfo):
     lat = visitInfo.observatory.getLatitude()
     ele = visitInfo.observatory.getElevation()
     earthLocation = EarthLocation.from_geodetic(long.asDegrees(), lat.asDegrees(), ele)
-    altAz = AltAz(obstime=visitInfo.date.toPython(), location=earthLocation)
+
+    # must go via astropy.Time because dafBase.dateTime.DateTime contains
+    # the timezone, but going straight to visitInfo.date.toPython() loses this.
+    obsTime = Time(visitInfo.date.toPython(), scale='tai')
+    altAz = AltAz(obstime=obsTime, location=earthLocation)
+
     obsAltAz = skyLocation.transform_to(altAz)
     alt = geom.Angle(obsAltAz.alt.degree, geom.degrees)
     az = geom.Angle(obsAltAz.az.degree, geom.degrees)
