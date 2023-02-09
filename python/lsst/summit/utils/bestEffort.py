@@ -217,8 +217,8 @@ class BestEffortIsr():
         isrConfig.doWrite = False  # this task writes separately, no need for this
         isrConfig.doSaturation = True  # saturation very important for roundness measurement in qfm
         isrConfig.doSaturationInterpolation = True
-        isrConfig.overscan.leadingColumnsToSkip = 5
         isrConfig.overscan.fitType = 'MEDIAN_PER_ROW'
+        isrConfig.overscan.doParallelOverscan = True
 
         # apply general overrides
         self._applyConfigOverrides(isrConfig, self.defaultExtraIsrOptions)
