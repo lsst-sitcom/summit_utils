@@ -58,7 +58,7 @@ def plot(exp, icSrc=None, filteredSources=None, saveAs=None,
     doSmooth : `bool`, optional
         Smooth the image slightly to improve the visability of low SNR sources?
     """
-    plt.figure(figsize=(16, 16))
+    fig = plt.figure(figsize=(16, 16))
     arr = exp.image.array
     arr = np.clip(arr, clipMin, clipMax)
     if doSmooth:
@@ -139,3 +139,6 @@ def plot(exp, icSrc=None, filteredSources=None, saveAs=None,
     if saveAs:
         plt.savefig(saveAs)
     plt.show()
+
+    plt.gcf().clear()
+    del fig
