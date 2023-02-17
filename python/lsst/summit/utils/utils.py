@@ -22,7 +22,7 @@
 import os
 import numpy as np
 import logging
-from scipy.ndimage.filters import gaussian_filter
+from scipy.ndimage import gaussian_filter
 import lsst.afw.image as afwImage
 import lsst.afw.detection as afwDetect
 import lsst.afw.math as afwMath
