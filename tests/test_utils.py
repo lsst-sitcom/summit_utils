@@ -39,6 +39,7 @@ from lsst.summit.utils.utils import (getExpPositionOffset,
                                      getFieldNameAndTileNumber,
                                      getAirmassSeeingCorrection,
                                      getFilterSeeingCorrection,
+                                     quickSmooth,
                                      )
 from lsst.obs.lsst.translators.latiss import AUXTEL_LOCATION
 
@@ -176,6 +177,14 @@ class MiscUtilsTestCase(lsst.utils.tests.TestCase):
             correction = getFilterSeeingCorrection(filterName)
             self.assertGreater(correction, 0.5)
             self.assertLess(correction, 1.5)
+
+    def test_quickSmooth(self):
+        # just test that it runs and returns the right shape. It's a wrapper on
+        # scipy.ndimage.gaussian_filter we can trust that it does what it
+        # should, and we just test the interface hasn't bitrotted on either end
+        data = np.zeros((100, 100), dtype=np.float32)
+        data = quickSmooth(data, 5.0)
+        self.assertEqual(data.shape, (100, 100))
 
 
 class TestMemory(lsst.utils.tests.MemoryTestCase):
