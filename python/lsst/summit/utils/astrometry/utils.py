@@ -147,11 +147,27 @@ def getAverageElFromHeader(header):
     return (elStart + elEnd) / 2
 
 
+def patchHeader(header):
+    """This is a TEMPORARY function to patch some info into the headers.
+    """
+    if header.get('SECPIX') == '3.11':
+        # the narrow camera currently is wrong about its place scale by of ~2.2
+        header['SECPIX'] = '1.44'
+        # update the boresight locations until this goes into the header
+        # service
+        header['CRPIX1'] = 1898.10
+        header['CRPIX2'] = 998.47
+    if header.get('SECPIX') == '8.64':
+        # update the boresight locations until this goes into the header
+        # service
+        header['CRPIX1'] = 1560.85
+        header['CRPIX2'] = 1257.15
+    return header
+
+
 def genericCameraHeaderToWcs(exp):
     header = exp.getMetadata().toDict()
-    width, height = exp.image.array.shape
-    header['CRPIX1'] = width/2
-    header['CRPIX2'] = height/2
+    header = patchHeader(header)
 
     header['CTYPE1'] = 'RA---TAN-SIP'
     header['CTYPE2'] = 'DEC--TAN-SIP'
