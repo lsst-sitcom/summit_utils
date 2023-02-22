@@ -259,7 +259,6 @@ class CommandLineSolver():
                f"--scale-low {scaleMin:.3f} "  # the scale range
                f"--scale-high {scaleMax:.3f} "  # the scale range
                f"--scale-units arcsecperpix "
-               "--crpix-center "  # the CRPIX is always the center of the image
                f"--config {configFile} "
                f"-D {tempDir} "
                "--overwrite "  # shouldn't matter as we're using temp files
