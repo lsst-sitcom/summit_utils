@@ -19,7 +19,9 @@
 # You should have received a copy of the GNU General Public License
 # along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
+import os
 import logging
+from lsst.utils import getPackageDir
 from lsst.ip.isr import IsrTask
 import lsst.daf.butler as dafButler
 from lsst.daf.butler.registry import ConflictingDefinitionError
@@ -214,11 +216,8 @@ class BestEffortIsr():
 
         # default options that are probably good for most engineering time
         isrConfig = IsrTask.ConfigClass()
-        isrConfig.doWrite = False  # this task writes separately, no need for this
-        isrConfig.doSaturation = True  # saturation very important for roundness measurement in qfm
-        isrConfig.doSaturationInterpolation = True
-        isrConfig.overscan.fitType = 'MEDIAN_PER_ROW'
-        isrConfig.overscan.doParallelOverscan = True
+        packageDir = getPackageDir("summit_utils")
+        isrConfig.load(os.path.join(packageDir, "config", "quickLookIsr.py"))
 
         # apply general overrides
         self._applyConfigOverrides(isrConfig, self.defaultExtraIsrOptions)
