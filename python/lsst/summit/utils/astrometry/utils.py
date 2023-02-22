@@ -260,7 +260,7 @@ def runCharactierizeImage(exp, snr, minPix):
     return charResult
 
 
-def filterSourceCatOnBrightest(catalog, brightFraction, minSources=15,
+def filterSourceCatOnBrightest(catalog, brightFraction, minSources=15, maxSources=200,
                                flux_field="base_CircularApertureFlux_3_0_instFlux"):
     """Filter a sourceCat on the brightness, leaving only the top fraction.
 
@@ -277,6 +277,8 @@ def filterSourceCatOnBrightest(catalog, brightFraction, minSources=15,
         Return this fraction of the brightest sources.
     minSources : `int`, optional
         Always return at least this many sources.
+    maxSources : `int`, optional
+        Never return more than this many sources.
     flux_field : `str`, optional
         Name of flux field to filter on.
 
@@ -287,6 +289,10 @@ def filterSourceCatOnBrightest(catalog, brightFraction, minSources=15,
     """
     assert minSources > 0
     assert brightFraction > 0 and brightFraction <= 1
+    if not maxSources >= minSources:
+        raise ValueError('maxSources must be greater than or equal to minSources, got '
+                         f'{maxSources=}, {minSources=}')
+
     maxFlux = np.nanmax(catalog[flux_field])
     result = catalog.subset(catalog[flux_field] > maxFlux * 0.001)
 
@@ -297,4 +303,4 @@ def filterSourceCatOnBrightest(catalog, brightFraction, minSources=15,
     result.sort(item.key)
     result = result.copy(deep=True)  # make it memory contiguous
     end = int(np.ceil(len(result)*brightFraction))
-    return result[-max(end, minSources):]
+    return result[-min(maxSources, max(end, minSources)):]
