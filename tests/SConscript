@@ -5,7 +5,7 @@ from lsst.sconsUtils import env, scripts
 scripts.BasicSConscript.tests(pyList=[])
 
 passThrough = ['DAF_BUTLER_REPOSITORY_INDEX',  # for repo locations
-               'EXTERNAL_URL',  # needed to determine site location - see utils.getSite()
+               'EXTERNAL_INSTANCE_URL',  # needed to determine site location - see utils.getSite()
                'HOSTNAME',  # needed to determine site location - see utils.getSite()
                'PGPASSFILE',  # needed for butler authentication
                'PGUSER',  # needed for butler authentication

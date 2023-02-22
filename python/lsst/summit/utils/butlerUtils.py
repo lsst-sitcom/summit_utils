@@ -91,7 +91,7 @@ def getLatissDefaultCollections():
         site = ''
 
     if site == 'tucson':
-        collections.append("LATISS-test-data-TTS")
+        collections.append("LATISS-test-data")
         return collections
     if site == 'summit':
         collections.append("LATISS-test-data")

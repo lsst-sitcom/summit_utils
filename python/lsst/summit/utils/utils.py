@@ -475,7 +475,7 @@ def getSite():
     """
     # All nublado instances guarantee that EXTERNAL_URL is set and uniquely
     # identifies it.
-    location = os.getenv('EXTERNAL_URL', "")
+    location = os.getenv('EXTERNAL_INSTANCE_URL', "")
     if location == "https://tucson-teststand.lsst.codes":
         return 'tucson'
     elif location == "https://summit-lsp.lsst.codes":
