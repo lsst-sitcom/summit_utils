@@ -192,6 +192,7 @@ class CommandLineSolver():
         x = fits.Column(name='X', format='D', array=xArray)
         y = fits.Column(name='Y', format='D', array=yArray)
         flux = fits.Column(name='FLUX', format='D', array=fluxArray)
+        print(f' of which {len(fluxArray)} made it into the fit')
         hdu = fits.BinTableHDU.from_columns([flux, x, y])
 
         filename = tempfile.mktemp(suffix='.fits')
@@ -233,6 +234,7 @@ class CommandLineSolver():
             raise ValueError("No WCS in exposure")
 
         configFile = self._writeConfigFile(wide=isWideField)
+        print(f'Fitting image with {len(sourceCat)} sources', end='')
         fitsFile = self._writeFitsTable(sourceCat)
 
         plateScale = wcs.getPixelScale().asArcseconds()
