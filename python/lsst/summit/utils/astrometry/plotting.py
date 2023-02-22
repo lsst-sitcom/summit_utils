@@ -24,6 +24,7 @@ import numpy as np
 import matplotlib.pyplot as plt
 from astropy.coordinates import Angle
 import astropy.units as u
+import copy
 
 from lsst.obs.lsst.translators.latiss import AUXTEL_LOCATION
 from .. import quickSmooth
@@ -59,14 +60,14 @@ def plot(exp, icSrc=None, filteredSources=None, saveAs=None,
         Smooth the image slightly to improve the visability of low SNR sources?
     """
     fig = plt.figure(figsize=(16, 16))
-    arr = exp.image.array
-    arr = np.clip(arr, clipMin, clipMax)
+    data = copy.deepcopy(exp.image.array)
+    data = np.clip(data, clipMin, clipMax)
     if doSmooth:
-        arr = quickSmooth(arr)  # smooth slightly to help visualize
-    plt.imshow(np.arcsinh(arr)/10,
+        data = quickSmooth(data)  # smooth slightly to help visualize
+    plt.imshow(np.arcsinh(data)/10,
                interpolation='None', cmap='gray', origin='lower')
 
-    height, width = exp.image.array.shape
+    height, width = data.shape
     leftFraction = .15  # fraction into the image to start the N/E compass
     rightFraction = .225  # fraction into the image to start the az/el compass
     fontsize = 20  # for the compass labels
