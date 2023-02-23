@@ -127,11 +127,13 @@ class CommandLineSolver():
                  checkInParallel=True,
                  timeout=300,
                  binary='solve-field',
+                 fluxSlot='base_CircularApertureFlux_3_0_instFlux',
                  ):
         self.indexFilePath = indexFilePath
         self.checkInParallel = checkInParallel
         self.timeout = timeout
         self.binary = binary
+        self.fluxSlot = fluxSlot
         if not shutil.which(binary):
             raise RuntimeError(f"Could not find {binary} in path, please install 'solve-field' and either"
                                " put it on your PATH or specify the full path to it in the 'binary' argument")
@@ -180,7 +182,7 @@ class CommandLineSolver():
         filename : `str`
             The filename to which the catalog was written.
         """
-        fluxArray = sourceCat.columns.getGaussianInstFlux()
+        fluxArray = sourceCat[self.fluxSlot]
         fluxFinite = np.logical_and(np.isfinite(fluxArray), fluxArray > 0)
         fluxArray = fluxArray[fluxFinite]
         indices = np.argsort(fluxArray)
