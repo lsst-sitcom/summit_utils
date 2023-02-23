@@ -259,8 +259,11 @@ class CommandLineSolver():
                f"--scale-low {scaleMin:.3f} "  # the scale range
                f"--scale-high {scaleMax:.3f} "  # the scale range
                f"--scale-units arcsecperpix "
+               f"--crpix-x {wcs.getPixelOrigin()[0]} "  # set the pixel origin
+               f"--crpix-y {wcs.getPixelOrigin()[1]} "  # set the pixel origin
                f"--config {configFile} "
                f"-D {tempDir} "
+               "--no-plots "  # don't make plots
                "--overwrite "  # shouldn't matter as we're using temp files
                )
 
