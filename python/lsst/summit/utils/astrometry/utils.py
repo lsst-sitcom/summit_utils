@@ -262,11 +262,14 @@ def runCharactierizeImage(exp, snr, minPix):
     charConfig.repair.doInterpolate = True
     charConfig.detection.minPixels = minPix
     charConfig.detection.thresholdValue = snr
+    charConfig.detection.includeThresholdMultiplier = 1
 
     # fit background with the most simple thing possible as we don't need
     # much sophistication here. weighting=False is *required* for very
     # large binSizes.
     charConfig.background.algorithm = 'CONSTANT'
+    charConfig.background.approxOrderX = 0
+    charConfig.background.approxOrderY = -1
     charConfig.background.binSize = max(exp.getWidth(), exp.getHeight())
     charConfig.background.weighting = False
 
