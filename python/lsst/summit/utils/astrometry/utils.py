@@ -259,10 +259,11 @@ def runCharactierizeImage(exp, snr, minPix):
     charConfig.doApCorr = False
     charConfig.doDeblend = False
     charConfig.repair.doCosmicRay = False
-    charConfig.repair.doInterpolate = True
+
     charConfig.detection.minPixels = minPix
     charConfig.detection.thresholdValue = snr
     charConfig.detection.includeThresholdMultiplier = 1
+    charConfig.detection.reEstimateBackground = False
 
     # fit background with the most simple thing possible as we don't need
     # much sophistication here. weighting=False is *required* for very
