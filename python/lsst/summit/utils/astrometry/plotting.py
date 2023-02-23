@@ -143,3 +143,4 @@ def plot(exp, icSrc=None, filteredSources=None, saveAs=None,
 
     plt.gcf().clear()
     del fig
+    del data
