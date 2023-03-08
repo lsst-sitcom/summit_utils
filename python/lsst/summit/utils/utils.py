@@ -730,6 +730,7 @@ def getAirmassSeeingCorrection(airmass):
         The correction factor to apply to the seeing.
 
     Raises
+    ------
         ValueError raised for unphysical airmasses.
     """
     if airmass < 1:
@@ -751,6 +752,7 @@ def getFilterSeeingCorrection(filterName):
         The correction factor to apply to the seeing.
 
     Raises
+    ------
         ValueError raised for unknown filters.
     """
     match filterName:
