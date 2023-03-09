@@ -37,6 +37,9 @@ from lsst.obs.base.makeRawVisitInfoViaObsInfo import MakeRawVisitInfoViaObsInfo
 from lsst.obs.lsst import Latiss
 from lsst.summit.utils.utils import (getExpPositionOffset,
                                      getFieldNameAndTileNumber,
+                                     getAirmassSeeingCorrection,
+                                     getFilterSeeingCorrection,
+                                     quickSmooth,
                                      )
 from lsst.obs.lsst.translators.latiss import AUXTEL_LOCATION
 
@@ -156,6 +159,32 @@ class MiscUtilsTestCase(lsst.utils.tests.TestCase):
         field, num = getFieldNameAndTileNumber('test_321a:asd_asd-dsa_321')
         self.assertEqual(field, 'test_321a:asd_asd-dsa')
         self.assertEqual(num, 321)
+
+    def test_getAirmassSeeingCorrection(self):
+        for airmass in (1.1, 2.0, 20.0):
+            correction = getAirmassSeeingCorrection(airmass)
+            self.assertGreater(correction, 0.01)
+            self.assertLess(correction, 1.0)
+
+        correction = getAirmassSeeingCorrection(1)
+        self.assertEqual(correction, 1.0)
+
+        with self.assertRaises(ValueError):
+            getAirmassSeeingCorrection(0.5)
+
+    def test_getFilterSeeingCorrection(self):
+        for filterName in ('SDSSg_65mm', 'SDSSr_65mm', 'SDSSi_65mm'):
+            correction = getFilterSeeingCorrection(filterName)
+            self.assertGreater(correction, 0.5)
+            self.assertLess(correction, 1.5)
+
+    def test_quickSmooth(self):
+        # just test that it runs and returns the right shape. It's a wrapper on
+        # scipy.ndimage.gaussian_filter we can trust that it does what it
+        # should, and we just test the interface hasn't bitrotted on either end
+        data = np.zeros((100, 100), dtype=np.float32)
+        data = quickSmooth(data, 5.0)
+        self.assertEqual(data.shape, (100, 100))
 
 
 class TestMemory(lsst.utils.tests.MemoryTestCase):

@@ -127,11 +127,13 @@ class CommandLineSolver():
                  checkInParallel=True,
                  timeout=300,
                  binary='solve-field',
+                 fluxSlot='base_CircularApertureFlux_3_0_instFlux',
                  ):
         self.indexFilePath = indexFilePath
         self.checkInParallel = checkInParallel
         self.timeout = timeout
         self.binary = binary
+        self.fluxSlot = fluxSlot
         if not shutil.which(binary):
             raise RuntimeError(f"Could not find {binary} in path, please install 'solve-field' and either"
                                " put it on your PATH or specify the full path to it in the 'binary' argument")
@@ -180,7 +182,7 @@ class CommandLineSolver():
         filename : `str`
             The filename to which the catalog was written.
         """
-        fluxArray = sourceCat.columns.getGaussianInstFlux()
+        fluxArray = sourceCat[self.fluxSlot]
         fluxFinite = np.logical_and(np.isfinite(fluxArray), fluxArray > 0)
         fluxArray = fluxArray[fluxFinite]
         indices = np.argsort(fluxArray)
@@ -192,6 +194,7 @@ class CommandLineSolver():
         x = fits.Column(name='X', format='D', array=xArray)
         y = fits.Column(name='Y', format='D', array=yArray)
         flux = fits.Column(name='FLUX', format='D', array=fluxArray)
+        print(f' of which {len(fluxArray)} made it into the fit')
         hdu = fits.BinTableHDU.from_columns([flux, x, y])
 
         filename = tempfile.mktemp(suffix='.fits')
@@ -233,6 +236,7 @@ class CommandLineSolver():
             raise ValueError("No WCS in exposure")
 
         configFile = self._writeConfigFile(wide=isWideField)
+        print(f'Fitting image with {len(sourceCat)} sources', end='')
         fitsFile = self._writeFitsTable(sourceCat)
 
         plateScale = wcs.getPixelScale().asArcseconds()
@@ -257,9 +261,11 @@ class CommandLineSolver():
                f"--scale-low {scaleMin:.3f} "  # the scale range
                f"--scale-high {scaleMax:.3f} "  # the scale range
                f"--scale-units arcsecperpix "
-               "--crpix-center "  # the CRPIX is always the center of the image
+               f"--crpix-x {wcs.getPixelOrigin()[0]} "  # set the pixel origin
+               f"--crpix-y {wcs.getPixelOrigin()[1]} "  # set the pixel origin
                f"--config {configFile} "
                f"-D {tempDir} "
+               "--no-plots "  # don't make plots
                "--overwrite "  # shouldn't matter as we're using temp files
                )
 

@@ -1,4 +1,4 @@
-# This file is part of summit_extras.
+# This file is part of summit_utils.
 #
 # Developed for the LSST Data Management System.
 # This product includes software developed by the LSST Project
@@ -23,6 +23,7 @@ import unittest
 import tempfile
 import itertools
 import os
+import datetime
 from unittest import mock
 from numpy.random import shuffle
 from astro_metadata_translator import ObservationInfo
@@ -124,10 +125,23 @@ class NightReportTestCase(lsst.utils.tests.TestCase):
     def test_getExposureMidpoint(self):
         """Test the exposure midpoint calculation
         """
-        midPoint = self.report.getExposureMidpoint(self.seqNums[0])
-        record = self.report.data[self.seqNums[0]]
-        self.assertGreater(midPoint, record['datetime_begin'].mjd)
-        self.assertLess(midPoint, record['datetime_end'].mjd)
+        # we would like a non-zero exptime exposure really
+        seqNumToUse = 0
+        for seqNum in self.report.data.keys():
+            expTime = self.report.data[seqNum]['exposure_time']
+            if expTime > 0:
+                seqNumToUse = seqNum
+                break
+
+        midPoint = self.report.getExposureMidpoint(seqNumToUse)
+        record = self.report.data[seqNumToUse]
+
+        if expTime == 0:
+            self.assertGreaterEqual(midPoint, record['datetime_begin'].to_datetime())
+            self.assertLessEqual(midPoint, record['datetime_end'].to_datetime())
+        else:
+            self.assertGreater(midPoint, record['datetime_begin'].to_datetime())
+            self.assertLess(midPoint, record['datetime_end'].to_datetime())
         return
 
     def test_getTimeDeltas(self):
@@ -191,9 +205,17 @@ class NightReportTestCase(lsst.utils.tests.TestCase):
 
     def test_calcShutterTimes(self):
         timings = self.report.calcShutterTimes()
+        if not timings:
+            return  # if the day has no on-sky observations, this returns None
         efficiency = 100*(timings['scienceTimeTotal']/timings['nightLength'])
         self.assertGreater(efficiency, 0)
         self.assertLessEqual(efficiency, 100)
+
+    def test_getDatesForSeqNums(self):
+        dateTimeDict = self.report.getDatesForSeqNums()
+        self.assertIsInstance(dateTimeDict, dict)
+        self.assertTrue(all(isinstance(seqNum, int) for seqNum in dateTimeDict.keys()))
+        self.assertTrue(all(isinstance(seqNum, datetime.datetime) for seqNum in dateTimeDict.values()))
 
     def test_doesNotRaise(self):
         """Tests for things which are hard to test, so just make sure they run.

@@ -22,7 +22,7 @@
 import os
 import numpy as np
 import logging
-from scipy.ndimage.filters import gaussian_filter
+from scipy.ndimage import gaussian_filter
 import lsst.afw.image as afwImage
 import lsst.afw.detection as afwDetect
 import lsst.afw.math as afwMath
@@ -41,6 +41,7 @@ from astro_metadata_translator import ObservationInfo
 from astropy.coordinates import SkyCoord, AltAz
 from astropy.coordinates.earth import EarthLocation
 import astropy.units as u
+from astropy.time import Time
 
 from .astrometry.utils import genericCameraHeaderToWcs
 
@@ -65,6 +66,8 @@ __all__ = ["SIGMATOFWHM",
            "getSite",
            "getExpPositionOffset",
            "starTrackerFileToExposure",
+           "getAirmassSeeingCorrection",
+           "getFilterSeeingCorrection",
            ]
 
 
@@ -472,7 +475,7 @@ def getSite():
     """
     # All nublado instances guarantee that EXTERNAL_URL is set and uniquely
     # identifies it.
-    location = os.getenv('EXTERNAL_URL', "")
+    location = os.getenv('EXTERNAL_INSTANCE_URL', "")
     if location == "https://tucson-teststand.lsst.codes":
         return 'tucson'
     elif location == "https://summit-lsp.lsst.codes":
@@ -515,7 +518,12 @@ def getAltAzFromSkyPosition(skyPos, visitInfo):
     lat = visitInfo.observatory.getLatitude()
     ele = visitInfo.observatory.getElevation()
     earthLocation = EarthLocation.from_geodetic(long.asDegrees(), lat.asDegrees(), ele)
-    altAz = AltAz(obstime=visitInfo.date.toPython(), location=earthLocation)
+
+    # must go via astropy.Time because dafBase.dateTime.DateTime contains
+    # the timezone, but going straight to visitInfo.date.toPython() loses this.
+    obsTime = Time(visitInfo.date.toPython(), scale='tai')
+    altAz = AltAz(obstime=obsTime, location=earthLocation)
+
     obsAltAz = skyLocation.transform_to(altAz)
     alt = geom.Angle(obsAltAz.alt.degree, geom.degrees)
     az = geom.Angle(obsAltAz.az.degree, geom.degrees)
@@ -706,3 +714,53 @@ def getFieldNameAndTileNumber(field, warn=True, logger=None):
         return field, None
 
     return "_".join(fieldParts[:-1]), fieldNum
+
+
+def getAirmassSeeingCorrection(airmass):
+    """Get the correction factor for seeing due to airmass.
+
+    Parameters
+    ----------
+    airmass : `float`
+        The airmass, greater than or equal to 1.
+
+    Returns
+    -------
+    correctionFactor : `float`
+        The correction factor to apply to the seeing.
+
+    Raises
+    ------
+        ValueError raised for unphysical airmasses.
+    """
+    if airmass < 1:
+        raise ValueError(f"Invalid airmass: {airmass}")
+    return airmass**(-0.6)
+
+
+def getFilterSeeingCorrection(filterName):
+    """Get the correction factor for seeing due to a filter.
+
+    Parameters
+    ----------
+    filterName : `str`
+        The name of the filter, e.g. 'SDSSg_65mm'.
+
+    Returns
+    -------
+    correctionFactor : `float`
+        The correction factor to apply to the seeing.
+
+    Raises
+    ------
+        ValueError raised for unknown filters.
+    """
+    match filterName:
+        case 'SDSSg_65mm':
+            return (477./500.)**0.2
+        case 'SDSSr_65mm':
+            return (623./500.)**0.2
+        case 'SDSSi_65mm':
+            return (762./500.)**0.2
+        case _:
+            raise ValueError(f"Unknown filter name: {filterName}")

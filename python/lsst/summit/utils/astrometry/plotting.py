@@ -24,6 +24,7 @@ import numpy as np
 import matplotlib.pyplot as plt
 from astropy.coordinates import Angle
 import astropy.units as u
+import copy
 
 from lsst.obs.lsst.translators.latiss import AUXTEL_LOCATION
 from .. import quickSmooth
@@ -32,7 +33,7 @@ from .. import quickSmooth
 # TODO: Add some of Craig's nice overlay stuff here
 
 def plot(exp, icSrc=None, filteredSources=None, saveAs=None,
-         clipMin=1, clipMax=1000000):
+         clipMin=1, clipMax=1000000, doSmooth=True):
     """Plot an exposure, overlaying the selected sources and compass arrows.
 
     Plots the exposure on a logNorm scale, with the brightest sources, as
@@ -55,15 +56,18 @@ def plot(exp, icSrc=None, filteredSources=None, saveAs=None,
         Clip values in the image below this value to ``clipMin``.
     clipMax : `float`
         Clip values in the image above this value to ``clipMax``.
+    doSmooth : `bool`, optional
+        Smooth the image slightly to improve the visability of low SNR sources?
     """
-    plt.figure(figsize=(16, 16))
-    arr = exp.image.array
-    arr = np.clip(arr, clipMin, clipMax)
-    arr = quickSmooth(arr)  # smooth slightly to help visualize
-    plt.imshow(np.arcsinh(arr)/10,
+    fig = plt.figure(figsize=(16, 16))
+    data = copy.deepcopy(exp.image.array)
+    data = np.clip(data, clipMin, clipMax)
+    if doSmooth:
+        data = quickSmooth(data)  # smooth slightly to help visualize
+    plt.imshow(np.arcsinh(data)/10,
                interpolation='None', cmap='gray', origin='lower')
 
-    height, width = exp.image.array.shape
+    height, width = data.shape
     leftFraction = .15  # fraction into the image to start the N/E compass
     rightFraction = .225  # fraction into the image to start the az/el compass
     fontsize = 20  # for the compass labels
@@ -136,3 +140,7 @@ def plot(exp, icSrc=None, filteredSources=None, saveAs=None,
     if saveAs:
         plt.savefig(saveAs)
     plt.show()
+
+    plt.gcf().clear()
+    del fig
+    del data

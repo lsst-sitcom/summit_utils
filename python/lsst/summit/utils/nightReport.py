@@ -24,6 +24,7 @@ import logging
 
 from dataclasses import dataclass
 import numpy as np
+import matplotlib
 import matplotlib.pyplot as plt
 from matplotlib.pyplot import cm
 
@@ -43,15 +44,13 @@ except ImportError:
 
 __all__ = ['NightReport']
 
-CALIB_VALUES = ['FlatField position', 'Park position', 'azel_target']
+CALIB_VALUES = ['FlatField position', 'Park position', 'azel_target', 'slew_icrs',
+                'DaytimeCheckout001', 'DaytimeCheckout002']
 N_STARS_PER_SYMBOL = 6
 MARKER_SEQUENCE = ['*', 'o', "D", 'P', 'v', "^", 's', 'o', 'v', '^', '<', '>',
                    '1', '2', '3', '4', '8', 's', 'p', 'P', '*', 'h', 'H', '+',
                    'x', 'X', 'D', 'd', '|', '_']
 SOUTHPOLESTAR = 'HD 185975'
-
-CALIB_VALUES = ['FlatField position', 'Park position', 'azel_target']
-# TODO: add skips for calib values
 
 
 @dataclass
@@ -62,6 +61,8 @@ class ColorAndMarker:
 
 
 class NightReport():
+    _version = 1
+
     def __init__(self, butler, dayObs, loadFromFile=None):
         self._supressAstroMetadataTranslatorWarnings()  # call early
         self.log = logging.getLogger('lsst.summit.utils.NightReport')
@@ -92,7 +93,11 @@ class NightReport():
         filename : `str`
             The full name and path of the file to save to.
         """
-        toSave = (self.data, self._expRecordsLoaded, self._obsInfosLoaded, self.dayObs)
+        toSave = dict(data=self.data,
+                      _expRecordsLoaded=self._expRecordsLoaded,
+                      _obsInfosLoaded=self._obsInfosLoaded,
+                      dayObs=self.dayObs,
+                      version=self._version)
         with open(filename, "wb") as f:
             pickle.dump(toSave, f, pickle.HIGHEST_PROTOCOL)
 
@@ -109,9 +114,20 @@ class NightReport():
         """
         with open(filename, "rb") as f:
             loaded = pickle.load(f)
-        self.data, self._expRecordsLoaded, self._obsInfosLoaded, dayObs = loaded
+        self.data = loaded['data']
+        self._expRecordsLoaded = loaded['_expRecordsLoaded']
+        self._obsInfosLoaded = loaded['_obsInfosLoaded']
+        dayObs = loaded['dayObs']
+        loadedVersion = loaded.get('version', 0)
+
         if dayObs != self.dayObs:
             raise RuntimeError(f"Loaded data is for {dayObs} but current dayObs is {self.dayObs}")
+        if loadedVersion < self._version:
+            self.log.critical(f"Loaded version is {loadedVersion} but current version is {self._version}."
+                              " Check carefully for compatibility issues/regenerate your saved report!")
+            # update to the version on the instance in case the report is
+            # re-saved.
+            self._version = loadedVersion
         assert len(self.data) == len(self._expRecordsLoaded)
         assert len(self.data) == len(self._obsInfosLoaded)
         self.log.info(f"Loaded {len(self.data)} records from {filename}")
@@ -223,6 +239,17 @@ class NightReport():
         self.stars = self.getObservedObjects()
         self.cMap = self.makeStarColorAndMarkerMap(self.stars)
 
+    def getDatesForSeqNums(self):
+        """Get a dict of {seqNum: date} for the report.
+
+        Returns
+        -------
+        dates : `dict`
+            Dict of {seqNum: date} for the current report.
+        """
+        return {seqNum: self.data[seqNum]['timespan'].begin.to_datetime()
+                for seqNum in sorted(self.data.keys())}
+
     def getObservedObjects(self, ignoreTileNum=True):
         """Get a list of the observed objects for the night.
 
@@ -317,7 +344,10 @@ class NightReport():
             Dictionary of the various calculated times, in seconds, and the
             seqNums of the first and last observations used in the calculation.
         """
-        firstObs = self.getObservingStartSeqNum(method='safe')
+        firstObs = self.getObservingStartSeqNum(method='heuristic')
+        if not firstObs:
+            self.log.warning("No on-sky observations found.")
+            return None
         lastObs = max(self.data.keys())
 
         begin = self.data[firstObs]['datetime_begin']
@@ -350,6 +380,9 @@ class NightReport():
         if not HAVE_HUMANIZE:
             self.log.warning('Please install humanize to make this print as intended.')
         timings = self.calcShutterTimes()
+        if not timings:
+            print('No on-sky observations found, so no shutter efficiency stats are available yet.')
+            return
 
         print(f"Observations started at: seqNum {timings['firstObs']:>3} at"
               f" {timings['startTime'].to_datetime().strftime('%H:%M:%S')} TAI")
@@ -387,6 +420,8 @@ class NightReport():
     def printObsGaps(self, threshold=100, includeCalibs=False):
         """Print out the gaps between observations in a human-readable format.
 
+        Prints the most recent gaps first.
+
         Parameters
         ----------
         threshold : `float`, optional
@@ -403,13 +438,16 @@ class NightReport():
         if includeCalibs:
             seqNums = allSeqNums
         else:
-            firstObs = self.getObservingStartSeqNum(method='safe')
+            firstObs = self.getObservingStartSeqNum(method='heuristic')
+            if not firstObs:
+                print("No on-sky observations found, so there can be no gaps in observing yet.")
+                return
             # there is always a big gap before firstObs by definition so add 1
             startPoint = allSeqNums.index(firstObs) + 1
             seqNums = allSeqNums[startPoint:]
 
         messages = []
-        for seqNum in seqNums:
+        for seqNum in reversed(seqNums):
             dt = dts[seqNum]
             if dt > threshold:
                 messages.append(f"seqNum {seqNum:3}: {precisedelta(dt)} gap")
@@ -462,6 +500,9 @@ class NightReport():
         if method == 'heuristic':
             # take the first cwfs image and return that
             seqNums = self.getSeqNumsMatching(observation_type='cwfs')
+            if not seqNums:
+                self.log.warning('No cwfs images found, observing is assumed not to have started.')
+                return None
             return min(seqNums)
 
     def printObsTable(self, **kwargs):
@@ -507,11 +548,12 @@ class NightReport():
 
         Returns
         -------
-        midpointMjd : `float`
-            The midpoint, as an mjd float.
+        midpoint : `datetime.datetime`
+            The midpoint, as a python datetime object.
         """
         timespan = self.data[seqNum]['timespan']
-        return (timespan.begin.mjd + timespan.end.mjd) / 2
+        expTime = self.data[seqNum]['exposure_time']
+        return ((timespan.begin) + expTime / 2).to_datetime()
 
     def plotPerObjectAirMass(self, objects=None, airmassOneAtTop=True, saveFig=''):
         """Plot the airmass for objects observed over the course of the night.
@@ -533,6 +575,8 @@ class NightReport():
 
         plt.figure(figsize=(10, 6))
         for star in objects:
+            if star in CALIB_VALUES:
+                continue
             seqNums = self.getSeqNumsMatching(target_name_short=star)
             airMasses = [self.data[seqNum]['boresight_airmass'] for seqNum in seqNums]
             obsTimes = [self.getExposureMidpoint(seqNum) for seqNum in seqNums]
@@ -541,10 +585,16 @@ class NightReport():
             plt.plot(obsTimes, airMasses, color=color, marker=marker, label=star, ms=10, ls='')
 
         plt.ylabel('Airmass', fontsize=20)
-        plt.ylabel('MJD', fontsize=20)
+        plt.xlabel('Time (UTC)', fontsize=20)
+        plt.xticks(rotation=25, horizontalalignment='right')
+
+        ax = plt.gca()
+        xfmt = matplotlib.dates.DateFormatter('%m-%d %H:%M:%S')
+        ax.xaxis.set_major_formatter(xfmt)
+
         if airmassOneAtTop:
-            ax = plt.gca()
             ax.set_ylim(ax.get_ylim()[::-1])
+
         plt.legend(bbox_to_anchor=(1, 1.025), prop={'size': 15}, loc='upper left')
 
         plt.tight_layout()
@@ -612,6 +662,8 @@ class NightReport():
         _ = plt.figure(figsize=(14, 10))
 
         for obj in objects:
+            if obj in CALIB_VALUES:
+                continue
             seqNums = self.getSeqNumsMatching(target_name_short=obj)
             altAzes = [self.data[seqNum]['altaz_begin'] for seqNum in seqNums]
             alts = [altAz.alt.deg for altAz in altAzes if altAz is not None]
