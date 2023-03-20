@@ -33,6 +33,7 @@ import lsst.utils.packages as packageUtils
 from lsst.daf.butler.cli.cliLog import CliLog
 import datetime
 from dateutil.tz import gettz
+from typing import Iterable
 
 from lsst.obs.lsst.translators.lsst import FILTER_DELIMITER
 from lsst.obs.lsst.translators.latiss import AUXTEL_LOCATION
@@ -68,6 +69,7 @@ __all__ = ["SIGMATOFWHM",
            "starTrackerFileToExposure",
            "getAirmassSeeingCorrection",
            "getFilterSeeingCorrection",
+           "calcAutoPlottingLimits",
            ]
 
 
@@ -764,3 +766,69 @@ def getFilterSeeingCorrection(filterName):
             return (762./500.)**0.2
         case _:
             raise ValueError(f"Unknown filter name: {filterName}")
+
+
+def calcAutoPlottingLimits(dataSeries, percentile=99.9, constantExtra=None, symmetricAroundZero=False):
+    """Calculate the right limits for plotting for one or more data series.
+
+    Given one or more data series with potential outliers, calculated the
+    values to pass for ymin, ymax so that the outliers don't ruin the plot. If
+    you are plotting several series on a single axis, pass them all in and the
+    overall plotting range will be given.
+
+    Parameters
+    ----------
+    dataSeries : `iterable` or `iterable` or `iterable`
+        One or more data series which will be going on the same axis, and
+        therefore want to have their common plotting limits calculated.
+    percentile : `float`, optional
+        The percentile used to clip the outliers from the data.
+    constantExtra : `float`, optional
+        The amount that's added on each side of the range so that data does not
+        quite touch the axes. If the default ``None`` is left then 5% of the
+        data range is added for cosmetics, but if zero is set this will
+        overrides this behaviour and zero you will get.
+    symmetricAroundZero : `bool`, optional
+        Make the limits symmetric around zero?
+
+    Returns
+    -------
+    ymin : `float`
+        The value to set the ylim minimum to.
+    ymax : `float`
+        The value to set the ylim maximum to.
+    """
+    if not isinstance(dataSeries, Iterable):
+        raise ValueError('dataSeries must be either an iterable, or an iterable of iterables')
+
+    # now we're sure we have an iterable, if it's just one make it a list of it
+    # lsst.utils.ensure_iterable is not suitable here as we already have one,
+    # we would need ensure_iterable_of_iterables here
+    if not isinstance(dataSeries[0], Iterable):  # we have a single data series, not multiple
+        dataSeries = [dataSeries]  # now we can iterate like we had more than one
+
+    mins = []
+    maxs = []
+
+    for data in dataSeries:
+        maxVal = np.percentile(data, percentile)
+        minVal = np.percentile(data, 100-percentile)
+
+        if constantExtra is None:
+            dataRange = maxVal - minVal
+            constantExtra = 0.05 * dataRange
+
+        maxVal += constantExtra
+        minVal -= constantExtra
+
+        maxs.append(maxVal)
+        mins.append(minVal)
+
+    maxVal = max(maxs)
+    minVal = min(mins)
+
+    if symmetricAroundZero:
+        biggestAbs = max(abs(minVal), abs(maxVal))
+        return -biggestAbs, biggestAbs
+
+    return minVal, maxVal
