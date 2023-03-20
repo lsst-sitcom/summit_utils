@@ -27,9 +27,14 @@ from dataclasses import dataclass
 import matplotlib.pyplot as plt
 from PIL import Image
 
+from matplotlib.patches import Rectangle
+from matplotlib.collections import PatchCollection
+from mpl_toolkits.axes_grid1 import make_axes_locatable
+
 import lsst.afw.math as afwMath
 import lsst.afw.image as afwImage
 import lsst.geom as geom
+from lsst.utils.iteration import ensure_iterable
 
 from lsst.summit.utils.utils import detectObjectsInExp
 
@@ -186,7 +191,7 @@ def sortSourcesByFlux(sources, reverse=False):
     Parameters
     ----------
     sources : `list` of
-              `lsst.summit.utils.astrometry.starTrackerAnalysis.Source`
+              `lsst.summit.utils.astrometry.fastStarTrackerAnalysis.Source`
         The list of sources to sort.
     reverse : `bool`, optional
         Return the brightest at the start of the list if ``reverse`` is
@@ -195,7 +200,7 @@ def sortSourcesByFlux(sources, reverse=False):
     Returns
     -------
     sources : `list` of
-              `lsst.summit.utils.astrometry.starTrackerAnalysis.Source`
+              `lsst.summit.utils.astrometry.fastStarTrackerAnalysis.Source`
         The sources, sorted by flux.
     """
     # invert reverse because we want brightest first by default, but want the
@@ -208,12 +213,14 @@ class Source:
     """A dataclass for FastStarTracker analysis results.
     """
     # raw numbers
-    centroidX: float = np.nan
-    centroidY: float = np.nan
+    centroidX: float = np.nan  # in image coordinates
+    centroidY: float = np.nan  # in image coordinates
     rawFlux: float = np.nan
     nPix: int = np.nan
     bbox: geom.Box2I = None
     cutout: np.array = None
+    localCentroidX: float = np.nan  # in cutout coordinates
+    localCentroidY: float = np.nan  # in cutout coordinates
 
     # numbers from the hsm moments fit
     hsmFittedFlux: float = np.nan
@@ -243,13 +250,13 @@ class Source:
                 retStr += f'bbox = lsst.geom.{repr(v)}\n'
             elif itemName == 'cutout':  # and don't spam the full moments
                 if v is None:
-                    retStr += f'cutout = None\n'
+                    retStr += 'cutout = None\n'
                 else:
                     retStr += f'cutout = {type(v)}\n'
         return retStr
 
 
-def analyzeFastStarTrackerImage(filename, boxSize, attachCutout=False):
+def analyzeFastStarTrackerImage(filename, boxSize, attachCutouts=True):
     """Analyze a single FastStarTracker image.
 
     Parameters
@@ -258,14 +265,14 @@ def analyzeFastStarTrackerImage(filename, boxSize, attachCutout=False):
         The full
     boxSize : `int`
         The size of the box to put around each source for measurement.
-    attachCutout : `bool`, optional
+    attachCutouts : `bool`, optional
         Attached the cutouts to the ``Source`` objects? Useful for
         debug/plotting but adds memory usage.
 
     Returns
     -------
     sources : `list` of
-              `lsst.summit.utils.astrometry.starTrackerAnalysis.Source`
+              `lsst.summit.utils.astrometry.fastStarTrackerAnalysis.Source`
         The sources in the image, sorted by rawFlux.
     """
     exp = tifToExp(filename)
@@ -283,7 +290,7 @@ def analyzeFastStarTrackerImage(filename, boxSize, attachCutout=False):
         bbox = getBboxAround(centroid, boxSize, exp)
         source.bbox = bbox
         cutout = exp.image[bbox].array
-        if attachCutout:
+        if attachCutouts:
             source.cutout = cutout
         source.centroidX = centroid[0]
         source.centroidY = centroid[1]
@@ -297,6 +304,8 @@ def analyzeFastStarTrackerImage(filename, boxSize, attachCutout=False):
         source.hsmFittedFlux = moments.moments_amp
         source.hsmCentroidX = moments.moments_centroid.x + bbox.minX - 1
         source.hsmCentroidY = moments.moments_centroid.y + bbox.minY - 1
+        source.localCentroidX = moments.moments_centroid.x - 1
+        source.localCentroidY = moments.moments_centroid.y - 1
         sources.append(source)
     return sortSourcesByFlux(sources)
 
@@ -316,7 +325,7 @@ def checkResultConsistency(results, silent=False):
     Parameters
     ----------
     results : `dict` of `list` of
-              `lsst.summit.utils.astrometry.starTrackerAnalysis.Source`
+              `lsst.summit.utils.astrometry.fastStarTrackerAnalysis.Source`
         A dict, keyed by sequence number, with each value being a list of the
         sources found in the image, e.g. as returned by
         ``analyzeFastStarTrackerImage()``.
@@ -374,7 +383,7 @@ def checkResultConsistency(results, silent=False):
     if not consistent:
         return False
 
-    if not silent and len(results)>1:  # can't np.diff an array of length 1 so these are not useful/defined
+    if not silent and len(results) > 1:  # can't np.diff an array of length 1 so these are not useful/defined
         # now the basic checks have passed, do some sanity checks on the
         # maximum deltas for the primary sources
         sources = [sourceSet[0] for sourceSet in results]
@@ -398,7 +407,7 @@ def plotResults(results, sourceIndex=0, allowInconsistent=False):
     Parameters
     ----------
     results : `dict` of `list` of
-              `lsst.summit.utils.astrometry.starTrackerAnalysis.Source`
+              `lsst.summit.utils.astrometry.fastStarTrackerAnalysis.Source`
         A dict, keyed by sequence number, with each value being a list of the
         sources found in the image, e.g. as returned by
         ``analyzeFastStarTrackerImage()``.
@@ -457,3 +466,88 @@ def plotResults(results, sourceIndex=0, allowInconsistent=False):
     # aspect='equal' but plt.plot() does not. Need Google for this and I'm on a
     # plane. It's hard to believe that I'd have to find the midpoint and range
     # of each axis and dilate as required so will wait for the internet here.
+
+# -------------- plotting tools
+
+
+def bboxToMatplotlibRectanle(bbox):
+    """Convert a bbox to a matplotlib Rectangle for plotting.
+
+    Parameters
+    ----------
+    results : `lsst.geom.Box2I` or `lsst.geom.Box2D`
+        The bbox to convert.
+
+    Returns
+    -------
+    rectangle : `bool`
+        The rectangle.
+    """
+    ll = bbox.minX, bbox.minY
+    width, height = bbox.getDimensions()
+    return Rectangle(ll, width, height)
+
+
+def plotSourcesOnImage(parentFilename, sources):
+    """Plot one of more source on top of an image.
+
+    Parameters
+    ----------
+    parentFilename : `str`
+        The full path to the parent (.tif) file.
+    sources : `list` of
+              `lsst.summit.utils.astrometry.fastStarTrackerAnalysis.Source` or
+              `lsst.summit.utils.astrometry.fastStarTrackerAnalysis.Source`
+        The sources found in the image.
+    """
+    exp = tifToExp(parentFilename)
+    data = exp.image.array
+
+    fig = plt.figure(figsize=(16, 8))
+    ax = fig.subplots(1)
+
+    plt.imshow(data, interpolation='None', origin='lower')
+
+    sources = ensure_iterable(sources)
+    patches = []
+    for source in sources:
+        ax.scatter(source.centroidX, source.centroidY, color='red', marker='x')  # mark the centroid
+        patch = bboxToMatplotlibRectanle(source.bbox)
+        patches.append(patch)
+
+    # move the colorbar
+    divider = make_axes_locatable(ax)
+    cax = divider.append_axes("right", size="5%", pad=0.05)
+    plt.colorbar(cax=cax)
+
+    # plot the bboxes on top
+    pc = PatchCollection(patches, edgecolor='r', facecolor='none')
+    ax.add_collection(pc)
+
+    plt.tight_layout()
+
+
+def plotSource(source):
+    """Plot a single source.
+
+    Parameters
+    ----------
+    source : `lsst.summit.utils.astrometry.fastStarTrackerAnalysis.Source`
+        The source to plot.
+    """
+    if source.cutout is None:
+        raise RuntimeError('Can only plot sources with attached cutouts. Either set attachCutouts=True '
+                           'in analyzeFastStarTrackerImage() or try using plotSourcesOnImage() instead')
+
+    fig = plt.figure(figsize=(16, 8))
+    ax = fig.subplots(1)
+
+    plt.imshow(source.cutout, interpolation='None', origin='lower')  # plot the image
+    ax.scatter(source.localCentroidX, source.localCentroidY, color='red', marker='x', s=200)  # mark centroid
+
+    # move the colorbar
+    divider = make_axes_locatable(ax)
+    cax = divider.append_axes("right", size="5%", pad=0.05)
+    plt.colorbar(cax=cax)
+
+    plt.tight_layout()
