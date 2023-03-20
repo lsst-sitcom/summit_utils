@@ -310,7 +310,7 @@ def analyzeFastStarTrackerImage(filename, boxSize, attachCutouts=True):
     return sortSourcesByFlux(sources)
 
 
-def checkResultConsistency(results, silent=False):
+def checkResultConsistency(results, maxAllowableShift=5, silent=False):
     """Check if a set of results are self-consistent.
 
     For each image, check the number of detected sources are the same in each
@@ -329,6 +329,9 @@ def checkResultConsistency(results, silent=False):
         A dict, keyed by sequence number, with each value being a list of the
         sources found in the image, e.g. as returned by
         ``analyzeFastStarTrackerImage()``.
+    maxAllowableShift : `float`
+        The biggest centroid shift between adjacent images allowable before
+        something is considered to have gone wrong.
     silent : `bool`, optional
         Print some useful checks and measurements if ``False``, otherwise just
         return whether the results appear nominally OK silently (for use when
@@ -352,7 +355,7 @@ def checkResultConsistency(results, silent=False):
     nSources = set([sourceSet[0].nSourcesInImage for sourceSet in results])
     if len(nSources) != 1:
         if not silent:
-            print(f'Images contain a variable number of sources: {nSources}')
+            print(f'❌ Images contain a variable number of sources: {nSources}')
         consistent = False
     else:
         if not silent:
@@ -362,7 +365,7 @@ def checkResultConsistency(results, silent=False):
     nSourcesCounted = set([len(sourceSet) for sourceSet in results])
     if len(nSourcesCounted) != 1:
         if not silent:
-            print(f'WARNING: Number of actual sources in each sourceSet varies, got: {nSourcesCounted}.'
+            print(f'❌ Number of actual sources in each sourceSet varies, got: {nSourcesCounted}.'
                   ' If some were manually removed you can ignore this')
         consistent = False
     else:
@@ -371,10 +374,10 @@ def checkResultConsistency(results, silent=False):
             print(f'✅ All results contain the same number of actual sources per image: {n}')
 
     widths = set([sourceSet[0].parentImageWidth for sourceSet in results])
-    heights = set([sourceSet[0].parentImageWidth for sourceSet in results])
-    if len(widths) != len(heights) != 1:
+    heights = set([sourceSet[0].parentImageHeight for sourceSet in results])
+    if len(widths) != 1 or len(heights) != 1:
         if not silent:
-            print(f'Input images were of variable dimenions! {widths=}, {heights=}')
+            print(f'❌ Input images were of variable dimenions! {widths=}, {heights=}')
         consistent = False
     else:
         if not silent:
@@ -383,7 +386,7 @@ def checkResultConsistency(results, silent=False):
     if not consistent:
         return False
 
-    if not silent and len(results) > 1:  # can't np.diff an array of length 1 so these are not useful/defined
+    if len(results) > 1:  # can't np.diff an array of length 1 so these are not useful/defined
         # now the basic checks have passed, do some sanity checks on the
         # maximum deltas for the primary sources
         sources = [sourceSet[0] for sourceSet in results]
@@ -391,12 +394,18 @@ def checkResultConsistency(results, silent=False):
         dy = np.diff([s.centroidY for s in sources])
         maxMovementX = np.max(dx)
         maxMovementY = np.max(dy)
-        print('Maximum centroid movement between images in (x, y) = '
-              f'({maxMovementX:.2f}, {maxMovementY:.2f}) pix')
+        happyOrSad = '✅'
+        if max(maxMovementX, maxMovementY) > maxAllowableShift:
+            consistent = False
+            happyOrSad = '❌'
+        if not silent:
+            print(f'{happyOrSad} Maximum centroid movement between images in (x, y) = '
+                f'({maxMovementX:.2f}, {maxMovementY:.2f}) pix')
 
         fluxStd = np.nanstd([s.rawFlux for s in sources])
         fluxMean = np.nanmean([s.rawFlux for s in sources])
-        print(f'Mean and stddev of fluxes = {fluxMean:.1f} ± {fluxStd:.1f} ADU')
+        if not silent:
+            print(f'Mean and stddev of fluxes = {fluxMean:.1f} ± {fluxStd:.1f} ADU')
 
     return consistent
 
@@ -421,7 +430,7 @@ def plotResults(results, sourceIndex=0, allowInconsistent=False):
     consistent = checkResultConsistency(results.values(), silent=True)
     if not consistent and not allowInconsistent:
         checkResultConsistency(results.values(), silent=False)  # print the problem if we're raising
-        raise ValueError('Inconsistent sources and allowInconsistent=False')
+        raise ValueError('The sources were found to be inconsistent and allowInconsistent=False')
 
     sourceDict = {k: v[sourceIndex] for k, v in results.items()}
     seqNums = list(sourceDict.keys())
