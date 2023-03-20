@@ -352,39 +352,31 @@ def checkResultConsistency(results, maxAllowableShift=5, silent=False):
         return False
 
     consistent = True
+    toPrint = []
     nSources = set([sourceSet[0].nSourcesInImage for sourceSet in results])
     if len(nSources) != 1:
-        if not silent:
-            print(f'❌ Images contain a variable number of sources: {nSources}')
+        toPrint.append(f'❌ Images contain a variable number of sources: {nSources}')
         consistent = False
     else:
-        if not silent:
-            n = nSources.pop()
-            print(f'✅ All images contain the same nominal number of sources at detection stage: {n}')
+        n = nSources.pop()
+        toPrint.append(f'✅ All images contain the same nominal number of sources at detection stage: {n}')
 
     nSourcesCounted = set([len(sourceSet) for sourceSet in results])
     if len(nSourcesCounted) != 1:
-        if not silent:
-            print(f'❌ Number of actual sources in each sourceSet varies, got: {nSourcesCounted}.'
-                  ' If some were manually removed you can ignore this')
+        toPrint.append(f'❌ Number of actual sources in each sourceSet varies, got: {nSourcesCounted}.'
+                       ' If some were manually removed you can ignore this')
         consistent = False
     else:
-        if not silent:
-            n = nSourcesCounted.pop()
-            print(f'✅ All results contain the same number of actual sources per image: {n}')
+        n = nSourcesCounted.pop()
+        toPrint.append(f'✅ All results contain the same number of actual sources per image: {n}')
 
     widths = set([sourceSet[0].parentImageWidth for sourceSet in results])
     heights = set([sourceSet[0].parentImageHeight for sourceSet in results])
     if len(widths) != 1 or len(heights) != 1:
-        if not silent:
-            print(f'❌ Input images were of variable dimenions! {widths=}, {heights=}')
+        toPrint.append(f'❌ Input images were of variable dimenions! {widths=}, {heights=}')
         consistent = False
     else:
-        if not silent:
-            print('✅ All input images were of the same dimensions')
-
-    if not consistent:
-        return False
+        toPrint.append('✅ All input images were of the same dimensions')
 
     if len(results) > 1:  # can't np.diff an array of length 1 so these are not useful/defined
         # now the basic checks have passed, do some sanity checks on the
@@ -398,14 +390,17 @@ def checkResultConsistency(results, maxAllowableShift=5, silent=False):
         if max(maxMovementX, maxMovementY) > maxAllowableShift:
             consistent = False
             happyOrSad = '❌'
-        if not silent:
-            print(f'{happyOrSad} Maximum centroid movement between images in (x, y) = '
-                f'({maxMovementX:.2f}, {maxMovementY:.2f}) pix')
+
+        toPrint.append(f'{happyOrSad} Maximum centroid movement between images in (x, y) = '
+                       f'({maxMovementX:.2f}, {maxMovementY:.2f}) pix')
 
         fluxStd = np.nanstd([s.rawFlux for s in sources])
         fluxMean = np.nanmean([s.rawFlux for s in sources])
-        if not silent:
-            print(f'Mean and stddev of fluxes = {fluxMean:.1f} ± {fluxStd:.1f} ADU')
+        toPrint.append(f'Mean and stddev of fluxes = {fluxMean:.1f} ± {fluxStd:.1f} ADU')
+
+    if not silent:
+        for line in toPrint:
+            print(line)
 
     return consistent
 
