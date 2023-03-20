@@ -442,3 +442,8 @@ def plotResults(results, sourceIndex=0, allowInconsistent=False):
     ax4.scatter([s.centroidX for s in sources], [s.centroidY for s in sources])
     ax4.set_xlabel('x-centroid (pixels)', size=axisLabelSize)
     ax4.set_ylabel('y-centroid (pixels)', size=axisLabelSize)
+
+    # TODO: check how to set the axes to an equal aspect. plt.imshow() takes an
+    # aspect='equal' but plt.plot() does not. Need Google for this and I'm on a
+    # plane. It's hard to believe that I'd have to find the midpoint and range
+    # of each axis and dilate as required so will wait for the internet here.
