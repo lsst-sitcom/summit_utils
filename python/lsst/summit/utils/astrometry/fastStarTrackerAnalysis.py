@@ -203,7 +203,7 @@ def sortSourcesByFlux(sources, reverse=False):
     return sorted(sources, key=lambda s: s.rawFlux, reverse=not reverse)
 
 
-@dataclass
+@dataclass(slots=True)
 class Source:
     """A dataclass for FastStarTracker analysis results.
     """
@@ -229,12 +229,13 @@ class Source:
         """Print everything except the full details of the moments.
         """
         retStr = ''
-        for k, v in self.__dict__.items():
+        for itemName in self.__slots__:
+            v = getattr(self, itemName)
             if isinstance(v, int):  # print ints as ints
-                retStr += f'{k} = {v}\n'
+                retStr += f'{itemName} = {v}\n'
             elif isinstance(v, float):  # but round floats at 3dp
-                retStr += f'{k} = {v:.3f}\n'
-            elif k == 'moments':  # and don't spam the full moments
+                retStr += f'{itemName} = {v:.3f}\n'
+            elif itemName == 'moments':  # and don't spam the full moments
                 retStr += 'moments = <galsim.hsm.ShapeData>\n'
 
         # retStr = '\n'.join([f'{item} = {getattr(self, item):.2f}'
