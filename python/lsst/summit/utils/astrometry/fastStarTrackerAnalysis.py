@@ -212,6 +212,8 @@ class Source:
     centroidY: float = np.nan
     rawFlux: float = np.nan
     nPix: int = np.nan
+    bbox: geom.Box2I = None
+    cutout: np.array = None
 
     # numbers from the hsm moments fit
     hsmFittedFlux: float = np.nan
@@ -236,15 +238,18 @@ class Source:
             elif isinstance(v, float):  # but round floats at 3dp
                 retStr += f'{itemName} = {v:.3f}\n'
             elif itemName == 'moments':  # and don't spam the full moments
-                retStr += 'moments = <galsim.hsm.ShapeData>\n'
-
-        # retStr = '\n'.join([f'{item} = {getattr(self, item):.2f}'
-        #                     for item in self.__dict__ if item != 'moments'])
-        # retStr += '\n' + 'moments = <galsim.hsm.ShapeData>'
+                retStr += f'moments = {type(v)}\n'
+            elif itemName == 'bbox':  # and don't spam the full moments
+                retStr += f'bbox = lsst.geom.{repr(v)}\n'
+            elif itemName == 'cutout':  # and don't spam the full moments
+                if v is None:
+                    retStr += f'cutout = None\n'
+                else:
+                    retStr += f'cutout = {type(v)}\n'
         return retStr
 
 
-def analyzeFastStarTrackerImage(filename, boxSize):
+def analyzeFastStarTrackerImage(filename, boxSize, attachCutout=False):
     """Analyze a single FastStarTracker image.
 
     Parameters
@@ -253,6 +258,9 @@ def analyzeFastStarTrackerImage(filename, boxSize):
         The full
     boxSize : `int`
         The size of the box to put around each source for measurement.
+    attachCutout : `bool`, optional
+        Attached the cutouts to the ``Source`` objects? Useful for
+        debug/plotting but adds memory usage.
 
     Returns
     -------
@@ -273,11 +281,13 @@ def analyzeFastStarTrackerImage(filename, boxSize):
 
         centroid = footprint.getCentroid()
         bbox = getBboxAround(centroid, boxSize, exp)
+        source.bbox = bbox
         cutout = exp.image[bbox].array
-        rawFlux = getFlux(cutout, bgMean)
+        if attachCutout:
+            source.cutout = cutout
         source.centroidX = centroid[0]
         source.centroidY = centroid[1]
-        source.rawFlux = rawFlux
+        source.rawFlux = getFlux(cutout, bgMean)
         source.imageBackground = bgMean
         source.imageStddev = bgStd
         source.nPix = countOverThresholdPixels(cutout, bgMean, bgStd)
@@ -364,7 +374,7 @@ def checkResultConsistency(results, silent=False):
     if not consistent:
         return False
 
-    if not silent:
+    if not silent and len(results)>1:  # can't np.diff an array of length 1 so these are not useful/defined
         # now the basic checks have passed, do some sanity checks on the
         # maximum deltas for the primary sources
         sources = [sourceSet[0] for sourceSet in results]
