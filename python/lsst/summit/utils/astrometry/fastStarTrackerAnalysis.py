@@ -456,20 +456,13 @@ def plotResults(results, sourceIndex=0, allowInconsistent=False):
     fig = plt.figure(figsize=(10, 10))
     ax4 = fig.subplots(1)
 
-    # TODO: add a linearly spaced color map to these points to show progression
-    # of seqNums
-    # npts = len(seqNums)
-    # spacing = np.linspace(0, 1, npts)
-    # cmap = matplotlib.colors.Colormap('jet', npts)
-
-    ax4.scatter([s.centroidX for s in sources], [s.centroidY for s in sources])
+    colors = np.arange(len(sources))
+    # gnuplot2 has a nice balance of nothing white, and having an intuitive
+    # progression of colours so the eye can pick out trends on the point cloud.
+    ax4.scatter([s.centroidX for s in sources], [s.centroidY for s in sources], c=colors, cmap='gnuplot2')
     ax4.set_xlabel('x-centroid (pixels)', size=axisLabelSize)
     ax4.set_ylabel('y-centroid (pixels)', size=axisLabelSize)
-
-    # TODO: check how to set the axes to an equal aspect. plt.imshow() takes an
-    # aspect='equal' but plt.plot() does not. Need Google for this and I'm on a
-    # plane. It's hard to believe that I'd have to find the midpoint and range
-    # of each axis and dilate as required so will wait for the internet here.
+    ax4.set_aspect('equal', 'box')
 
 # -------------- plotting tools
 
