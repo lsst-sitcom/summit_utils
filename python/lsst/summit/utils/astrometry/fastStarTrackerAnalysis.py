@@ -46,7 +46,8 @@ __all__ = ('tifToExp',
            'sortSourcesByFlux',
            'analyzeFastStarTrackerImage',
            'checkResultConsistency',
-           'plotResults'
+           'plotResults',
+           'plotSource'
            )
 
 
