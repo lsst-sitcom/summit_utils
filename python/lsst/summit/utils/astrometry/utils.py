@@ -268,14 +268,19 @@ def runCharactierizeImage(exp, snr, minPix):
     charConfig.detection.minPixels = minPix
     charConfig.detection.thresholdValue = snr
     charConfig.detection.includeThresholdMultiplier = 1
+    charConfig.detection.nSigmaToGrow = 0
+
+    charConfig.psfIterations = 1
+    charConfig.installSimplePsf.fwhm = 5
+    charConfig.installSimplePsf.width = 51
 
     # fit background with the most simple thing possible as we don't need
     # much sophistication here. weighting=False is *required* for very
     # large binSizes.
-    charConfig.background.algorithm = 'CONSTANT'
-    charConfig.background.approxOrderX = 0
+#     charConfig.background.algorithm = 'AKIMA'
+    charConfig.background.approxOrderX = 1
     charConfig.background.approxOrderY = -1
-    charConfig.background.binSize = max(exp.getWidth(), exp.getHeight())
+#     charConfig.background.binSize = max(exp.getWidth(), exp.getHeight())
     charConfig.background.weighting = False
 
     # set this to use all the same minimal settings as those above
