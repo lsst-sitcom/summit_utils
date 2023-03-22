@@ -207,7 +207,11 @@ class CommandLineSolver():
 
     # try to keep this call sig and the defaults as similar as possible
     # to the run method on the OnlineSolver
-    def run(self, exp, sourceCat, isWideField, *, useGaia=False, percentageScaleError=10, radius=None, silent=True):
+    def run(self, exp, sourceCat, isWideField, *,
+            useGaia=False,
+            percentageScaleError=10,
+            radius=None,
+            silent=True):
         """Get the astrometric solution for an image using astrometry.net using
         the binary ``solve-field`` and a set of index files.
 
@@ -221,7 +225,8 @@ class CommandLineSolver():
         isWideField : `bool`
             Is this a wide field image? Used to select the correct index files.
         useGaia : `bool`
-            Use the Gaia 5200 index files? If set, ``isWideField`` is ignored.
+            Use the Gaia 5200/LITE index files? If set, ``isWideField`` is
+            ignored.
         percentageScaleError : `float`, optional
             The percentage scale error to allow in the astrometric solution.
         radius : `float`, optional
