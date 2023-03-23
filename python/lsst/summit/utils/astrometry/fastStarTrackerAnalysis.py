@@ -405,12 +405,12 @@ def checkResultConsistency(results, maxAllowableShift=5, silent=False):
             consistent = False
             happyOrSad = '❌'
 
-        toPrint.append(f'{happyOrSad} Maximum centroid movement between images in (x, y) = '
-                       f'({maxMovementX:.2f}, {maxMovementY:.2f}) pix')
+        toPrint.append(f'{happyOrSad} Maximum centroid movement of brightest object between images in (x, y)'
+                       f' = ({maxMovementX:.2f}, {maxMovementY:.2f}) pix')
 
         fluxStd = np.nanstd([s.rawFlux for s in sources])
         fluxMean = np.nanmean([s.rawFlux for s in sources])
-        toPrint.append(f'Mean and stddev of fluxes = {fluxMean:.1f} ± {fluxStd:.1f} ADU')
+        toPrint.append(f'Mean and stddev of flux from brightest object = {fluxMean:.1f} ± {fluxStd:.1f} ADU')
 
     if not silent:
         for line in toPrint:
