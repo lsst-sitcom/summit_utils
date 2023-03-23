@@ -319,11 +319,10 @@ def findFastStarTrackerImageSources(filename, boxSize, attachCutouts=True):
 def checkResultConsistency(results, maxAllowableShift=5, silent=False):
     """Check if a set of results are self-consistent.
 
-    For each image, check the number of detected sources are the same in each
-    image, that no sources have been removed from each image's source list, and
-    that all the input images were the same size (because we read out sub
-    frames, and analyzing these with full frame data invalidates the centroid
-    coordinates).
+    Check the number of detected sources are the same in each image, that no
+    sources have been removed from each image's source list, and that all the
+    input images were the same size (because we read out sub frames, and
+    analyzing these with full frame data invalidates the centroid coordinates).
 
     Also displays the maximum (x, y) movements between adjacent exposures, and
     the mean and stddev of the main source's flux.
@@ -419,8 +418,12 @@ def checkResultConsistency(results, maxAllowableShift=5, silent=False):
     return consistent
 
 
-def plotResults(results, sourceIndex=0, allowInconsistent=False):
+def plotSourceMovement(results, sourceIndex=0, allowInconsistent=False):
     """Plot the centroid movements and fluxes etc for a set of results.
+
+    By default the brightest source in each image is plotted, but this can be
+    changed by setting ``sourceIndex`` to values greater than 0 to move through
+    the list of sources in each image.
 
     Parameters
     ----------
@@ -435,6 +438,13 @@ def plotResults(results, sourceIndex=0, allowInconsistent=False):
         source by default.
     allowInconsistent : `bool`, optional
         Make the plots even if the input results appear to be inconsistent?
+
+    Returns
+    -------
+    figs : `list` of `matplotlib.figure.Figure`
+        The figures. The first is the source's flux and x, y movement over the
+        image sequence, and the second is a scatter plot of the x and y, with
+        the color showing the position in the sequence.
     """
     consistent = checkResultConsistency(results.values(), silent=True)
     if not consistent and not allowInconsistent:
@@ -447,6 +457,7 @@ def plotResults(results, sourceIndex=0, allowInconsistent=False):
 
     axisLabelSize = 18
 
+    figs = []
     fig = plt.figure(figsize=(10, 16))
     ax1, ax2, ax3 = fig.subplots(3, sharex=True)
     fig.subplots_adjust(hspace=0)
@@ -467,6 +478,8 @@ def plotResults(results, sourceIndex=0, allowInconsistent=False):
     ax3.set_xlabel('SeqNum', size=axisLabelSize)
     ax3.legend()
 
+    figs.append(fig)
+
     fig = plt.figure(figsize=(10, 10))
     ax4 = fig.subplots(1)
 
@@ -477,6 +490,9 @@ def plotResults(results, sourceIndex=0, allowInconsistent=False):
     ax4.set_xlabel('x-centroid (pixels)', size=axisLabelSize)
     ax4.set_ylabel('y-centroid (pixels)', size=axisLabelSize)
     ax4.set_aspect('equal', 'box')
+    figs.append(fig)
+
+    return figs
 
 # -------------- plotting tools
 
