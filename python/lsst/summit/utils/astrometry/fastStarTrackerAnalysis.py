@@ -57,7 +57,8 @@ def tifToExp(filename):
     Opens the file, sets a blank mask plane, and converts the data to
     `np.float32` and returns an exposure, currently with no visitInfo.
 
-    Once we have a way of getting the expTime, set that.
+    TODO: DM-38422 Once we have a way of getting the expTime, set that,
+    and the frequency at which the images were taken.
 
     Parameters
     ----------
