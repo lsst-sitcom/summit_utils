@@ -44,7 +44,7 @@ __all__ = ('tifToExp',
            'getBackgroundLevel',
            'countOverThresholdPixels',
            'sortSourcesByFlux',
-           'analyzeFastStarTrackerImage',
+           'findFastStarTrackerImageSources',
            'checkResultConsistency',
            'plotResults',
            'plotSource'
@@ -64,6 +64,11 @@ def tifToExp(filename):
     ----------
     filename : `str`
         The full path to the file to load.
+
+    Returns
+    -------
+    exp : `lsst.afw.image.Exposure`
+        The exposure.
     """
     im = Image.open(filename)
     data = im.getdata()
@@ -124,8 +129,7 @@ def getFlux(cutout, backgroundLevel=0):
     if not backgroundLevel:
         return rawFlux
 
-    nPix = cutout.shape[0] * cutout.shape[1]
-    return rawFlux - (nPix*backgroundLevel)
+    return rawFlux - (cutout.size*backgroundLevel)
 
 
 def getBackgroundLevel(exp, nSigma=3):
@@ -258,7 +262,7 @@ class Source:
         return retStr
 
 
-def analyzeFastStarTrackerImage(filename, boxSize, attachCutouts=True):
+def findFastStarTrackerImageSources(filename, boxSize, attachCutouts=True):
     """Analyze a single FastStarTracker image.
 
     Parameters
@@ -268,7 +272,7 @@ def analyzeFastStarTrackerImage(filename, boxSize, attachCutouts=True):
     boxSize : `int`
         The size of the box to put around each source for measurement.
     attachCutouts : `bool`, optional
-        Attached the cutouts to the ``Source`` objects? Useful for
+        Attach the cutouts to the ``Source`` objects? Useful for
         debug/plotting but adds memory usage.
 
     Returns
@@ -330,7 +334,7 @@ def checkResultConsistency(results, maxAllowableShift=5, silent=False):
               `lsst.summit.utils.astrometry.fastStarTrackerAnalysis.Source`
         A dict, keyed by sequence number, with each value being a list of the
         sources found in the image, e.g. as returned by
-        ``analyzeFastStarTrackerImage()``.
+        ``findFastStarTrackerImageSources()``.
     maxAllowableShift : `float`
         The biggest centroid shift between adjacent images allowable before
         something is considered to have gone wrong.
@@ -416,7 +420,7 @@ def plotResults(results, sourceIndex=0, allowInconsistent=False):
               `lsst.summit.utils.astrometry.fastStarTrackerAnalysis.Source`
         A dict, keyed by sequence number, with each value being a list of the
         sources found in the image, e.g. as returned by
-        ``analyzeFastStarTrackerImage()``.
+        ``findFastStarTrackerImageSources()``.
     sourceIndex : `int`, optional
         If there is more than one source in every image, which source number
         should the plot be made for? Defaults to zero, which is the brightest
@@ -536,7 +540,7 @@ def plotSource(source):
     """
     if source.cutout is None:
         raise RuntimeError('Can only plot sources with attached cutouts. Either set attachCutouts=True '
-                           'in analyzeFastStarTrackerImage() or try using plotSourcesOnImage() instead')
+                           'in findFastStarTrackerImageSources() or try using plotSourcesOnImage() instead')
 
     fig = plt.figure(figsize=(16, 8))
     ax = fig.subplots(1)
