@@ -351,6 +351,14 @@ def checkResultConsistency(results, maxAllowableShift=5, silent=False):
     if isinstance(results, typing.ValuesView):  # in case we're passed a .values()
         results = list(results)
 
+    sourceCounts = set([len(sourceSet) for sourceSet in results])
+    if sourceCounts == {0}:  # none of the images contain any detections
+        if not silent:
+            print('No images contain any sources. Results are technically consistent, but also useless.')
+        # this is technically consistent, so return True, but any downstream
+        # code which tries to make plots with these will fail, of course.
+        return True
+
     if 0 in ([len(sourceSet) for sourceSet in results]):
         if not silent:
             print('Some results contain no sources. Results are therefore fundamentally inconsistent'
