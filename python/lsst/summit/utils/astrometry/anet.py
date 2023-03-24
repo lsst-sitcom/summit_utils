@@ -145,7 +145,7 @@ class CommandLineSolver():
         ----------
         wide : `bool`
             Is this a wide field image? Used to select the 4100 vs 4200 dir in
-            the index file path.
+            the index file path. Ignored if ``useGaia`` is ``True``.
         useGaia : `bool`
             Use the 5200 Gaia catalog? If ``True``, ``wide`` is ignored.
 
@@ -224,6 +224,7 @@ class CommandLineSolver():
             default run of CharacterizeImageTask is suitable.
         isWideField : `bool`
             Is this a wide field image? Used to select the correct index files.
+            Ignored if ``useGaia`` is ``True``.
         useGaia : `bool`
             Use the Gaia 5200/LITE index files? If set, ``isWideField`` is
             ignored.
