@@ -138,21 +138,25 @@ class CommandLineSolver():
             raise RuntimeError(f"Could not find {binary} in path, please install 'solve-field' and either"
                                " put it on your PATH or specify the full path to it in the 'binary' argument")
 
-    def _writeConfigFile(self, wide):
+    def _writeConfigFile(self, wide, useGaia):
         """Write a temporary config file for astrometry.net.
 
         Parameters
         ----------
         wide : `bool`
             Is this a wide field image? Used to select the 4100 vs 4200 dir in
-            the index file path.
+            the index file path. Ignored if ``useGaia`` is ``True``.
+        useGaia : `bool`
+            Use the 5200 Gaia catalog? If ``True``, ``wide`` is ignored.
 
         Returns
         -------
         filename : `str`
             The filename to which the config file was written.
         """
-        indexFileDir = os.path.join(self.indexFilePath, ('4100' if wide else '4200'))
+        fileSet = '4100' if wide else '4200'
+        fileSet = '5200/LITE' if useGaia else fileSet
+        indexFileDir = os.path.join(self.indexFilePath, fileSet)
         if not os.path.isdir(indexFileDir):
             raise RuntimeError(f"No index files found at {self.indexFilePath}, in {indexFileDir} (you need a"
                                " 4100 dir for wide field and 4200 dir for narrow field images).")
@@ -203,7 +207,11 @@ class CommandLineSolver():
 
     # try to keep this call sig and the defaults as similar as possible
     # to the run method on the OnlineSolver
-    def run(self, exp, sourceCat, isWideField, *, percentageScaleError=10, radius=None, silent=True):
+    def run(self, exp, sourceCat, isWideField, *,
+            useGaia=False,
+            percentageScaleError=10,
+            radius=None,
+            silent=True):
         """Get the astrometric solution for an image using astrometry.net using
         the binary ``solve-field`` and a set of index files.
 
@@ -216,6 +224,10 @@ class CommandLineSolver():
             default run of CharacterizeImageTask is suitable.
         isWideField : `bool`
             Is this a wide field image? Used to select the correct index files.
+            Ignored if ``useGaia`` is ``True``.
+        useGaia : `bool`
+            Use the Gaia 5200/LITE index files? If set, ``isWideField`` is
+            ignored.
         percentageScaleError : `float`, optional
             The percentage scale error to allow in the astrometric solution.
         radius : `float`, optional
@@ -235,7 +247,7 @@ class CommandLineSolver():
         if not wcs:
             raise ValueError("No WCS in exposure")
 
-        configFile = self._writeConfigFile(wide=isWideField)
+        configFile = self._writeConfigFile(wide=isWideField, useGaia=useGaia)
         print(f'Fitting image with {len(sourceCat)} sources', end='')
         fitsFile = self._writeFitsTable(sourceCat)
 

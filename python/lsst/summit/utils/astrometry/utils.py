@@ -162,6 +162,11 @@ def patchHeader(header):
         # service
         header['CRPIX1'] = 1560.85
         header['CRPIX2'] = 1257.15
+    if header.get('SECPIX') == '0.67':
+        # use the fast camera chip centre until we know better
+        header['SECPIX'] = '0.6213'  # measured from a fit
+        header['CRPIX1'] = 329.5
+        header['CRPIX2'] = 246.5
     return header
 
 
