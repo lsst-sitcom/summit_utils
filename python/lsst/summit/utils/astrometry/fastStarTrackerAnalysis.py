@@ -486,10 +486,16 @@ def plotSourceMovement(results, sourceIndex=0, allowInconsistent=False):
     colors = np.arange(len(sources))
     # gnuplot2 has a nice balance of nothing white, and having an intuitive
     # progression of colours so the eye can pick out trends on the point cloud.
-    ax4.scatter([s.centroidX for s in sources], [s.centroidY for s in sources], c=colors, cmap='gnuplot2')
+    axRef = ax4.scatter([s.centroidX for s in sources], [s.centroidY for s in sources],
+                        c=colors, cmap='gnuplot2')
     ax4.set_xlabel('x-centroid (pixels)', size=axisLabelSize)
     ax4.set_ylabel('y-centroid (pixels)', size=axisLabelSize)
     ax4.set_aspect('equal', 'box')
+    # move the colorbar
+    divider = make_axes_locatable(ax4)
+    cax = divider.append_axes("right", size="5%", pad=0.05)
+    cbar = plt.colorbar(axRef, cax=cax)
+    cbar.set_label('Image number in series', size=axisLabelSize*.75)
     figs.append(fig)
 
     return figs
