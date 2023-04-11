@@ -495,9 +495,19 @@ def getSite():
     raise ValueError('Location could not be determined')
 
 
-def getAltAzFromSkyPosition(skyPos, visitInfo):
+def getAltAzFromSkyPosition(skyPos, visitInfo, doCorrectRefraction=False,
+                            wavelength=500.0,
+                            pressureOverride=None,
+                            temperatureOverride=None,
+                            relativeHumidityOverride=None,
+                            ):
     """Get the alt/az from the position on the sky and the time and location
     of the observation.
+
+    The temperature, pressure and relative humidity are taken from the
+    visitInfo by default, but can be individually overridden as needed. It
+    should be noted that the visitInfo never contains a nominal wavelength, and
+    so this takes a default value of 500nm.
 
     Parameters
     ----------
@@ -505,6 +515,19 @@ def getAltAzFromSkyPosition(skyPos, visitInfo):
         The position on the sky.
     visitInfo : `lsst.afw.image.VisitInfo`
         The visit info containing the time of the observation.
+    doCorrectRefraction : `bool`, optional
+        Correct for the atmospheric refraction?
+    wavelength : `float`, optional
+        The nominal wavelength in nanometers (e.g. 500.0), as a float.
+    pressureOverride : `float`, optional
+        The pressure, in bars (e.g. 0.770), to override the value supplied in
+        the visitInfo, as a float.
+    temperatureOverride : `float`, optional
+        The temperature, in Celsius (e.g. 10.0), to override the value supplied
+        in the visitInfo, as a float.
+    relativeHumidityOverride : `float`, optional
+        The relativeHumidity in the range 0..1 (i.e. not as a percentage), to
+        override the value supplied in the visitInfo, as a float.
 
     Returns
     -------
@@ -519,10 +542,43 @@ def getAltAzFromSkyPosition(skyPos, visitInfo):
     ele = visitInfo.observatory.getElevation()
     earthLocation = EarthLocation.from_geodetic(long.asDegrees(), lat.asDegrees(), ele)
 
+    refractionKwargs = {}
+    if doCorrectRefraction:
+        # wavelength is never supplied in the visitInfo so always take this
+        wavelength = wavelength * u.nm
+
+        if pressureOverride:
+            pressure = pressureOverride
+        else:
+            pressure = visitInfo.weather.getAirPressure()
+            # ObservationInfos (which are the "source of truth" use pascals) so
+            # convert from pascals to bars
+            pressure /= 100000.0
+        pressure = pressure*u.bar
+
+        if temperatureOverride:
+            temperature = temperatureOverride
+        else:
+            temperature = visitInfo.weather.getAirTemperature()
+        temperature = temperature*u.deg_C
+
+        if relativeHumidityOverride:
+            relativeHumidity = relativeHumidityOverride
+        else:
+            relativeHumidity = visitInfo.weather.getHumidity() / 100.0  # this is in percent
+        relativeHumidity = relativeHumidity*u.deg_C
+
+        refractionKwargs = dict(pressure=pressure,
+                                temperature=temperature,
+                                relative_humidity=relativeHumidity,
+                                obswl=wavelength)
+
     # must go via astropy.Time because dafBase.dateTime.DateTime contains
     # the timezone, but going straight to visitInfo.date.toPython() loses this.
     obsTime = Time(visitInfo.date.toPython(), scale='tai')
-    altAz = AltAz(obstime=obsTime, location=earthLocation)
+    altAz = AltAz(obstime=obsTime,
+                  location=earthLocation,
+                  **refractionKwargs)
 
     obsAltAz = skyLocation.transform_to(altAz)
     alt = geom.Angle(obsAltAz.alt.degree, geom.degrees)
