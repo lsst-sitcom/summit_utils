@@ -53,7 +53,7 @@ class ExpSkyPositionOffsetTestCase(lsst.utils.tests.TestCase):
         self.detector = camera[0]
 
         self.viMaker = MakeRawVisitInfoViaObsInfo()
-        self.mi = afwImage.maskedImage.MaskedImageF(0, 0)
+        self.mi = afwImage.MaskedImageF(0, 0)
         self.baseHeader = dict(boresight_airmass=1.5,
                                temperature=15*u.deg_C,
                                observation_type="science",
