@@ -825,7 +825,7 @@ def getFilterSeeingCorrection(filterName):
             raise ValueError(f"Unknown filter name: {filterName}")
 
 
-def getCdf(data, scale, nBins=100_000):
+def getCdf(data, scale):
     """Return an approximate cumulative distribution function scaled to
     the [0, scale] range.
 
@@ -835,30 +835,30 @@ def getCdf(data, scale, nBins=100_000):
         The input data.
     scale : `int`
         The scaling range of the output.
-    nBins : `int`
-        The number of bins to make the histogram in the calculation.
 
     Returns
     -------
     cdf : `np.array` of `int`
         A monotonically increasing sequence that represents a scaled
         cumulative distribution function, starting with the value at
-        minVal, then at (minVal + binSize), and so on.
+        minVal, then at (minVal + 1), and so on.
     minVal : `float`
         An integer smaller than the minimum value in the input data.
-    binSize : `float`
-        The bin width of the histogram and the output cdf.
+    maxVal : `float`
+        An integer larger than the maximum value in the input data.
     """
     flatData = data.ravel()
+    size = flatData.size - np.count_nonzero(np.isnan(flatData))
 
-    minVal = np.floor(np.nanmin(flatData)) - 1.0
+    minVal = np.floor(np.nanmin(flatData))
     maxVal = np.ceil(np.nanmax(flatData)) + 1.0
 
-    hist, binEdges = np.histogram(flatData, bins=nBins, range=(minVal, maxVal))
-    binSize = binEdges[1] - binEdges[0]
+    hist, binEdges = np.histogram(
+        flatData, bins=int(maxVal - minVal), range=(minVal, maxVal)
+    )
 
-    cdf = (scale*np.cumsum(hist)/flatData.size).astype(np.int64)
-    return cdf, minVal, binSize
+    cdf = (scale*np.cumsum(hist)/size).astype(np.int64)
+    return cdf, minVal, maxVal
 
 
 def getQuantiles(data, nColors):
@@ -884,9 +884,10 @@ def getQuantiles(data, nColors):
         A monotonically increasing sequence of size (nColors + 1).
         These are the edges of nColors intervals.
     """
-    cdf, minVal, binSize = getCdf(data, nColors)
-    maxVal = minVal + binSize*cdf.size
-    boundaries = np.asarray([np.argmax(cdf >= i)*binSize + minVal for i in range(nColors)] + [maxVal])
+    cdf, minVal, maxVal = getCdf(data, nColors)
+    boundaries = np.asarray(
+        [np.argmax(cdf >= i) + minVal for i in range(nColors)] + [maxVal]
+    )
     return boundaries
 
 
@@ -906,6 +907,6 @@ def digitizeData(data, nColors=256):
     data: `np.array` of `int`
         Scaled data in the [0, nColors - 1] range.
     """
-    cdf, minVal, binSize = getCdf(data, nColors - 1)
-    bins = np.floor((data - minVal)/binSize).astype(np.int64)
+    cdf, minVal, maxVal = getCdf(data, nColors - 1)
+    bins = np.floor((data - minVal)).astype(np.int64)
     return cdf[bins]
