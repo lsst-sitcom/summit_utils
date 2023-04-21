@@ -69,6 +69,7 @@ __all__ = ["SIGMATOFWHM",
            "getAirmassSeeingCorrection",
            "getFilterSeeingCorrection",
            "getCdf",
+           "getQuantiles",
            "digitizeData",
            ]
 
@@ -858,6 +859,35 @@ def getCdf(data, scale, nBins=100_000):
 
     cdf = (scale*np.cumsum(hist)/flatData.size).astype(np.int64)
     return cdf, minVal, binSize
+
+
+def getQuantiles(data, nColors):
+    """Get a set of boundaries that equally distribute data into
+    nColors intervals. The output can be used to make a colormap
+    of nColors colors.
+
+    This is equivalent to using the numpy function:
+        np.quantile(data, np.linspace(0, 1, nColors + 1))
+    but with a coarser precision, yet sufficient for our use case.
+    This implementation gives a speed-up.
+
+    Parameters
+    ----------
+    data : `np.array`
+        The input image data.
+    nColors : `int`
+        The number of intervals to distribute data into.
+
+    Returns
+    -------
+    boundaries: `list` of `float`
+        A monotonically increasing sequence of size (nColors + 1).
+        These are the edges of nColors intervals.
+    """
+    cdf, minVal, binSize = getCdf(data, nColors)
+    maxVal = minVal + binSize*cdf.size
+    boundaries = np.asarray([np.argmax(cdf >= i)*binSize + minVal for i in range(nColors)] + [maxVal])
+    return boundaries
 
 
 def digitizeData(data, nColors=256):
