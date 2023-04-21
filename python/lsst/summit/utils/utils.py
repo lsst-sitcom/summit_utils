@@ -68,6 +68,8 @@ __all__ = ["SIGMATOFWHM",
            "starTrackerFileToExposure",
            "getAirmassSeeingCorrection",
            "getFilterSeeingCorrection",
+           "getCdf",
+           "digitizeData",
            ]
 
 
@@ -820,3 +822,60 @@ def getFilterSeeingCorrection(filterName):
             return (762./500.)**0.2
         case _:
             raise ValueError(f"Unknown filter name: {filterName}")
+
+
+def getCdf(data, scale, nBins=100_000):
+    """Return an approximate cumulative distribution function scaled to
+    the [0, scale] range.
+
+    Parameters
+    ----------
+    data : `np.array`
+        The input data.
+    scale : `int`
+        The scaling range of the output.
+    nBins : `int`
+        The number of bins to make the histogram in the calculation.
+
+    Returns
+    -------
+    cdf : `np.array` of `int`
+        A monotonically increasing sequence that represents a scaled
+        cumulative distribution function, starting with the value at
+        minVal, then at (minVal + binSize), and so on.
+    minVal : `float`
+        An integer smaller than the minimum value in the input data.
+    binSize : `float`
+        The bin width of the histogram and the output cdf.
+    """
+    flatData = data.ravel()
+
+    minVal = np.floor(np.nanmin(flatData)) - 1.0
+    maxVal = np.ceil(np.nanmax(flatData)) + 1.0
+
+    hist, binEdges = np.histogram(flatData, bins=nBins, range=(minVal, maxVal))
+    binSize = binEdges[1] - binEdges[0]
+
+    cdf = (scale*np.cumsum(hist)/flatData.size).astype(np.int64)
+    return cdf, minVal, binSize
+
+
+def digitizeData(data, nColors=256):
+    """
+    Scale data into nColors using its cumulative distribution function.
+
+    Parameters
+    ----------
+    data : `np.array`
+        The input image data.
+    nColors : `int`
+        The number of intervals to distribute data into.
+
+    Returns
+    -------
+    data: `np.array` of `int`
+        Scaled data in the [0, nColors - 1] range.
+    """
+    cdf, minVal, binSize = getCdf(data, nColors - 1)
+    bins = np.floor((data - minVal)/binSize).astype(np.int64)
+    return cdf[bins]
