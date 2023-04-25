@@ -68,6 +68,9 @@ __all__ = ["SIGMATOFWHM",
            "starTrackerFileToExposure",
            "getAirmassSeeingCorrection",
            "getFilterSeeingCorrection",
+           "getCdf",
+           "getQuantiles",
+           "digitizeData",
            ]
 
 
@@ -820,3 +823,90 @@ def getFilterSeeingCorrection(filterName):
             return (762./500.)**0.2
         case _:
             raise ValueError(f"Unknown filter name: {filterName}")
+
+
+def getCdf(data, scale):
+    """Return an approximate cumulative distribution function scaled to
+    the [0, scale] range.
+
+    Parameters
+    ----------
+    data : `np.array`
+        The input data.
+    scale : `int`
+        The scaling range of the output.
+
+    Returns
+    -------
+    cdf : `np.array` of `int`
+        A monotonically increasing sequence that represents a scaled
+        cumulative distribution function, starting with the value at
+        minVal, then at (minVal + 1), and so on.
+    minVal : `float`
+        An integer smaller than the minimum value in the input data.
+    maxVal : `float`
+        An integer larger than the maximum value in the input data.
+    """
+    flatData = data.ravel()
+    size = flatData.size - np.count_nonzero(np.isnan(flatData))
+
+    minVal = np.floor(np.nanmin(flatData))
+    maxVal = np.ceil(np.nanmax(flatData)) + 1.0
+
+    hist, binEdges = np.histogram(
+        flatData, bins=int(maxVal - minVal), range=(minVal, maxVal)
+    )
+
+    cdf = (scale*np.cumsum(hist)/size).astype(np.int64)
+    return cdf, minVal, maxVal
+
+
+def getQuantiles(data, nColors):
+    """Get a set of boundaries that equally distribute data into
+    nColors intervals. The output can be used to make a colormap
+    of nColors colors.
+
+    This is equivalent to using the numpy function:
+        np.quantile(data, np.linspace(0, 1, nColors + 1))
+    but with a coarser precision, yet sufficient for our use case.
+    This implementation gives a speed-up.
+
+    Parameters
+    ----------
+    data : `np.array`
+        The input image data.
+    nColors : `int`
+        The number of intervals to distribute data into.
+
+    Returns
+    -------
+    boundaries: `list` of `float`
+        A monotonically increasing sequence of size (nColors + 1).
+        These are the edges of nColors intervals.
+    """
+    cdf, minVal, maxVal = getCdf(data, nColors)
+    boundaries = np.asarray(
+        [np.argmax(cdf >= i) + minVal for i in range(nColors)] + [maxVal]
+    )
+    return boundaries
+
+
+def digitizeData(data, nColors=256):
+    """
+    Scale data into nColors using its cumulative distribution function.
+
+    Parameters
+    ----------
+    data : `np.array`
+        The input image data.
+    nColors : `int`
+        The number of intervals to distribute data into.
+
+    Returns
+    -------
+    data: `np.array` of `int`
+        Scaled data in the [0, nColors - 1] range.
+    """
+    cdf, minVal, maxVal = getCdf(data, nColors - 1)
+    bins = np.floor((data - minVal)).astype(np.int64)
+    return cdf[bins]

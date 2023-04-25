@@ -40,6 +40,7 @@ from lsst.summit.utils.utils import (getExpPositionOffset,
                                      getAirmassSeeingCorrection,
                                      getFilterSeeingCorrection,
                                      quickSmooth,
+                                     getQuantiles,
                                      )
 from lsst.obs.lsst.translators.latiss import AUXTEL_LOCATION
 
@@ -185,6 +186,25 @@ class MiscUtilsTestCase(lsst.utils.tests.TestCase):
         data = np.zeros((100, 100), dtype=np.float32)
         data = quickSmooth(data, 5.0)
         self.assertEqual(data.shape, (100, 100))
+
+
+class QuantileTestCase(lsst.utils.tests.TestCase):
+    def setUp(self) -> None:
+        return super().setUp()
+
+    def test_quantiles(self):
+        # We understand that our algorithm gives very large rounding error
+        # compared to the generic numpy method. But still test it.
+        np.random.seed(1234)
+        # too big of a width violates the tolerance in the test to cap at 10k
+        dataRanges = [(50, 1, -1), (100_000, 5_000, -1), (5_000_000, 10_000, -2)]
+        colorRanges = [2, 256, 999]  # [very few, nominal, lots and an odd number]
+        for nColors, (mean, width, decimal) in itertools.product(colorRanges, dataRanges):
+            data = np.random.normal(mean, width, (100, 100))
+            data[10, 10] = np.nan  # check we're still nan-safe
+            edges1 = getQuantiles(data, nColors)
+            edges2 = np.nanquantile(data, np.linspace(0, 1, nColors + 1))  # must check with nanquantile
+            np.testing.assert_almost_equal(edges1, edges2, decimal=decimal)
 
 
 class TestMemory(lsst.utils.tests.MemoryTestCase):
