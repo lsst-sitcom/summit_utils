@@ -19,9 +19,11 @@
 # You should have received a copy of the GNU General Public License
 # along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
+import os
 from lsst.ip.isr import IsrTask
 from lsst.ip.isr.isrTask import IsrTaskConnections
 import lsst.pipe.base.connectionTypes as cT
+from lsst.utils import getPackageDir
 
 import lsst.pex.config as pexConfig
 import lsst.pipe.base as pipeBase
@@ -51,7 +53,7 @@ class QuickLookIsrTaskConnections(IsrTaskConnections):
     """
     def __init__(self, *, config=None):
         # programatically clone all of the connections from isrTask
-        # settin minimum values to zero for everything except the ccdExposure
+        # setting minimum values to zero for everything except the ccdExposure
         super().__init__(config=IsrTask.ConfigClass())  # need a dummy config, isn't used other than for ctor
         for name, connection in self.allConnections.items():
             if hasattr(connection, 'minimum'):
@@ -191,7 +193,13 @@ class QuickLookIsrTask(pipeBase.PipelineTask):
             - ``exposure`` : `afw.image.Exposure`
                 The ISRed and cosmic-ray-repaired exposure.
         """
-        isrConfig = isrBaseConfig if isrBaseConfig else IsrTask.ConfigClass()
+        if not isrBaseConfig:
+            isrConfig = IsrTask.ConfigClass()
+            packageDir = getPackageDir("summit_utils")
+            isrConfig.load(os.path.join(packageDir, "config", "quickLookIsr.py"))
+        else:
+            isrConfig = isrBaseConfig
+
         isrConfig.doBias = False
         isrConfig.doDark = False
         isrConfig.doFlat = False

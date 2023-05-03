@@ -19,7 +19,9 @@
 # You should have received a copy of the GNU General Public License
 # along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
+import os
 import logging
+from lsst.utils import getPackageDir
 from lsst.ip.isr import IsrTask
 import lsst.daf.butler as dafButler
 from lsst.daf.butler.registry import ConflictingDefinitionError
@@ -88,7 +90,7 @@ class BestEffortIsr():
             self.butler = dafButler.Butler(repoString, collections=self.collections,
                                            instrument='LATISS',
                                            run=CURRENT_RUN if doWrite else None)
-        except(FileNotFoundError, RuntimeError):
+        except (FileNotFoundError, RuntimeError):
             # Depending on the value of DAF_BUTLER_REPOSITORY_INDEX and whether
             # it is present and blank, or just not set, both these exception
             # types can be raised, see
@@ -104,6 +106,7 @@ class BestEffortIsr():
         self.defaultExtraIsrOptions = defaultExtraIsrOptions
 
         self._cache = {}
+        self._cacheIsForDetector = None
 
     def _applyConfigOverrides(self, config, overrides):
         """Update a config class with a dict of options.
@@ -198,6 +201,9 @@ class BestEffortIsr():
             The postIsr exposure
         """
         dataId = self.updateDataId(expIdOrDataId, **kwargs)
+        if 'detector' not in dataId:
+            raise ValueError('dataId must contain a detector. Either specify a detector as a kwarg,'
+                             ' or use a fully-qualified dataId')
 
         if not forceRemake:
             try:
@@ -214,11 +220,8 @@ class BestEffortIsr():
 
         # default options that are probably good for most engineering time
         isrConfig = IsrTask.ConfigClass()
-        isrConfig.doWrite = False  # this task writes separately, no need for this
-        isrConfig.doSaturation = True  # saturation very important for roundness measurement in qfm
-        isrConfig.doSaturationInterpolation = True
-        isrConfig.overscan.fitType = 'MEDIAN_PER_ROW'
-        isrConfig.overscan.doParallelOverscan = True
+        packageDir = getPackageDir("summit_utils")
+        isrConfig.load(os.path.join(packageDir, "config", "quickLookIsr.py"))
 
         # apply general overrides
         self._applyConfigOverrides(isrConfig, self.defaultExtraIsrOptions)
@@ -227,6 +230,10 @@ class BestEffortIsr():
 
         isrParts = ['camera', 'bias', 'dark', 'flat', 'defects', 'linearizer', 'crosstalk', 'bfKernel',
                     'bfGains', 'ptc']
+
+        if self._cacheIsForDetector != dataId['detector']:
+            self.clearCache()
+            self._cacheIsForDetector = dataId['detector']
 
         isrDict = {}
         # we build a cache of all the isr components which will be used to save
