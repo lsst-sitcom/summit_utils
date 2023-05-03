@@ -309,13 +309,15 @@ def sortRecordsByDayObsThenSeqNum(records):
     return records
 
 
-def getDaysWithData(butler):
+def getDaysWithData(butler, datasetType='raw'):
     """Get all the days for which LATISS has taken data on the mountain.
 
     Parameters
     ----------
     butler : `lsst.daf.butler.Butler
         The butler to query.
+    datasetType : `str`
+        The datasetType to query.
 
     Returns
     -------
@@ -330,7 +332,7 @@ def getDaysWithData(butler):
     # seqNums from 950 on one day, we can no longer assume this so don't be
     # tempted to add such a constraint back in here for speed.
     where = "exposure.day_obs>20200101"
-    records = butler.registry.queryDimensionRecords("exposure", where=where, datasets='raw')
+    records = butler.registry.queryDimensionRecords("exposure", where=where, datasets=datasetType)
     return sorted(set([r.day_obs for r in records]))
 
 
