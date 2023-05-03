@@ -106,6 +106,7 @@ class BestEffortIsr():
         self.defaultExtraIsrOptions = defaultExtraIsrOptions
 
         self._cache = {}
+        self._cacheIsForDetector = None
 
     def _applyConfigOverrides(self, config, overrides):
         """Update a config class with a dict of options.
@@ -229,6 +230,10 @@ class BestEffortIsr():
 
         isrParts = ['camera', 'bias', 'dark', 'flat', 'defects', 'linearizer', 'crosstalk', 'bfKernel',
                     'bfGains', 'ptc']
+
+        if self._cacheIsForDetector != dataId['detector']:
+            self.clearCache()
+            self._cacheIsForDetector = dataId['detector']
 
         isrDict = {}
         # we build a cache of all the isr components which will be used to save
