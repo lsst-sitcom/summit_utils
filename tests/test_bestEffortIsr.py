@@ -70,6 +70,14 @@ class BestEffortIsrTestCase(lsst.utils.tests.TestCase):
         exp = self.bestEffortIsr.getExposure(expRecord.dataId, detector=0, forceRemake=True)
         self.assertIsInstance(exp, afwImage.Exposure)
 
+    def test_raises(self):
+        """Ensure function cannot be called without specifying a detector.
+        """
+        dataId = self.dataId
+        dataId.pop('detector')
+        with self.assertRaises(ValueError):
+            self.bestEffortIsr.getExposure(dataId)
+
 
 class TestMemory(lsst.utils.tests.MemoryTestCase):
     pass

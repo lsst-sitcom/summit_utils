@@ -200,6 +200,9 @@ class BestEffortIsr():
             The postIsr exposure
         """
         dataId = self.updateDataId(expIdOrDataId, **kwargs)
+        if 'detector' not in dataId:
+            raise ValueError('dataId must contain a detector. Either specify a detector as a kwarg,'
+                             ' or use a fully-qualified dataId')
 
         if not forceRemake:
             try:
