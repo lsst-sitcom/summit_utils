@@ -90,7 +90,7 @@ class BestEffortIsr():
             self.butler = dafButler.Butler(repoString, collections=self.collections,
                                            instrument='LATISS',
                                            run=CURRENT_RUN if doWrite else None)
-        except(FileNotFoundError, RuntimeError):
+        except (FileNotFoundError, RuntimeError):
             # Depending on the value of DAF_BUTLER_REPOSITORY_INDEX and whether
             # it is present and blank, or just not set, both these exception
             # types can be raised, see
