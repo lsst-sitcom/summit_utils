@@ -34,6 +34,7 @@ import lsst.afw.geom as afwGeom
 import lsst.geom as geom
 import lsst.utils.tests
 import numpy as np
+import datetime
 from astro_metadata_translator import makeObservationInfo
 from lsst.obs.base import createInitialSkyWcsFromBoresight
 from lsst.obs.base.makeRawVisitInfoViaObsInfo import MakeRawVisitInfoViaObsInfo
@@ -46,6 +47,9 @@ from lsst.summit.utils.utils import (getExpPositionOffset,
                                      quickSmooth,
                                      getQuantiles,
                                      fluxesFromFootprints,
+                                     getCurrentDayObs_datetime,
+                                     getCurrentDayObs_int,
+                                     getCurrentDayObs_humanStr,
                                      )
 
 from lsst.obs.lsst.translators.latiss import AUXTEL_LOCATION
@@ -192,6 +196,33 @@ class MiscUtilsTestCase(lsst.utils.tests.TestCase):
         data = np.zeros((100, 100), dtype=np.float32)
         data = quickSmooth(data, 5.0)
         self.assertEqual(data.shape, (100, 100))
+
+    def test_getCurrentDayObs_datetime(self):
+        """Just a type check and a basic sanity check on the range.
+
+        Setting days=3 as the tolerance just because of timezones and who knows
+        what really.
+        """
+        dt = getCurrentDayObs_datetime()
+        self.assertIsInstance(dt, datetime.date)
+        self.assertLess(dt, datetime.date.today() + datetime.timedelta(days=3))
+        self.assertGreater(dt, datetime.date.today() - datetime.timedelta(days=3))
+
+    def test_getCurrentDayObs_int(self):
+        """Just a type check and a basic sanity check on the range.
+        """
+        dayObs = getCurrentDayObs_int()
+        self.assertIsInstance(dayObs, int)
+        self.assertLess(dayObs, 21000101)
+        self.assertGreater(dayObs, 19700101)
+
+    def test_getCurrentDayObs_humanStr(self):
+        """Just a basic formatting check.
+        """
+        dateStr = getCurrentDayObs_humanStr()
+        self.assertIsInstance(dateStr, str)
+        self.assertEqual(len(dateStr), 10)
+        self.assertRegex(dateStr, r'\d{4}-\d{2}-\d{2}')
 
 
 class QuantileTestCase(lsst.utils.tests.TestCase):
