@@ -50,8 +50,8 @@ class BestEffortIsr():
 
     Parameters
     ----------
-    repoDir : `str`
-        The repo root. Will be removed after DM-33849.
+    repoString : `str`, optional
+        The Butler repo root.
     extraCollections : `list` of `str`, optional
         Extra collections to add to the butler init. Collections are prepended.
     defaultExtraIsrOptions : `dict`, optional
@@ -75,14 +75,17 @@ class BestEffortIsr():
                  defaultExtraIsrOptions={},
                  doRepairCosmics=True,
                  doWrite=True,
-                 embargo=False):
+                 embargo=False,
+                 repoString=None):
         self.log = logging.getLogger(__name__)
 
         collections = getLatissDefaultCollections()
         self.collections = extraCollections + collections
         self.log.info(f'Instantiating butler with collections={self.collections}')
-        try:
+
+        if repoString is None:
             repoString = "LATISS" if not embargo else "/repo/embargo"
+        try:
             self.butler = dafButler.Butler(repoString, collections=self.collections,
                                            instrument='LATISS',
                                            run=CURRENT_RUN if doWrite else None)
