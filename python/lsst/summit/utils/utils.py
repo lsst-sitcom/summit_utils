@@ -321,8 +321,8 @@ def fluxesFromFootprints(footprints, parentImage, subtractImageMedian=False):
                  `lsst.afw.detection.Footprint` or
                  `iterable` of `lsst.afw.detection.Footprint`
         The footprints to measure.
-    parentImage : `lsst.afw.image.Exposure`
-        The parent exposure.
+    parentImage : `lsst.afw.image.Image`
+        The parent image.
     subtractImageMedian : `bool`, optional
         Subtract a whole-image median from each pixel in the footprint when
         summing as a very crude background subtraction. Does not change the
@@ -339,7 +339,7 @@ def fluxesFromFootprints(footprints, parentImage, subtractImageMedian=False):
     """
     median = 0
     if subtractImageMedian:
-        median = np.nanmedian(parentImage.image.array)
+        median = np.nanmedian(parentImage.array)
 
     # poor person's single dispatch
     badTypeMsg = ("This function works with FootprintSets, single Footprints, and iterables of Footprints. "
@@ -354,7 +354,7 @@ def fluxesFromFootprints(footprints, parentImage, subtractImageMedian=False):
     else:
         raise TypeError(badTypeMsg)
 
-    return [fluxFromFootprint(fp, parentImage, backgroundValue=median) for fp in footprints]
+    return np.array([fluxFromFootprint(fp, parentImage, backgroundValue=median) for fp in footprints])
 
 
 def fluxFromFootprint(footprint, parentImage, backgroundValue=0):
@@ -366,8 +366,8 @@ def fluxFromFootprint(footprint, parentImage, backgroundValue=0):
     ----------
     footprint : `lsst.afw.detection.Footprint`
         The footprint to measure.
-    parentImage : `lsst.afw.image.Exposure`
-        The parent exposure.
+    parentImage : `lsst.afw.image.Image`
+        Image containing the footprint.
     backgroundValue : `bool`, optional
         The value to subtract from each pixel in the footprint when summing
         as a very crude background subtraction. Does not change the original
@@ -379,8 +379,9 @@ def fluxFromFootprint(footprint, parentImage, backgroundValue=0):
         The flux in the footprint
     """
     if backgroundValue:  # only do the subtraction if non-zero for speed
-        return footprint.getSpans().flatten(parentImage.image.array - backgroundValue).sum()
-    return footprint.getSpans().flatten(parentImage.image.array).sum()
+        xy0 = parentImage.getBBox().getMin()
+        return footprint.computeFluxFromArray(parentImage.array - backgroundValue, xy0)
+    return footprint.computeFluxFromImage(parentImage)
 
 
 def humanNameForCelestialObject(objName):
