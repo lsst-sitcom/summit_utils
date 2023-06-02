@@ -161,11 +161,7 @@ def datasetExists(butler, dataProduct, dataId, **kwargs):
         True if the dataProduct exists for the dataProduct and can be retreived
         else False.
     """
-    try:
-        exists = butler.datasetExists(dataProduct, dataId, **kwargs)
-        return exists
-    except (LookupError, RuntimeError):
-        return False
+    return butler.exists(dataProduct, dataId, **kwargs)
 
 
 def updateDataId(dataId, **kwargs):
