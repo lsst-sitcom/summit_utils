@@ -27,7 +27,7 @@ import lsst.daf.butler as dafButler
 from lsst.daf.butler.registry import ConflictingDefinitionError
 
 from lsst.summit.utils.quickLook import QuickLookIsrTask
-from lsst.summit.utils.butlerUtils import getLatissDefaultCollections, datasetExists
+from lsst.summit.utils.butlerUtils import getLatissDefaultCollections
 
 # TODO: add attempt for fringe once registry & templates are fixed
 
@@ -246,7 +246,7 @@ class BestEffortIsr():
                 self.log.info(f"Using {component} from cache...")
                 isrDict[component] = self._cache[component]
                 continue
-            if datasetExists(self.butler, component, dataId):
+            if self.butler.exists(component, dataId):
                 try:
                     # TODO: add caching for flats
                     item = self.butler.get(component, dataId=dataId)

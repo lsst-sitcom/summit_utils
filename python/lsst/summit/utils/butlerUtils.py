@@ -22,6 +22,7 @@
 import lsst.daf.butler as dafButler
 import itertools
 import copy
+from deprecated.sphinx import deprecated
 
 from lsst.summit.utils.utils import getSite
 
@@ -142,7 +143,11 @@ def makeDefaultLatissButler(*, extraCollections=None, writeable=False, embargo=F
     return butler
 
 
-# TODO: DM-32940 can remove this whole function once this ticket merges.
+@deprecated(
+    reason="datasExists has been replaced by Butler.exists(). Will be removed after v26.0.",
+    version="v26.0",
+    category=FutureWarning,
+)
 def datasetExists(butler, dataProduct, dataId, **kwargs):
     """Collapse the tri-state behaviour of butler.datasetExists to a boolean.
 
@@ -161,11 +166,7 @@ def datasetExists(butler, dataProduct, dataId, **kwargs):
         True if the dataProduct exists for the dataProduct and can be retreived
         else False.
     """
-    try:
-        exists = butler.datasetExists(dataProduct, dataId, **kwargs)
-        return exists
-    except (LookupError, RuntimeError):
-        return False
+    return butler.exists(dataProduct, dataId, **kwargs)
 
 
 def updateDataId(dataId, **kwargs):
