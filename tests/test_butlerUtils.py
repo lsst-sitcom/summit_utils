@@ -412,7 +412,7 @@ class ButlerInitTestCase(lsst.utils.tests.TestCase):
         # If DAF_BUTLER_REPOSITORY_INDEX is present but is just an empty
         # string then using a label raises a RuntimeError
         with unittest.mock.patch.dict(os.environ, {"DAF_BUTLER_REPOSITORY_INDEX": ''}):
-            with self.assertRaises(RuntimeError):
+            with self.assertRaises(FileNotFoundError):
                 dafButler.Butler('LATISS')
 
         # If DAF_BUTLER_REPOSITORY_INDEX _is_ set, we can't rely on any given
