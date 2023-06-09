@@ -47,6 +47,7 @@ __all__ = ["makeDefaultLatissButler",
            "getDayObsSeqNumFromExposureId",
            "removeDataProduct",
            "getLatissOnSkyDataIds",
+           "getExpRecord",
            ]
 
 _LATISS_DEFAULT_COLLECTIONS = ['LATISS/raw/all', 'LATISS/calib', "LATISS/runs/quickLook"]
@@ -765,3 +766,43 @@ def getLatissOnSkyDataIds(butler, skipTypes=('bias', 'dark', 'flat'), checkObjec
         return filledIds
     else:
         return [updateDataIdOrDataCord(dataId, detector=0) for dataId in dataIds]
+
+
+def getExpRecord(butler, instrument, expId=None, dayObs=None, seqNum=None):
+    """Get the exposure record for a given exposure ID or dayObs+seqNum.
+
+    Parameters
+    ----------
+    butler : `lsst.daf.butler.Butler`
+        The butler.
+    expId : `int`
+        The exposure ID.
+    instrument : `str`
+        The instrument name, e.g. 'LSSTCam'.
+
+    Returns
+    -------
+    expRecord : `lsst.daf.butler.DimensionRecord`
+        The exposure record.
+    """
+    if expId is None and (dayObs is None or seqNum is None):
+        raise ValueError('Must supply either expId or (dayObs AND seqNum)')
+
+    where = "instrument=inst"  # Note you can't use =instrument as bind-strings can't clash with dimensions
+    bind = {'inst': instrument}
+    if expId:
+        where += ' AND exposure.id=expId'
+        bind.update({'expId': expId})
+    if dayObs and seqNum:
+        where += ' AND exposure.day_obs=dayObs AND exposure.seq_num=seqNum'
+        bind.update({'dayObs': dayObs, 'seqNum': seqNum})
+
+    expRecords = butler.registry.queryDimensionRecords("exposure",
+                                                       where=where,
+                                                       bind=bind,
+                                                       datasets='raw')
+    expRecords = list(set(expRecords))  # must call set as this may contain many duplicates
+    if len(expRecords) != 1:
+        raise RuntimeError(f'Failed to find unique exposure record for {instrument=} with'
+                           f' {expId=}, {dayObs=}, {seqNum=}, got {len(expRecords)} records')
+    return expRecords[0]
