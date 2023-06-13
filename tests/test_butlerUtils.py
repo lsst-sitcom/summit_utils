@@ -29,7 +29,7 @@ import copy
 import lsst.utils.tests
 from lsst.summit.utils.butlerUtils import (makeDefaultLatissButler,
                                            updateDataId,
-                                           sanitize_day_obs,
+                                           sanitizeDayObs,
                                            getMostRecentDayObs,
                                            getSeqNumsForDayObs,
                                            getMostRecentDataId,
@@ -135,15 +135,15 @@ class ButlerUtilsTestCase(lsst.utils.tests.TestCase):
             print(f"RECENT_DAY is now {timeSinceUpdate.days} days in the past. "
                   "You might want to consider updating this to speed up butler queries.")
 
-    def test_sanitize_day_obs(self):
+    def test_sanitizeDayObs(self):
         dayObs = '2020-01-02'
-        self.assertEqual(sanitize_day_obs(dayObs), 20200102)
+        self.assertEqual(sanitizeDayObs(dayObs), 20200102)
         dayObs = 20210201
-        self.assertEqual(sanitize_day_obs(dayObs), dayObs)
+        self.assertEqual(sanitizeDayObs(dayObs), dayObs)
 
         with self.assertRaises(ValueError):
-            sanitize_day_obs(1.234)
-            sanitize_day_obs('Febuary 29th, 1970')
+            sanitizeDayObs(1.234)
+            sanitizeDayObs('Febuary 29th, 1970')
 
     def test_getMostRecentDayObs(self):
         # just a basic sanity check here as we can't know the value,
