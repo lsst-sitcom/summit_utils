@@ -179,7 +179,11 @@ class ReferenceList:
 class TMA:
     _UNINITIALIZED_VALUE: int = -999
 
-    def __init__(self):
+    def __init__(self, debug=False):
+        self.log = logging.getLogger('lsst.summit.utils.tmaUtils.TMA')
+        if debug:
+            self.log.level = logging.DEBUG
+        self._mostRecentRowTime = 0
         self._parts = {'azimuthInPosition': self._UNINITIALIZED_VALUE,
                        'azimuthMotionState': self._UNINITIALIZED_VALUE,
                        'azimuthSystemState': self._UNINITIALIZED_VALUE,
@@ -240,9 +244,17 @@ class TMA:
         )
 
     def apply(self, row):
+        timestamp = row['private_sndStamp']
+        if timestamp < self._mostRecentRowTime:
+            raise ValueError('TMA evolution must be monotonic increasing in time, tried to apply a row which'
+                             ' predates the most previous one')
+        self._mostRecentRowTime = timestamp
+
         rowFor = row['rowFor']  # e.g. elevationMotionState
         axis, rowType = getAxisAndType(rowFor)  # e.g. elevation, MotionState
-        self._parts[rowFor] = self._getRowPayload(row, rowType, rowFor)
+        value = self._getRowPayload(row, rowType, rowFor)
+        self.log.debug(f"Setting {rowFor} to {repr(value)}")
+        self._parts[rowFor] = value
 
     def _getRowPayload(self, row, rowType, rowFor):
         match rowType:

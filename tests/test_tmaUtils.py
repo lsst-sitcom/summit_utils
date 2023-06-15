@@ -25,6 +25,7 @@ import unittest
 import lsst.utils.tests
 
 import pandas as pd
+import numpy as np
 import asyncio
 
 from lsst.summit.utils.efdUtils import makeEfdClient
@@ -96,9 +97,11 @@ class TmatilsTestCase(lsst.utils.tests.TestCase):
         self.assertFalse(tma._isValid)
         self.assertFalse(tma.isMoving)
         self.assertFalse(tma.canMove)
+        self.assertEqual(tma.state, TMAState.UNINITIALIZED)
 
         _makeValid(tma)  # we're valid, but still aren't moving and can't
         self.assertTrue(tma._isValid)
+        self.assertNotEqual(tma.state, TMAState.UNINITIALIZED)
         self.assertFalse(tma.isMoving)
         self.assertFalse(tma.canMove)
 
@@ -144,6 +147,27 @@ class TMAEventMakerTestCase(lsst.utils.tests.TestCase):
                    'elevationMotionState',
                    'elevationSystemState'}
         self.assertSetEqual(rowsFor, correct)
+
+    def test_monotonicTimeInDataframe(self):
+        # ensure that each row is later than the previous
+        times = self.sampleData['private_sndStamp']
+        self.assertTrue(np.all(np.diff(times) > 0))
+
+    def test_monotonicTimeApplicationOfRows(self):
+        # ensure you can apply rows in the correct order
+        tma = TMA()
+        row1 = self.sampleData.iloc[0]
+        row2 = self.sampleData.iloc[1]
+
+        # just running this check it is OK
+        tma.apply(row1)
+        tma.apply(row2)
+
+        # and that if you apply them in reverse order then things will raise
+        tma = TMA()
+        with self.assertRaises(ValueError):
+            tma.apply(row2)
+            tma.apply(row1)
 
 
 class TestMemory(lsst.utils.tests.MemoryTestCase):
