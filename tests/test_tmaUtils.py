@@ -40,6 +40,7 @@ from lsst.summit.utils.tmaUtils import (TMA,
                                         TMAState,
                                         AxisMotionState,
                                         PowerState,
+                                        getAxisAndType,
                                         )
 
 
@@ -92,6 +93,17 @@ class TmatilsTestCase(lsst.utils.tests.TestCase):
         self.assertEqual(tma._parts['azimuthMotionState'], AxisMotionState.TRACKING)
         self.assertEqual(tma._parts['elevationMotionState'], AxisMotionState.TRACKING)
 
+    def test_getAxisAndType(self):
+        # check both the long and short form names work
+        for s in ['azimuthMotionState', 'lsst.sal.MTMount.logevent_azimuthMotionState']:
+            self.assertEqual(getAxisAndType(s), ('azimuth', 'MotionState'))
+
+        # check in position, and use elevation instead of azimuth to test that
+        for s in ['elevationInPosition', 'lsst.sal.MTMount.logevent_elevationInPosition']:
+            self.assertEqual(getAxisAndType(s), ('elevation', 'InPosition'))
+
+        for s in ['azimuthSystemState', 'lsst.sal.MTMount.logevent_azimuthSystemState']:
+            self.assertEqual(getAxisAndType(s), ('azimuth', 'SystemState'))
 
 def makeValid(tma):
     """Helper function to turn a TMA into a valid state.

@@ -126,7 +126,7 @@ def getAxisAndType(rowFor):
     axis = matches.group(1)
     rowType = matches.group(2)
 
-    assert f"{axis}{rowType}" == rowFor
+    assert rowFor.endswith(f"{axis}{rowType}")
     return axis, rowType
 
 
