@@ -24,9 +24,6 @@
 import unittest
 import lsst.utils.tests
 
-# from astropy.time import Time
-
-# XXX protect this import and set a SKIPIF variable to use in decorator
 import pandas as pd
 import asyncio
 

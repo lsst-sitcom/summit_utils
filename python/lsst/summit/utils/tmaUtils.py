@@ -83,7 +83,7 @@ class AxisMotionState(enum.IntEnum):
     """Motion state of azimuth elevation and camera cable wrap.
 
     Note: this is copied over from
-    https://github.com/lsst-ts/ts_idl/blob/develop/python/lsst/ts/idl/enums/MTMount.py  # noqa: E501
+    https://github.com/lsst-ts/ts_idl/blob/develop/python/lsst/ts/idl/enums/MTMount.py  # noqa: E505
     to save having to depend on T&S code directly. These enums are extremely
     static, so this is a reasonable thing to do, and much easier than setting
     up a dependency on ts_idl.
@@ -106,7 +106,7 @@ class PowerState(enum.IntEnum):
     use TURNING_ON and TURNING_OFF. The oil supply system is one.
 
     Note: this is copied over from
-    https://github.com/lsst-ts/ts_idl/blob/develop/python/lsst/ts/idl/enums/MTMount.py  # noqa: E501
+    https://github.com/lsst-ts/ts_idl/blob/develop/python/lsst/ts/idl/enums/MTMount.py  # noqa: E505
     to save having to depend on T&S code directly. These enums are extremely
     static, so this is a reasonable thing to do, and much easier than setting
     up a dependency on ts_idl.
@@ -221,7 +221,8 @@ class TMA:
             return TMAState.UNINITIALIZED
 
         # now we know we're initialized, check axes for motion and in position
-        # if all axes are tracking and all are in position, we're tracking the sky
+        # if all axes are tracking and all are in position, we're tracking the
+        # sky
         if (all([x == AxisMotionState.TRACKING for x in self.motion]) and
             all([x == True for x in self.inPosition])):
             return TMAState.TRACKING
@@ -252,8 +253,8 @@ class TMAEventMaker:
     ]
     # relevant column: 'inPosition'
     _inPositionComponents = [
-        'lsst.sal.MTMount.logevent_azimuthInPosition',  # ['inPosition', 'private_kafkaStamp'],  start, end
-        'lsst.sal.MTMount.logevent_elevationInPosition',  # ['inPosition', 'private_kafkaStamp'],  start, end
+        'lsst.sal.MTMount.logevent_azimuthInPosition',
+        'lsst.sal.MTMount.logevent_elevationInPosition',
     ]
     # the components which, if in fault, put the TMA into fault
     # relevant column: 'powerState'
@@ -327,15 +328,18 @@ class TMAEventMaker:
         # AxisMotionState:
         #     Stopping=0  # can be collapsed with stopping
         #     Stopped=1
-        #     MovingPointToPoint=2  # unusual, used for balancing or parking etc, or hoisting etc
+
+        # unusual, used for balancing or parking etc, or hoisting etc
+        #     MovingPointToPoint=2
         #     Jogging=3  # INGORE - we never do that
         #     Tracking=4  # most of the time but IT INCLUDES SLEWING
         #     TrackingPaused=5  # INGORE - Russell says "it's bizarre"
-        # Jogging - can do on the hand paddle and the EUI (engineering user interface) but the CSC doesn't support that
+        # Jogging - can do on the hand paddle and the EUI (engineering user
+        # interface) but the CSC doesn't support that
 
         # InPosition is False a lot of the time,
 
-        # if axis Motions is tracking then inPosition=True means you are tracking
+        # if AxisMotion is tracking then inPosition=True means you are tracking
         # and False means you're slewing
         # and it can go back and forth between the two!
 

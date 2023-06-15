@@ -49,7 +49,6 @@ class EfdUtilsTestCase(lsst.utils.tests.TestCase):
             cls.client = makeEfdClient()
         except RuntimeError:
             raise unittest.SkipTest("Could not instantiate an EFD client")
-        # cls.assertIsInstance(cls.client, lsst_efd_client.efd_helper.EfdClient)
         cls.dayObs = 20230601
         # get a sample expRecord here to test expRecordToTimespan
         cls.axisTopic = 'lsst.sal.MTMount.logevent_azimuthMotionState'
