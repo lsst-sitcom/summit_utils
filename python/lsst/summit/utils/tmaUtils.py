@@ -61,6 +61,7 @@ def _makeValid(tma):
     tma._parts['elevationMotionState'] = AxisMotionState.STOPPED
     tma._parts['elevationSystemState'] = PowerState.OFF
 
+
 def _turnOn(tma):
     """Helper function to turn TMA axes on for testing.
 
@@ -193,6 +194,13 @@ class TMA:
         self.motion = ReferenceList(self._parts, motionKeys)
         self.inPosition = ReferenceList(self._parts, positionKeys)
 
+        # tuples of states for state collapsing
+        self.STOP_LIKE = (AxisMotionState.STOPPING, AxisMotionState.STOPPED)
+        self.MOVING_LIKE = (AxisMotionState.MOVING_POINT_TO_POINT, AxisMotionState.JOGGING, AxisMotionState.TRACKING)
+        self.OFF_LIKE = (PowerState.OFF, PowerState.TURNING_OFF)
+        self.ON_LIKE = (PowerState.ON, PowerState.TURNING_ON)
+        self.FAULT_LIKE = (PowerState.FAULT)
+
     @property
     def _isValid(self):
         # TODO: probably need to init the inPositions to False? and then just
@@ -259,6 +267,15 @@ class TMA:
         # next, check we're valid, and if not, return UNINITIALIZED state
         if not self._isValid:
             return TMAState.UNINITIALIZED
+
+        # if any axis is off, the TMA is OFF
+        if (any([x in (PowerState.OFF, PowerState.TURNING_OFF) for x in self.system])):
+            return TMAState.OFF
+
+        # we know we're valid and all axes are not off, so see if we're in motion
+        # if all axes are stopped, we're stopped
+        if (all([x in self.STOP_LIKE for x in self.motion])):
+            return TMAState.STOPPED
 
         # now we know we're initialized, check axes for motion and in position
         # if all axes are tracking and all are in position, we're tracking the

@@ -104,8 +104,9 @@ class TmatilsTestCase(lsst.utils.tests.TestCase):
 
         _turnOn(tma)  # can now move, still valid, but not in motion
         self.assertTrue(tma._isValid)
-        self.assertTrue(tma.isMoving)
-        self.assertFalse(tma.canMove)
+        self.assertTrue(tma.canMove)
+        self.assertFalse(tma.isMoving)
+
 
 class TMAEventMakerTestCase(lsst.utils.tests.TestCase):
     @classmethod
