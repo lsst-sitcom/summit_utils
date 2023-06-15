@@ -183,7 +183,9 @@ class TMA:
         self.log = logging.getLogger('lsst.summit.utils.tmaUtils.TMA')
         if debug:
             self.log.level = logging.DEBUG
-        self._mostRecentRowTime = 0
+        self._mostRecentRowTime = -1
+
+        # the actual components of the TMA
         self._parts = {'azimuthInPosition': self._UNINITIALIZED_VALUE,
                        'azimuthMotionState': self._UNINITIALIZED_VALUE,
                        'azimuthSystemState': self._UNINITIALIZED_VALUE,
@@ -194,6 +196,8 @@ class TMA:
         systemKeys = ['azimuthSystemState', 'elevationSystemState']
         positionKeys = ['azimuthInPosition', 'elevationInPosition']
         motionKeys = ['azimuthMotionState', 'elevationMotionState']
+
+        # references to the _parts as conceptual groupings
         self.system = ReferenceList(self._parts, systemKeys)
         self.motion = ReferenceList(self._parts, motionKeys)
         self.inPosition = ReferenceList(self._parts, positionKeys)
@@ -204,6 +208,43 @@ class TMA:
         self.OFF_LIKE = (PowerState.OFF, PowerState.TURNING_OFF)
         self.ON_LIKE = (PowerState.ON, PowerState.TURNING_ON)
         self.FAULT_LIKE = (PowerState.FAULT,)  # note the trailing comma - this must be an iterable
+
+    def apply(self, row):
+        """Apply a row of data to the TMA state.
+
+        Checks that the row contains data for a later time, and applies the
+        relevant column entry to the relevant component.
+        """
+        timestamp = row['private_sndStamp']
+        if timestamp < self._mostRecentRowTime:
+            raise ValueError('TMA evolution must be monotonic increasing in time, tried to apply a row which'
+                             ' predates the most previous one')
+        self._mostRecentRowTime = timestamp
+
+        rowFor = row['rowFor']  # e.g. elevationMotionState
+        axis, rowType = getAxisAndType(rowFor)  # e.g. elevation, MotionState
+        value = self._getRowPayload(row, rowType, rowFor)
+        self.log.debug(f"Setting {rowFor} to {repr(value)}")
+        self._parts[rowFor] = value
+
+    def _getRowPayload(self, row, rowType, rowFor):
+        """Get the correct column value from the row.
+
+        Given the row, and which component it relates to, get the
+        relevant value, as its enum or a bool, depending on the component.
+        """
+        match rowType:
+            case 'MotionState':
+                value = row[f'state_{rowFor}']
+                return AxisMotionState(value)
+            case 'SystemState':
+                value = row[f'powerState_{rowFor}']
+                return PowerState(value)
+            case 'InPosition':
+                value = row[f'inPosition_{rowFor}']
+                return bool(value)
+            case _:
+                raise ValueError(f'Failed to get row payload with {rowType=} and {row=}')
 
     @property
     def _isValid(self):
@@ -242,33 +283,6 @@ class TMA:
             self._parts['azimuthSystemState'] not in badStates and
             self._parts['elevationSystemState'] not in badStates
         )
-
-    def apply(self, row):
-        timestamp = row['private_sndStamp']
-        if timestamp < self._mostRecentRowTime:
-            raise ValueError('TMA evolution must be monotonic increasing in time, tried to apply a row which'
-                             ' predates the most previous one')
-        self._mostRecentRowTime = timestamp
-
-        rowFor = row['rowFor']  # e.g. elevationMotionState
-        axis, rowType = getAxisAndType(rowFor)  # e.g. elevation, MotionState
-        value = self._getRowPayload(row, rowType, rowFor)
-        self.log.debug(f"Setting {rowFor} to {repr(value)}")
-        self._parts[rowFor] = value
-
-    def _getRowPayload(self, row, rowType, rowFor):
-        match rowType:
-            case 'MotionState':
-                value = row[f'state_{rowFor}']
-                return AxisMotionState(value)
-            case 'SystemState':
-                value = row[f'powerState_{rowFor}']
-                return PowerState(value)
-            case 'InPosition':
-                value = row[f'inPosition_{rowFor}']
-                return bool(value)
-            case _:
-                raise ValueError(f'Failed to get row payload with {rowType=} and {row=}')
 
     @property
     def axesInFault(self):
