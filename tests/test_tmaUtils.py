@@ -38,6 +38,8 @@ from lsst.summit.utils.tmaUtils import (TMA,
                                         TMAEvent,
                                         TMAEventMaker,
                                         TMAState,
+                                        AxisMotionState,
+                                        PowerState,
                                         )
 
 
@@ -76,6 +78,27 @@ class TmatilsTestCase(lsst.utils.tests.TestCase):
         tma._parts['elevationMotionState'] = 1
         tma._parts['elevationSystemState'] = 1
         self.assertTrue(tma._isValid)
+
+    def test_tmaReferences(self):
+        """Check the linkage between the component lists and the _parts dict.
+        """
+        tma = TMA()
+
+        # setting one axis should not make things valid
+        self.assertEqual(tma._parts['azimuthMotionState'], tma._UNINITIALIZED_VALUE)
+        self.assertEqual(tma._parts['elevationMotionState'], tma._UNINITIALIZED_VALUE)
+        tma.motion[0] = AxisMotionState.TRACKING  # set azimuth to 0
+        tma.motion[1] = AxisMotionState.TRACKING  # set azimuth to 0
+        self.assertEqual(tma._parts['azimuthMotionState'], AxisMotionState.TRACKING)
+        self.assertEqual(tma._parts['elevationMotionState'], AxisMotionState.TRACKING)
+
+
+def makeValid(tma):
+    """Helper function to turn a TMA into a valid state.
+    """
+    for name, value in tma._parts.items():
+        if value == tma._UNINITIALIZED_VALUE:
+            tma._parts[name] = 1
 
 
 class TestMemory(lsst.utils.tests.MemoryTestCase):

@@ -37,6 +37,8 @@ __all__ = (
     'TMAEvent',
     'TMAEventMaker',
     'TMAState',
+    'AxisMotionState',
+    'PowerState',
 )
 
 # we don't want to use `None` for a no data sentinel because dict.get('key')
