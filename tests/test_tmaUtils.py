@@ -104,18 +104,21 @@ class TMAEventMakerTestCase(lsst.utils.tests.TestCase):
         cls.dayObs = 20230601
         # get a sample expRecord here to test expRecordToTimespan
         cls.tmaEventMaker = TMAEventMaker(cls.client)
+        cls.events = cls.tmaEventMaker.getEvents(cls.dayObs)  # does the fetch
+        cls.sampleData = cls.tmaEventMaker._data[cls.dayObs]  # pull the data from the object and test length
 
     def tearDown(self):
         loop = asyncio.get_event_loop()
         loop.run_until_complete(self.client.influx_client.close())
 
-    def test_getEvents(self):
-        dayObs = self.dayObs
-
-        _ = self.tmaEventMaker.getEvents(dayObs)  # does the fetch
-        data = self.tmaEventMaker._data[self.dayObs]  # pull the data from the object and test length
+    def test_events(self):
+        data = self.sampleData
         self.assertIsInstance(data, pd.DataFrame)
         self.assertEqual(len(data), 993)
+
+    def test_rowDataForValues(self):
+        rowsFor = set(self.sampleData['rowFor'])
+        self.assertEqual(len(rowsFor), 6)
 
 
 class TestMemory(lsst.utils.tests.MemoryTestCase):
