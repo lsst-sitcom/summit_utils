@@ -281,12 +281,12 @@ class TMA:
         # if all axes are tracking and all are in position, we're tracking the
         # sky
         if (all([x == AxisMotionState.TRACKING for x in self.motion]) and
-            all([x == True for x in self.inPosition])):
+            all([x is True for x in self.inPosition])):
             return TMAState.TRACKING
 
         # all axes in motion, but not all in position means slewing to target
         if (all([x == AxisMotionState.TRACKING for x in self.motion]) and
-            not all([x == True for x in self.inPosition])):
+            not all([x is True for x in self.inPosition])):
             return TMAState.SLEWING
 
         # any axis moving point to point is moving point to point
