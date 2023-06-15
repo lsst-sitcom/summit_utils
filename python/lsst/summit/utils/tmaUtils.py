@@ -203,7 +203,7 @@ class TMA:
         self.MOVING_LIKE = (AxisMotionState.MOVING_POINT_TO_POINT, AxisMotionState.JOGGING, AxisMotionState.TRACKING)
         self.OFF_LIKE = (PowerState.OFF, PowerState.TURNING_OFF)
         self.ON_LIKE = (PowerState.ON, PowerState.TURNING_ON)
-        self.FAULT_LIKE = (PowerState.FAULT)
+        self.FAULT_LIKE = (PowerState.FAULT,)  # note the trailing comma - this must be an iterable
 
     @property
     def _isValid(self):
@@ -269,6 +269,10 @@ class TMA:
                 return bool(value)
             case _:
                 raise ValueError(f'Failed to get row payload with {rowType=} and {row=}')
+
+    @property
+    def axesInFault(self):
+        return [x in self.FAULT_LIKE for x in self.system]
 
     @property
     def state(self):
