@@ -275,8 +275,11 @@ class TMAEventMaker:
     # XXX check this is compatible with astropy times
     TIME_CHUNKING = datetime.timedelta(minutes=15)
 
-    def __init__(self):
-        self.client = makeEfdClient()
+    def __init__(self, client=None):
+        if client is not None:
+            self.client = client
+        else:
+            self.client = makeEfdClient()
         self.log = logging.getLogger(__name__)
         self._data = {}
 

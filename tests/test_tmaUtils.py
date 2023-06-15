@@ -27,10 +27,7 @@ import lsst.utils.tests
 # from astropy.time import Time
 
 # XXX protect this import and set a SKIPIF variable to use in decorator
-import lsst_efd_client
-import astropy
 import pandas as pd
-import datetime
 import asyncio
 
 from lsst.summit.utils.efdUtils import makeEfdClient
@@ -44,25 +41,15 @@ from lsst.summit.utils.tmaUtils import (TMA,
                                         )
 
 
+def makeValid(tma):
+    """Helper function to turn a TMA into a valid state.
+    """
+    for name, value in tma._parts.items():
+        if value == tma._UNINITIALIZED_VALUE:
+            tma._parts[name] = 1
+
+
 class TmatilsTestCase(lsst.utils.tests.TestCase):
-
-    # @classmethod
-    # def setUpClass(cls):
-    #     try:
-    #         cls.client = makeEfdClient()
-    #     except RuntimeError:
-    #         raise unittest.SkipTest("Could not instantiate an EFD client")
-    #     # cls.assertIsInstance(cls.client, lsst_efd_client.efd_helper.EfdClient)
-    #     cls.dayObs = 20230601
-    #     # get a sample expRecord here to test expRecordToTimespan
-    #     cls.axisTopic = 'lsst.sal.MTMount.logevent_azimuthMotionState'
-
-    # def tearDown(self):
-    #     loop = asyncio.get_event_loop()
-    #     loop.run_until_complete(self.client.influx_client.close())
-
-    # def test_makeEfdClient(self):
-    #     self.assertIsInstance(self.client, lsst_efd_client.efd_helper.EfdClient)
 
     def test_tmaInit(self):
         tma = TMA()
@@ -105,12 +92,30 @@ class TmatilsTestCase(lsst.utils.tests.TestCase):
         for s in ['azimuthSystemState', 'lsst.sal.MTMount.logevent_azimuthSystemState']:
             self.assertEqual(getAxisAndType(s), ('azimuth', 'SystemState'))
 
-def makeValid(tma):
-    """Helper function to turn a TMA into a valid state.
-    """
-    for name, value in tma._parts.items():
-        if value == tma._UNINITIALIZED_VALUE:
-            tma._parts[name] = 1
+
+class TMAEventMakerTestCase(lsst.utils.tests.TestCase):
+    @classmethod
+    def setUpClass(cls):
+        try:
+            cls.client = makeEfdClient()
+        except RuntimeError:
+            raise unittest.SkipTest("Could not instantiate an EFD client")
+
+        cls.dayObs = 20230601
+        # get a sample expRecord here to test expRecordToTimespan
+        cls.tmaEventMaker = TMAEventMaker(cls.client)
+
+    def tearDown(self):
+        loop = asyncio.get_event_loop()
+        loop.run_until_complete(self.client.influx_client.close())
+
+    def test_getEvents(self):
+        dayObs = self.dayObs
+
+        _ = self.tmaEventMaker.getEvents(dayObs)  # does the fetch
+        data = self.tmaEventMaker._data[self.dayObs]  # pull the data from the object and test length
+        self.assertIsInstance(data, pd.DataFrame)
+        self.assertEqual(len(data), 993)
 
 
 class TestMemory(lsst.utils.tests.MemoryTestCase):
