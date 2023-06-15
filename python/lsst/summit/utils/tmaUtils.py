@@ -48,6 +48,29 @@ __all__ = (
 NO_DATA_SENTINEL = "NODATA"
 
 
+def _makeValid(tma):
+    """Helper function to turn a TMA into a valid state for testing.
+
+    Do not call directly in normal usage or code, as this just arbitrarily
+    sets values to make the TMA valid.
+    """
+    tma._parts['azimuthInPosition'] = False
+    tma._parts['azimuthMotionState'] = AxisMotionState.STOPPED
+    tma._parts['azimuthSystemState'] = PowerState.OFF
+    tma._parts['elevationInPosition'] = False
+    tma._parts['elevationMotionState'] = AxisMotionState.STOPPED
+    tma._parts['elevationSystemState'] = PowerState.OFF
+
+def _turnOn(tma):
+    """Helper function to turn TMA axes on for testing.
+
+    Do not call directly in normal usage or code, as this just arbitrarily
+    sets values to turn the axes on.
+    """
+    tma._parts['azimuthSystemState'] = PowerState.ON
+    tma._parts['elevationSystemState'] = PowerState.ON
+
+
 @dataclass(slots=True, kw_only=True)
 class TMAEvent:
     dayObs: int
@@ -184,6 +207,10 @@ class TMA:
         return self.state in [TMAState.MOVING_POINT_TO_POINT, TMAState.TRACKING, TMAState.SLEWING]
 
     @property
+    def isNotMoving(self):
+        return not self.isMoving
+
+    @property
     def canMove(self):
         return self.state not in [TMAState.FAULT, TMAState.OFF]
 
@@ -195,29 +222,42 @@ class TMA:
     def isSlewing(self):
         return self.state == TMAState.SLEWING
 
+    @property
+    def canMove(self):
+        badStates = [PowerState.OFF, PowerState.TURNING_OFF, PowerState.FAULT, PowerState.UNKNOWN]
+        return bool(
+            self._isValid and
+            self._parts['azimuthSystemState'] not in badStates and
+            self._parts['elevationSystemState'] not in badStates
+        )
+
     def apply(self, row):
         rowFor = row['rowFor']  # e.g. elevationMotionState
         axis, rowType = getAxisAndType(rowFor)  # e.g. elevation, MotionState
-        self._parts[rowFor] = self.getRowPayload(row, rowType, rowFor)
+        self._parts[rowFor] = self._getRowPayload(row, rowType, rowFor)
 
-    def getRowPayload(self, row, rowType, rowFor):
+    def _getRowPayload(self, row, rowType, rowFor):
         match rowType:
             case 'MotionState':
-                return row[f'state_{rowFor}']
+                value = row[f'state_{rowFor}']
+                return AxisMotionState(value)
             case 'SystemState':
-                return row[f'powerState_{rowFor}']
+                value = row[f'powerState_{rowFor}']
+                return PowerState(value)
             case 'InPosition':
-                return row[f'inPosition_{rowFor}']
+                value = row[f'inPosition_{rowFor}']
+                return bool(value)
             case _:
                 raise ValueError(f'Failed to get row payload with {rowType=} and {row=}')
 
-    def getState(self):
+    @property
+    def state(self):
         # if anything is in fault, we're in fault, even if not initialized
         if any([x == PowerState.FAULT for x in self.system]):
             return TMAState.FAULT
 
         # next, check we're valid, and if not, return UNINITIALIZED state
-        if not self._isValid():
+        if not self._isValid:
             return TMAState.UNINITIALIZED
 
         # now we know we're initialized, check axes for motion and in position

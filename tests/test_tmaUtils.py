@@ -35,6 +35,8 @@ from lsst.summit.utils.tmaUtils import (TMA,
                                         AxisMotionState,
                                         PowerState,
                                         getAxisAndType,
+                                        _makeValid,  # move definition into here to discourage elsewhere?
+                                        _turnOn,  # move definition into here to discourage elsewhere?
                                         )
 
 
@@ -89,6 +91,21 @@ class TmatilsTestCase(lsst.utils.tests.TestCase):
         for s in ['azimuthSystemState', 'lsst.sal.MTMount.logevent_azimuthSystemState']:
             self.assertEqual(getAxisAndType(s), ('azimuth', 'SystemState'))
 
+    def test_initStateLogic(self):
+        tma = TMA()
+        self.assertFalse(tma._isValid)
+        self.assertFalse(tma.isMoving)
+        self.assertFalse(tma.canMove)
+
+        _makeValid(tma)  # we're valid, but still aren't moving and can't
+        self.assertTrue(tma._isValid)
+        self.assertFalse(tma.isMoving)
+        self.assertFalse(tma.canMove)
+
+        _turnOn(tma)  # can now move, still valid, but not in motion
+        self.assertTrue(tma._isValid)
+        self.assertTrue(tma.isMoving)
+        self.assertFalse(tma.canMove)
 
 class TMAEventMakerTestCase(lsst.utils.tests.TestCase):
     @classmethod
@@ -116,6 +133,9 @@ class TMAEventMakerTestCase(lsst.utils.tests.TestCase):
     def test_rowDataForValues(self):
         rowsFor = set(self.sampleData['rowFor'])
         self.assertEqual(len(rowsFor), 6)
+
+        # hard coding these ensures that you can't extend the axes/model
+        # without being explicit about it here.
         correct = {'azimuthInPosition',
                    'azimuthMotionState',
                    'azimuthSystemState',
