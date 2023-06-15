@@ -255,6 +255,7 @@ class TMA:
         # to Russell & Tiago
         return not any([v == self._UNINITIALIZED_VALUE for v in self._parts.values()])
 
+    # state inspection properties - a high level way of inspecting the state as an API
     @property
     def isMoving(self):
         return self.state in [TMAState.MOVING_POINT_TO_POINT, TMAState.TRACKING, TMAState.SLEWING]
@@ -262,10 +263,6 @@ class TMA:
     @property
     def isNotMoving(self):
         return not self.isMoving
-
-    @property
-    def canMove(self):
-        return self.state not in [TMAState.FAULT, TMAState.OFF]
 
     @property
     def isTracking(self):
@@ -284,27 +281,44 @@ class TMA:
             self._parts['elevationSystemState'] not in badStates
         )
 
+    # axis inspection properties, for internal use
     @property
-    def axesInFault(self):
+    def _axesInFault(self):
+        """Returns a list of states for the axes, in order to call any() and all()"""
         return [x in self.FAULT_LIKE for x in self.system]
+
+    @property
+    def _axesOff(self):
+        """Returns a list of states for the axes, in order to call any() and all()"""
+        return [x in self.OFF_LIKE for x in self.system]
+
+    @property
+    def _axesOn(self):
+        """Returns a list of states for the axes, in order to call any() and all()"""
+        return [not x for x in self._axesOn]
+
+    @property
+    def _axesInMotion(self):
+        """Returns a list of states for the axes, in order to call any() and all()"""
+        return [x not in self.STOP_LIKE for x in self.motion]
 
     @property
     def state(self):
         # if anything is in fault, we're in fault, even if not initialized
-        if any([x == PowerState.FAULT for x in self.system]):
+        if any(self._axesInFault):
             return TMAState.FAULT
 
         # next, check we're valid, and if not, return UNINITIALIZED state
         if not self._isValid:
             return TMAState.UNINITIALIZED
 
-        # if any axis is off, the TMA is OFF
-        if (any([x in (PowerState.OFF, PowerState.TURNING_OFF) for x in self.system])):
+        # if all axes are off, the TMA is OFF
+        if any(self._axesOff):
             return TMAState.OFF
 
-        # we know we're valid and all axes are not off, so see if we're in motion
-        # if all axes are stopped, we're stopped
-        if (all([x in self.STOP_LIKE for x in self.motion])):
+        # we know we're valid and at least some axes are not off, so see if we're in motion
+        # if no axes are moving, we're stopped
+        if not any(self._axesInMotion):
             return TMAState.STOPPED
 
         # now we know we're initialized, check axes for motion and in position
