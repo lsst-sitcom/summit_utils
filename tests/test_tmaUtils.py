@@ -116,6 +116,13 @@ class TMAEventMakerTestCase(lsst.utils.tests.TestCase):
     def test_rowDataForValues(self):
         rowsFor = set(self.sampleData['rowFor'])
         self.assertEqual(len(rowsFor), 6)
+        correct = {'azimuthInPosition',
+                   'azimuthMotionState',
+                   'azimuthSystemState',
+                   'elevationInPosition',
+                   'elevationMotionState',
+                   'elevationSystemState'}
+        self.assertSetEqual(rowsFor, correct)
 
 
 class TestMemory(lsst.utils.tests.MemoryTestCase):
