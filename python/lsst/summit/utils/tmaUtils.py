@@ -226,6 +226,7 @@ class TMA:
         value = self._getRowPayload(row, rowType, rowFor)
         self.log.debug(f"Setting {rowFor} to {repr(value)}")
         self._parts[rowFor] = value
+        _ = self.state  # touch the state property to make sure we don't fall through the seive
 
     def _getRowPayload(self, row, rowType, rowFor):
         """Get the correct column value from the row.
@@ -303,6 +304,21 @@ class TMA:
         return [x not in self.STOP_LIKE for x in self.motion]
 
     @property
+    def _axesTRACKING(self):
+        """Returns a list of states for the axes, in order to call any() and all()
+
+        Note this is _axesTRACKING not _axesTracking to make sure it's clear
+        that this is the AxisMotionState type of TRACKING and not the normal
+        conceptual notion of tracking (the sky, i.e. as opposed to slewing)
+        """
+        return [x == AxisMotionState.TRACKING for x in self.motion]
+
+    @property
+    def _axesInPosition(self):
+        """Returns a list of states for the axes, in order to call any() and all()"""
+        return [x is True for x in self.inPosition]
+
+    @property
     def state(self):
         # if anything is in fault, we're in fault, even if not initialized
         if any(self._axesInFault):
@@ -321,16 +337,16 @@ class TMA:
         if not any(self._axesInMotion):
             return TMAState.STOPPED
 
-        # now we know we're initialized, check axes for motion and in position
-        # if all axes are tracking and all are in position, we're tracking the
-        # sky
-        if (all([x == AxisMotionState.TRACKING for x in self.motion]) and
-            all([x is True for x in self.inPosition])):
+        # now we know we're initialized, and that at least one axis is moving
+        # so check axes for motion and in position. If all axes are tracking
+        # and all are in position, we're tracking the sky
+        if (all(self._axesTRACKING) and
+            all(self._axesInPosition)):
             return TMAState.TRACKING
 
-        # all axes in motion, but not all in position means slewing to target
-        if (all([x == AxisMotionState.TRACKING for x in self.motion]) and
-            not all([x is True for x in self.inPosition])):
+        # if all axes in motion, but not all in position means slewing to target
+        if (all(self._axesTRACKING) and
+            not all(self._axesInPosition)):
             return TMAState.SLEWING
 
         # any axis moving point to point is moving point to point
