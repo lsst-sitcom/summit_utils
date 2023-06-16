@@ -373,7 +373,7 @@ class TMA:
         # if we want to differentiate between MOVING_POINT_TO_POINT moves, JOGGING moves and regular
         # slews, the logic in the step above needs to be changed and the new steps added here.
 
-        raise RuntimeError('State error: fell through the state seive - rewrite your logic!')
+        raise RuntimeError('State error: fell through the state sieve - rewrite your logic!')
 
 
 class TMAEventMaker:
