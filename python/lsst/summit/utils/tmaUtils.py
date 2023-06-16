@@ -106,7 +106,7 @@ class AxisMotionState(enum.IntEnum):
     """Motion state of azimuth elevation and camera cable wrap.
 
     Note: this is copied over from
-    https://github.com/lsst-ts/ts_idl/blob/develop/python/lsst/ts/idl/enums/MTMount.py  # noqa: E505
+    https://github.com/lsst-ts/ts_idl/blob/develop/python/lsst/ts/idl/enums/MTMount.py  # noqa: W505
     to save having to depend on T&S code directly. These enums are extremely
     static, so this is a reasonable thing to do, and much easier than setting
     up a dependency on ts_idl.
@@ -129,7 +129,7 @@ class PowerState(enum.IntEnum):
     use TURNING_ON and TURNING_OFF. The oil supply system is one.
 
     Note: this is copied over from
-    https://github.com/lsst-ts/ts_idl/blob/develop/python/lsst/ts/idl/enums/MTMount.py  # noqa: E505
+    https://github.com/lsst-ts/ts_idl/blob/develop/python/lsst/ts/idl/enums/MTMount.py  # noqa: W505
     to save having to depend on T&S code directly. These enums are extremely
     static, so this is a reasonable thing to do, and much easier than setting
     up a dependency on ts_idl.
@@ -223,7 +223,7 @@ class TMA:
         relevant column entry to the relevant component.
         """
         timestamp = row['private_sndStamp']
-        if timestamp < self._mostRecentRowTime:
+        if timestamp < self._mostRecentRowTime:  # NB equals is OK, technically, though it never happens
             raise ValueError('TMA evolution must be monotonic increasing in time, tried to apply a row which'
                              ' predates the most previous one')
         self._mostRecentRowTime = timestamp
@@ -234,8 +234,12 @@ class TMA:
         self.log.debug(f"Setting {rowFor} to {repr(value)}")
         self._parts[rowFor] = value
         try:
-            _ = self.state  # touch the state property to make sure we don't fall through the seive
+            # touch the state property as this executes the sieving, to make
+            # sure we don't fall through the sieve at any point in time
+            _ = self.state
         except RuntimeError as e:
+            # improve error reporting, but always reraise this, as this is a
+            # full-blown failure
             raise RuntimeError(f'Failed to apply {value} to {axis}{rowType} with state {self._parts}') from e
 
     def _getRowPayload(self, row, rowType, rowFor):
@@ -266,7 +270,8 @@ class TMA:
         # to Russell & Tiago
         return not any([v == self._UNINITIALIZED_VALUE for v in self._parts.values()])
 
-    # state inspection properties - a high level way of inspecting the state as an API
+    # state inspection properties - a high level way of inspecting the state as
+    # an API
     @property
     def isMoving(self):
         return self.state in [TMAState.TRACKING, TMAState.SLEWING]
@@ -295,22 +300,26 @@ class TMA:
     # axis inspection properties, for internal use
     @property
     def _axesInFault(self):
-        """Returns a list of states for the axes, in order to call any() and all()"""
+        """Returns a list of states for the axes, in order to call any() and
+        all()"""
         return [x in self.FAULT_LIKE for x in self.system]
 
     @property
     def _axesOff(self):
-        """Returns a list of states for the axes, in order to call any() and all()"""
+        """Returns a list of states for the axes, in order to call any() and
+        all()"""
         return [x in self.OFF_LIKE for x in self.system]
 
     @property
     def _axesOn(self):
-        """Returns a list of states for the axes, in order to call any() and all()"""
+        """Returns a list of states for the axes, in order to call any() and
+        all()"""
         return [not x for x in self._axesOn]
 
     @property
     def _axesInMotion(self):
-        """Returns a list of states for the axes, in order to call any() and all()"""
+        """Returns a list of states for the axes, in order to call any() and
+        all()"""
         # XXX remove this duplication once you're sure it's never violated
         a = [x not in self.STOP_LIKE for x in self.motion]
         b = [x in self.MOVING_LIKE for x in self.motion]
@@ -319,7 +328,8 @@ class TMA:
 
     @property
     def _axesTRACKING(self):
-        """Returns a list of states for the axes, in order to call any() and all()
+        """Returns a list of states for the axes, in order to call any() and
+        all()
 
         Note this is _axesTRACKING not _axesTracking to make sure it's clear
         that this is the AxisMotionState type of TRACKING and not the normal
@@ -329,23 +339,26 @@ class TMA:
 
     @property
     def _axesInPosition(self):
-        """Returns a list of states for the axes, in order to call any() and all()"""
+        """Returns a list of states for the axes, in order to call any() and
+        all()"""
         return [x is True for x in self.inPosition]
 
     @property
     def state(self):
-        # first, check we're valid, and if not, return UNINITIALIZED state, as things are unknown
+        # first, check we're valid, and if not, return UNINITIALIZED state, as
+        # things are unknown
         if not self._isValid:
             return TMAState.UNINITIALIZED
 
-        # if we're not in engineering mode, i.e. we're under normal CSC control, then
-        # if anything is in fault, we're in fault. If we're engineering then some axes
-        # will move when others are in fault
+        # if we're not in engineering mode, i.e. we're under normal CSC
+        # control, then if anything is in fault, we're in fault. If we're
+        # engineering then some axes will move when others are in fault
         if not self.engineeringMode:
             if any(self._axesInFault):
                 return TMAState.FAULT
         else:
-            # we're in engineering mode, so return fault state if ALL are in fault
+            # we're in engineering mode, so return fault state if ALL are in
+            # fault
             if all(self._axesInFault):
                 return TMAState.FAULT
 
@@ -353,25 +366,26 @@ class TMA:
         if all(self._axesOff):
             return TMAState.OFF
 
-        # we know we're valid and at least some axes are not off, so see if we're in motion
-        # if no axes are moving, we're stopped
+        # we know we're valid and at least some axes are not off, so see if
+        # we're in motion if no axes are moving, we're stopped
         if not any(self._axesInMotion):
             return TMAState.STOPPED
 
         # now we know we're initialized, and that at least one axis is moving
         # so check axes for motion and in position. If all axes are tracking
         # and all are in position, we're tracking the sky
-        if (all(self._axesTRACKING) and
-            all(self._axesInPosition)):
+        if (all(self._axesTRACKING) and all(self._axesInPosition)):
             return TMAState.TRACKING
 
-        # we now know explicitly that not everything is in position, so we no longer need to check that.
-        # We do actually know that something is in motion, but confirm that's the case and return SLEWING
-        if (any(self._axesInMotion)):# and  # includes JOGGING
+        # we now know explicitly that not everything is in position, so we no
+        # longer need to check that. We do actually know that something is in
+        # motion, but confirm that's the case and return SLEWING
+        if (any(self._axesInMotion)):
             return TMAState.SLEWING
 
-        # if we want to differentiate between MOVING_POINT_TO_POINT moves, JOGGING moves and regular
-        # slews, the logic in the step above needs to be changed and the new steps added here.
+        # if we want to differentiate between MOVING_POINT_TO_POINT moves,
+        # JOGGING moves and regular slews, the logic in the step above needs to
+        # be changed and the new steps added here.
 
         raise RuntimeError('State error: fell through the state sieve - rewrite your logic!')
 
