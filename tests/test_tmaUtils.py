@@ -169,6 +169,17 @@ class TMAEventMakerTestCase(lsst.utils.tests.TestCase):
             tma.apply(row2)
             tma.apply(row1)
 
+    def test_fullDaySequence(self):
+        # make sure we can apply all the data from the day without falling
+        # through the logic sieve
+        for engineering in (True, False):
+            tma = TMA(engineeringMode=engineering)
+
+            _makeValid(tma)  # XXX at some point this should be removed
+
+            for rowNum, row in self.sampleData.iterrows():
+                tma.apply(row)
+
 
 class TestMemory(lsst.utils.tests.MemoryTestCase):
     pass
