@@ -20,6 +20,7 @@
 # along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
 import asyncio
+import nest_asyncio
 from astropy.time import Time, TimeDelta
 import datetime
 import logging
@@ -177,6 +178,7 @@ def getEfdData(client, topic, *,
     begin -= TimeDelta(prePadding, format='sec')
     end += TimeDelta(postPadding, format='sec')
 
+    nest_asyncio.apply()
     loop = asyncio.get_event_loop()
     ret = loop.run_until_complete(_getEfdData(client,
                                               topic,
