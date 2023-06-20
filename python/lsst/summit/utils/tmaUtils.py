@@ -219,6 +219,8 @@ class ReferenceList:
 
 
 class TMA:
+    """A state machine model of the TMA.
+    """
     _UNINITIALIZED_VALUE: int = -999
 
     def __init__(self, engineeringMode=True, debug=False):
