@@ -127,7 +127,14 @@ class TMAEvent:
         return False
 
     def __repr__(self):
-        return self.__str__()
+        return (
+            f"TMAEvent(dayObs={self.dayObs}, seqNum={self.seqNum}, type={self.type!r},"
+            f" endReason={self.endReason!r}, duration={self.duration}, begin={self.begin!r},"
+            f" end={self.end!r}, beginFloat={self.beginFloat}, endFloat={self.endFloat})"
+        )
+
+    def _ipython_display_(self):
+        print(self.__str__())
 
     def __str__(self):
         return (
@@ -145,6 +152,9 @@ class TMAState(enum.IntEnum):
     SLEWING = 2
     FAULT = 3
     OFF = 4
+
+    def __repr__(self):
+        return f"TMAState.{self.name}"
 
 
 class AxisMotionState(enum.IntEnum):
