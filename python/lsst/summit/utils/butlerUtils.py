@@ -29,7 +29,7 @@ from lsst.summit.utils.utils import getSite
 
 __all__ = ["makeDefaultLatissButler",
            "updateDataId",
-           "sanitize_day_obs",
+           "sanitizeDayObs",
            "getMostRecentDayObs",
            "getSeqNumsForDayObs",
            "getMostRecentDataId",
@@ -196,7 +196,7 @@ def updateDataId(dataId, **kwargs):
     raise ValueError(f"Unknown dataId type {type(dataId)}")
 
 
-def sanitize_day_obs(day_obs):
+def sanitizeDayObs(day_obs):
     """Take string or int day_obs and turn it into the int version.
 
     Parameters
@@ -264,7 +264,7 @@ def getSeqNumsForDayObs(butler, day_obs, extraWhere=''):
         The seq_nums taken on the corresponding day_obs in ascending numerical
         order.
     """
-    day_obs = sanitize_day_obs(day_obs)
+    day_obs = sanitizeDayObs(day_obs)
     where = "exposure.day_obs=day_obs"
     if extraWhere:
         extraWhere = extraWhere.replace('"', '\'')

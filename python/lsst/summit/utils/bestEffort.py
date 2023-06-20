@@ -32,7 +32,6 @@ from lsst.summit.utils.butlerUtils import getLatissDefaultCollections
 # TODO: add attempt for fringe once registry & templates are fixed
 
 CURRENT_RUN = "LATISS/runs/quickLook/1"
-ALLOWED_REPOS = ['/repo/main', '/repo/LATISS', '/readonly/repo/main']
 
 
 class BestEffortIsr():
@@ -47,15 +46,12 @@ class BestEffortIsr():
 
     This class uses the ``quickLookIsrTask``, see docs there for details.
 
-    Acceptable repodir values are currently listed in ALLOWED_REPOS. This will
-    be updated (removed) once DM-33849 is done.
-
     defaultExtraIsrOptions is a dict of options applied to all images.
 
     Parameters
     ----------
-    repoDir : `str`
-        The repo root. Will be removed after DM-33849.
+    repoString : `str`, optional
+        The Butler repo root.
     extraCollections : `list` of `str`, optional
         Extra collections to add to the butler init. Collections are prepended.
     defaultExtraIsrOptions : `dict`, optional
@@ -79,14 +75,17 @@ class BestEffortIsr():
                  defaultExtraIsrOptions={},
                  doRepairCosmics=True,
                  doWrite=True,
-                 embargo=False):
+                 embargo=False,
+                 repoString=None):
         self.log = logging.getLogger(__name__)
 
         collections = getLatissDefaultCollections()
         self.collections = extraCollections + collections
         self.log.info(f'Instantiating butler with collections={self.collections}')
-        try:
+
+        if repoString is None:
             repoString = "LATISS" if not embargo else "/repo/embargo"
+        try:
             self.butler = dafButler.Butler(repoString, collections=self.collections,
                                            instrument='LATISS',
                                            run=CURRENT_RUN if doWrite else None)
