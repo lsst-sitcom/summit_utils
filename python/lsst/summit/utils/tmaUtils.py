@@ -93,11 +93,7 @@ class TMAEvent:
         return False
 
     def __repr__(self):
-        return (
-            f"TMAEvent(dayObs={self.dayObs}, seqNum={self.seqNum}, seqType={self.seqType!r},"
-            f" endReason={self.endReason!r}, duration={self.duration}, begin={self.begin!r},"
-            f" end={self.end!r}, beginFloat={self.beginFloat}, endFloat={self.endFloat})"
-        )
+        return self.__str__()
 
     def __str__(self):
         return (
@@ -111,10 +107,10 @@ class TMAState(enum.IntEnum):
     """Overall state of the TMA"""
     UNINITIALIZED = -1
     STOPPED = 0
-    TRACKING = 2
-    SLEWING = 3
-    FAULT = 4
-    OFF = 5
+    TRACKING = 1
+    SLEWING = 2
+    FAULT = 3
+    OFF = 4
 
 
 class AxisMotionState(enum.IntEnum):
