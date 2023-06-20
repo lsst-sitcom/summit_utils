@@ -100,6 +100,7 @@ def _getBeginEnd(dayObs, begin, end, timespan, event, expRecord):
 
 
 def getEfdData(client, topic, *,
+               columns=None,
                prePadding=0,
                postPadding=0,
                dayObs=None,
@@ -108,7 +109,6 @@ def getEfdData(client, topic, *,
                timespan=None,
                event=None,
                expRecord=None,
-               columns=None,  # XXX add support for this
                ):
     """Get one or more EFD topics over a time range in a non-blocking manner.
 
@@ -129,6 +129,8 @@ def getEfdData(client, topic, *,
         The EFD client to use.
     topic : `str`
         The topic to query.
+    columns : `list` of `str`, optional
+        The columns to query. If not specified, all columns are queried.
     prePadding : `float`
         The amount of time before the nominal start of the query to include.
     postPadding : `float`
@@ -178,6 +180,7 @@ def getEfdData(client, topic, *,
     loop = asyncio.get_event_loop()
     ret = loop.run_until_complete(_getEfdData(client,
                                               topic,
+                                              columns,
                                               begin.utc,
                                               end.utc))
     if ret.empty:
@@ -187,7 +190,7 @@ def getEfdData(client, topic, *,
     return ret
 
 
-async def _getEfdData(client, topic, begin, end, columns=None):
+async def _getEfdData(client, topic, columns, begin, end):
     if columns is None:
         columns = ['*']
 
