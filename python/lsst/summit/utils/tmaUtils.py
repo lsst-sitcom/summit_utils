@@ -457,19 +457,6 @@ class TMAEventMaker:
         'lsst.sal.MTMount.logevent_elevationSystemState',
     ]
 
-    # time keys in common between all:
-    # 'private_efdStamp'
-    # 'private_identity'
-    # 'private_kafkaStamp'
-    # 'private_origin'
-    # 'private_rcvStamp'
-    # 'private_revCode'
-    # 'private_seqNum'
-    # 'private_sndStamp'
-
-    # XXX check this is compatible with astropy times
-    TIME_CHUNKING = datetime.timedelta(minutes=15)
-
     def __init__(self, client=None):
         if client is not None:
             self.client = client
@@ -477,74 +464,6 @@ class TMAEventMaker:
             self.client = makeEfdClient()
         self.log = logging.getLogger(__name__)
         self._data = {}
-
-    def _combineFaultTypeStates(self, stateDict):
-        """Combine the component states
-
-        Parameters
-        ----------
-        stateDict : `dict` of `???`
-            The state of each component.
-
-        Returns
-        -------
-        ??? : ???
-        """
-        # PowerState:
-        #     Off=0
-        #     On=1
-        #     Fault=2
-        #     TurningOn=3
-        #     TurningOff=4
-        #     Unknown=15
-
-        # if any in fault, return fault
-        # if any off, return off
-        # if all on, return on
-        # raise RuntimeError for all other cases, stating the state of all
-        # components
-
-        # return the logical combination of all the states
-        raise NotImplementedError("This function is not yet implemented")
-
-    def _combineAxisStates(self, stateDict):
-        """Combine the axis states
-
-        Parameters
-        ----------
-        stateDict : `dict` of `???`
-            The state of each component.
-
-        Returns
-        -------
-        ??? : ???
-        """
-        # AxisMotionState:
-        #     Stopping=0  # can be collapsed with stopping
-        #     Stopped=1
-
-        # unusual, used for balancing or parking etc, or hoisting etc
-        #     MovingPointToPoint=2
-        #     Jogging=3  # INGORE - we never do that
-        #     Tracking=4  # most of the time but IT INCLUDES SLEWING
-        #     TrackingPaused=5  # INGORE - Russell says "it's bizarre"
-        # Jogging - can do on the hand paddle and the EUI (engineering user
-        # interface) but the CSC doesn't support that
-
-        # InPosition is False a lot of the time,
-
-        # if AxisMotion is tracking then inPosition=True means you are tracking
-        # and False means you're slewing
-        # and it can go back and forth between the two!
-
-        # if any MovingPointToPoint or jogging return slewing
-        # if any stopped or stopping return stopped
-        # if all tracking return tracking
-        # raise RuntimeError for all other cases, state the state of all
-        # components
-
-        # return the logical combination of all the states
-        raise NotImplementedError("This function is not yet implemented")
 
     def getState(self, time, detailed=False):
         """Get the mount state at the time specified.
