@@ -40,6 +40,8 @@ __all__ = (
     'TMAState',
     'AxisMotionState',
     'PowerState',
+    'getSlewsFromEventList',
+    'getTracksFromEventList',
 )
 
 # we don't want to use `None` for a no data sentinel because dict.get('key')
@@ -365,11 +367,7 @@ class TMA:
     def _axesInMotion(self):
         """Returns a list of states for the axes, in order to call any() and
         all()"""
-        # XXX remove this duplication once you're sure it's never violated
-        a = [x not in self.STOP_LIKE for x in self.motion]
-        b = [x in self.MOVING_LIKE for x in self.motion]
-        assert a == b
-        return a
+        return [x in self.MOVING_LIKE for x in self.motion]
 
     @property
     def _axesTRACKING(self):
