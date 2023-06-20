@@ -216,7 +216,6 @@ def makeEfdClient():
     except ValueError as e:
         raise RuntimeError("Could not create EFD client as the site could not be determined") from e
 
-    # XXX remove non-async option
     if site == 'summit':
         return EfdClient('summit_efd')
     if site in ['staff-rsp', 'rubin-devl']:

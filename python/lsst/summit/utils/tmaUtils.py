@@ -97,7 +97,7 @@ class TMAEvent:
 
     def __str__(self):
         return (
-            f"dayObs: {self.dayObs}\nseqNum: {self.seqNum}\type: {self.type.name}"
+            f"dayObs: {self.dayObs}\nseqNum: {self.seqNum}\ntype: {self.type.name}"
             f"\nendReason: {self.endReason.name}\nduration: {self.duration}\nbegin: {self.begin!r},"
             f"\nend: {self.end!r}\nbeginFloat: {self.beginFloat}\nendFloat: {self.endFloat}"
         )
