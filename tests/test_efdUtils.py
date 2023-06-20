@@ -24,10 +24,7 @@
 import unittest
 import lsst.utils.tests
 
-# from astropy.time import Time
 
-# XXX protect this import and set a SKIPIF variable to use in decorator
-import lsst_efd_client
 import astropy
 import pandas as pd
 import datetime
@@ -40,7 +37,14 @@ from lsst.summit.utils.efdUtils import (makeEfdClient,
                                         getSubTopics,
                                         )
 
+HAS_EFD_CLIENT = True
+try:
+    import lsst_efd_client
+except ImportError:
+    HAS_EFD_CLIENT = False
 
+
+@unittest.skipIf(not HAS_EFD_CLIENT, "No EFD client available")
 class EfdUtilsTestCase(lsst.utils.tests.TestCase):
 
     @classmethod
@@ -85,7 +89,13 @@ class EfdUtilsTestCase(lsst.utils.tests.TestCase):
             self.assertEqual(dayEnd.jd, dayStart.jd + 1)
 
     def test_getSubTopics(self):
-        return
+        subTopics = getSubTopics(self.client, 'lsst.sal.MTMount')
+        self.assertIsInstance(subTopics, list)
+        self.assertGreater(len(subTopics), 0)
+
+        subTopics = getSubTopics(self.client, 'fake.topics.does.not.exist')
+        self.assertIsInstance(subTopics, list)
+        self.assertEqual(len(subTopics), 0)
 
     def test_getEfdData(self):
         dayStart = getDayObsStartTime(self.dayObs)

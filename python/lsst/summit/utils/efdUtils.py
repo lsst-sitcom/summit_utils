@@ -23,7 +23,6 @@ import asyncio
 from astropy.time import Time, TimeDelta
 import datetime
 import logging
-from lsst.utils.iteration import ensure_iterable
 
 from .utils import getSite
 
