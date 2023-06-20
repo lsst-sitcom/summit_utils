@@ -62,7 +62,7 @@ def getSlewsFromEventList(events):
     events : `list` of `TMAEvent`
         The filtered list of events.
     """
-    return [e for e in events if e.seqType==TMAState.SLEWING]
+    return [e for e in events if e.type == TMAState.SLEWING]
 
 
 def getTracksFromEventList(events):
@@ -78,7 +78,7 @@ def getTracksFromEventList(events):
     events : `list` of `TMAEvent`
         The filtered list of events.
     """
-    return [e for e in events if e.seqType==TMAState.TRACKING]
+    return [e for e in events if e.type == TMAState.TRACKING]
 
 
 def _makeValid(tma):
@@ -465,57 +465,6 @@ class TMAEventMaker:
         self.log = logging.getLogger(__name__)
         self._data = {}
 
-    def getState(self, time, detailed=False):
-        """Get the mount state at the time specified.
-
-        Parameters
-        ----------
-        time : `astropy.time.Time`
-            The time at which to get the TMA state.
-        detailed : `bool`, optional
-            If detailed, return the state of all components at the specified
-            time. Usually used to see why the particular overall system state
-            was the case.
-
-        Returns
-        -------
-        state : `???`
-            The state of the TMA at the specified time.
-        breakdown : `tuple` of `???`
-            The state of all the subcomponents at the specified time, if
-            ``detailed``, else ``None``.
-        """
-        # do the state-type ones first, because if we're in fault and not
-        # detailed then we don't need to know anything else
-        stateComponents = {}
-        for component in self._stateComponents:
-            stateComponents[component] = self._getComponentState(component, time)
-        systemState = self._combineFaultTypeStates(stateComponents)
-
-        # the early exit clause
-        if systemState == 'fault' and not detailed:
-            return "fault", None
-
-        axisStates = {}
-        for component in self._movingComponents:
-            axisStates[component] = self._getComponentState(component, time)
-        movingState = self._combineAxisStates(axisStates)
-
-        breakdown = None
-        if detailed:
-            breakdown = axisStates.update(stateComponents)
-
-        if systemState == 'fault':
-            return 'fault', breakdown
-        if systemState == 'off':
-            return 'off', breakdown
-        if systemState == 'on':
-            return movingState, breakdown
-
-        # all eventualities should have been covered by this point, so if we've
-        # fallen all the way through the seive then raise
-        raise RuntimeError('Overall state could not be determined')
-
     @staticmethod
     def isToday(dayObs):
         todayDayObs = getCurrentDayObs_int()
@@ -584,7 +533,7 @@ class TMAEventMaker:
 
         Returns
         -------
-        events : `list` of `TmaEvent`
+        events : `list` of `lsst.summit.utils.tmaUtils.TMAState`
             The events for the specified dayObs.
         """
         workingLive = self.isToday(dayObs)
@@ -661,8 +610,15 @@ class TMAEventMaker:
         self._data[dayObs] = merged
 
     def _calculateEventsFromMergedData(self, data, dayObs):
-        # run the data, row by row, through the TMA state machine to get
-        # the state at each row
+        """
+
+        Runs the data, row by row, through the TMA state machine to get the
+        state at each row, building a dict of these states. Then loops over the
+        dict of states, building a list of events by chunking the states into
+        blocks of the same state, and creating an event for each block.
+        Off-type states are skipped over, with each event starting when the
+        telescope next resumes motion.
+        """
         engineering = True
         tma = TMA(engineeringMode=engineering)
         _makeValid(tma)  # XXX this needs removing eventually
