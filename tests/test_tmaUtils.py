@@ -34,7 +34,6 @@ from lsst.summit.utils.tmaUtils import (TMA,
                                         TMAEventMaker,
                                         TMAState,
                                         AxisMotionState,
-                                        PowerState,
                                         getAxisAndType,
                                         _makeValid,  # move definition into here to discourage elsewhere?
                                         _turnOn,  # move definition into here to discourage elsewhere?
