@@ -77,7 +77,7 @@ def _turnOn(tma):
 class TMAEvent:
     dayObs: int
     seqNum: int
-    seqType: str  # can be 'slew', 'track', 'pointToPoint'
+    type: str  # can be 'slew', 'track', 'pointToPoint'
     endReason: str  # can be 'slew', 'fault', 'stop', 'unfinished' - rare!
     duration: float  # seconds
     begin: Time
@@ -97,9 +97,9 @@ class TMAEvent:
 
     def __str__(self):
         return (
-            f"dayObs: {self.dayObs}\nseqNum: {self.seqNum}\nseqType: {self.seqType.name}"
+            f"dayObs: {self.dayObs}\nseqNum: {self.seqNum}\type: {self.type.name}"
             f"\nendReason: {self.endReason.name}\nduration: {self.duration}\nbegin: {self.begin!r},"
-            f"\nend: {self.end!r}\nbeginFloat: {self.beginFloat}\nendFloat: {self.endFloat})"
+            f"\nend: {self.end!r}\nbeginFloat: {self.beginFloat}\nendFloat: {self.endFloat}"
         )
 
 
@@ -775,7 +775,7 @@ class TMAEventMaker:
             event = TMAEvent(
                 dayObs=dayObs,
                 seqNum=seqNum,
-                seqType=eventType,
+                type=eventType,
                 endReason=endReason,
                 duration=duration,
                 begin=beginAstropy,

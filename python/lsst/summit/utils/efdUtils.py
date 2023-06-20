@@ -109,6 +109,7 @@ def getEfdData(client, topics, *,
                timespan=None,
                event=None,
                expRecord=None,
+               columns=None,  # XXX add support for this
                ):
     """Get one or more EFD topics over a time range in a non-blocking manner.
 
@@ -184,6 +185,7 @@ def getEfdData(client, topics, *,
                                               topics,
                                               begin.utc,
                                               end.utc))
+    # warn if empty
     return ret
 
 
@@ -201,7 +203,7 @@ async def _getEfdData(client, topics, begin, end):
     return data
 
 
-def makeEfdClient(asychronous=True):  # XXX remove the async kwarg
+def makeEfdClient():
     """Automatically create an EFD client based on the site.
 
     Returns
@@ -216,9 +218,9 @@ def makeEfdClient(asychronous=True):  # XXX remove the async kwarg
 
     # XXX remove non-async option
     if site == 'summit':
-        return EfdClient('summit_efd', asychronous=asychronous)
+        return EfdClient('summit_efd')
     if site in ['staff-rsp', 'rubin-devl']:
-        return EfdClient('usdf_efd', asychronous=asychronous)
+        return EfdClient('usdf_efd')
 
     raise RuntimeError(f"Could not create EFD client as the site {site} is not recognized")
 
