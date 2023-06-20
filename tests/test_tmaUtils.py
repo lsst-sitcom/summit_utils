@@ -35,7 +35,7 @@ from lsst.summit.utils.tmaUtils import (TMA,
                                         TMAState,
                                         AxisMotionState,
                                         getAxisAndType,
-                                        _makeValid,  # move definition into here to discourage elsewhere?
+                                        _initializeTma,
                                         _turnOn,  # move definition into here to discourage elsewhere?
                                         )
 
@@ -98,11 +98,11 @@ class TmaUtilsTestCase(lsst.utils.tests.TestCase):
         self.assertFalse(tma.canMove)
         self.assertEqual(tma.state, TMAState.UNINITIALIZED)
 
-        _makeValid(tma)  # we're valid, but still aren't moving and can't
+        _initializeTma(tma)  # we're valid, but still aren't moving and can't
         self.assertTrue(tma._isValid)
         self.assertNotEqual(tma.state, TMAState.UNINITIALIZED)
+        self.assertTrue(tma.canMove)
         self.assertFalse(tma.isMoving)
-        self.assertFalse(tma.canMove)
 
         _turnOn(tma)  # can now move, still valid, but not in motion
         self.assertTrue(tma._isValid)
@@ -174,7 +174,7 @@ class TMAEventMakerTestCase(lsst.utils.tests.TestCase):
         for engineering in (True, False):
             tma = TMA(engineeringMode=engineering)
 
-            _makeValid(tma)  # XXX at some point this should be removed
+            _initializeTma(tma)
 
             for rowNum, row in self.sampleData.iterrows():
                 tma.apply(row)
