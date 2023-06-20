@@ -79,10 +79,10 @@ class TMAEvent:
     seqType: str  # can be 'slew', 'track', 'pointToPoint'
     endReason: str  # can be 'slew', 'fault', 'stop', 'unfinished' - rare!
     duration: float  # seconds
-    beginTime: Time
-    endTime: Time
-    beginTimeFloat: float
-    endTimeFloat: float
+    begin: Time
+    end: Time
+    beginFloat: float
+    endFloat: float
 
     def __lt__(self, other):
         if self.dayObs < other.dayObs:
@@ -648,7 +648,7 @@ class TMAEventMaker:
             self.log.warning(f"No data found for {dayObs=}")
             return []
 
-        events = self._calculateEventsFromMergedData(data)
+        events = self._calculateEventsFromMergedData(data, dayObs)
         if not events:
             self.log.warning(f"Failed to calculate any events for {dayObs=} despite EFD data existing!")
         return events
@@ -696,7 +696,82 @@ class TMAEventMaker:
         merged = self._mergeData(data)
         self._data[dayObs] = merged
 
-    def _calculateEventsFromMergedData(self, data):
-        seqNums = []
+    def _calculateEventsFromMergedData(self, data, dayObs):
+        # run the data, row by row, through the TMA state machine to get
+        # the state at each row
+        engineering = True
+        tma = TMA(engineeringMode=engineering)
+        _makeValid(tma)  # XXX this needs removing eventually
 
-        return seqNums
+        tmaStates = {}
+        for rowNum, row in data.iterrows():
+            tma.apply(row)
+            tmaStates[rowNum] = tma.state
+
+        stateTuples = self._statesToEventTuples(tmaStates)
+        events = self._makeEventsFromStateTuples(stateTuples, dayObs, data)
+
+        return events
+
+    def _statesToEventTuples(self, states):
+        """
+        """
+        # Consider rewriting this with states as a list and using pop(0)?
+        skipStates = (TMAState.STOPPED, TMAState.OFF, TMAState.FAULT)
+
+        parsed_states = []
+        eventStart = None
+        rowNum = 0
+        nRows = len(states)
+        while rowNum < nRows:
+            previousState = None
+            state = states[rowNum]
+            # if we're not in an event, fast forward through off-like rows
+            # until a new event starts
+            if eventStart is None and state in skipStates:
+                rowNum += 1
+                continue
+
+            # we've started a new event, so walk through it and find the end
+            eventStart = rowNum
+            previousState = state
+            rowNum += 1  # move to the next row before starting the while loop
+            state = states[rowNum]
+            while state == previousState:
+                if rowNum == nRows:
+                    break
+                rowNum += 1
+                state = states[rowNum]
+            parsed_states.append((eventStart, rowNum, previousState, state))
+            if state in skipStates:
+                eventStart = None
+
+        return parsed_states
+
+    def _makeEventsFromStateTuples(self, states, dayObs, data):
+        """
+        """
+        seqNum = 0
+        events = []
+        for row in states:
+            eventStart, eventEnd, eventType, endReason = row
+
+            begin = data.iloc[eventStart]['private_sndStamp']
+            end = data.iloc[eventEnd]['private_sndStamp']
+            beginAstropy = Time(begin, format='unix')
+            endAstropy = Time(end, format='unix')
+            duration = end - begin
+            event = TMAEvent(
+                dayObs=dayObs,
+                seqNum=seqNum,
+                seqType=eventType,
+                endReason=endReason,
+                duration=duration,
+                begin=beginAstropy,
+                end=endAstropy,
+                beginFloat=begin,
+                endFloat=end,
+            )
+            events.append(event)
+            seqNum += 1
+        return events

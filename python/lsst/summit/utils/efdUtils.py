@@ -245,6 +245,22 @@ def expRecordToTimespan(expRecord):
             }
 
 
+def efdTimestampToAstropy(timestamp):
+    """Get an efd timestamp as an astropy.time.Time object.
+
+    Parameters
+    ----------
+    timestamp : `float`
+        The timestamp, as a float.
+
+    Returns
+    -------
+    time : `astropy.time.Time`
+        The timestamp as an astropy.time.Time object.
+    """
+    return Time(timestamp, format='unix')
+
+
 def calcNextDay(dayObs):
     """Given an integer dayObs, calculate the next integer dayObs.
 
