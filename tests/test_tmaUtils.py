@@ -48,7 +48,7 @@ def makeValid(tma):
             tma._parts[name] = 1
 
 
-class TmatilsTestCase(lsst.utils.tests.TestCase):
+class TmaUtilsTestCase(lsst.utils.tests.TestCase):
 
     def test_tmaInit(self):
         tma = TMA()
@@ -178,6 +178,18 @@ class TMAEventMakerTestCase(lsst.utils.tests.TestCase):
 
             for rowNum, row in self.sampleData.iterrows():
                 tma.apply(row)
+
+    def test_endToEnd(self):
+        eventMaker = TMAEventMaker()
+        events = eventMaker.getEvents(self.dayObs)
+        self.assertIsInstance(events, list)
+        self.assertEqual(len(events), 200)
+        self.assertIsInstance(events[0], TMAEvent)
+
+        slews = [e for e in events if e.type == TMAState.SLEWING]
+        tracks = [e for e in events if e.type == TMAState.TRACKING]
+        self.assertEqual(len(slews), 157)
+        self.assertEqual(len(tracks), 43)
 
 
 class TestMemory(lsst.utils.tests.MemoryTestCase):
