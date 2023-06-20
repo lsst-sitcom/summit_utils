@@ -22,11 +22,15 @@
 import asyncio
 from astropy.time import Time, TimeDelta
 import datetime
-from lsst.summit.utils.utils import getSite  # XXX change back to relative import
-
-# XXX Protect this import or file RFC and get that added to lsst_distrib
-from lsst_efd_client import EfdClient
 from lsst.utils.iteration import ensure_iterable
+
+from .utils import getSite
+
+HAS_EFD_CLIENT = True
+try:
+    from lsst_efd_client import EfdClient
+except ImportError:
+    HAS_EFD_CLIENT = False
 
 __all__ = [
     'makeEfdClient',
@@ -211,6 +215,9 @@ def makeEfdClient():
     efdClient : `lsst_efd_client.efd_helper.EfdClient`
         The EFD client to use for the current site.
     """
+    if not HAS_EFD_CLIENT:
+        raise RuntimeError("Could not create EFD client because importing lsst_efd_client failed.")
+
     try:
         site = getSite()
     except ValueError as e:
