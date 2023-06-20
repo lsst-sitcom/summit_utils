@@ -30,6 +30,7 @@ from astropy.time import Time
 from lsst.summit.utils.utils import getCurrentDayObs_int  # XXX change back to relative import
 from lsst.summit.utils.efdUtils import (getEfdData,  # XXX change back to relative import
                                         makeEfdClient,
+                                        efdTimestampToAstropy,
                                         )
 
 __all__ = (
@@ -90,6 +91,20 @@ class TMAEvent:
         elif self.dayObs == other.dayObs:
             return self.seqNum < other.seqNum
         return False
+
+    def __repr__(self):
+        return (
+            f"TMAEvent(dayObs={self.dayObs}, seqNum={self.seqNum}, seqType={self.seqType!r},"
+            f" endReason={self.endReason!r}, duration={self.duration}, begin={self.begin!r},"
+            f" end={self.end!r}, beginFloat={self.beginFloat}, endFloat={self.endFloat})"
+        )
+
+    def __str__(self):
+        return (
+            f"dayObs: {self.dayObs}\nseqNum: {self.seqNum}\nseqType: {self.seqType.name}"
+            f"\nendReason: {self.endReason.name}\nduration: {self.duration}\nbegin: {self.begin!r},"
+            f"\nend: {self.end!r}\nbeginFloat: {self.beginFloat}\nendFloat: {self.endFloat})"
+        )
 
 
 class TMAState(enum.IntEnum):
@@ -758,8 +773,8 @@ class TMAEventMaker:
 
             begin = data.iloc[eventStart]['private_sndStamp']
             end = data.iloc[eventEnd]['private_sndStamp']
-            beginAstropy = Time(begin, format='unix')
-            endAstropy = Time(end, format='unix')
+            beginAstropy = efdTimestampToAstropy(begin)
+            endAstropy = efdTimestampToAstropy(end)
             duration = end - begin
             event = TMAEvent(
                 dayObs=dayObs,

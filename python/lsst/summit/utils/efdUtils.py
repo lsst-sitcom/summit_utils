@@ -258,7 +258,7 @@ def efdTimestampToAstropy(timestamp):
     time : `astropy.time.Time`
         The timestamp as an astropy.time.Time object.
     """
-    return Time(timestamp, format='unix')
+    return Time(timestamp, format='unix_tai')
 
 
 def calcNextDay(dayObs):
