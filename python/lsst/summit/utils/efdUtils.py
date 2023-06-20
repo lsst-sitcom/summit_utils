@@ -22,6 +22,7 @@
 import asyncio
 from astropy.time import Time, TimeDelta
 import datetime
+import logging
 from lsst.utils.iteration import ensure_iterable
 
 from .utils import getSite
@@ -94,17 +95,12 @@ def _getBeginEnd(dayObs, begin, end, timespan, event, expRecord):
     if end is None:
         end = begin + timespan
 
-        # if isinstance(begin, datetime.datetime):
-        #     begin = Time(begin)  # XXX handle UTC/TAI here
-        # if isinstance(end, datetime.datetime):
-        #     end = Time(end)  # XXX handle UTC/TAI here
-
     assert (begin is not None)
     assert (end is not None)
     return begin, end
 
 
-def getEfdData(client, topics, *,
+def getEfdData(client, topic, *,
                prePadding=0,
                postPadding=0,
                dayObs=None,
@@ -128,15 +124,12 @@ def getEfdData(client, topics, *,
 
     The results from all topics are merged into a single dataframe.
 
-    TODO: Add support for datetime objects?
-    TODO: Add support for begin/end as strings?
-
     Parameters
     ----------
     client : `lsst_efd_client.efd_helper.EfdClient`
         The EFD client to use.
-    topics : `str` or iterable of `str`
-        The topics to query.
+    topic : `str`
+        The topic to query.
     prePadding : `float`
         The amount of time before the nominal start of the query to include.
     postPadding : `float`
@@ -172,9 +165,8 @@ def getEfdData(client, topics, *,
     time is specified but no end time or timespan.
 
     """
-    # takes one of more topics and merges the results into one dataframe
-    # ideally calls mpts as necessary so that users needn't care if things are
-    # packed
+    # ideally should calls mpts as necessary so that users needn't care if
+    # things are packed
 
     # supports aliases so that you can query with them. If there is no entry in
     # the alias dict then it queries with the supplied key. The fact the schema
@@ -186,24 +178,31 @@ def getEfdData(client, topics, *,
 
     loop = asyncio.get_event_loop()
     ret = loop.run_until_complete(_getEfdData(client,
-                                              topics,
+                                              topic,
                                               begin.utc,
                                               end.utc))
-    # warn if empty
+    if ret.empty:
+        log = logging.getLogger(__name__)
+        log.warning(f"Topic {topic} is in the schema, but no data was returned by the query for the specified"
+                    " time range")
     return ret
 
 
-async def _getEfdData(client, topics, begin, end):
-    topics = list(ensure_iterable(topics))
+async def _getEfdData(client, topic, begin, end, columns=None):
+    if columns is None:
+        columns = ['*']
+
     availableTopics = await client.get_topics()
 
-    topicsToQuery = [t if t not in TOPIC_ALIASES else TOPIC_ALIASES[t] for t in topics]
+    topicToQuery = topic
+    if topic in TOPIC_ALIASES:
+        topicToQuery = TOPIC_ALIASES[topic]
 
-    for topic in topicsToQuery:
-        if topic not in availableTopics:
-            raise ValueError(f"Topic {topic} not in EFD schema")
+    if topicToQuery not in availableTopics:
+        raise ValueError(f"Topic {topicToQuery} not in EFD schema")
 
-    data = await client.select_time_series(topicsToQuery[0], ['*'], begin.utc, end.utc)
+    data = await client.select_time_series(topicToQuery, columns, begin.utc, end.utc)
+
     return data
 
 

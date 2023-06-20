@@ -27,11 +27,11 @@ import logging
 import pandas as pd
 from dataclasses import dataclass
 from astropy.time import Time
-from lsst.summit.utils.utils import getCurrentDayObs_int  # XXX change back to relative import
-from lsst.summit.utils.efdUtils import (getEfdData,  # XXX change back to relative import
-                                        makeEfdClient,
-                                        efdTimestampToAstropy,
-                                        )
+from .utils import getCurrentDayObs_int
+from .efdUtils import (getEfdData,
+                       makeEfdClient,
+                       efdTimestampToAstropy,
+                       )
 
 __all__ = (
     'TMA',
@@ -47,6 +47,38 @@ __all__ = (
 # was queried for and no data was found, whereas the key not being present
 # means that we've not yet looked for the data.
 NO_DATA_SENTINEL = "NODATA"
+
+
+def getSlewsFromEventList(events):
+    """Get the slew events from a list of TMAEvents.
+
+    Parameters
+    ----------
+    events : `list` of `TMAEvent`
+        The list of events to filter.
+
+    Returns
+    -------
+    events : `list` of `TMAEvent`
+        The filtered list of events.
+    """
+    return [e for e in events if e.seqType==TMAState.SLEWING]
+
+
+def getTracksFromEventList(events):
+    """Get the tracking events from a list of TMAEvents.
+
+    Parameters
+    ----------
+    events : `list` of `TMAEvent`
+        The list of events to filter.
+
+    Returns
+    -------
+    events : `list` of `TMAEvent`
+        The filtered list of events.
+    """
+    return [e for e in events if e.seqType==TMAState.TRACKING]
 
 
 def _makeValid(tma):
