@@ -82,7 +82,7 @@ def getTracksFromEventList(events):
     return [e for e in events if e.type == TMAState.TRACKING]
 
 
-def _makeValid(tma):
+def _initializeTma(tma):
     """Helper function to turn a TMA into a valid state for testing.
 
     Do not call directly in normal usage or code, as this just arbitrarily
@@ -90,10 +90,10 @@ def _makeValid(tma):
     """
     tma._parts['azimuthInPosition'] = False
     tma._parts['azimuthMotionState'] = AxisMotionState.STOPPED
-    tma._parts['azimuthSystemState'] = PowerState.OFF
+    tma._parts['azimuthSystemState'] = PowerState.ON
     tma._parts['elevationInPosition'] = False
     tma._parts['elevationMotionState'] = AxisMotionState.STOPPED
-    tma._parts['elevationSystemState'] = PowerState.OFF
+    tma._parts['elevationSystemState'] = PowerState.ON
 
 
 def _turnOn(tma):
@@ -628,7 +628,14 @@ class TMAEventMaker:
         """
         engineering = True
         tma = TMA(engineeringMode=engineering)
-        _makeValid(tma)  # XXX this needs removing eventually
+
+        # For now, we assume that the TMA starts each day able to move, but
+        # stationary. If this turns out to cause problems, we will need to
+        # change to loading data from the previous day(s), and looking back
+        # through it in time until a state change has been found for every
+        # axis. For now though, Bruno et. al think this is acceptable and
+        # preferable.
+        _initializeTma(tma)
 
         tmaStates = {}
         for rowNum, row in data.iterrows():
