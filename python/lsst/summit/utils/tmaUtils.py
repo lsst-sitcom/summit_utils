@@ -99,25 +99,30 @@ def plotEvent(client, event, fig=None, prePadding=0, postPadding=0):
                     " Pass in a figure with fig = plt.figure(figsize=(10, 6)) to avoid this warning.")
     ax1 = fig.gca()
 
+    azimuthData = getEfdData(client,
+                             'lsst.sal.MTMount.azimuth',
+                             event=event,
+                             prePadding=prePadding,
+                             postPadding=postPadding)
+    elevationData = getEfdData(client,
+                              'lsst.sal.MTMount.elevation',
+                               event=event,
+                               prePadding=prePadding,
+                               postPadding=postPadding)
+
     # Use the native color cycle for the lines. Because they're on different
     # axes they don't cycle by themselves
     linesColourCycle = [p['color'] for p in plt.rcParams['axes.prop_cycle']]
 
-    azimuth_data = getEfdData(client, 'lsst.sal.MTMount.azimuth', event=event,
-                              prePadding=prePadding, postPadding=postPadding)
-    elevation_data = getEfdData(client, 'lsst.sal.MTMount.elevation', event=event,
-                                prePadding=prePadding, postPadding=postPadding)
-
-    ax1.plot(azimuth_data['actualPosition'], label='Azimuth position', c=linesColourCycle[0])
+    ax1.plot(azimuthData['actualPosition'], label='Azimuth position', c=linesColourCycle[0])
     ax1.yaxis.set_major_formatter(FuncFormatter(tickFormatter))
-    ax1.set_ylabel('Azimuth (Degrees)')
-    ax1.set_xlabel('Time (UTC)')
+    ax1.set_ylabel('Azimuth (degrees)')
+    ax1.set_xlabel('Time (UTC)')  # yes, it really is UTC, matplotlib convert this automatically!
 
     ax2 = ax1.twinx()
-    ax2.plot(elevation_data['actualPosition'], label='Elevation position', c=linesColourCycle[1])
+    ax2.plot(elevationData['actualPosition'], label='Elevation position', c=linesColourCycle[1])
     ax2.yaxis.set_major_formatter(FuncFormatter(tickFormatter))
-
-    ax2.set_ylabel('Elevation (Degrees)')
+    ax2.set_ylabel('Elevation (degrees)')
 
     # put the ticks at an angle, and right align with the tick marks
     ax1.set_xticks(ax1.get_xticks())  # needed to supress a user warning
@@ -127,6 +132,9 @@ def plotEvent(client, event, fig=None, prePadding=0, postPadding=0):
     ax1.xaxis.set_major_formatter(mdates.DateFormatter('%H:%M:%S'))
 
     if prePadding or postPadding:
+        # note the conversion to utc because the x-axis from the dataframe
+        # already got automagically converted when plotting before, so this is
+        # necessary for things to line up
         ax2.axvline(event.begin.utc.datetime, c='k', ls='--', alpha=0.5, label='Event begin/end')
         ax2.axvline(event.end.utc.datetime, c='k', ls='--', alpha=0.5)
 
