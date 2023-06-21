@@ -30,7 +30,7 @@ from matplotlib.ticker import FuncFormatter
 import matplotlib.dates as mdates
 import matplotlib.pyplot as plt
 
-from .utils import getCurrentDayObs_int
+from .utils import getCurrentDayObs_int, dayObsIntToString
 from .efdUtils import (getEfdData,
                        makeEfdClient,
                        efdTimestampToAstropy,
@@ -141,6 +141,14 @@ def plotEvent(client, event, fig=None, prePadding=0, postPadding=0):
     # of the otherwise-opaque legend.
     ax2.legend(handles, labels, facecolor='white', framealpha=1)
 
+    # Add title with the event name, type etc
+    dayObsStr = dayObsIntToString(event.dayObs)
+    title = (f"{dayObsStr} - seqNum {event.seqNum}"  # top line, rest below
+             f"\nDuration = {event.duration:.2f}s"
+             f" Event type: {event.type.name}"
+             f" End reason: {event.endReason.name}"
+             )
+    ax2.set_title(title)
     return fig
 
 
