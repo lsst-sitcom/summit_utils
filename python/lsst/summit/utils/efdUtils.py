@@ -52,6 +52,11 @@ TOPIC_ALIASES = {
     'MtAzState': 'lsst.sal.MTMount.logevent_azimuthSystemState',
     'MtElState': 'lsst.sal.MTMount.logevent_elevationSystemState',
 }
+
+COMMAND_ALIASES = {
+    'raDecTarget': 'lsst.sal.MTPtg.command_raDecTarget',
+}
+
 # setting aliases within the dictionary itself: making alt an alias for el
 TOPIC_ALIASES['MtAlt'] = TOPIC_ALIASES['MtEl']
 TOPIC_ALIASES['MtAltInPosition'] = TOPIC_ALIASES['MtElInPosition']
@@ -110,6 +115,7 @@ def getEfdData(client, topic, *,
                timespan=None,
                event=None,
                expRecord=None,
+               noWarn=False,
                ):
     """Get one or more EFD topics over a time range in a non-blocking manner.
 
@@ -154,6 +160,9 @@ def getEfdData(client, topic, *,
     expRecord : `lsst.daf.butler.dimensions.DimensionRecord`, optional
         The exposure record containing the timespan to query. If specified, all
         other options are disallowed.
+    noWarn : bool, optional
+        If True, don't warn when no data is found. Useful for utility code
+        which is checking for data.
 
     Returns
     -------
@@ -185,7 +194,7 @@ def getEfdData(client, topic, *,
                                               columns,
                                               begin.utc,
                                               end.utc))
-    if ret.empty:
+    if ret.empty and not noWarn:
         log = logging.getLogger(__name__)
         log.warning(f"Topic {topic} is in the schema, but no data was returned by the query for the specified"
                     " time range")
