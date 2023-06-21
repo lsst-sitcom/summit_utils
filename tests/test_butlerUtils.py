@@ -55,6 +55,7 @@ from lsst.summit.utils.butlerUtils import (makeDefaultLatissButler,
                                            _assureDict,
                                            getLatissDefaultCollections,
                                            RECENT_DAY,
+                                           getExpRecord,
                                            )
 from lsst.summit.utils.butlerUtils import removeDataProduct  # noqa: F401
 import lsst.daf.butler as dafButler
@@ -391,6 +392,27 @@ class ButlerUtilsTestCase(lsst.utils.tests.TestCase):
         dataId = updateDataId(dataId, detector=321)
         self.assertTrue('detector' in dataId)
         self.assertEqual(dataId['detector'], 321)
+
+    def test_getExpRecord(self):
+        expId = self.expIdOnly['exposure']
+        dayObs = self.dayObsSeqNumIdOnly['day_obs']
+        seqNum = self.dayObsSeqNumIdOnly['seq_num']
+
+        recordByExpId = getExpRecord(self.butler, 'LATISS', expId=expId)
+        self.assertIsInstance(recordByExpId, dafButler.dimensions.DimensionRecord)
+
+        recordByDayObsSeqNum = getExpRecord(self.butler, 'LATISS', dayObs=dayObs, seqNum=seqNum)
+        self.assertIsInstance(recordByDayObsSeqNum, dafButler.dimensions.DimensionRecord)
+        self.assertEqual(recordByExpId, recordByDayObsSeqNum)
+
+        with self.assertRaises(ValueError):
+            # because we need dayObs too, so immediate raise due to bad args
+            _ = getExpRecord(self.butler, 'LATISS', seqNum=seqNum)
+
+        with self.assertRaises(RuntimeError):
+            # (dayObs, seqNum) no longer matches the expId, so there are no
+            # results, which is a RuntimeError
+            _ = getExpRecord(self.butler, 'LATISS', expId=expId, dayObs=dayObs, seqNum=seqNum+1)
 
 
 class ButlerInitTestCase(lsst.utils.tests.TestCase):
