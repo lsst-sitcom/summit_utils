@@ -29,11 +29,13 @@ from astropy.time import Time
 from matplotlib.ticker import FuncFormatter
 import matplotlib.dates as mdates
 import matplotlib.pyplot as plt
+from lsst.utils.iteration import ensure_iterable
 
 from .utils import getCurrentDayObs_int, dayObsIntToString
 from .efdUtils import (getEfdData,
                        makeEfdClient,
                        efdTimestampToAstropy,
+                       COMMAND_ALIASES,
                        )
 
 __all__ = (
@@ -86,7 +88,7 @@ def getTracksFromEventList(events):
     return [e for e in events if e.type == TMAState.TRACKING]
 
 
-def plotEvent(client, event, fig=None, prePadding=0, postPadding=0):
+def plotEvent(client, event, fig=None, prePadding=0, postPadding=0, commands=None):
     def tickFormatter(value, tick_number):
         # Convert the value to a string without subtracting large numbers
         # tick_number is unused.
@@ -105,7 +107,7 @@ def plotEvent(client, event, fig=None, prePadding=0, postPadding=0):
                              prePadding=prePadding,
                              postPadding=postPadding)
     elevationData = getEfdData(client,
-                              'lsst.sal.MTMount.elevation',
+                               'lsst.sal.MTMount.elevation',
                                event=event,
                                prePadding=prePadding,
                                postPadding=postPadding)
@@ -113,14 +115,17 @@ def plotEvent(client, event, fig=None, prePadding=0, postPadding=0):
     # Use the native color cycle for the lines. Because they're on different
     # axes they don't cycle by themselves
     linesColourCycle = [p['color'] for p in plt.rcParams['axes.prop_cycle']]
+    colorCounter = 0
 
-    ax1.plot(azimuthData['actualPosition'], label='Azimuth position', c=linesColourCycle[0])
+    ax1.plot(azimuthData['actualPosition'], label='Azimuth position', c=linesColourCycle[colorCounter])
+    colorCounter += 1
     ax1.yaxis.set_major_formatter(FuncFormatter(tickFormatter))
     ax1.set_ylabel('Azimuth (degrees)')
     ax1.set_xlabel('Time (UTC)')  # yes, it really is UTC, matplotlib convert this automatically!
 
     ax2 = ax1.twinx()
-    ax2.plot(elevationData['actualPosition'], label='Elevation position', c=linesColourCycle[1])
+    ax2.plot(elevationData['actualPosition'], label='Elevation position', c=linesColourCycle[colorCounter])
+    colorCounter += 1
     ax2.yaxis.set_major_formatter(FuncFormatter(tickFormatter))
     ax2.set_ylabel('Elevation (degrees)')
 
@@ -137,6 +142,15 @@ def plotEvent(client, event, fig=None, prePadding=0, postPadding=0):
         # necessary for things to line up
         ax2.axvline(event.begin.utc.datetime, c='k', ls='--', alpha=0.5, label='Event begin/end')
         ax2.axvline(event.end.utc.datetime, c='k', ls='--', alpha=0.5)
+
+    if commands is not None:
+        if not isinstance(commands, dict):
+            raise TypeError('commands must be a dict of command names with values as'
+                            ' astropy.time.Time values')
+        for command, time in commands.items():
+            ax2.axvline(event.begin.utc.datetime, c=linesColourCycle[colorCounter],
+                        ls='--', alpha=0.75, label=f'{command}')
+            colorCounter += 1
 
     # combine the legends and put inside the plot
     handles1, labels1 = ax1.get_legend_handles_labels()
@@ -158,6 +172,33 @@ def plotEvent(client, event, fig=None, prePadding=0, postPadding=0):
              )
     ax2.set_title(title)
     return fig
+
+
+def getCommandsDuringEvent(client, event, commands=['raDecTarget'], log=None, doLog=True):
+    if log is None and doLog:
+        log = logging.getLogger(__name__)
+
+    commands = ensure_iterable(commands)
+    fullCommands = [c if c not in COMMAND_ALIASES else COMMAND_ALIASES[c] for c in commands]
+    del commands  # make sure we always use their full names
+
+    ret = {}
+    for command in fullCommands:
+        data = getEfdData(client, command, event=event, noWarn=True)
+        if data.empty:
+            if doLog:
+                log.info(f'Found no command issued for {command} during event')
+            ret[command] = None
+        elif len(data) > 1:
+            if doLog:
+                log.warning(f'Found multiple commands issued for {command} during event, returning None')
+            ret[command] = None
+        else:
+            assert len(data) == 1  # this must be true now
+            commandTime = data.private_sndStamp
+            ret[command] = Time(commandTime, format='unix_tai')
+
+    return ret
 
 
 def _initializeTma(tma):
