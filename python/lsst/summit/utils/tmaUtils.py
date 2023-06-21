@@ -135,7 +135,11 @@ def plotEvent(client, event, fig=None, prePadding=0, postPadding=0):
     handles2, labels2 = ax2.get_legend_handles_labels()
     handles = handles1 + handles2
     labels = labels1 + labels2
-    ax1.legend(handles, labels)
+    # ax2 is "in front" of ax1 because it has the vlines plotted on it, and
+    # vlines are on ax2 so that they appear at the bottom of the legend, so
+    # make sure to plot the legend on ax2, otherwise the vlines will go on top
+    # of the otherwise-opaque legend.
+    ax2.legend(handles, labels, facecolor='white', framealpha=1)
 
     return fig
 
