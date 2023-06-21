@@ -26,6 +26,10 @@ import logging
 import pandas as pd
 from dataclasses import dataclass
 from astropy.time import Time
+from matplotlib.ticker import FuncFormatter
+import matplotlib.dates as mdates
+import matplotlib.pyplot as plt
+
 from .utils import getCurrentDayObs_int
 from .efdUtils import (getEfdData,
                        makeEfdClient,
@@ -80,6 +84,60 @@ def getTracksFromEventList(events):
         The filtered list of events.
     """
     return [e for e in events if e.type == TMAState.TRACKING]
+
+
+def plotEvent(client, event, fig=None, prePadding=0, postPadding=0):
+    def tickFormatter(value, tick_number):
+        # Convert the value to a string without subtracting large numbers
+        # tick_number is unused.
+        return f"{value:.2f}"
+
+    if fig is None:
+        fig = plt.figure(figsize=(10, 6))
+        log = logging.getLogger(__name__)
+        log.warning("Making new matplotlib figure - if this is in a loop you're going to have a bad time."
+                    " Pass in a figure with fig = plt.figure(figsize=(10, 6)) to avoid this warning.")
+    ax1 = fig.gca()
+
+    # Use the native color cycle for the lines. Because they're on different
+    # axes they don't cycle by themselves
+    linesColourCycle = [p['color'] for p in plt.rcParams['axes.prop_cycle']]
+
+    azimuth_data = getEfdData(client, 'lsst.sal.MTMount.azimuth', event=event,
+                              prePadding=prePadding, postPadding=postPadding)
+    elevation_data = getEfdData(client, 'lsst.sal.MTMount.elevation', event=event,
+                                prePadding=prePadding, postPadding=postPadding)
+
+    ax1.plot(azimuth_data['actualPosition'], label='Azimuth position', c=linesColourCycle[0])
+    ax1.yaxis.set_major_formatter(FuncFormatter(tickFormatter))
+    ax1.set_ylabel('Azimuth (Degrees)')
+    ax1.set_xlabel('Time (UTC)')
+
+    ax2 = ax1.twinx()
+    ax2.plot(elevation_data['actualPosition'], label='Elevation position', c=linesColourCycle[1])
+    ax2.yaxis.set_major_formatter(FuncFormatter(tickFormatter))
+
+    ax2.set_ylabel('Elevation (Degrees)')
+
+    # put the ticks at an angle, and right align with the tick marks
+    ax1.set_xticks(ax1.get_xticks())  # needed to supress a user warning
+    xlabels = ax1.get_xticks()
+    ax1.set_xticklabels(xlabels, rotation=40, ha='right')
+    ax1.xaxis.set_major_locator(mdates.AutoDateLocator())
+    ax1.xaxis.set_major_formatter(mdates.DateFormatter('%H:%M:%S'))
+
+    if prePadding or postPadding:
+        ax2.axvline(event.begin.utc.datetime, c='k', ls='--', alpha=0.5, label='Event begin/end')
+        ax2.axvline(event.end.utc.datetime, c='k', ls='--', alpha=0.5)
+
+    # combine the legends and put inside the plot
+    handles1, labels1 = ax1.get_legend_handles_labels()
+    handles2, labels2 = ax2.get_legend_handles_labels()
+    handles = handles1 + handles2
+    labels = labels1 + labels2
+    ax1.legend(handles, labels)
+
+    return fig
 
 
 def _initializeTma(tma):
