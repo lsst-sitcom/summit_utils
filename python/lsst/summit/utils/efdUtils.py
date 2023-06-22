@@ -98,7 +98,11 @@ def _getBeginEnd(dayObs, begin, end, timespan, event, expRecord):
     if end is not None and timespan is not None:
         raise ValueError("You can't specify both a end and a timespan")
     if end is None:
-        end = begin + timespan
+        if timespan > datetime.timedelta(minutes=0):
+            end = begin + timespan  # the normal case
+        else:
+            end = begin  # the case where timespan is negative
+            begin = begin + timespan  # adding the negative to the start, i.e. subtracting it to bring back
 
     assert (begin is not None)
     assert (end is not None)
