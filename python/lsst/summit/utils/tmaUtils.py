@@ -180,6 +180,8 @@ def plotEvent(client, event, fig=None, prePadding=0, postPadding=0, commands={})
 
 
 def getCommandsDuringEvent(client, event, commands=['raDecTarget'], log=None, doLog=True):
+    # TODO: Add support for padding the event here to allow looking for
+    # triggering commands before the event
     if log is None and doLog:
         log = logging.getLogger(__name__)
 
