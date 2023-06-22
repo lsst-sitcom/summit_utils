@@ -23,11 +23,14 @@
 
 import copy
 import itertools
+from typing import Iterable
 import unittest
 
 import astropy.time
 import astropy.units as u
+import lsst.afw.detection as afwDetect
 import lsst.afw.image as afwImage
+import lsst.afw.geom as afwGeom
 import lsst.geom as geom
 import lsst.utils.tests
 import numpy as np
@@ -35,13 +38,16 @@ from astro_metadata_translator import makeObservationInfo
 from lsst.obs.base import createInitialSkyWcsFromBoresight
 from lsst.obs.base.makeRawVisitInfoViaObsInfo import MakeRawVisitInfoViaObsInfo
 from lsst.obs.lsst import Latiss
+
 from lsst.summit.utils.utils import (getExpPositionOffset,
                                      getFieldNameAndTileNumber,
                                      getAirmassSeeingCorrection,
                                      getFilterSeeingCorrection,
                                      quickSmooth,
                                      getQuantiles,
+                                     fluxesFromFootprints,
                                      )
+
 from lsst.obs.lsst.translators.latiss import AUXTEL_LOCATION
 
 
@@ -205,6 +211,62 @@ class QuantileTestCase(lsst.utils.tests.TestCase):
             edges1 = getQuantiles(data, nColors)
             edges2 = np.nanquantile(data, np.linspace(0, 1, nColors + 1))  # must check with nanquantile
             np.testing.assert_almost_equal(edges1, edges2, decimal=decimal)
+
+
+class ImageBasedTestCase(lsst.utils.tests.TestCase):
+    def test_fluxFromFootprint(self):
+        image = afwImage.Image(
+            np.arange(8100, dtype=np.int32).reshape(90, 90),
+            xy0=lsst.geom.Point2I(10, 12),
+            dtype="I"
+        )
+
+        radius = 3
+        spans = afwGeom.SpanSet.fromShape(radius, afwGeom.Stencil.CIRCLE, offset=(27, 30))
+        footprint1 = afwDetect.Footprint(spans)
+
+        # The extracted footprint should be the same as the product of the
+        # spans and the overlapped bow with the image
+        truth1 = spans.asArray() * image.array[15:22, 14:21]
+
+        radius = 3
+        spans = afwGeom.SpanSet.fromShape(radius, afwGeom.Stencil.CIRCLE, offset=(44, 49))
+        footprint2 = afwDetect.Footprint(spans)
+        truth2 = spans.asArray() * image.array[34:41, 31:38]
+
+        allFootprints = [footprint1, footprint2]
+        footprintSet = afwDetect.FootprintSet(image.getBBox())
+        footprintSet.setFootprints(allFootprints)
+
+        # check it can accept a footprintSet, and single and iterables of
+        # footprints
+        with self.assertRaises(TypeError):
+            fluxesFromFootprints(10, image)
+
+        with self.assertRaises(TypeError):
+            fluxesFromFootprints([8, 6, 7, 5, 3, 0, 9], image)
+
+        # check the footPrintSet
+        fluxes = fluxesFromFootprints(footprintSet, image)
+        expectedLength = len(footprintSet.getFootprints())
+        self.assertEqual(len(fluxes), expectedLength)  # always one flux per footprint
+        self.assertIsInstance(fluxes, Iterable)
+        self.assertAlmostEqual(fluxes[0], np.sum(truth1))
+        self.assertAlmostEqual(fluxes[1], np.sum(truth2))
+
+        # check the list of footprints
+        fluxes = fluxesFromFootprints(allFootprints, image)
+        expectedLength = 2
+        self.assertEqual(len(fluxes), expectedLength)  # always one flux per footprint
+        self.assertIsInstance(fluxes, Iterable)
+        self.assertAlmostEqual(fluxes[0], np.sum(truth1))
+        self.assertAlmostEqual(fluxes[1], np.sum(truth2))
+
+        # ensure that subtracting the image median from fluxes leave image
+        # pixels untouched
+        oldImageArray = copy.deepcopy(image.array)
+        fluxes = fluxesFromFootprints(footprintSet, image, subtractImageMedian=True)
+        np.testing.assert_array_equal(image.array, oldImageArray)
 
 
 class TestMemory(lsst.utils.tests.MemoryTestCase):
