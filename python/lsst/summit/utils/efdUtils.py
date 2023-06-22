@@ -24,6 +24,7 @@ import nest_asyncio
 from astropy.time import Time, TimeDelta
 import datetime
 import logging
+import pandas as pd
 
 from .utils import getSite
 
@@ -40,6 +41,7 @@ __all__ = [
     'getDayObsStartTime',
     'getDayObsEndTime',
     'getSubTopics',
+    'getStateAtTime',
 ]
 
 
@@ -221,6 +223,28 @@ async def _getEfdData(client, topic, columns, begin, end):
     data = await client.select_time_series(topicToQuery, columns, begin.utc, end.utc)
 
     return data
+
+
+def getStateAtTime(client, component, time, warnStaleAfterNMinutes=12*60):
+    TIME_CHUNKING = datetime.timedelta(minutes=15)
+    staleAge = datetime.timedelta(warnStaleAfterNMinutes)
+
+    df = pd.DataFrame()
+    beginTime = time
+    while df.empty:
+        df = getEfdData(client, component, begin=beginTime, timespan=-TIME_CHUNKING, noWarn=True)
+        beginTime -= TIME_CHUNKING
+
+    lastRow = df.iloc[-1]
+    commandTime = efdTimestampToAstropy(lastRow['private_sndStamp'])
+    stateData = lastRow['state']
+
+    commandAge = time - commandTime
+    if commandAge > staleAge:
+        log = logging.getLogger(__name__)
+        log.warning(f"Component {component} was last set {commandAge.sec/60:.1} minutes"
+                    " before the requested time")
+    return stateData, commandTime
 
 
 def makeEfdClient():
