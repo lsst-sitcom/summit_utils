@@ -147,13 +147,13 @@ def plotEvent(client, event, fig=None, prePadding=0, postPadding=0, commands={})
     if not isinstance(commands, dict):
         raise TypeError('commands must be a dict of command names with values as'
                         ' astropy.time.Time values')
-    for command, time in commands.items():
+    for command, commandTime in commands.items():
         # if commands weren't found, the item is set to None. This is common
         # for events so handle it gracefully and silently. The command finding
         # code logs about lack of commands found so no need to mention here.
-        if time is None:
+        if commandTime is None:
             continue
-        ax2.axvline(event.begin.utc.datetime, c=linesColourCycle[colorCounter],
+        ax2.axvline(commandTime.utc.datetime, c=linesColourCycle[colorCounter],
                     ls='--', alpha=0.75, label=f'{command}')
         colorCounter += 1
 
