@@ -88,7 +88,7 @@ def getTracksFromEventList(events):
     return [e for e in events if e.type == TMAState.TRACKING]
 
 
-def plotEvent(client, event, fig=None, prePadding=0, postPadding=0, commands=None):
+def plotEvent(client, event, fig=None, prePadding=0, postPadding=0, commands={}):
     def tickFormatter(value, tick_number):
         # Convert the value to a string without subtracting large numbers
         # tick_number is unused.
@@ -143,14 +143,19 @@ def plotEvent(client, event, fig=None, prePadding=0, postPadding=0, commands=Non
         ax2.axvline(event.begin.utc.datetime, c='k', ls='--', alpha=0.5, label='Event begin/end')
         ax2.axvline(event.end.utc.datetime, c='k', ls='--', alpha=0.5)
 
-    if commands is not None:
-        if not isinstance(commands, dict):
-            raise TypeError('commands must be a dict of command names with values as'
-                            ' astropy.time.Time values')
-        for command, time in commands.items():
-            ax2.axvline(event.begin.utc.datetime, c=linesColourCycle[colorCounter],
-                        ls='--', alpha=0.75, label=f'{command}')
-            colorCounter += 1
+    # plot any commands we might have
+    if not isinstance(commands, dict):
+        raise TypeError('commands must be a dict of command names with values as'
+                        ' astropy.time.Time values')
+    for command, time in commands.items():
+        # if commands weren't found, the item is set to None. This is common
+        # for events so handle it gracefully and silently. The command finding
+        # code logs about lack of commands found so no need to mention here.
+        if time is None:
+            continue
+        ax2.axvline(event.begin.utc.datetime, c=linesColourCycle[colorCounter],
+                    ls='--', alpha=0.75, label=f'{command}')
+        colorCounter += 1
 
     # combine the legends and put inside the plot
     handles1, labels1 = ax1.get_legend_handles_labels()
