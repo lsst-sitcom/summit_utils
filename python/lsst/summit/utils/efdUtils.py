@@ -63,6 +63,8 @@ COMMAND_ALIASES = {
 TOPIC_ALIASES['MtAlt'] = TOPIC_ALIASES['MtEl']
 TOPIC_ALIASES['MtAltInPosition'] = TOPIC_ALIASES['MtElInPosition']
 
+TIME_CHUNKING = datetime.timedelta(minutes=15)
+
 
 def _getBeginEnd(dayObs, begin, end, timespan, event, expRecord):
     if expRecord is not None:
@@ -225,26 +227,91 @@ async def _getEfdData(client, topic, columns, begin, end):
     return data
 
 
-def getStateAtTime(client, component, time, warnStaleAfterNMinutes=12*60):
-    TIME_CHUNKING = datetime.timedelta(minutes=15)
+def getMostRecentRowWithDataBefore(client, topic, timeToLookBefore, warnStaleAfterNMinutes=60*12):
+    """Get the most recent row of data for a topic before a given time.
+
+    Parameters
+    ----------
+    client : `lsst_efd_client.efd_helper.EfdClient`
+        The EFD client to use.
+    topic : `str`
+        The topic to query.
+    timeToLookBefore : `astropy.Time`
+        The time to look before.
+    warnStaleAfterNMinutes : `float`, optional
+        The number of minutes after which to consider the data stale and issue
+        a warning.
+
+    Returns
+    -------
+    row : `pandas.Series`
+        The row of data.
+
+    Raises
+    ------
+    ValueError: If the topic is not in the EFD schema.
+    """
     staleAge = datetime.timedelta(warnStaleAfterNMinutes)
 
     df = pd.DataFrame()
-    beginTime = time
+    beginTime = timeToLookBefore
     while df.empty:
-        df = getEfdData(client, component, begin=beginTime, timespan=-TIME_CHUNKING, noWarn=True)
+        df = getEfdData(client, topic, begin=beginTime, timespan=-TIME_CHUNKING, noWarn=True)
         beginTime -= TIME_CHUNKING
 
     lastRow = df.iloc[-1]
     commandTime = efdTimestampToAstropy(lastRow['private_sndStamp'])
-    stateData = lastRow['state']
 
-    commandAge = time - commandTime
+    commandAge = timeToLookBefore - commandTime
     if commandAge > staleAge:
         log = logging.getLogger(__name__)
-        log.warning(f"Component {component} was last set {commandAge.sec/60:.1} minutes"
+        log.warning(f"Component {topic} was last set {commandAge.sec/60:.1} minutes"
                     " before the requested time")
-    return stateData, commandTime
+
+    return lastRow
+
+
+def getStateAtTime(client, topic, timeToLookBefore, warnStaleAfterNMinutes=12*60):
+    """Get the state of a component at a given time.
+
+    Parameters
+    ----------
+    client : `lsst_efd_client.efd_helper.EfdClient`
+        The EFD client to use.
+    topic : `str`
+        The topic to query.
+    timeToLookBefore : `astropy.Time`
+        The time to look before.
+    warnStaleAfterNMinutes : `float`, optional
+        The number of minutes after which to consider the data stale and issue
+        a warning.
+
+    Returns
+    -------
+    state : `Enum`
+        The appropriate enumClass for the topic, holding the value it was set
+        to at ``commandTime``.
+    commandTime : `astropy.Time`
+        The time the component was set to the returned state.
+
+    Raises
+    ------
+    ValueError: If the topic is not in the EFD schema.
+    """
+    row = getMostRecentRowWithDataBefore(client=client,
+                                         topic=topic,
+                                         timeToLookBefore=timeToLookBefore,
+                                         warnStaleAfterNMinutes=warnStaleAfterNMinutes)
+
+    commandTime = efdTimestampToAstropy(row['private_sndStamp'])
+    # TODO: need to a) know which column to get the value from, and
+    # b) convert it to the appropriate enum class depending on topic.
+
+    # example: for lsst.sal.MTMount.logevent_azimuthMotionState
+    value = row['state']
+    # state = AxisMotionState(value)
+
+    return value, commandTime
 
 
 def makeEfdClient():
