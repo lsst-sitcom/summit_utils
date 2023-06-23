@@ -391,12 +391,15 @@ def calcNextDay(dayObs):
 
 def getDayObsStartTime(dayObs):
     """Get the start of the given dayObs as an astropy.time.Time object.
+
+    The observatory rolls the date over at UTC-12.
     """
     pythonDateTime = datetime.datetime.strptime(str(dayObs), "%Y%m%d")
     astroPyTime = Time(pythonDateTime)
     twelveHours = datetime.timedelta(hours=-12)
+    oneDay = datetime.timedelta(hours=24)
     offset = TimeDelta(twelveHours, format='datetime')
-    return astroPyTime + offset
+    return astroPyTime + offset + oneDay
 
 
 def getDayObsEndTime(dayObs):
