@@ -118,7 +118,7 @@ class TMAEventMakerTestCase(lsst.utils.tests.TestCase):
         except RuntimeError:
             raise unittest.SkipTest("Could not instantiate an EFD client")
 
-        cls.dayObs = 20230601
+        cls.dayObs = 20230531
         # get a sample expRecord here to test expRecordToTimespan
         cls.tmaEventMaker = TMAEventMaker(cls.client)
         cls.events = cls.tmaEventMaker.getEvents(cls.dayObs)  # does the fetch
@@ -190,6 +190,14 @@ class TMAEventMakerTestCase(lsst.utils.tests.TestCase):
         tracks = [e for e in events if e.type == TMAState.TRACKING]
         self.assertEqual(len(slews), 157)
         self.assertEqual(len(tracks), 43)
+
+    def test_noDataBehaviour(self):
+        eventMaker = TMAEventMaker()
+        noDataDayObs = 19500101  # do not use 19700101 - there is data for that day!
+        with self.assertWarns(Warning, msg=f"No EFD data found for dayObs={noDataDayObs}"):
+            events = eventMaker.getEvents(noDataDayObs)
+            self.assertIsInstance(events, list)
+            self.assertEqual(len(events), 0)
 
 
 class TestMemory(lsst.utils.tests.MemoryTestCase):
