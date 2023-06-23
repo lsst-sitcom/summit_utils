@@ -691,7 +691,7 @@ class TMAEventMaker:
             raise RuntimeError("This should never happen")
 
         if self._noDataFound(data):
-            self.log.warning(f"No data found for {dayObs=}")
+            self.log.warning(f"No EFD data found for {dayObs=}")
             return []
 
         events = self._calculateEventsFromMergedData(data, dayObs)
@@ -735,12 +735,14 @@ class TMAEventMaker:
             self.log.debug(f"Found {len(data[component])} for {component}")
 
         if all([dataframe.empty for dataframe in data.values()]):
+            # if every single dataframe is empty, set the sentinel and don't
+            # try to merge anything, otherwise merge all the data we found
             self.log.debug(f"No data found for {dayObs=}")
             # a sentinel value that's not None
-            data = NO_DATA_SENTINEL
-
-        merged = self._mergeData(data)
-        self._data[dayObs] = merged
+            self._data[dayObs] = NO_DATA_SENTINEL
+        else:
+            merged = self._mergeData(data)
+            self._data[dayObs] = merged
 
     def _calculateEventsFromMergedData(self, data, dayObs):
         """
