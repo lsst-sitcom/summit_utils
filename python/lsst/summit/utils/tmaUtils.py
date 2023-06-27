@@ -88,7 +88,40 @@ def getTracksFromEventList(events):
     return [e for e in events if e.type == TMAState.TRACKING]
 
 
-def plotEvent(client, event, fig=None, prePadding=0, postPadding=0, commands={}):
+def getAzimuthElevationDataForEvent(client, event, prePadding=0, postPadding=0):
+    """
+
+    Parameters
+    ----------
+    client : `lsst_efd_client.efd_helper.EfdClient`
+        The EFD client to use.
+    event : `lsst.summit.utils.tmaUtils.TMAEvent`
+        The event to plot.
+    fig : `matplotlib.figure.Figure`, optional
+        The figure to plot on. If not specified, a new figure will be created.
+    prePadding : `float`, optional
+        The amount of time to pad the event with before the start time, in
+        seconds.
+    postPadding : `float`, optional
+        The amount of time to pad the event with after the end time, in
+        seconds.
+    """
+    azimuthData = getEfdData(client,
+                             'lsst.sal.MTMount.azimuth',
+                             event=event,
+                             prePadding=prePadding,
+                             postPadding=postPadding)
+    elevationData = getEfdData(client,
+                               'lsst.sal.MTMount.elevation',
+                               event=event,
+                               prePadding=prePadding,
+                               postPadding=postPadding)
+
+    return azimuthData, elevationData
+
+
+def plotEvent(client, event, fig=None, prePadding=0, postPadding=0, commands={},
+              azimuthData=None, elevationData=None):
     """Plot the TMA axis states for a given TMAEvent.
 
     Parameters
@@ -109,6 +142,12 @@ def plotEvent(client, event, fig=None, prePadding=0, postPadding=0, commands={})
         A dictionary of commands to plot on the figure. The keys are the
         topic names, and the values are the times at which the commands were
         sent.
+    azimuthData : `pandas.DataFrame`, optional
+        The azimuth data to plot. If not specified, it will be queried from the
+        EFD.
+    elevationData : `pandas.DataFrame`, optional
+        The elevation data to plot. If not specified, it will be queried from
+        the EFD.
 
     Returns
     -------
@@ -127,16 +166,11 @@ def plotEvent(client, event, fig=None, prePadding=0, postPadding=0, commands={})
                     " Pass in a figure with fig = plt.figure(figsize=(10, 6)) to avoid this warning.")
     ax1 = fig.gca()
 
-    azimuthData = getEfdData(client,
-                             'lsst.sal.MTMount.azimuth',
-                             event=event,
-                             prePadding=prePadding,
-                             postPadding=postPadding)
-    elevationData = getEfdData(client,
-                               'lsst.sal.MTMount.elevation',
-                               event=event,
-                               prePadding=prePadding,
-                               postPadding=postPadding)
+    if azimuthData is None or elevationData is None:
+        azimuthData, elevationData = getAzimuthElevationDataForEvent(client,
+                                                                     event,
+                                                                     prePadding=prePadding,
+                                                                     postPadding=postPadding)
 
     # Use the native color cycle for the lines. Because they're on different
     # axes they don't cycle by themselves
