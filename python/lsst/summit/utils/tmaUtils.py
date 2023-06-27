@@ -89,6 +89,32 @@ def getTracksFromEventList(events):
 
 
 def plotEvent(client, event, fig=None, prePadding=0, postPadding=0, commands={}):
+    """Plot the TMA axis states for a given TMAEvent.
+
+    Parameters
+    ----------
+    client : `lsst_efd_client.efd_helper.EfdClient`
+        The EFD client to use.
+    event : `lsst.summit.utils.tmaUtils.TMAEvent`
+        The event to plot.
+    fig : `matplotlib.figure.Figure`, optional
+        The figure to plot on. If not specified, a new figure will be created.
+    prePadding : `float`, optional
+        The amount of time to pad the event with before the start time, in
+        seconds.
+    postPadding : `float`, optional
+        The amount of time to pad the event with after the end time, in
+        seconds.
+    commands : `dict` of `str` : `astropy.time.Time`, optional
+        A dictionary of commands to plot on the figure. The keys are the
+        topic names, and the values are the times at which the commands were
+        sent.
+
+    Returns
+    -------
+    fig : `matplotlib.figure.Figure`
+        The figure on which the plot was made.
+    """
     def tickFormatter(value, tick_number):
         # Convert the value to a string without subtracting large numbers
         # tick_number is unused.
@@ -170,7 +196,7 @@ def plotEvent(client, event, fig=None, prePadding=0, postPadding=0, commands={})
 
     # Add title with the event name, type etc
     dayObsStr = dayObsIntToString(event.dayObs)
-    title = (f"{dayObsStr} - seqNum {event.seqNum}"  # top line, rest below
+    title = (f"{dayObsStr} - seqNum {event.seqNum} (v{event.version})"  # top line, rest below
              f"\nDuration = {event.duration:.2f}s"
              f" Event type: {event.type.name}"
              f" End reason: {event.endReason.name}"
@@ -180,6 +206,25 @@ def plotEvent(client, event, fig=None, prePadding=0, postPadding=0, commands={})
 
 
 def getCommandsDuringEvent(client, event, commands=['raDecTarget'], log=None, doLog=True):
+    """Get the commands issued during an event.
+
+    Get the times at which the specified commands were issued during the event.
+
+    Parameters
+    ----------
+    client : `lsst_efd_client.efd_helper.EfdClient`
+        The EFD client to use.
+    event : `lsst.summit.utils.tmaUtils.TMAEvent`
+        The event to plot.
+    commands : `list` of `str`, optional
+        The commands or command aliases to look for. Defaults to
+        ['raDecTarget'].
+    log : `logging.Logger`, optional
+        The logger to use. If not specified, a new logger will be created if
+        needed.
+    doLog : `bool`, optional
+        Whether to log messages. Defaults to True.
+    """
     # TODO: Add support for padding the event here to allow looking for
     # triggering commands before the event
     if log is None and doLog:
@@ -243,6 +288,7 @@ class TMAEvent:
     end: Time
     beginFloat: float
     endFloat: float
+    version: int = 0
 
     def __lt__(self, other):
         if self.dayObs < other.dayObs:
