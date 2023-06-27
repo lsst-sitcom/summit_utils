@@ -315,8 +315,8 @@ def _turnOn(tma):
 class TMAEvent:
     dayObs: int
     seqNum: int
-    type: str  # can be 'slew', 'track', 'pointToPoint'
-    endReason: str  # can be 'slew', 'fault', 'stop', 'unfinished' - rare!
+    type: str  # can be 'SLEWING', 'TRACKING'
+    endReason: str  # can be 'STOPPED', 'TRACKING', 'FAULT', 'SLEWING', 'OFF'
     duration: float  # seconds
     begin: Time
     end: Time
@@ -881,7 +881,7 @@ class TMAEventMaker:
             if rowNum == nRows:
                 # we've reached the end of the data, and we're still in an
                 # event, so don't return this presumably in-progress event
-                self.log.warning('Reached the end of the data while still in an event')
+                self.log.warning('Reached the end of the data while starting a new event')
                 break
             state = states[rowNum]
             while state == previousState:
