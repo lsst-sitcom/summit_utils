@@ -893,6 +893,19 @@ class TMAEventMaker:
             if state in skipStates:
                 eventStart = None
 
+        # done parsing, just check the last event is valid
+        if len(parsed_states) >= 1:
+            lastEvent = parsed_states[-1]
+            if lastEvent[1] == nRows:
+                # Generally, you *want* the end to be at the start of the next
+                # row because you were in that state right up until that state
+                # change, but in the case of an un-ended event, this will
+                # overrun the array, so take one-off the row number and issue a
+                # warning
+                self.log.warning("Last event ends open, forcing it to end at end of the day's data")
+                # it's a tuple, so (deliberately) awkward to modify
+                parsed_states[-1] = (lastEvent[0], lastEvent[1] - 1, lastEvent[2], lastEvent[3])
+
         return parsed_states
 
     def _makeEventsFromStateTuples(self, states, dayObs, data):
