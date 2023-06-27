@@ -196,7 +196,7 @@ def plotEvent(client, event, fig=None, prePadding=0, postPadding=0, commands={})
 
     # Add title with the event name, type etc
     dayObsStr = dayObsIntToString(event.dayObs)
-    title = (f"{dayObsStr} - seqNum {event.seqNum} (v{event.version})"  # top line, rest below
+    title = (f"{dayObsStr} - seqNum {event.seqNum} (version {event.version})"  # top line, rest below
              f"\nDuration = {event.duration:.2f}s"
              f" Event type: {event.type.name}"
              f" End reason: {event.endReason.name}"
@@ -288,7 +288,7 @@ class TMAEvent:
     end: Time
     beginFloat: float
     endFloat: float
-    version: int = 0
+    version: int = 0  # update this number any time a code change which could change event definitions is made
 
     def __lt__(self, other):
         if self.dayObs < other.dayObs:
