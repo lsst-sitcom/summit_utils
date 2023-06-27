@@ -878,11 +878,16 @@ class TMAEventMaker:
             eventStart = rowNum
             previousState = state
             rowNum += 1  # move to the next row before starting the while loop
+            if rowNum == nRows:
+                # we've reached the end of the data, and we're still in an
+                # event, so don't return this presumably in-progress event
+                self.log.warning('Reached the end of the data while still in an event')
+                break
             state = states[rowNum]
             while state == previousState:
+                rowNum += 1
                 if rowNum == nRows:
                     break
-                rowNum += 1
                 state = states[rowNum]
             parsed_states.append((eventStart, rowNum, previousState, state))
             if state in skipStates:
