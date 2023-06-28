@@ -369,7 +369,26 @@ class TMAEvent:
 
 
 class TMAState(enum.IntEnum):
-    """Overall state of the TMA
+    """Overall state of the TMA.
+
+    States are defined as follows:
+
+    UNINITIALIZED
+        We have not yet got data for all relevant components, so the overall
+        state is undefined.
+    STOPPED
+        All components are on, and none are moving.
+    TRACKING
+        We are tracking the sky.
+    SLEWING
+        One or more components are moving, and one or more are not tracking the
+        sky. This should probably be called MOVING, as it includes: slewing,
+        MOVING_POINT_TO_POINT, and JOGGING.
+    FAULT
+        All (if engineeringMode) or any (if not engineeringMode) components are
+        in fault.
+    OFF
+        All components are off.
     """
     UNINITIALIZED = -1
     STOPPED = 0
