@@ -60,6 +60,10 @@ TOPIC_ALIASES = {
 
 COMMAND_ALIASES = {
     'raDecTarget': 'lsst.sal.MTPtg.command_raDecTarget',
+    'moveToTarget': 'lsst.sal.MTMount.command_moveToTarget',
+    'startTracking': 'lsst.sal.MTMount.command_startTracking',
+    'stopTracking': 'lsst.sal.MTMount.command_stopTracking',
+    'trackTarget': 'lsst.sal.MTMount.command_trackTarget',  # issued at 20Hz - don't plot
 }
 
 # setting aliases within the dictionary itself: making alt an alias for el
