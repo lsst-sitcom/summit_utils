@@ -180,9 +180,11 @@ def plotEvent(client, event, fig=None, prePadding=0, postPadding=0, commands={},
                     " Pass in a figure with fig = plt.figure(figsize=(10, 8)) to avoid this warning.")
 
     fig.clear()
-    ax1, ax2 = fig.subplots(2, gridspec_kw={'wspace': 0,
-                                            'hspace': 0,
-                                            'height_ratios': [2.5, 1]})
+    ax1, ax2 = fig.subplots(2,
+                            sharex=True,
+                            gridspec_kw={'wspace': 0,
+                                         'hspace': 0,
+                                         'height_ratios': [2.5, 1]})
 
     if azimuthData is None or elevationData is None:
         azimuthData, elevationData = getAzimuthElevationDataForEvent(client,
