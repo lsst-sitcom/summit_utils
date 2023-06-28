@@ -912,7 +912,7 @@ class TMAEventMaker:
 
         # applies the data to the state machine, and generates events from the
         # series of states which results
-        events = self._calculateEventsFromMergedData(data, dayObs)
+        events = self._calculateEventsFromMergedData(data, dayObs, dataIsForCurrentDay=workingLive)
         if not events:
             self.log.warning(f"Failed to calculate any events for {dayObs=} despite EFD data existing!")
         return events
@@ -978,7 +978,7 @@ class TMAEventMaker:
             merged = self._mergeData(data)
             self._data[dayObs] = merged
 
-    def _calculateEventsFromMergedData(self, data, dayObs):
+    def _calculateEventsFromMergedData(self, data, dayObs, dataIsForCurrentDay):
         """Calculate the list of events from the merged data.
 
         Runs the merged data, row by row, through the TMA state machine (with
@@ -999,6 +999,9 @@ class TMAEventMaker:
             The merged dataframe to use.
         dayObs : `int`
             The dayObs for the data.
+        dataIsForCurrentDay : `bool`
+            Whether the data is for the current day. Determines whether to
+            allow an open last event or not.
 
         Returns
         -------
@@ -1021,12 +1024,12 @@ class TMAEventMaker:
             tma.apply(row)
             tmaStates[rowNum] = tma.state
 
-        stateTuples = self._statesToEventTuples(tmaStates)
+        stateTuples = self._statesToEventTuples(tmaStates, dataIsForCurrentDay)
         events = self._makeEventsFromStateTuples(stateTuples, dayObs, data)
 
         return events
 
-    def _statesToEventTuples(self, states):
+    def _statesToEventTuples(self, states, dataIsForCurrentDay):
         """Get the event-tuples from the dictionary of TMAStates.
 
         Chunks the states into blocks of the same state, so that we can create
@@ -1041,6 +1044,9 @@ class TMAEventMaker:
         ----------
         states : `dict` of `int` : `lsst.summit.utils.tmaUtils.TMAState`
             The states of the TMA, keyed by row number.
+        dataIsForCurrentDay : `bool`
+            Whether the data is for the current day. Determines whether to
+            allow and open last event or not.
 
         Returns
         -------
@@ -1084,17 +1090,30 @@ class TMAEventMaker:
                 eventStart = None
 
         # done parsing, just check the last event is valid
-        if len(parsedStates) >= 1:
+        if parsedStates:  # ensure we have at least one event
             lastEvent = parsedStates[-1]
             if lastEvent[1] == nRows:
-                # Generally, you *want* the end to be at the start of the next
-                # row because you were in that state right up until that state
-                # change, but in the case of an un-ended event, this will
-                # overrun the array, so take one-off the row number and issue a
-                # warning
-                self.log.warning("Last event ends open, forcing it to end at end of the day's data")
-                # it's a tuple, so (deliberately) awkward to modify
-                parsedStates[-1] = (lastEvent[0], lastEvent[1] - 1, lastEvent[2], lastEvent[3])
+                # Generally, you *want* the timespan for an event to be the
+                # first row of the next event, because you were in that state
+                # right up until that state change. However, if that event is
+                # a) the last one of the day and b) runs right up until the end
+                # of the dataframe, then there isn't another row, so this will
+                # overrun the array.
+                #
+                # If the data is for the current day then this isn't a worry,
+                # as we're likely still taking data, and this event will likely
+                # close yet, so we don't issue a warning, and simply drop the
+                # event from the list.
+
+                # However, if the data is for a past day then no new data will
+                # come to close the event, so allow the event to be "open", and
+                # issue a warning
+                if dataIsForCurrentDay:
+                    parsedStates = parsedStates[:-1]
+                else:
+                    self.log.warning("Last event ends open, forcing it to end at end of the day's data")
+                    # it's a tuple, so (deliberately) awkward to modify
+                    parsedStates[-1] = (lastEvent[0], lastEvent[1] - 1, lastEvent[2], lastEvent[3])
 
         return parsedStates
 
