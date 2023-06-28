@@ -302,6 +302,10 @@ def getCommandsDuringEvent(client, event, commands=['raDecTarget'], log=None, do
     """
     # TODO: Add support for padding the event here to allow looking for
     # triggering commands before the event
+
+    # TODO: Change this to always return a list of times, and remove warning
+    # about finding multiple commands. Remember to update docs and plotting
+    # code.
     if log is None and doLog:
         log = logging.getLogger(__name__)
 
