@@ -174,11 +174,15 @@ def plotEvent(client, event, fig=None, prePadding=0, postPadding=0, commands={},
         return f"{value:.2f}"
 
     if fig is None:
-        fig = plt.figure(figsize=(10, 6))
+        fig = plt.figure(figsize=(10, 8))
         log = logging.getLogger(__name__)
         log.warning("Making new matplotlib figure - if this is in a loop you're going to have a bad time."
-                    " Pass in a figure with fig = plt.figure(figsize=(10, 6)) to avoid this warning.")
-    ax1 = fig.gca()
+                    " Pass in a figure with fig = plt.figure(figsize=(10, 8)) to avoid this warning.")
+
+    fig.clear()
+    ax1, ax2 = fig.subplots(2, gridspec_kw={'wspace': 0,
+                                            'hspace': 0,
+                                            'height_ratios': [2.5, 1]})
 
     if azimuthData is None or elevationData is None:
         azimuthData, elevationData = getAzimuthElevationDataForEvent(client,
@@ -188,34 +192,46 @@ def plotEvent(client, event, fig=None, prePadding=0, postPadding=0, commands={},
 
     # Use the native color cycle for the lines. Because they're on different
     # axes they don't cycle by themselves
-    linesColourCycle = [p['color'] for p in plt.rcParams['axes.prop_cycle']]
+    lineColors = [p['color'] for p in plt.rcParams['axes.prop_cycle']]
     colorCounter = 0
 
-    ax1.plot(azimuthData['actualPosition'], label='Azimuth position', c=linesColourCycle[colorCounter])
+    ax1.plot(azimuthData['actualPosition'], label='Azimuth position', c=lineColors[colorCounter])
     colorCounter += 1
     ax1.yaxis.set_major_formatter(FuncFormatter(tickFormatter))
     ax1.set_ylabel('Azimuth (degrees)')
-    ax1.set_xlabel('Time (UTC)')  # yes, it really is UTC, matplotlib convert this automatically!
 
-    ax2 = ax1.twinx()
-    ax2.plot(elevationData['actualPosition'], label='Elevation position', c=linesColourCycle[colorCounter])
+    ax1_twin = ax1.twinx()
+    ax1_twin.plot(elevationData['actualPosition'], label='Elevation position', c=lineColors[colorCounter])
     colorCounter += 1
-    ax2.yaxis.set_major_formatter(FuncFormatter(tickFormatter))
-    ax2.set_ylabel('Elevation (degrees)')
+    ax1_twin.yaxis.set_major_formatter(FuncFormatter(tickFormatter))
+    ax1_twin.set_ylabel('Elevation (degrees)')
+    ax1.set_xticks([])  # remove x tick labels on the hidden upper x-axis
+
+    ax2_twin = ax2.twinx()
+    ax2.plot(azimuthData['actualTorque'], label='Azimuth torque', c=lineColors[colorCounter])
+    colorCounter += 1
+    ax2_twin.plot(elevationData['actualTorque'], label='Elevation torque', c=lineColors[colorCounter])
+    colorCounter += 1
+    ax2.set_ylabel('Azimuth torque (nM)')
+    ax2_twin.set_ylabel('Elevation torque (nM)')
+    ax2.set_xlabel('Time (UTC)')  # yes, it really is UTC, matplotlib converts this automatically!
 
     # put the ticks at an angle, and right align with the tick marks
-    ax1.set_xticks(ax1.get_xticks())  # needed to supress a user warning
-    xlabels = ax1.get_xticks()
-    ax1.set_xticklabels(xlabels, rotation=40, ha='right')
-    ax1.xaxis.set_major_locator(mdates.AutoDateLocator())
-    ax1.xaxis.set_major_formatter(mdates.DateFormatter('%H:%M:%S'))
+    ax2.set_xticks(ax2.get_xticks())  # needed to supress a user warning
+    xlabels = ax2.get_xticks()
+    ax2.set_xticklabels(xlabels, rotation=40, ha='right')
+    ax2.xaxis.set_major_locator(mdates.AutoDateLocator())
+    ax2.xaxis.set_major_formatter(mdates.DateFormatter('%H:%M:%S'))
 
     if prePadding or postPadding:
         # note the conversion to utc because the x-axis from the dataframe
         # already got automagically converted when plotting before, so this is
         # necessary for things to line up
-        ax2.axvline(event.begin.utc.datetime, c='k', ls='--', alpha=0.5, label='Event begin/end')
-        ax2.axvline(event.end.utc.datetime, c='k', ls='--', alpha=0.5)
+        ax1_twin.axvline(event.begin.utc.datetime, c='k', ls='--', alpha=0.5, label='Event begin/end')
+        ax1_twin.axvline(event.end.utc.datetime, c='k', ls='--', alpha=0.5)
+        # extend lines down across lower plot, but do not re-add label
+        ax2_twin.axvline(event.begin.utc.datetime, c='k', ls='--', alpha=0.5)
+        ax2_twin.axvline(event.end.utc.datetime, c='k', ls='--', alpha=0.5)
 
     # plot any commands we might have
     if not isinstance(commands, dict):
@@ -227,20 +243,26 @@ def plotEvent(client, event, fig=None, prePadding=0, postPadding=0, commands={},
         # code logs about lack of commands found so no need to mention here.
         if commandTime is None:
             continue
-        ax2.axvline(commandTime.utc.datetime, c=linesColourCycle[colorCounter],
-                    ls='--', alpha=0.75, label=f'{command}')
+        ax1_twin.axvline(commandTime.utc.datetime, c=lineColors[colorCounter],
+                         ls='--', alpha=0.75, label=f'{command}')
+        # extend lines down across lower plot, but do not re-add label
+        ax2_twin.axvline(commandTime.utc.datetime, c=lineColors[colorCounter],
+                         ls='--', alpha=0.75)
         colorCounter += 1
 
     # combine the legends and put inside the plot
     handles1, labels1 = ax1.get_legend_handles_labels()
-    handles2, labels2 = ax2.get_legend_handles_labels()
-    handles = handles1 + handles2
-    labels = labels1 + labels2
+    handles2, labels2 = ax1_twin.get_legend_handles_labels()
+    handles3, labels3 = ax2.get_legend_handles_labels()
+    handles4, labels4 = ax2_twin.get_legend_handles_labels()
+
+    handles = handles1 + handles2 + handles3 + handles4
+    labels = labels1 + labels2 + labels3 + labels4
     # ax2 is "in front" of ax1 because it has the vlines plotted on it, and
     # vlines are on ax2 so that they appear at the bottom of the legend, so
     # make sure to plot the legend on ax2, otherwise the vlines will go on top
     # of the otherwise-opaque legend.
-    ax2.legend(handles, labels, facecolor='white', framealpha=1)
+    ax1_twin.legend(handles, labels, facecolor='white', framealpha=1)
 
     # Add title with the event name, type etc
     dayObsStr = dayObsIntToString(event.dayObs)
@@ -249,7 +271,7 @@ def plotEvent(client, event, fig=None, prePadding=0, postPadding=0, commands={},
              f" Event type: {event.type.name}"
              f" End reason: {event.endReason.name}"
              )
-    ax2.set_title(title)
+    ax1_twin.set_title(title)
     return fig
 
 
