@@ -861,6 +861,12 @@ class TMAEventMaker:
 
         # Iterate over the keys and merge the corresponding DataFrames
         for key, df in data.items():
+            if df.empty:
+                # Must skip the df if it's empty, otherwise the merge will fail
+                # due to lack of private_sndStamp. Because other axes might
+                # still be in motion, so we still want to merge what we have
+                continue
+
             originalRowCounter += len(df)
             component = self._shortName(key)  # Add suffix to column names to identify the source
             suffix = '_' + component
