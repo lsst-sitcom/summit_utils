@@ -439,6 +439,43 @@ def efdTimestampToAstropy(timestamp):
     return Time(timestamp, format='unix_tai')
 
 
+def astropyToEfdTimestamp(time):
+    """Get astropy Time object as an efd timestamp
+
+    Parameters
+    ----------
+    time : `astropy.time.Time`
+        The time as an astropy.time.Time object.
+
+    Returns
+    -------
+    timestamp : `float`
+        The timestamp, as a float.
+    """
+
+    return time.value
+
+
+def clipDataToEvent(df, event):
+    """Clip a padded dataframe to an event.
+
+    Parameters
+    ----------
+    df : `pandas.DataFrame`
+        The dataframe to clip.
+    event : `lsst.summit.utils.efdUtils.TmaEvent`
+        The event to clip to.
+
+    Returns
+    -------
+    clipped : `pandas.DataFrame`
+        The clipped dataframe.
+    """
+    mask = (df['private_sndStamp'] >= event.begin.value) & (df['private_sndStamp'] <= event.end.value)
+    clipped_df = df.loc[mask].copy()
+    return clipped_df
+
+
 def calcNextDay(dayObs):
     """Given an integer dayObs, calculate the next integer dayObs.
 
