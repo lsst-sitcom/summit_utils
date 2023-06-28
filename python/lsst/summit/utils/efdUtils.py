@@ -222,8 +222,8 @@ def getEfdData(client, topic, *,
     time is specified but no end time or timespan.
 
     """
-    # TODO: ideally should calls mpts as necessary so that users needn't care if
-    # things are packed
+    # TODO: ideally should calls mpts as necessary so that users needn't care
+    # if things are packed
 
     # supports aliases so that you can query with them. If there is no entry in
     # the alias dict then it queries with the supplied key. The fact the schema

@@ -89,7 +89,7 @@ def getTracksFromEventList(events):
 
 
 def getAzimuthElevationDataForEvent(client, event, prePadding=0, postPadding=0):
-    """
+    """Get the azimuth and elevation data for a given TMAEvent.
 
     Parameters
     ----------
@@ -97,14 +97,19 @@ def getAzimuthElevationDataForEvent(client, event, prePadding=0, postPadding=0):
         The EFD client to use.
     event : `lsst.summit.utils.tmaUtils.TMAEvent`
         The event to plot.
-    fig : `matplotlib.figure.Figure`, optional
-        The figure to plot on. If not specified, a new figure will be created.
     prePadding : `float`, optional
         The amount of time to pad the event with before the start time, in
         seconds.
     postPadding : `float`, optional
         The amount of time to pad the event with after the end time, in
         seconds.
+
+    Returns
+    -------
+    azimuthData : `pandas.DataFrame`
+        The azimuth data for the specified event.
+    elevationData : `pandas.DataFrame`
+        The elevation data for the specified event.
     """
     azimuthData = getEfdData(client,
                              'lsst.sal.MTMount.azimuth',
@@ -122,7 +127,17 @@ def getAzimuthElevationDataForEvent(client, event, prePadding=0, postPadding=0):
 
 def plotEvent(client, event, fig=None, prePadding=0, postPadding=0, commands={},
               azimuthData=None, elevationData=None):
-    """Plot the TMA axis states for a given TMAEvent.
+    """Plot the TMA axis positions over the course of a given TMAEvent.
+
+    Plots the axis motion profiles for the given event, with optional padding
+    at the start and end of the event. If the data is provided via the
+    azimuthData and elevationData parameters, it will be used, otherwise it
+    will be queried from the EFD.
+
+    Optionally plots any commands issued during or around the event, if these
+    are supplied. Commands are supplied as a dictionary of the command topic
+    strings, with values as astro.time.Time objects at which the command was
+    issued.
 
     Parameters
     ----------
@@ -139,9 +154,8 @@ def plotEvent(client, event, fig=None, prePadding=0, postPadding=0, commands={},
         The amount of time to pad the event with after the end time, in
         seconds.
     commands : `dict` of `str` : `astropy.time.Time`, optional
-        A dictionary of commands to plot on the figure. The keys are the
-        topic names, and the values are the times at which the commands were
-        sent.
+        A dictionary of commands to plot on the figure. The keys are the topic
+        names, and the values are the times at which the commands were sent.
     azimuthData : `pandas.DataFrame`, optional
         The azimuth data to plot. If not specified, it will be queried from the
         EFD.
@@ -258,6 +272,11 @@ def getCommandsDuringEvent(client, event, commands=['raDecTarget'], log=None, do
         needed.
     doLog : `bool`, optional
         Whether to log messages. Defaults to True.
+
+    Returns
+    -------
+    commands : `dict` of `str` : `astropy.time.Time`
+        A dictionary of the commands and the times at which they were issued.
     """
     # TODO: Add support for padding the event here to allow looking for
     # triggering commands before the event
@@ -311,7 +330,7 @@ def _turnOn(tma):
     tma._parts['elevationSystemState'] = PowerState.ON
 
 
-@dataclass(slots=True, kw_only=True)
+@dataclass(slots=True, kw_only=True)  # XXX add frozen=True?
 class TMAEvent:
     dayObs: int
     seqNum: int
@@ -350,7 +369,8 @@ class TMAEvent:
 
 
 class TMAState(enum.IntEnum):
-    """Overall state of the TMA"""
+    """Overall state of the TMA
+    """
     UNINITIALIZED = -1
     STOPPED = 0
     TRACKING = 1
@@ -404,6 +424,21 @@ class PowerState(enum.IntEnum):
 
 
 def getAxisAndType(rowFor):
+    """Get the axis the data relates to, and the type of data it contains.
+
+    Parameters
+    ----------
+    rowFor : `str`
+        The column in the dataframe denoting what this row is for, e.g.
+            "elevationMotionState" or "azimuthInPosition", etc.
+
+    Returns
+    -------
+    axis : `str`
+        The axis the row is for, e.g. "azimuth", "elevation".
+    rowType : `str`
+        The type of the row, e.g. "MotionState", "SystemState", "InPosition".
+    """
     regex = r'(azimuth|elevation)(InPosition|MotionState|SystemState)'
     matches = re.search(regex, rowFor)
     axis = matches.group(1)
@@ -437,6 +472,14 @@ class ReferenceList:
 
 class TMA:
     """A state machine model of the TMA.
+
+    XXX rename this to TMAStateMachine?
+    XXX remove engineeringMode
+
+    Parameters
+    ----------
+    debug : `bool`, optional
+        Whether to log debug messages. Defaults to False.
     """
     _UNINITIALIZED_VALUE: int = -999
 
@@ -483,6 +526,11 @@ class TMA:
 
         Checks that the row contains data for a later time, and applies the
         relevant column entry to the relevant component.
+
+        Parameters
+        ----------
+        row : `pandas.Series`
+            The row of data to apply to the state machine.
         """
         timestamp = row['private_sndStamp']
         if timestamp < self._mostRecentRowTime:  # NB equals is OK, technically, though it never happens
@@ -505,10 +553,26 @@ class TMA:
             raise RuntimeError(f'Failed to apply {value} to {axis}{rowType} with state {self._parts}') from e
 
     def _getRowPayload(self, row, rowType, rowFor):
-        """Get the correct column value from the row.
+        """Get the relevant value from the row.
 
-        Given the row, and which component it relates to, get the
-        relevant value, as its enum or a bool, depending on the component.
+        Given the row, and which component it relates to, get the relevant
+        value, as a bool or cast to the appropriate enum class.
+
+        Parameters
+        ----------
+        row : `pandas.Series`
+            The row of data from the dataframe.
+        rowType : `str`
+            The type of the row, e.g. "MotionState", "SystemState",
+            "InPosition".
+        rowFor : `str`
+            The component the row is for, e.g. "azimuth", "elevation".
+
+        Returns
+        -------
+        value : `bool` or `enum`
+            The value of the row, as a bool or enum, depending on the
+            component, cast to the appropriate enum class or bool.
         """
         match rowType:
             case 'MotionState':
@@ -525,11 +589,16 @@ class TMA:
 
     @property
     def _isValid(self):
-        # TODO: probably need to init the inPositions to False? and then just
-        # itertools.chain self.system and motion rather than checking all
-        # parts? Really not sure about this though. If no days started during
-        # TMA usage this would probably be easier - need to think and/or speak
-        # to Russell & Tiago
+        """Has the TMA had a value applied to all its components?
+
+        If any component has not yet had a value applied, the TMA is not valid,
+        as those components will be in an unknown state.
+
+        Returns
+        -------
+        isValid : `bool`
+            Whether the TMA is fully initialized.
+        """
         return not any([v == self._UNINITIALIZED_VALUE for v in self._parts.values()])
 
     # state inspection properties - a high level way of inspecting the state as
@@ -559,50 +628,51 @@ class TMA:
             self._parts['elevationSystemState'] not in badStates
         )
 
-    # axis inspection properties, for internal use
+    # Axis inspection properties, designed for internal use. These return
+    # iterables so that they can be used in any() and all() calls, which make
+    # the logic much easier to read, e.g. to see if anything is moving, we can
+    # write `if not any(_axisInMotion):`
     @property
     def _axesInFault(self):
-        """Returns a list of states for the axes, in order to call any() and
-        all()"""
         return [x in self.FAULT_LIKE for x in self.system]
 
     @property
     def _axesOff(self):
-        """Returns a list of states for the axes, in order to call any() and
-        all()"""
         return [x in self.OFF_LIKE for x in self.system]
 
     @property
     def _axesOn(self):
-        """Returns a list of states for the axes, in order to call any() and
-        all()"""
         return [not x for x in self._axesOn]
 
     @property
     def _axesInMotion(self):
-        """Returns a list of states for the axes, in order to call any() and
-        all()"""
         return [x in self.MOVING_LIKE for x in self.motion]
 
     @property
     def _axesTRACKING(self):
-        """Returns a list of states for the axes, in order to call any() and
-        all()
-
-        Note this is _axesTRACKING not _axesTracking to make sure it's clear
-        that this is the AxisMotionState type of TRACKING and not the normal
-        conceptual notion of tracking (the sky, i.e. as opposed to slewing)
+        """Note this is deliberately named _axesTRACKING and not _axesTracking
+        to make it clear that this is the AxisMotionState type of TRACKING and
+        not the normal conceptual notion of tracking (the sky, i.e. as opposed
+        to slewing).
         """
         return [x == AxisMotionState.TRACKING for x in self.motion]
 
     @property
     def _axesInPosition(self):
-        """Returns a list of states for the axes, in order to call any() and
-        all()"""
         return [x is True for x in self.inPosition]
 
     @property
     def state(self):
+        """The overall state of the TMA.
+
+        Note that this is both a property, and also the method which applies
+        the logic sieve to determine the state.
+
+        Returns
+        -------
+        state : `TMAState`
+            The overall state of the TMA.
+        """
         # first, check we're valid, and if not, return UNINITIALIZED state, as
         # things are unknown
         if not self._isValid:
@@ -649,20 +719,21 @@ class TMA:
 
 
 class TMAEventMaker:
-    # TODO: turn this into an ABC with a TMA mount instance of it.
-
     # the topics which need logical combination to determine the overall mount
     # state. Will need updating as new components are added to the system.
+
     # relevant column: 'state'
     _movingComponents = [
         'lsst.sal.MTMount.logevent_azimuthMotionState',
         'lsst.sal.MTMount.logevent_elevationMotionState',
     ]
+
     # relevant column: 'inPosition'
     _inPositionComponents = [
         'lsst.sal.MTMount.logevent_azimuthInPosition',
         'lsst.sal.MTMount.logevent_elevationInPosition',
     ]
+
     # the components which, if in fault, put the TMA into fault
     # relevant column: 'powerState'
     _stateComponents = [
@@ -689,19 +760,42 @@ class TMAEventMaker:
 
     @staticmethod
     def _shortName(topic):
+        """Get the short name of a topic.
+
+        Parameters
+        ----------
+        topic : `str`
+            The topic to get the short name of.
+
+        Returns
+        -------
+        shortName : `str`
+            The short name of the topic, e.g. 'azimuthInPosition'
+        """
         # get, for example 'azimuthInPosition' from
         # lsst.sal.MTMount.logevent_azimuthInPosition
         return topic.split('_')[-1]
 
     def _mergeData(self, data):
-        """Merge a set of dataframes.
+        """Merge a dict of dataframes based on private_sndStamp, recording
+        where each row came from.
 
-        data is a dict of dataframes, keyed by topic.
+        Given a dict or dataframes, keyed by topic, merge them into a single
+        dataframe, adding a column to record which topic each row came from.
+
+        Parameters
+        ----------
+        data : `dict` of `str` : `pandas.DataFrame`
+            The dataframes to merge.
+
+        Returns
+        -------
+        merged : `pandas.DataFrame`
+            The merged dataframe.
         """
         excludeColumns = ['private_sndStamp', 'rowFor']
 
         mergeArgs = {
-            # 'on': 'private_sndStamp',
             'how': 'outer',
             'sort': True,
         }
@@ -734,10 +828,22 @@ class TMAEventMaker:
         return merged
 
     def getEvents(self, dayObs):
-        """Get the TMA seqNums for the specified dayObs.
+        """Get the TMA events for the specified dayObs.
 
-        Gets the data from the cache or EFD as required, handling live data.
-        Merges the EFD data streams, generates TmaEvents for the day's data.
+        Gets the required mount data from the cache or the EFD as required,
+        handling whether we're working with live vs historical data. The
+        dataframes from the EFD is merged and applied to the TMAStateMachine,
+        and that series of state changes is used to generate a list of
+        TmaEvents for the day's data.
+
+        If the data is for the current day, i.e. if new events can potentially
+        land, then if the last event is "open" (meaning that the TMA appears to
+        be in motion and thus the event is growing with time), then that event
+        is excluded from the event list as it is expected to be changing with
+        time, and will likely close eventually. However, if that situation
+        occurs on a day in the past, then that event can never close, and the
+        event is therefore included, but a warning about the open event is
+        logged.
 
         Parameters
         ----------
@@ -752,6 +858,7 @@ class TMAEventMaker:
         workingLive = self.isToday(dayObs)
         data = None
 
+        # get or update the data as required
         if dayObs in self._data and not workingLive:
             # data is in the cache and it's not being updated, so use it
             data = self._data[dayObs]
@@ -770,10 +877,13 @@ class TMAEventMaker:
         else:
             raise RuntimeError("This should never happen")
 
+        # if we don't have something to work with, log a warning and return
         if self._noDataFound(data):
             self.log.warning(f"No EFD data found for {dayObs=}")
             return []
 
+        # applies the data to the state machine, and generates events from the
+        # series of states which results
         events = self._calculateEventsFromMergedData(data, dayObs)
         if not events:
             self.log.warning(f"Failed to calculate any events for {dayObs=} despite EFD data existing!")
@@ -781,19 +891,35 @@ class TMAEventMaker:
 
     @staticmethod
     def _noDataFound(data):
-        # can't just compare to with data == NO_DATA_SENTINEL because data
-        # is usually a dataframe, and you can't compare a dataframe to a string
-        # directly.
+        """Check if any data was found.
+
+        Parameters
+        ----------
+        data : `pandas.DataFrame`
+            The merged dataframe to check.
+
+        Returns
+        -------
+        noDataFound : `bool`
+            Whether no data was found.
+        """
+        # You can't just compare to with data == NO_DATA_SENTINEL because
+        # `data` is usually a dataframe, and you can't compare a dataframe to a
+        # string directly.
         return isinstance(data, str) and data == NO_DATA_SENTINEL
 
     def _getEfdDataForDayObs(self, dayObs):
         """Get the EFD data for the specified dayObs and store it in the cache.
 
-        Gets the EFD data for all components, and stores it as a dict, keyed by
-        the component topic name. If no data is found, the value is set to
-        ``NO_DATA_SENTINEL`` to differentiate this from ``None``, as this is
-        what you'd get if you queried the cache with `self._data.get(dayObs)`.
-        It also marks that we have already queried this day.
+        Gets the EFD data for all components, as a dict of dataframes keyed by
+        component name. These are then merged into a single dataframe in time
+        order, based on each row's `private_sndStamp`. This is then stored in
+        self._data[dayObs].
+
+        If no data is found, the value is set to ``NO_DATA_SENTINEL`` to
+        differentiate this from ``None``, as this is what you'd get if you
+        queried the cache with `self._data.get(dayObs)`. It also marks that we
+        have already queried this day.
 
         Parameters
         ----------
@@ -825,17 +951,34 @@ class TMAEventMaker:
             self._data[dayObs] = merged
 
     def _calculateEventsFromMergedData(self, data, dayObs):
-        """
+        """Calculate the list of events from the merged data.
 
-        Runs the data, row by row, through the TMA state machine to get the
-        state at each row, building a dict of these states. Then loops over the
-        dict of states, building a list of events by chunking the states into
-        blocks of the same state, and creating an event for each block.
-        Off-type states are skipped over, with each event starting when the
-        telescope next resumes motion.
+        Runs the merged data, row by row, through the TMA state machine (with
+        `tma.apply`) to get the overall TMA state at each row, building a dict
+        of these states, keyed by row number.
+
+        This time-series of TMA states are then looped over (in
+        `_statesToEventTuples`), building a list of tuples representing the
+        start and end of each event, the type of the event, and the reason for
+        the event ending.
+
+        This list of tuples is then passed to `_makeEventsFromStateTuples`,
+        which actually creates the `TMAEvent` objects.
+
+        Parameters
+        ----------
+        data : `pandas.DataFrame`
+            The merged dataframe to use.
+        dayObs : `int`
+            The dayObs for the data.
+
+        Returns
+        -------
+        events : `list` of `lsst.summit.utils.tmaUtils.TMAEvent`
+            The events for the specified dayObs.
         """
         engineering = True
-        tma = TMA(engineeringMode=engineering)
+        tma = TMA(engineeringMode=engineering)  # XXX remove this mode
 
         # For now, we assume that the TMA starts each day able to move, but
         # stationary. If this turns out to cause problems, we will need to
@@ -856,12 +999,31 @@ class TMAEventMaker:
         return events
 
     def _statesToEventTuples(self, states):
-        """
+        """Get the event-tuples from the dictionary of TMAStates.
+
+        Chunks the states into blocks of the same state, so that we can create
+        an event for each block in `_makeEventsFromStateTuples`. Off-type
+        states are skipped over, with each event starting when the telescope
+        next resumes motion or changes to a different type of motion state,
+        i.e. from non-tracking type movement (MOVE_POINT_TO_POINT, JOGGING,
+        TRACKING-but-not-in-position, i.e. slewing) to a tracking type
+        movement, or vice versa.
+
+        Parameters
+        ----------
+        states : `dict` of `int` : `lsst.summit.utils.tmaUtils.TMAState`
+            The states of the TMA, keyed by row number.
+
+        Returns
+        -------
+        parsedStates : `list` of `tuple`
+            The parsed states, as a list of tuples of the form:
+                ``(eventStart, eventEnd, eventType, endReason)``
         """
         # Consider rewriting this with states as a list and using pop(0)?
         skipStates = (TMAState.STOPPED, TMAState.OFF, TMAState.FAULT)
 
-        parsed_states = []
+        parsedStates = []
         eventStart = None
         rowNum = 0
         nRows = len(states)
@@ -889,13 +1051,13 @@ class TMAEventMaker:
                 if rowNum == nRows:
                     break
                 state = states[rowNum]
-            parsed_states.append((eventStart, rowNum, previousState, state))
+            parsedStates.append((eventStart, rowNum, previousState, state))
             if state in skipStates:
                 eventStart = None
 
         # done parsing, just check the last event is valid
-        if len(parsed_states) >= 1:
-            lastEvent = parsed_states[-1]
+        if len(parsedStates) >= 1:
+            lastEvent = parsedStates[-1]
             if lastEvent[1] == nRows:
                 # Generally, you *want* the end to be at the start of the next
                 # row because you were in that state right up until that state
@@ -904,12 +1066,30 @@ class TMAEventMaker:
                 # warning
                 self.log.warning("Last event ends open, forcing it to end at end of the day's data")
                 # it's a tuple, so (deliberately) awkward to modify
-                parsed_states[-1] = (lastEvent[0], lastEvent[1] - 1, lastEvent[2], lastEvent[3])
+                parsedStates[-1] = (lastEvent[0], lastEvent[1] - 1, lastEvent[2], lastEvent[3])
 
-        return parsed_states
+        return parsedStates
 
     def _makeEventsFromStateTuples(self, states, dayObs, data):
-        """
+        """For the list of state-tuples, create a list of `TMAEvent` objects.
+
+        Given the underlying data, and the start/stop points for each event,
+        create the TMAEvent objects for the dayObs.
+
+        Parameters
+        ----------
+        states : `list` of `tuple`
+            The parsed states, as a list of tuples of the form:
+                ``(eventStart, eventEnd, eventType, endReason)``
+        dayObs : `int`
+            The dayObs for the data.
+        data : `pandas.DataFrame`
+            The merged dataframe.
+
+        Returns
+        -------
+        events : `list` of `lsst.summit.utils.tmaUtils.TMAEvent`
+            The events for the specified dayObs.
         """
         seqNum = 0
         events = []
