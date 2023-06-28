@@ -1143,6 +1143,7 @@ class TMAEventMaker:
                 # come to close the event, so allow the event to be "open", and
                 # issue a warning
                 if dataIsForCurrentDay:
+                    self.log.info("Discarding open (likely in-progess) final event from current day's events")
                     parsedStates = parsedStates[:-1]
                 else:
                     self.log.warning("Last event ends open, forcing it to end at end of the day's data")
