@@ -39,7 +39,7 @@ from .efdUtils import (getEfdData,
                        )
 
 __all__ = (
-    'TMA',
+    'TMAStateMachine',
     'TMAEvent',
     'TMAEventMaker',
     'TMAState',
@@ -470,14 +470,23 @@ class ReferenceList:
         return len(self.keys)
 
 
-class TMA:
+class TMAStateMachine:
     """A state machine model of the TMA.
 
-    XXX rename this to TMAStateMachine?
-    XXX remove engineeringMode
+    Note that when used for event generation, changing ``engineeringMode`` to
+    False might change the resulting list of events, and that if the TMA moves
+    with some axis in fault, then these events will be missed. It is therefore
+    thought that ``engineeringMode=True`` should always be used when generating
+    events. The option, however, is there for completeness, as this will be
+    useful for knowing is the CSC would consider the TMA to be in fault in the
+    general case.
 
     Parameters
     ----------
+    engineeringMode : `bool`, optional
+        Whether the TMA is in engineering mode. Defaults to True. If False,
+        then the TMA will be in fault if any component is in fault. If True,
+        then the TMA will be in fault only if all components are in fault.
     debug : `bool`, optional
         Whether to log debug messages. Defaults to False.
     """
@@ -978,7 +987,7 @@ class TMAEventMaker:
             The events for the specified dayObs.
         """
         engineering = True
-        tma = TMA(engineeringMode=engineering)  # XXX remove this mode
+        tma = TMAStateMachine(engineeringMode=engineering)
 
         # For now, we assume that the TMA starts each day able to move, but
         # stationary. If this turns out to cause problems, we will need to

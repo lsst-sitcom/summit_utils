@@ -29,7 +29,7 @@ import numpy as np
 import asyncio
 
 from lsst.summit.utils.efdUtils import makeEfdClient
-from lsst.summit.utils.tmaUtils import (TMA,
+from lsst.summit.utils.tmaUtils import (TMAStateMachine,
                                         TMAEvent,
                                         TMAEventMaker,
                                         TMAState,
@@ -51,7 +51,7 @@ def makeValid(tma):
 class TmaUtilsTestCase(lsst.utils.tests.TestCase):
 
     def test_tmaInit(self):
-        tma = TMA()
+        tma = TMAStateMachine()
         self.assertFalse(tma._isValid)
 
         # setting one axis should not make things valid
@@ -69,7 +69,7 @@ class TmaUtilsTestCase(lsst.utils.tests.TestCase):
     def test_tmaReferences(self):
         """Check the linkage between the component lists and the _parts dict.
         """
-        tma = TMA()
+        tma = TMAStateMachine()
 
         # setting one axis should not make things valid
         self.assertEqual(tma._parts['azimuthMotionState'], tma._UNINITIALIZED_VALUE)
@@ -92,7 +92,7 @@ class TmaUtilsTestCase(lsst.utils.tests.TestCase):
             self.assertEqual(getAxisAndType(s), ('azimuth', 'SystemState'))
 
     def test_initStateLogic(self):
-        tma = TMA()
+        tma = TMAStateMachine()
         self.assertFalse(tma._isValid)
         self.assertFalse(tma.isMoving)
         self.assertFalse(tma.canMove)
@@ -154,7 +154,7 @@ class TMAEventMakerTestCase(lsst.utils.tests.TestCase):
 
     def test_monotonicTimeApplicationOfRows(self):
         # ensure you can apply rows in the correct order
-        tma = TMA()
+        tma = TMAStateMachine()
         row1 = self.sampleData.iloc[0]
         row2 = self.sampleData.iloc[1]
 
@@ -163,7 +163,7 @@ class TMAEventMakerTestCase(lsst.utils.tests.TestCase):
         tma.apply(row2)
 
         # and that if you apply them in reverse order then things will raise
-        tma = TMA()
+        tma = TMAStateMachine()
         with self.assertRaises(ValueError):
             tma.apply(row2)
             tma.apply(row1)
@@ -172,7 +172,7 @@ class TMAEventMakerTestCase(lsst.utils.tests.TestCase):
         # make sure we can apply all the data from the day without falling
         # through the logic sieve
         for engineering in (True, False):
-            tma = TMA(engineeringMode=engineering)
+            tma = TMAStateMachine(engineeringMode=engineering)
 
             _initializeTma(tma)
 
