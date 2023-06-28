@@ -35,13 +35,16 @@ except ImportError:
     HAS_EFD_CLIENT = False
 
 __all__ = [
-    'makeEfdClient',
     'getEfdData',
+    'getMostRecentRowWithDataBefore',
+    'getStateAtTime',
+    'makeEfdClient',
     'expRecordToTimespan',
+    'efdTimestampToAstropy',
+    'calcNextDay',
     'getDayObsStartTime',
     'getDayObsEndTime',
     'getSubTopics',
-    'getStateAtTime',
 ]
 
 
@@ -63,10 +66,45 @@ COMMAND_ALIASES = {
 TOPIC_ALIASES['MtAlt'] = TOPIC_ALIASES['MtEl']
 TOPIC_ALIASES['MtAltInPosition'] = TOPIC_ALIASES['MtElInPosition']
 
+# When looking backwards in time to find the most recent state event, look back
+# in chunks of this size. Too small, and there will be too many queries, too
+# large and there will be too much data returned unnecessarily, as we only need
+# one row by definition. Will tune this parameters in consultation with SQuaRE.
 TIME_CHUNKING = datetime.timedelta(minutes=15)
 
 
 def _getBeginEnd(dayObs, begin, end, timespan, event, expRecord):
+    """Calculate the begin and end times to pass to _getEfdData, given the
+    kwargs passed to getEfdData.
+
+    Parameters
+    ----------
+    dayObs : `int
+        The dayObs to query. If specified, this is used to determine the begin
+        and end times.
+    begin : `astropy.Time`
+        The begin time for the query. If specified, either a end time or a
+        timespan must be supplied.
+    end : `astropy.Time`
+        The end time for the query. If specified, a begin time must also be
+        supplied.
+    timespan : `astropy.TimeDelta`
+        The timespan for the query. If specified, a begin time must also be
+        supplied.
+    event : `lsst.summit.utils.efdUtils.TmaEvent`
+        The event to query. If specified, this is used to determine the begin
+        and end times, and all other options are disallowed.
+    expRecord : `lsst.daf.butler.dimensions.DimensionRecord`
+        The exposure record containing the timespan to query. If specified, all
+        other options are disallowed.
+
+    Returns
+    -------
+    begin : `astropy.Time`
+        The begin time for the query.
+    end : `astropy.Time`
+        The end time for the query.
+    """
     if expRecord is not None:
         forbiddenOpts = [event, begin, end, timespan, dayObs]
         if any([x is not None for x in forbiddenOpts]):
@@ -184,7 +222,7 @@ def getEfdData(client, topic, *,
     time is specified but no end time or timespan.
 
     """
-    # ideally should calls mpts as necessary so that users needn't care if
+    # TODO: ideally should calls mpts as necessary so that users needn't care if
     # things are packed
 
     # supports aliases so that you can query with them. If there is no entry in
@@ -210,6 +248,26 @@ def getEfdData(client, topic, *,
 
 
 async def _getEfdData(client, topic, columns, begin, end):
+    """Get data for a topic from the EFD over the specified time range.
+
+    Parameters
+    ----------
+    client : `lsst_efd_client.efd_helper.EfdClient`
+        The EFD client to use.
+    topic : `str`
+        The topic to query.
+    columns : `list` of `str`, optional
+        The columns to query. If not specified, all columns are queried.
+    begin : `astropy.Time`, optional
+        The begin time for the query.
+    end : `astropy.Time`, optional
+        The end time for the query.
+
+    Returns
+    -------
+    data : `pandas.DataFrame`
+        The data from the query.
+    """
     if columns is None:
         columns = ['*']
 
@@ -271,7 +329,7 @@ def getMostRecentRowWithDataBefore(client, topic, timeToLookBefore, warnStaleAft
     return lastRow
 
 
-def getStateAtTime(client, topic, timeToLookBefore, warnStaleAfterNMinutes=12*60):
+def getStateAtTime(client, topic, time, warnStaleAfterNMinutes=12*60):
     """Get the state of a component at a given time.
 
     Parameters
@@ -280,8 +338,8 @@ def getStateAtTime(client, topic, timeToLookBefore, warnStaleAfterNMinutes=12*60
         The EFD client to use.
     topic : `str`
         The topic to query.
-    timeToLookBefore : `astropy.Time`
-        The time to look before.
+    time : `astropy.Time`
+        The time at which to get the state.
     warnStaleAfterNMinutes : `float`, optional
         The number of minutes after which to consider the data stale and issue
         a warning.
@@ -300,12 +358,15 @@ def getStateAtTime(client, topic, timeToLookBefore, warnStaleAfterNMinutes=12*60
     """
     row = getMostRecentRowWithDataBefore(client=client,
                                          topic=topic,
-                                         timeToLookBefore=timeToLookBefore,
+                                         timeToLookBefore=time,
                                          warnStaleAfterNMinutes=warnStaleAfterNMinutes)
 
     commandTime = efdTimestampToAstropy(row['private_sndStamp'])
-    # TODO: need to a) know which column to get the value from, and
-    # b) convert it to the appropriate enum class depending on topic.
+    # TODO: need to:
+    # a) know which column to get the value from depending on topic, and
+    # b) cast it to the appropriate enum class, and
+    # c) be able to import all the enums, rather than having a few of them them
+    # copied & pasted
 
     # example: for lsst.sal.MTMount.logevent_azimuthMotionState
     value = row['state']
@@ -381,10 +442,19 @@ def efdTimestampToAstropy(timestamp):
 def calcNextDay(dayObs):
     """Given an integer dayObs, calculate the next integer dayObs.
 
+    Integers are used for dayObs, but dayObs values are therefore not
+    contiguous due to month/year ends etc, so this utility provides a robust
+    way to get the integer dayObs which follows the one specified.
+
     Parameters
     ----------
     dayObs : `int`
-        The dayObs, as an integer, e.g. 20231225
+        The dayObs, as an integer, e.g. 20231231
+
+    Returns
+    -------
+    nextDayObs : `int`
+        The next dayObs, as an integer, e.g. 20240101
     """
     d1 = datetime.datetime.strptime(str(dayObs), '%Y%m%d')
     oneDay = datetime.timedelta(days=1)
@@ -395,6 +465,16 @@ def getDayObsStartTime(dayObs):
     """Get the start of the given dayObs as an astropy.time.Time object.
 
     The observatory rolls the date over at UTC-12.
+
+    Parameters
+    ----------
+    dayObs : `int`
+        The dayObs, as an integer, e.g. 20231225
+
+    Returns
+    -------
+    time : `astropy.time.Time`
+        The start of the dayObs as an astropy.time.Time object.
     """
     pythonDateTime = datetime.datetime.strptime(str(dayObs), "%Y%m%d")
     astroPyTime = Time(pythonDateTime)
@@ -405,7 +485,17 @@ def getDayObsStartTime(dayObs):
 
 
 def getDayObsEndTime(dayObs):
-    """Get the start of the given dayObs as an astropy.time.Time object.
+    """Get the end of the given dayObs as an astropy.time.Time object.
+
+    Parameters
+    ----------
+    dayObs : `int`
+        The dayObs, as an integer, e.g. 20231225
+
+    Returns
+    -------
+    time : `astropy.time.Time`
+        The end of the dayObs as an astropy.time.Time object.
     """
     return getDayObsStartTime(calcNextDay(dayObs))
 
@@ -417,6 +507,18 @@ def getSubTopics(client, topic):
     doing `getSubTopics(client, 'lsst.sal.ATMCS')` to get all the topics for
     the AuxTel Mount Control System, you can do `getSubTopics(client,
     'lsst.sal.AT')` to get all which relate to the AuxTel in general.
+
+    Parameters
+    ----------
+    client : `lsst_efd_client.efd_helper.EfdClient`
+        The EFD client to use.
+    topic : `str`
+        The topic to query.
+
+    Returns
+    -------
+    subTopics : `list` of `str`
+        The sub topics.
     """
     loop = asyncio.get_event_loop()
     topics = loop.run_until_complete(client.get_topics())
