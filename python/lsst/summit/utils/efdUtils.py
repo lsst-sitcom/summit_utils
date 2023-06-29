@@ -541,6 +541,24 @@ def getDayObsEndTime(dayObs):
     return getDayObsStartTime(calcNextDay(dayObs))
 
 
+def getDayObsForTime(time):
+    """Get the dayObs in which an astropy.time.Time object falls.
+
+    Parameters
+    ----------
+    time : `astropy.time.Time`
+        The time.
+
+    Returns
+    -------
+    dayObs : `int`
+        The dayObs, as an integer, e.g. 20231225
+    """
+    twelveHours = datetime.timedelta(hours=-12)
+    offset = TimeDelta(twelveHours, format='datetime')
+    return int((time + offset).utc.isot[:10].replace('-', ''))
+
+
 def getSubTopics(client, topic):
     """Get all the sub topics within a given topic.
 
