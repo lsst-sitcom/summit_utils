@@ -25,6 +25,7 @@ import itertools
 import logging
 import pandas as pd
 import numpy as np
+import humanize
 from dataclasses import dataclass
 from astropy.time import Time
 from matplotlib.ticker import FuncFormatter
@@ -37,6 +38,9 @@ from .efdUtils import (getEfdData,
                        makeEfdClient,
                        efdTimestampToAstropy,
                        COMMAND_ALIASES,
+                       getDayObsForTime,
+                       getDayObsStartTime,
+                       getDayObsEndTime,
                        )
 
 __all__ = (
@@ -1344,3 +1348,98 @@ class TMAEventMaker:
                 # silently as usual
                 tma.apply(row)
                 tmaStates[rowNum] = tma.state
+
+    def findEvent(self, time):
+        """Find the event which contains the specified time.
+
+        If the specified time lies within an event, that event is returned. If
+        it is at the exact start, that is logged, and if that start point is
+        shared by the end of the previous event, that is logged too. If the
+        event lies between events, the events either side are logged, but
+        ``None`` is returned. If the time lies before the first event of the
+        day a warning is logged, as for times after the last event of the day.
+
+        Parameters
+        ----------
+        time : `astropy.time.Time`
+            The time.
+
+        Returns
+        -------
+        event : `lsst.summit.utils.tmaUtils.TMAEvent` or `None`
+            The event which contains the specified time, or ``None`` if the
+            time doesn't fall during an event.
+        """
+        # there are four possible cases:
+        # 1) the time lies before the first event of the day
+        # 2) the time lies after the last event of the day
+        # 3) the time lies within an event
+        #   3a) the time is exactly at the start of an event
+        #   3b) if so, time can be shared by the end of the previous event if
+        #       they are contiguous
+        # 4) the time lies between two events
+
+        dayObs = getDayObsForTime(time)
+        # we know this is on the right day, and definitely before the specified
+        # time, but sanity check this before continuing as this needs to be
+        # true for this to give the correct answer
+        assert getDayObsStartTime(dayObs) <= time
+        assert getDayObsEndTime(dayObs) > time
+
+        # command start to many log messages so define once here
+        logStart = f"Specified time {time.isot} falls on {dayObs=}"
+
+        events = self.getEvents(dayObs)
+        if len(events) == 0:
+            self.log.warning(f'There are no events found for {dayObs}')
+            return None
+
+        # check case 1)
+        if time < events[0].begin:
+            self.log.warning(f'{logStart} and is before the first event of the day')
+            return None
+
+        # check case 2)
+        if time > events[-1].end:
+            self.log.warning(f'{logStart} and is after the last event of the day')
+            return None
+
+        # we are now either in an event, or between events. Walk through the
+        # events, and if the end of the event is after the specified time, then
+        # we're either in it or past it, so check if we're in.
+        for eventNum, event in enumerate(events):
+            if event.end > time:  # case 3) we are now into or past the right event
+                # the event end encloses the time, so note the > and not >=,
+                # this must be strictly greater, we check the overlap case
+                # later
+                if time >= event.begin:  # we're fully inside the event, so return it.
+                    # 3a) before returning, check if we're exactly at the start
+                    # of the event, and if so, log it. Then 3b) also check if
+                    # we're at the exact end of the previous event, and if so,
+                    # log that too.
+                    if time == event.begin:
+                        self.log.info(f"{logStart} and is exactly at the start of event"
+                                      f" {eventNum}")
+                        if eventNum == 0:  # I think this is actually impossible, but check anyway
+                            return event  # can't check the previous event so return here
+                        previousEvent = events[eventNum - 1]
+                        if previousEvent.end == time:
+                            self.log.info("Previous event is contiguous, so this time is also at the exact"
+                                          f" end of {eventNum - 1}")
+                    return event
+                else:  # case 4)
+                    # the event end is past the time, but it's not inside the
+                    # event, so we're between events. Log which we're between
+                    # and return None
+                    previousEvent = events[eventNum - 1]
+                    timeAfterPrev = (time - previousEvent.end).to_datetime()
+                    naturalTimeAfterPrev = humanize.naturaldelta(timeAfterPrev, minimum_unit='MICROSECONDS')
+                    timeBeforeCurrent = (event.begin - time).to_datetime()
+                    naturalTimeBeforeCurrent = humanize.naturaldelta(timeBeforeCurrent,
+                                                                     minimum_unit='MICROSECONDS')
+                    self.log.info(f"{logStart} and lies"
+                                  f" {naturalTimeBeforeCurrent} before the start of event {event.seqNum}, and"
+                                  f" {naturalTimeAfterPrev} after the end of event {previousEvent.seqNum}.")
+                    return None
+
+        raise RuntimeError('This should never happen')
