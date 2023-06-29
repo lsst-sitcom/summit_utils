@@ -390,6 +390,8 @@ class TMAEvent:
     beginFloat: float
     endFloat: float
     version: int = 0  # update this number any time a code change which could change event definitions is made
+    _startRow: int
+    _endRow: int
 
     def __lt__(self, other):
         if self.dayObs < other.dayObs:
@@ -1213,7 +1215,102 @@ class TMAEventMaker:
                 end=endAstropy,
                 beginFloat=begin,
                 endFloat=end,
+                _startRow=eventStart,
+                _endRow=eventEnd,
             )
             events.append(event)
             seqNum += 1
         return events
+
+    @staticmethod
+    def printTmaDetailedState(tma):
+        axes = ['azimuth', 'elevation']
+        p = tma._parts
+        axisPad = len(max(axes, key=len))  # length of the longest axis string == 9 here, but this is general
+        motionPad = max(len(s.name) for s in AxisMotionState)
+        powerPad = max(len(s.name) for s in PowerState)
+
+        # example output to show what's being done with the padding:
+        #   azimuth - Power:          ON Motion:               STOPPED InPosition: True        # noqa: W505
+        # elevation - Power:          ON Motion: MOVING_POINT_TO_POINT InPosition: False       # noqa: W505
+        for axis in axes:
+            print(f"{axis:>{axisPad}} - "
+                  f"Power: {p[f'{axis}SystemState'].name:>{powerPad}} "
+                  f"Motion: {p[f'{axis}MotionState'].name:>{motionPad}} "
+                  f"InPosition: {p[f'{axis}InPosition']}")
+        print(f"Overall system state: {tma.state.name}")
+
+    def printEventDetails(self, event, taiOrUtc='tai'):
+        """Print a detailed breakdown of all state transitions during an event.
+
+        Note: this is not the most efficient way to do this, but it is much the
+        cleanest with respect to the actual state machine application and event
+        generation code, and is easily fast enough for the cases it will be
+        used for. It is not worth complicating the normal state machine logic
+        to try to use this code.
+
+        Parameters
+        ----------
+        event : `lsst.summit.utils.tmaUtils.TMAEvent`
+            The event to display the details of.
+        taiOrUtc : `str`, optional
+            Whether to display time strings in TAI or UTC. Defaults to TAI.
+            Case insensitive.
+        """
+        taiOrUtc = taiOrUtc.lower()
+        if taiOrUtc not in ['tai', 'utc']:
+            raise ValueError(f'Got unsuppoted value for {taiOrUtc=}')
+        useUtc = taiOrUtc == 'utc'
+
+        print(f"Details for {event.duration:.2f}s {event.type.name} event dayObs={event.dayObs}"
+              f" seqNum={event.seqNum}:")
+        print(f"- Event began at: {event.begin.utc.isot if useUtc else event.begin.isot}")
+        print(f"- Event ended at: {event.end.utc.isot if useUtc else event.end.isot}")
+
+        dayObs = event.dayObs
+        data = self._data[dayObs]
+        startRow = event._startRow
+        endRow = event._endRow
+        nRowsToApply = endRow - startRow + 1
+        print(f"\nTotal number of rows in the merged dataframe: {len(data)}")
+        print(f"Of which rows {startRow} to {endRow} (inclusive) relate to this event.")
+
+        # reconstruct all the states
+        tma = TMAStateMachine(engineeringMode=True)
+        _initializeTma(tma)
+
+        tmaStates = {}
+        firstAppliedRow = True  # flag to print a header on the first row that's applied
+        for rowNum, row in data.iterrows():  # must replay rows right from start to get full correct state
+            if rowNum == startRow:
+                # we've not yet applied this row, so this is the state just
+                # before event
+                print(f"\nBefore the event the TMA was in state {tma.state.name}:")
+                self.printTmaDetailedState(tma)
+
+            if rowNum >= startRow and rowNum <= endRow:
+                if firstAppliedRow:  # only print this intro on the first row we're applying
+                    print(f"\nThen, applying the {nRowsToApply} rows of data for this event, the state"
+                          " evolved as follows:\n")
+                    firstAppliedRow = False
+
+                # break the row down and print its details
+                rowFor = row['rowFor']
+                axis, rowType = getAxisAndType(rowFor)  # e.g. elevation, MotionState
+                value = tma._getRowPayload(row, rowType, rowFor)
+                valueStr = f"{str(value) if isinstance(value, bool) else value.name}"
+                rowTime = efdTimestampToAstropy(row['private_sndStamp'])
+                print(f"On row {rowNum} the {axis} axis had the {rowType} set to {valueStr} at"
+                      f" {rowTime.utc.isot if useUtc else rowTime.isot}")
+
+                # then apply it as usual, printing the state right afterwards
+                tma.apply(row)
+                tmaStates[rowNum] = tma.state
+                self.printTmaDetailedState(tma)
+                print()
+
+            else:
+                # if it's not in the range of interest then just apply it
+                # silently as usual
+                tma.apply(row)
+                tmaStates[rowNum] = tma.state
