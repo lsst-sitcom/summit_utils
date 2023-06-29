@@ -1240,7 +1240,29 @@ class TMAEventMaker:
                   f"InPosition: {p[f'{axis}InPosition']}")
         print(f"Overall system state: {tma.state.name}")
 
-    def printEventDetails(self, event, taiOrUtc='tai'):
+    def printFullDayStateEvolution(self, dayObs, taiOrUtc='tai'):
+        # create a fake event which spans the whole day, and then use
+        # printEventDetails code while skipping the header to print the
+        # evolution.
+        data = self._data[dayObs]
+        lastRowNum = len(data) - 1
+
+        fakeEvent = TMAEvent(
+            dayObs=dayObs,
+            seqNum=-1,  # anything will do
+            type=TMAState.OFF,  # anything will do
+            endReason=TMAState.OFF,  # anything will do
+            duration=-1,  # anything will do
+            begin=efdTimestampToAstropy(data.iloc[0]['private_sndStamp']),
+            end=efdTimestampToAstropy(data.iloc[-1]['private_sndStamp']),
+            beginFloat=-1,
+            endFloat=-1,
+            _startRow=0,
+            _endRow=lastRowNum
+        )
+        self.printEventDetails(fakeEvent, taiOrUtc=taiOrUtc, printHeader=False)
+
+    def printEventDetails(self, event, taiOrUtc='tai', printHeader=True):
         """Print a detailed breakdown of all state transitions during an event.
 
         Note: this is not the most efficient way to do this, but it is much the
@@ -1256,16 +1278,23 @@ class TMAEventMaker:
         taiOrUtc : `str`, optional
             Whether to display time strings in TAI or UTC. Defaults to TAI.
             Case insensitive.
+        printHeader : `bool`, optional
+            Whether to print the event summary. Defaults to True. The primary
+            reason for the existence of this option is so that this same
+            printing function can be used to show the evolution of a whole day
+            by supplying a fake event which spans the whole day, but this event
+            necessarily has a meaningless summary, and so needs suppressing.
         """
         taiOrUtc = taiOrUtc.lower()
         if taiOrUtc not in ['tai', 'utc']:
             raise ValueError(f'Got unsuppoted value for {taiOrUtc=}')
         useUtc = taiOrUtc == 'utc'
 
-        print(f"Details for {event.duration:.2f}s {event.type.name} event dayObs={event.dayObs}"
-              f" seqNum={event.seqNum}:")
-        print(f"- Event began at: {event.begin.utc.isot if useUtc else event.begin.isot}")
-        print(f"- Event ended at: {event.end.utc.isot if useUtc else event.end.isot}")
+        if printHeader:
+            print(f"Details for {event.duration:.2f}s {event.type.name} event dayObs={event.dayObs}"
+                  f" seqNum={event.seqNum}:")
+            print(f"- Event began at: {event.begin.utc.isot if useUtc else event.begin.isot}")
+            print(f"- Event ended at: {event.end.utc.isot if useUtc else event.end.isot}")
 
         dayObs = event.dayObs
         data = self._data[dayObs]
@@ -1273,7 +1302,8 @@ class TMAEventMaker:
         endRow = event._endRow
         nRowsToApply = endRow - startRow + 1
         print(f"\nTotal number of rows in the merged dataframe: {len(data)}")
-        print(f"Of which rows {startRow} to {endRow} (inclusive) relate to this event.")
+        if printHeader:
+            print(f"of which rows {startRow} to {endRow} (inclusive) relate to this event.")
 
         # reconstruct all the states
         tma = TMAStateMachine(engineeringMode=True)
