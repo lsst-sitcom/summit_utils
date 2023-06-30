@@ -221,9 +221,12 @@ def getEfdData(client, topic, *,
 
     Raises
     ------
-    ValueError: If the topics are not in the EFD schema. ValueError: If both a
-    dayObs and a begin/end or timespan are specified. ValueError: If a begin
-    time is specified but no end time or timespan.
+    ValueError:
+        If the topics are not in the EFD schema.
+    ValueError:
+        If both a dayObs and a begin/end or timespan are specified.
+    ValueError:
+        If a begin time is specified but no end time or timespan.
 
     """
     # TODO: ideally should calls mpts as necessary so that users needn't care
