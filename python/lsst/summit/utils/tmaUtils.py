@@ -1120,7 +1120,7 @@ class TMAEventMaker:
             self._inPositionComponents,
             self._stateComponents
         ):
-            data[component] = getEfdData(self.client, component, dayObs=dayObs)
+            data[component] = getEfdData(self.client, component, dayObs=dayObs, noWarn=True)
             self.log.debug(f"Found {len(data[component])} for {component}")
 
         if all([dataframe.empty for dataframe in data.values()]):
