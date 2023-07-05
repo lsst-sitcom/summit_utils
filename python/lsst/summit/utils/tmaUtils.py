@@ -1647,8 +1647,9 @@ class TMAEventMaker:
                     naturalTimeBeforeCurrent = humanize.naturaldelta(timeBeforeCurrent,
                                                                      minimum_unit='MICROSECONDS')
                     self.log.info(f"{logStart} and lies"
-                                  f" {naturalTimeBeforeCurrent} before the start of event {event.seqNum}, and"
-                                  f" {naturalTimeAfterPrev} after the end of event {previousEvent.seqNum}.")
+                                  f" {naturalTimeAfterPrev} after the end of event {previousEvent.seqNum}"
+                                  f" and {naturalTimeBeforeCurrent} before the start of event {event.seqNum}."
+                                  )
                     return None
 
         raise RuntimeError('This should never happen')
