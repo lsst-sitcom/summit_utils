@@ -502,7 +502,7 @@ def calcNextDay(dayObs):
     """
     d1 = datetime.datetime.strptime(str(dayObs), '%Y%m%d')
     oneDay = datetime.timedelta(days=1)
-    return (d1 + oneDay).strftime('%Y%m%d')
+    return int((d1 + oneDay).strftime('%Y%m%d'))
 
 
 def getDayObsStartTime(dayObs):
