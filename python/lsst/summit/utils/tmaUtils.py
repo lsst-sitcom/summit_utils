@@ -469,11 +469,8 @@ class ScriptStatePoint:
         print(self.__str__())
 
     def __str__(self):
-        return (
-            f"time: {self.time.isot}\n"
-            f"state: {self.state.name}\n"
-            f"reason: {self.reason}"
-        )
+        reasonStr = f" - {self.reason}" if self.reason else ""
+        return (f"{self.state.name:>10} @ {self.time.isot}{reasonStr}")
 
 
 @dataclass(slots=True, kw_only=True, frozen=True)
