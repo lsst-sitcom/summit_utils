@@ -41,6 +41,7 @@ from .efdUtils import (getEfdData,
                        getDayObsForTime,
                        getDayObsStartTime,
                        getDayObsEndTime,
+                       clipDataToEvent,
                        )
 
 __all__ = (
@@ -382,7 +383,100 @@ def _turnOn(tma):
     tma._parts['elevationSystemState'] = PowerState.ON
 
 
-@dataclass(slots=True, kw_only=True)  # XXX add frozen=True?
+@dataclass(slots=True, kw_only=True, frozen=True)
+class BlockInfo:
+    """The block info relating to a TMAEvent.
+
+    Parameters
+    ----------
+    blockNumber : `int`
+        The block number, as an integer.
+    blockId : `str`
+        The block ID, as a string.
+    salIndices : `list` of `int`
+        One or more SAL indices, relating to the block.
+    tickets : `list` of `str`
+        One or more SITCOM tickets, relating to the block.
+    states : `list` of `ScriptStatePoint`
+        The states of the script during the block. Each element is a
+        ``ScriptStatePoint`` which contains:
+            - the time, as an astropy.time.Time
+            - the state, as a ``ScriptState`` enum
+            - the reason for state change, as a string
+    """
+    blockNumber: int
+    blockId: str
+    salIndices: int
+    tickets: list
+    states: list
+
+    def __repr__(self):
+        return (
+            f"BlockInfo(blockNumber={self.blockNumber}, blockId={self.blockId}, salIndices={self.salIndices},"
+            f" tickets={self.tickets}, states={self.states!r}"
+        )
+
+    def _ipython_display_(self):
+        print(self.__str__())
+
+    def __str__(self):
+        newline = '  \n'  # no \n allowed in f-strings until python 3.12
+        return (
+            f"blockNumber: {self.blockNumber}\n"
+            f"blockId: {self.blockId}\n"
+            f"salIndices: {self.salIndices}\n"
+            f"tickets: {self.tickets}\n"
+            f"states: \n{newline.join([str(state) for state in self.states])}"
+        )
+
+
+class ScriptState(enum.IntEnum):
+    """ScriptState constants.
+
+    Note: this is copied over from
+    https://github.com/lsst-ts/ts_idl/blob/develop/python/lsst/ts/idl/enums/Script.py  # noqa: W505
+    to save having to depend on T&S code directly. These enums are extremely
+    static, so this is a reasonable thing to do, and much easier than setting
+    up a dependency on ts_idl.
+    """
+
+    UNKNOWN = 0
+    UNCONFIGURED = 1
+    CONFIGURED = 2
+    RUNNING = 3
+    PAUSED = 4
+    ENDING = 5
+    STOPPING = 6
+    FAILING = 7
+    DONE = 8
+    STOPPED = 9
+    FAILED = 10
+    CONFIGURE_FAILED = 11
+
+
+@dataclass(slots=True, kw_only=True, frozen=True)
+class ScriptStatePoint:
+    time: Time
+    state: ScriptState
+    reason: str
+
+    def __repr__(self):
+        return (
+            f"ScriptStatePoint(time={self.time!r}, state={self.state!r}, reason={self.reason!r})"
+        )
+
+    def _ipython_display_(self):
+        print(self.__str__())
+
+    def __str__(self):
+        return (
+            f"time: {self.time.isot}\n"
+            f"state: {self.state.name}\n"
+            f"reason: {self.reason}"
+        )
+
+
+@dataclass(slots=True, kw_only=True, frozen=True)
 class TMAEvent:
     dayObs: int
     seqNum: int
@@ -393,6 +487,7 @@ class TMAEvent:
     end: Time
     beginFloat: float
     endFloat: float
+    blockInfo: BlockInfo = None
     version: int = 0  # update this number any time a code change which could change event definitions is made
     _startRow: int
     _endRow: int
@@ -1086,7 +1181,7 @@ class TMAEventMaker:
 
         stateTuples = self._statesToEventTuples(tmaStates, dataIsForCurrentDay)
         events = self._makeEventsFromStateTuples(stateTuples, dayObs, data)
-
+        self.addBlockDataToEvents(events)
         return events
 
     def _statesToEventTuples(self, states, dataIsForCurrentDay):
@@ -1178,6 +1273,119 @@ class TMAEventMaker:
 
         return parsedStates
 
+    def addBlockDataToEvents(self, events):
+        """Find all the block data in the EFD for the specified events.
+
+        Finds all the block data in the EFD relating to the events, parses it,
+        from the rows of the dataframe, and adds it to the events in place.
+
+        Parameters
+        ----------
+        events : `lsst.summit.utils.tmaUtils.TMAEvent` or
+                 `list` of `lsst.summit.utils.tmaUtils.TMAEvent`
+            One or more events to get the block data for.
+        """
+        events = ensure_iterable(events)
+        events = sorted(events)
+
+        # Get all the data in one go and then clip to the events in the loop.
+        # This is orders of magnitude faster than querying individually.
+        allData = getEfdData(self.client,
+                             "lsst.sal.Script.logevent_state",
+                             begin=events[0].begin,  # time ordered, so this is the start of the window
+                             end=events[-1].end,  # and this is the end
+                             noWarn=True)
+        if allData.empty:
+            self.log.info('No block data found for the specified events')
+            return {}
+
+        blockPattern = r"BLOCK-(\d+)"
+        blockIdPattern = r"BL\d+(?:_\w+)+"
+        sitcomPattern = r"SITCOM-(\d+)"
+
+        for event in events:
+            eventData = clipDataToEvent(allData, event)
+            if eventData.empty:
+                continue
+
+            blockNums = set()
+            blockIds = set()
+            tickets = set()
+            salIndices = set()
+            stateList = []
+
+            # for each for in the data which corresponds to the event, extract
+            # the block number, block id, sitcom tickets, sal index and state
+            # some may have multiple values, some may be None, so collect in
+            # sets and then remove None, and validate on ones which must not
+            # contain duplicate values
+            for rowNum, row in eventData.iterrows():
+                # the lastCheckpoint column contains the block number, blockId,
+                # and any sitcom tickets.
+                rowStr = row['lastCheckpoint']
+
+                blockMatch = re.search(blockPattern, rowStr)
+                blockNumber = int(blockMatch.group(1)) if blockMatch else None
+                blockNums.add(blockNumber)
+
+                blockIdMatch = re.search(blockIdPattern, rowStr)
+                blockId = blockIdMatch.group(0) if blockIdMatch else None
+                blockIds.add(blockId)
+
+                sitcomMatches = re.findall(sitcomPattern, rowStr)
+                sitcomTicketNumbers = [int(match) for match in sitcomMatches]
+                tickets.update(sitcomTicketNumbers)
+
+                salIndices.add(row['salIndex'])
+
+                state = row['state']
+                state = ScriptState(state)  # cast this back to its native enum
+                stateReason = row['reason']  # might be empty, might contain useful error messages
+                stateTimestamp = efdTimestampToAstropy(row['private_sndStamp'])
+                scriptStatePoint = ScriptStatePoint(time=stateTimestamp,
+                                                    state=state,
+                                                    reason=stateReason)
+                stateList.append(scriptStatePoint)
+
+            # remove all the Nones from the sets, and then check the lengths
+            for fieldSet in (blockNums, blockIds, salIndices):
+                if None in fieldSet:
+                    fieldSet.remove(None)
+
+            # if we didn't find any block numbers at all, that is fine, just
+            # continue as this event doesn't relate to a BLOCK
+            if not blockNums:
+                continue
+
+            # but if it does related to a BLOCK then it must not have more than
+            # one. If this is the case something is wrong with a SAL script, so
+            # raise here to indicate the something needs debugging in the
+            # scriptQueue or something like that.
+            if len(blockNums) > 1:
+                raise RuntimeError(f"Found multiple BLOCK values ({blockNums}) for {event}")
+            blockNumber = blockNums.pop()
+
+            # likewise for the blockIds
+            if len(blockIds) > 1:
+                raise RuntimeError(f"Found multiple blockIds ({blockIds}) for {event}")
+            blockId = blockIds.pop()
+
+            blockInfo = BlockInfo(
+                blockNumber=blockNumber,
+                blockId=blockId,
+                salIndices=sorted([i for i in salIndices]),
+                tickets=[f'SITCOM-{ticket}' for ticket in tickets],
+                states=stateList,
+            )
+
+            # Add the blockInfo to the TMAEvent. Because this is a frozen
+            # dataclass, use object.__setattr__ to set the attribute. This is
+            # the correct way to set a frozen dataclass attribute after
+            # creation.
+            object.__setattr__(event, 'blockInfo', blockInfo)
+
+        return
+
     def _makeEventsFromStateTuples(self, states, dayObs, data):
         """For the list of state-tuples, create a list of `TMAEvent` objects.
 
@@ -1219,6 +1427,7 @@ class TMAEventMaker:
                 end=endAstropy,
                 beginFloat=begin,
                 endFloat=end,
+                blockInfo=None,  # this is added later
                 _startRow=eventStart,
                 _endRow=eventEnd,
             )
