@@ -33,6 +33,7 @@ import matplotlib.dates as mdates
 import matplotlib.pyplot as plt
 from lsst.utils.iteration import ensure_iterable
 
+from .enums import ScriptState, AxisMotionState, PowerState
 from .utils import getCurrentDayObs_int, dayObsIntToString
 from .efdUtils import (getEfdData,
                        makeEfdClient,
@@ -430,30 +431,6 @@ class BlockInfo:
         )
 
 
-class ScriptState(enum.IntEnum):
-    """ScriptState constants.
-
-    Note: this is copied over from
-    https://github.com/lsst-ts/ts_idl/blob/develop/python/lsst/ts/idl/enums/Script.py  # noqa: W505
-    to save having to depend on T&S code directly. These enums are extremely
-    static, so this is a reasonable thing to do, and much easier than setting
-    up a dependency on ts_idl.
-    """
-
-    UNKNOWN = 0
-    UNCONFIGURED = 1
-    CONFIGURED = 2
-    RUNNING = 3
-    PAUSED = 4
-    ENDING = 5
-    STOPPING = 6
-    FAILING = 7
-    DONE = 8
-    STOPPED = 9
-    FAILED = 10
-    CONFIGURE_FAILED = 11
-
-
 @dataclass(slots=True, kw_only=True, frozen=True)
 class ScriptStatePoint:
     time: Time
@@ -545,47 +522,6 @@ class TMAState(enum.IntEnum):
 
     def __repr__(self):
         return f"TMAState.{self.name}"
-
-
-class AxisMotionState(enum.IntEnum):
-    """Motion state of azimuth elevation and camera cable wrap.
-
-    Note: this is copied over from
-    https://github.com/lsst-ts/ts_idl/blob/develop/python/lsst/ts/idl/enums/MTMount.py  # noqa: W505
-    to save having to depend on T&S code directly. These enums are extremely
-    static, so this is a reasonable thing to do, and much easier than setting
-    up a dependency on ts_idl.
-    """
-
-    STOPPING = 0
-    STOPPED = 1
-    MOVING_POINT_TO_POINT = 2
-    JOGGING = 3
-    TRACKING = 4
-    TRACKING_PAUSED = 5
-
-
-class PowerState(enum.IntEnum):
-    """Power state of a system or motion controller.
-
-    Also used for motion controller state.
-
-    Note that only a few systems (and no motion controllers)
-    use TURNING_ON and TURNING_OFF. The oil supply system is one.
-
-    Note: this is copied over from
-    https://github.com/lsst-ts/ts_idl/blob/develop/python/lsst/ts/idl/enums/MTMount.py  # noqa: W505
-    to save having to depend on T&S code directly. These enums are extremely
-    static, so this is a reasonable thing to do, and much easier than setting
-    up a dependency on ts_idl.
-    """
-
-    OFF = 0
-    ON = 1
-    FAULT = 2
-    TURNING_ON = 3
-    TURNING_OFF = 4
-    UNKNOWN = 15
 
 
 def getAxisAndType(rowFor):
