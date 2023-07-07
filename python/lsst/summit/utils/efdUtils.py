@@ -41,9 +41,12 @@ __all__ = [
     'makeEfdClient',
     'expRecordToTimespan',
     'efdTimestampToAstropy',
+    'astropyToEfdTimestamp',
+    'clipDataToEvent',
     'calcNextDay',
     'getDayObsStartTime',
     'getDayObsEndTime',
+    'getDayObsForTime',
     'getSubTopics',
 ]
 
