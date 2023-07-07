@@ -23,19 +23,27 @@
 
 import unittest
 import lsst.utils.tests
-
-
 import astropy
 import pandas as pd
 import datetime
 import asyncio
+from astropy.time import Time
 
-from lsst.summit.utils.efdUtils import (makeEfdClient,
-                                        getEfdData,
-                                        getDayObsStartTime,
-                                        getDayObsEndTime,
-                                        getSubTopics,
-                                        )
+from lsst.summit.utils.tmaUtils import TMAEvent, TMAState
+
+from lsst.summit.utils.efdUtils import (
+    getEfdData,
+    getMostRecentRowWithDataBefore,
+    makeEfdClient,
+    efdTimestampToAstropy,
+    astropyToEfdTimestamp,
+    clipDataToEvent,
+    # calcNextDay,  # this is indirectly tested by test_getDayObsAsTimes()
+    getDayObsStartTime,
+    getDayObsEndTime,
+    getDayObsForTime,
+    getSubTopics,
+)
 
 HAS_EFD_CLIENT = True
 try:
@@ -53,9 +61,25 @@ class EfdUtilsTestCase(lsst.utils.tests.TestCase):
             cls.client = makeEfdClient()
         except RuntimeError:
             raise unittest.SkipTest("Could not instantiate an EFD client")
-        cls.dayObs = 20230601
+        cls.dayObs = 20230531
         # get a sample expRecord here to test expRecordToTimespan
         cls.axisTopic = 'lsst.sal.MTMount.logevent_azimuthMotionState'
+        cls.timeSeriesTopic = 'lsst.sal.MTMount.azimuth'
+        cls.event = TMAEvent(
+            dayObs=20230531,
+            seqNum=27,
+            type=TMAState.TRACKING,
+            endReason=TMAState.SLEWING,
+            duration=0.47125244140625,
+            begin=Time(1685578390.2265284, scale='tai', format='unix_tai'),
+            end=Time(1685578390.6977808, scale='tai', format='unix_tai'),
+            beginFloat=1685578390.2265284,
+            endFloat=1685578390.6977808,
+            blockInfo=None,
+            version=0,
+            _startRow=254,
+            _endRow=255,
+        )
 
     def tearDown(self):
         loop = asyncio.get_event_loop()
@@ -120,8 +144,24 @@ class EfdUtilsTestCase(lsst.utils.tests.TestCase):
         self.assertTrue(dayObsData.equals(dayStartEndData))
 
         # test event
-        # test expRecord
+        # note that here we're going to clip to an event and pad things, so
+        # we want to use the timeSeriesTopic not the states, so that there's
+        # plenty of rows to test the padding is actually working
+        eventData = getEfdData(self.client, self.timeSeriesTopic, event=self.event)
+        self.assertIsInstance(dayObsData, pd.DataFrame)
+
         # test padding options
+        padded = getEfdData(self.client, self.timeSeriesTopic, event=self.event, prePadding=1, postPadding=2)
+        self.assertGreater(len(padded), len(eventData))
+        startTimeDiff = (efdTimestampToAstropy(eventData.iloc[0]['private_sndStamp']) -
+                         efdTimestampToAstropy(padded.iloc[0]['private_sndStamp']))
+        endTimeDiff = (efdTimestampToAstropy(padded.iloc[-1]['private_sndStamp']) -
+                       efdTimestampToAstropy(eventData.iloc[-1]['private_sndStamp']))
+
+        self.assertGreater(startTimeDiff.sec, 0)
+        self.assertLess(startTimeDiff.sec, 1.1)  # padding isn't super exact, so give a little wiggle room
+        self.assertGreater(endTimeDiff.sec, 0)
+        self.assertLess(endTimeDiff.sec, 2.1)  # padding isn't super exact, so give a little wiggle room
 
         with self.assertRaises(ValueError):
             # not enough info to constrain
@@ -136,6 +176,65 @@ class EfdUtilsTestCase(lsst.utils.tests.TestCase):
             _ = getEfdData(self.client, self.axisTopic, begin=self.dayObs)
             # good query, except the topic doesn't exist
             _ = getEfdData(self.client, 'badTopic', begin=dayStart, end=dayEnd)
+
+    def test_getMostRecentRowWithDataBefore(self):
+        time = Time(1687845854.736784, scale='tai', format='unix_tai')
+        rowData = getMostRecentRowWithDataBefore(self.client,
+                                                 "lsst.sal.MTM1M3.logevent_forceActuatorState",
+                                                 time)
+        self.assertIsInstance(rowData, pd.Series)
+
+        stateTime = efdTimestampToAstropy(rowData['private_sndStamp'])
+        self.assertLess(stateTime, time)
+
+    def test_getStateAtTime(self):
+        # getStateAtTime()
+        return
+
+    def test_efdTimestampToAstropy(self):
+        time = efdTimestampToAstropy(1687845854.736784)
+        self.assertIsInstance(time, astropy.time.Time)
+        return
+
+    def test_astropyToEfdTimestamp(self):
+        time = Time(1687845854.736784, scale='tai', format='unix_tai')
+        efdTimestamp = astropyToEfdTimestamp(time)
+        self.assertIsInstance(efdTimestamp, float)
+        return
+
+    def test_clipDataToEvent(self):
+        # get 10 mins of data either side of the event we'll clip to
+        duration = datetime.timedelta(seconds=10*60)
+        queryBegin = self.event.begin - duration
+        queryEnd = self.event.end + duration
+        dayObsData = getEfdData(self.client, 'lsst.sal.MTMount.azimuth', begin=queryBegin, end=queryEnd)
+
+        # clip the data, and check it's shorter, non-zero, and falls in the
+        # right time range
+        clippedData = clipDataToEvent(dayObsData, self.event)
+
+        self.assertIsInstance(clippedData, pd.DataFrame)
+        self.assertGreater(len(clippedData), 0)
+        self.assertLess(len(clippedData), len(dayObsData))
+
+        dataStart = efdTimestampToAstropy(clippedData.iloc[0]['private_sndStamp'])
+        dataEnd = efdTimestampToAstropy(clippedData.iloc[-1]['private_sndStamp'])
+
+        self.assertGreaterEqual(dataStart, self.event.begin)
+        self.assertLessEqual(dataEnd, self.event.end)
+        return
+
+    def test_getDayObsForTime(self):
+        pydate = datetime.datetime(2023, 2, 5, 13, 30, 1)
+        time = Time(pydate)
+        dayObs = getDayObsForTime(time)
+        self.assertEqual(dayObs, 20230205)
+
+        pydate = datetime.datetime(2023, 2, 5, 11, 30, 1)
+        time = Time(pydate)
+        dayObs = getDayObsForTime(time)
+        self.assertEqual(dayObs, 20230204)
+        return
 
 
 class TestMemory(lsst.utils.tests.MemoryTestCase):
