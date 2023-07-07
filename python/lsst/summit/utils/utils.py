@@ -539,6 +539,22 @@ def getCurrentDayObs_humanStr():
     return dayObsIntToString(getCurrentDayObs_int())
 
 
+def getExpRecordAge(expRecord):
+    """Get the time, in seconds, since the end of exposure.
+
+    Parameters
+    ----------
+    expRecord : `lsst.daf.butler.DimensionRecord`
+        The exposure record.
+
+    Returns
+    -------
+    age : `float`
+        The age of the exposure, in seconds.
+    """
+    return -1 * (expRecord.timespan.end - Time.now()).sec
+
+
 def getSite():
     """Returns where the code is running.
 
