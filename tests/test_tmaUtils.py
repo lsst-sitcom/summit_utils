@@ -27,17 +27,25 @@ import lsst.utils.tests
 import pandas as pd
 import numpy as np
 import asyncio
+import matplotlib.pyplot as plt
+from astropy.time import TimeDelta
 
-from lsst.summit.utils.efdUtils import makeEfdClient
-from lsst.summit.utils.tmaUtils import (TMAStateMachine,
-                                        TMAEvent,
-                                        TMAEventMaker,
-                                        TMAState,
-                                        AxisMotionState,
-                                        getAxisAndType,
-                                        _initializeTma,
-                                        _turnOn,  # move definition into here to discourage elsewhere?
-                                        )
+from lsst.summit.utils.efdUtils import makeEfdClient, getDayObsStartTime, calcNextDay
+from lsst.summit.utils.tmaUtils import (
+    getSlewsFromEventList,
+    getTracksFromEventList,
+    getAzimuthElevationDataForEvent,
+    plotEvent,
+    getCommandsDuringEvent,
+    TMAStateMachine,
+    TMAEvent,
+    TMAEventMaker,
+    TMAState,
+    AxisMotionState,
+    getAxisAndType,
+    _initializeTma,
+    _turnOn,  # move definition into here to discourage elsewhere?
+)
 
 
 def makeValid(tma):
@@ -96,18 +104,36 @@ class TmaUtilsTestCase(lsst.utils.tests.TestCase):
         self.assertFalse(tma._isValid)
         self.assertFalse(tma.isMoving)
         self.assertFalse(tma.canMove)
+        self.assertFalse(tma.isTracking)
+        self.assertFalse(tma.isSlewing)
         self.assertEqual(tma.state, TMAState.UNINITIALIZED)
 
         _initializeTma(tma)  # we're valid, but still aren't moving and can't
         self.assertTrue(tma._isValid)
         self.assertNotEqual(tma.state, TMAState.UNINITIALIZED)
         self.assertTrue(tma.canMove)
+        self.assertTrue(tma.isNotMoving)
         self.assertFalse(tma.isMoving)
+        self.assertFalse(tma.isTracking)
+        self.assertFalse(tma.isSlewing)
 
         _turnOn(tma)  # can now move, still valid, but not in motion
         self.assertTrue(tma._isValid)
         self.assertTrue(tma.canMove)
+        self.assertTrue(tma.isNotMoving)
         self.assertFalse(tma.isMoving)
+        self.assertFalse(tma.isTracking)
+        self.assertFalse(tma.isSlewing)
+
+        # consider manipulating the axes by hand here and testing these?
+        # it's likely not worth it, given how much this exercised elsewhere,
+        # but these are the only functions not yet being directly tested
+        # tma._axesInFault()
+        # tma._axesOff()
+        # tma._axesOn()
+        # tma._axesInMotion()
+        # tma._axesTRACKING()
+        # tma._axesInPosition()
 
 
 class TMAEventMakerTestCase(lsst.utils.tests.TestCase):
@@ -180,7 +206,7 @@ class TMAEventMakerTestCase(lsst.utils.tests.TestCase):
                 tma.apply(row)
 
     def test_endToEnd(self):
-        eventMaker = TMAEventMaker()
+        eventMaker = self.tmaEventMaker
         events = eventMaker.getEvents(self.dayObs)
         self.assertIsInstance(events, list)
         self.assertEqual(len(events), 200)
@@ -192,12 +218,116 @@ class TMAEventMakerTestCase(lsst.utils.tests.TestCase):
         self.assertEqual(len(tracks), 43)
 
     def test_noDataBehaviour(self):
-        eventMaker = TMAEventMaker()
+        eventMaker = self.tmaEventMaker
         noDataDayObs = 19500101  # do not use 19700101 - there is data for that day!
         with self.assertWarns(Warning, msg=f"No EFD data found for dayObs={noDataDayObs}"):
             events = eventMaker.getEvents(noDataDayObs)
             self.assertIsInstance(events, list)
             self.assertEqual(len(events), 0)
+
+    def test_helperFunctions(self):
+        eventMaker = self.tmaEventMaker
+        events = eventMaker.getEvents(self.dayObs)
+
+        slews = [e for e in events if e.type == TMAState.SLEWING]
+        tracks = [e for e in events if e.type == TMAState.TRACKING]
+        foundSlews = getSlewsFromEventList(events)
+        foundTracks = getTracksFromEventList(events)
+        self.assertEqual(slews, foundSlews)
+        self.assertEqual(tracks, foundTracks)
+
+    def test_printing(self):
+        eventMaker = self.tmaEventMaker
+        events = eventMaker.getEvents(self.dayObs)
+
+        # spot-check both a slow and a track to print
+        slews = [e for e in events if e.type == TMAState.SLEWING]
+        tracks = [e for e in events if e.type == TMAState.TRACKING]
+        eventMaker.printEventDetails(slews[0])
+        eventMaker.printEventDetails(tracks[0])
+
+        # check the full day trick works
+        eventMaker.printFullDayStateEvolution(self.dayObs)
+
+        tma = TMAStateMachine()
+        _initializeTma(tma)  # the uninitialized state contains wrong types for printing
+        eventMaker.printTmaDetailedState(tma)
+
+    def test_getAxisData(self):
+        eventMaker = self.tmaEventMaker
+        events = eventMaker.getEvents(self.dayObs)
+
+        azData, elData = getAzimuthElevationDataForEvent(self.client, events[0])
+        self.assertIsInstance(azData, pd.DataFrame)
+        self.assertIsInstance(elData, pd.DataFrame)
+
+        paddedAzData, paddedElData = getAzimuthElevationDataForEvent(self.client,
+                                                                     events[0],
+                                                                     prePadding=2,
+                                                                     postPadding=1)
+        self.assertGreater(len(paddedAzData), len(azData))
+        self.assertGreater(len(paddedElData), len(elData))
+
+        # just check this doesn't raise when called, and check we can pass the
+        # data in
+        plotEvent(self.client, events[0], azimuthData=azData, elevationData=elData)
+
+    def test_plottingAndCommands(self):
+        eventMaker = self.tmaEventMaker
+        events = eventMaker.getEvents(self.dayObs)
+        event = events[28]  # this one has commands, and we'll check that later
+
+        # check we _can_ plot without a figure, and then stop doing that
+        plotEvent(self.client, event)
+
+        fig = plt.figure(figsize=(10, 8))
+        # just check this doesn't raise when called
+        plotEvent(self.client, event, fig=fig)
+        plt.close(fig)
+
+        commandsToPlot = ['raDecTarget', 'moveToTarget', 'startTracking', 'stopTracking']
+        commands = getCommandsDuringEvent(self.client, event, commandsToPlot, doLog=False)
+        self.assertTrue(not all([time is None for time in commands.values()]))  # at least one command
+
+        plotEvent(self.client, event, fig=fig, commands=commands)
+
+        del fig
+
+    def test_findEvent(self):
+        eventMaker = self.tmaEventMaker
+        events = eventMaker.getEvents(self.dayObs)
+        event = events[28]  # this one has a contiguous event before it
+
+        time = event.begin
+        found = eventMaker.findEvent(time)
+        self.assertEqual(found, event)
+
+        dt = TimeDelta(0.01, format='sec')
+        # must be just inside to get the same event back, because if a moment
+        # is shared it gives the one which starts with the moment (whilst
+        # logging info messages about it)
+        time = event.end - dt
+        found = eventMaker.findEvent(time)
+        self.assertEqual(found, event)
+
+        # now check that if we're a hair after, we don't get the same event
+        time = event.end + dt
+        found = eventMaker.findEvent(time)
+        self.assertNotEqual(found, event)
+
+        # Now check the cases which don't find an event at all. It would be
+        # nice to check the log messages here, but it seems too fragile to be
+        # worth it
+        dt = TimeDelta(1, format='sec')
+        tooEarlyOnDay = getDayObsStartTime(self.dayObs) + dt  # 1 second after start of day
+        found = eventMaker.findEvent(tooEarlyOnDay)
+        self.assertIsNone(found)
+
+        # 1 second before end of day and this day does not end with an open
+        # event
+        tooLateOnDay = getDayObsStartTime(calcNextDay(self.dayObs)) - dt
+        found = eventMaker.findEvent(tooLateOnDay)
+        self.assertIsNone(found)
 
 
 class TestMemory(lsst.utils.tests.MemoryTestCase):

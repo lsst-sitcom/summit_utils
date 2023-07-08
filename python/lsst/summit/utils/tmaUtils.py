@@ -99,6 +99,8 @@ def getTracksFromEventList(events):
 def getTorqueMaxima(table):
     """Print the min and max values of the azimuth and elevation torques.
 
+    Designed to be used with the table as downloaded from RubinTV.
+
     Parameters
     ----------
     table : `pandas.DataFrame`
