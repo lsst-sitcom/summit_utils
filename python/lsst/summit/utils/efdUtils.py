@@ -328,7 +328,7 @@ def getMostRecentRowWithDataBefore(client, topic, timeToLookBefore, warnStaleAft
         beginTime -= TIME_CHUNKING
 
     lastRow = df.iloc[-1]
-    commandTime = efdTimestampToAstropy(lastRow['private_sndStamp'])
+    commandTime = efdTimestampToAstropy(lastRow['private_efdStamp'])
 
     commandAge = timeToLookBefore - commandTime
     if commandAge > staleAge:
@@ -371,7 +371,7 @@ def getStateAtTime(client, topic, time, warnStaleAfterNMinutes=12*60):
                                          timeToLookBefore=time,
                                          warnStaleAfterNMinutes=warnStaleAfterNMinutes)
 
-    commandTime = efdTimestampToAstropy(row['private_sndStamp'])
+    commandTime = efdTimestampToAstropy(row['private_efdStamp'])
     # TODO: need to:
     # a) know which column to get the value from depending on topic, and
     # b) cast it to the appropriate enum class, and
@@ -446,7 +446,7 @@ def efdTimestampToAstropy(timestamp):
     time : `astropy.time.Time`
         The timestamp as an astropy.time.Time object.
     """
-    return Time(timestamp, format='unix_tai')
+    return Time(timestamp, format='unix')
 
 
 def astropyToEfdTimestamp(time):
@@ -481,7 +481,7 @@ def clipDataToEvent(df, event):
     clipped : `pandas.DataFrame`
         The clipped dataframe.
     """
-    mask = (df['private_sndStamp'] >= event.begin.value) & (df['private_sndStamp'] <= event.end.value)
+    mask = (df['private_efdStamp'] >= event.begin.value) & (df['private_efdStamp'] <= event.end.value)
     clipped_df = df.loc[mask].copy()
     return clipped_df
 

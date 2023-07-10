@@ -71,10 +71,10 @@ class EfdUtilsTestCase(lsst.utils.tests.TestCase):
             type=TMAState.TRACKING,
             endReason=TMAState.SLEWING,
             duration=0.47125244140625,
-            begin=Time(1685578390.2265284, scale='tai', format='unix_tai'),
-            end=Time(1685578390.6977808, scale='tai', format='unix_tai'),
-            beginFloat=1685578390.2265284,
-            endFloat=1685578390.6977808,
+            begin=Time(1685578353.2265284, scale='utc', format='unix'),
+            end=Time(1685578353.6977808, scale='utc', format='unix'),
+            beginFloat=1685578353.2265284,
+            endFloat=1685578353.6977808,
             blockInfo=None,
             version=0,
             _startRow=254,
@@ -153,10 +153,10 @@ class EfdUtilsTestCase(lsst.utils.tests.TestCase):
         # test padding options
         padded = getEfdData(self.client, self.timeSeriesTopic, event=self.event, prePadding=1, postPadding=2)
         self.assertGreater(len(padded), len(eventData))
-        startTimeDiff = (efdTimestampToAstropy(eventData.iloc[0]['private_sndStamp']) -
-                         efdTimestampToAstropy(padded.iloc[0]['private_sndStamp']))
-        endTimeDiff = (efdTimestampToAstropy(padded.iloc[-1]['private_sndStamp']) -
-                       efdTimestampToAstropy(eventData.iloc[-1]['private_sndStamp']))
+        startTimeDiff = (efdTimestampToAstropy(eventData.iloc[0]['private_efdStamp']) -
+                         efdTimestampToAstropy(padded.iloc[0]['private_efdStamp']))
+        endTimeDiff = (efdTimestampToAstropy(padded.iloc[-1]['private_efdStamp']) -
+                       efdTimestampToAstropy(eventData.iloc[-1]['private_efdStamp']))
 
         self.assertGreater(startTimeDiff.sec, 0)
         self.assertLess(startTimeDiff.sec, 1.1)  # padding isn't super exact, so give a little wiggle room
@@ -178,13 +178,13 @@ class EfdUtilsTestCase(lsst.utils.tests.TestCase):
             _ = getEfdData(self.client, 'badTopic', begin=dayStart, end=dayEnd)
 
     def test_getMostRecentRowWithDataBefore(self):
-        time = Time(1687845854.736784, scale='tai', format='unix_tai')
+        time = Time(1687845854.736784, scale='utc', format='unix')
         rowData = getMostRecentRowWithDataBefore(self.client,
                                                  "lsst.sal.MTM1M3.logevent_forceActuatorState",
                                                  time)
         self.assertIsInstance(rowData, pd.Series)
 
-        stateTime = efdTimestampToAstropy(rowData['private_sndStamp'])
+        stateTime = efdTimestampToAstropy(rowData['private_efdStamp'])
         self.assertLess(stateTime, time)
 
     def test_getStateAtTime(self):
@@ -197,7 +197,7 @@ class EfdUtilsTestCase(lsst.utils.tests.TestCase):
         return
 
     def test_astropyToEfdTimestamp(self):
-        time = Time(1687845854.736784, scale='tai', format='unix_tai')
+        time = Time(1687845854.736784, scale='utc', format='unix')
         efdTimestamp = astropyToEfdTimestamp(time)
         self.assertIsInstance(efdTimestamp, float)
         return
@@ -217,8 +217,8 @@ class EfdUtilsTestCase(lsst.utils.tests.TestCase):
         self.assertGreater(len(clippedData), 0)
         self.assertLess(len(clippedData), len(dayObsData))
 
-        dataStart = efdTimestampToAstropy(clippedData.iloc[0]['private_sndStamp'])
-        dataEnd = efdTimestampToAstropy(clippedData.iloc[-1]['private_sndStamp'])
+        dataStart = efdTimestampToAstropy(clippedData.iloc[0]['private_efdStamp'])
+        dataEnd = efdTimestampToAstropy(clippedData.iloc[-1]['private_efdStamp'])
 
         self.assertGreaterEqual(dataStart, self.event.begin)
         self.assertLessEqual(dataEnd, self.event.end)

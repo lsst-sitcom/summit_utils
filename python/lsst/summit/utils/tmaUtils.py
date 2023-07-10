@@ -356,8 +356,8 @@ def getCommandsDuringEvent(client, event, commands=['raDecTarget'], log=None, do
             ret[command] = None
         else:
             assert len(data) == 1  # this must be true now
-            commandTime = data.private_sndStamp
-            ret[command] = Time(commandTime, format='unix_tai')
+            commandTime = data.private_efdStamp
+            ret[command] = Time(commandTime, format='unix')
 
     return ret
 
@@ -644,7 +644,7 @@ class TMAStateMachine:
         row : `pandas.Series`
             The row of data to apply to the state machine.
         """
-        timestamp = row['private_sndStamp']
+        timestamp = row['private_efdStamp']
         if timestamp < self._mostRecentRowTime:  # NB equals is OK, technically, though it never happens
             raise ValueError('TMA evolution must be monotonic increasing in time, tried to apply a row which'
                              ' predates the most previous one')
@@ -889,7 +889,7 @@ class TMAEventMaker:
         return topic.split('_')[-1]
 
     def _mergeData(self, data):
-        """Merge a dict of dataframes based on private_sndStamp, recording
+        """Merge a dict of dataframes based on private_efdStamp, recording
         where each row came from.
 
         Given a dict or dataframes, keyed by topic, merge them into a single
@@ -905,7 +905,7 @@ class TMAEventMaker:
         merged : `pandas.DataFrame`
             The merged dataframe.
         """
-        excludeColumns = ['private_sndStamp', 'rowFor']
+        excludeColumns = ['private_efdStamp', 'rowFor']
 
         mergeArgs = {
             'how': 'outer',
@@ -919,7 +919,7 @@ class TMAEventMaker:
         for key, df in data.items():
             if df.empty:
                 # Must skip the df if it's empty, otherwise the merge will fail
-                # due to lack of private_sndStamp. Because other axes might
+                # due to lack of private_efdStamp. Because other axes might
                 # still be in motion, so we still want to merge what we have
                 continue
 
@@ -1031,7 +1031,7 @@ class TMAEventMaker:
 
         Gets the EFD data for all components, as a dict of dataframes keyed by
         component name. These are then merged into a single dataframe in time
-        order, based on each row's `private_sndStamp`. This is then stored in
+        order, based on each row's `private_efdStamp`. This is then stored in
         self._data[dayObs].
 
         If no data is found, the value is set to ``NO_DATA_SENTINEL`` to
@@ -1276,7 +1276,7 @@ class TMAEventMaker:
                 state = row['state']
                 state = ScriptState(state)  # cast this back to its native enum
                 stateReason = row['reason']  # might be empty, might contain useful error messages
-                stateTimestamp = efdTimestampToAstropy(row['private_sndStamp'])
+                stateTimestamp = efdTimestampToAstropy(row['private_efdStamp'])
                 scriptStatePoint = ScriptStatePoint(time=stateTimestamp,
                                                     state=state,
                                                     reason=stateReason)
@@ -1347,8 +1347,8 @@ class TMAEventMaker:
         for row in states:
             eventStart, eventEnd, eventType, endReason = row
 
-            begin = data.iloc[eventStart]['private_sndStamp']
-            end = data.iloc[eventEnd]['private_sndStamp']
+            begin = data.iloc[eventStart]['private_efdStamp']
+            end = data.iloc[eventEnd]['private_efdStamp']
             beginAstropy = efdTimestampToAstropy(begin)
             endAstropy = efdTimestampToAstropy(end)
             duration = end - begin
@@ -1401,8 +1401,8 @@ class TMAEventMaker:
             type=TMAState.OFF,  # anything will do
             endReason=TMAState.OFF,  # anything will do
             duration=-1,  # anything will do
-            begin=efdTimestampToAstropy(data.iloc[0]['private_sndStamp']),
-            end=efdTimestampToAstropy(data.iloc[-1]['private_sndStamp']),
+            begin=efdTimestampToAstropy(data.iloc[0]['private_efdStamp']),
+            end=efdTimestampToAstropy(data.iloc[-1]['private_efdStamp']),
             beginFloat=-1,
             endFloat=-1,
             _startRow=0,
@@ -1477,7 +1477,7 @@ class TMAEventMaker:
                 axis, rowType = getAxisAndType(rowFor)  # e.g. elevation, MotionState
                 value = tma._getRowPayload(row, rowType, rowFor)
                 valueStr = f"{str(value) if isinstance(value, bool) else value.name}"
-                rowTime = efdTimestampToAstropy(row['private_sndStamp'])
+                rowTime = efdTimestampToAstropy(row['private_efdStamp'])
                 print(f"On row {rowNum} the {axis} axis had the {rowType} set to {valueStr} at"
                       f" {rowTime.utc.isot if useUtc else rowTime.isot}")
 

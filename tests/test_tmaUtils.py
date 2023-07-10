@@ -239,7 +239,7 @@ class TMAEventMakerTestCase(lsst.utils.tests.TestCase):
 
     def test_monotonicTimeInDataframe(self):
         # ensure that each row is later than the previous
-        times = self.sampleData['private_sndStamp']
+        times = self.sampleData['private_efdStamp']
         self.assertTrue(np.all(np.diff(times) > 0))
 
     def test_monotonicTimeApplicationOfRows(self):
