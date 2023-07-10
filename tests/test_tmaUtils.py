@@ -22,6 +22,7 @@
 """Test cases for utils."""
 
 import unittest
+import os
 import lsst.utils.tests
 
 import pandas as pd
@@ -30,6 +31,7 @@ import asyncio
 import matplotlib.pyplot as plt
 from astropy.time import TimeDelta
 
+from lsst.utils import getPackageDir
 from lsst.summit.utils.efdUtils import makeEfdClient, getDayObsStartTime, calcNextDay
 from lsst.summit.utils.tmaUtils import (
     getSlewsFromEventList,
@@ -46,6 +48,68 @@ from lsst.summit.utils.tmaUtils import (
     _initializeTma,
     _turnOn,  # move definition into here to discourage elsewhere?
 )
+
+__all__ = [
+    'writeNewTmaEventTestTruthValues',
+]
+
+
+def getTmaEventTestTruthValues():
+    """Get the current truth values for the TMA event test cases.
+
+    Returns
+    -------
+    seqNums : `np.array` of `int`
+        The sequence numbers of the events.
+    startRows : `np.array` of `int`
+        The _startRow numbers of the events.
+    endRows : `np.array` of `int`
+        The _endRow numbers of the events.
+    types : `np.array` of `str`
+        The event types, as a string, i.e. the ``TMAEvent.name`` of the event's
+        ``event.type``.
+    endReasons : `np.array` of `str`
+        The event end reasons, as a string, i.e. the ``TMAEvent.name`` of the
+        event's ``event.endReason``.
+    """
+    packageDir = getPackageDir("summit_utils")
+    dataFilename = os.path.join(packageDir, "tests", "data", "tmaEventData.txt")
+
+    seqNums, startRows, endRows, types, endReasons = np.genfromtxt(dataFilename,
+                                                                   delimiter=',',
+                                                                   dtype=None,
+                                                                   names=True,
+                                                                   encoding='utf-8',
+                                                                   unpack=True
+                                                                   )
+    return seqNums, startRows, endRows, types, endReasons
+
+
+def writeNewTmaEventTestTruthValues():
+    """This function is used to write out the truth values for the test cases.
+
+    If the internal event creation logic changes, these values can change, and
+    will need to be updated. Run this function, and check the new values into
+    git.
+
+    Note: if you have cause to update values with this function, make sure to
+    update the version number on the TMAEvent class.
+    """
+    dayObs = 20230531  # obviously must match the day in the test class
+
+    eventMaker = TMAEventMaker()
+    events = eventMaker.getEvents(dayObs)
+
+    packageDir = getPackageDir("summit_utils")
+    dataFilename = os.path.join(packageDir, "tests", "data", "tmaEventData.txt")
+
+    columnHeader = "seqNum,startRow,endRow,type,endReason"
+    with open(dataFilename, 'w') as f:
+        f.write(columnHeader + '\n')
+        for event in events:
+            line = (f"{event.seqNum},{event._startRow},{event._endRow},{event.type.name},"
+                    f"{event.endReason.name}")
+            f.write(line + '\n')
 
 
 def makeValid(tma):
@@ -216,6 +280,14 @@ class TMAEventMakerTestCase(lsst.utils.tests.TestCase):
         tracks = [e for e in events if e.type == TMAState.TRACKING]
         self.assertEqual(len(slews), 157)
         self.assertEqual(len(tracks), 43)
+
+        seqNums, startRows, endRows, types, endReasons = getTmaEventTestTruthValues()
+        for eventNum, event in enumerate(events):
+            self.assertEqual(event.seqNum, seqNums[eventNum])
+            self.assertEqual(event._startRow, startRows[eventNum])
+            self.assertEqual(event._endRow, endRows[eventNum])
+            self.assertEqual(event.type.name, types[eventNum])
+            self.assertEqual(event.endReason.name, endReasons[eventNum])
 
     def test_noDataBehaviour(self):
         eventMaker = self.tmaEventMaker
