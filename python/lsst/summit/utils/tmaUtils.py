@@ -1410,8 +1410,6 @@ class TMAEventMaker:
             # creation.
             object.__setattr__(event, 'blockInfo', blockInfo)
 
-        return
-
     def _makeEventsFromStateTuples(self, states, dayObs, data):
         """For the list of state-tuples, create a list of ``TMAEvent`` objects.
 
