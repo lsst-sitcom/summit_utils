@@ -309,11 +309,20 @@ def getMostRecentRowWithDataBefore(client, topic, timeToLookBefore, warnStaleAft
     """
     staleAge = datetime.timedelta(warnStaleAfterNMinutes)
 
+    firstDayPossible = getDayObsStartTime(20190101)
+
+    if timeToLookBefore < firstDayPossible:
+        raise ValueError(f"Requested time {timeToLookBefore} is before any data was put in the EFD")
+
     df = pd.DataFrame()
     beginTime = timeToLookBefore
-    while df.empty:
+    while df.empty and beginTime > firstDayPossible:
         df = getEfdData(client, topic, begin=beginTime, timespan=-TIME_CHUNKING, warn=False)
         beginTime -= TIME_CHUNKING
+
+    if beginTime < firstDayPossible and df.empty:  # we ran all the way back to the beginning of time
+        raise ValueError(f"The entire EFD was searched backwards from {timeToLookBefore} and no data was "
+                         f"found in {topic=}")
 
     lastRow = df.iloc[-1]
     commandTime = efdTimestampToAstropy(lastRow['private_efdStamp'])
