@@ -526,7 +526,7 @@ def getDayObsEndTime(dayObs):
     time : `astropy.time.Time`
         The end of the dayObs as an astropy.time.Time object.
     """
-    return getDayObsStartTime(calcNextDay(dayObs))
+    return getDayObsStartTime(dayObs) + 24 * u.hour
 
 
 def getDayObsForTime(time):
