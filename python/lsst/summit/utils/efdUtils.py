@@ -154,7 +154,7 @@ def getEfdData(client, topic, *,
                timespan=None,
                event=None,
                expRecord=None,
-               noWarn=False,
+               warn=True,
                ):
     """Get one or more EFD topics over a time range, synchronously.
 
@@ -201,9 +201,10 @@ def getEfdData(client, topic, *,
     expRecord : `lsst.daf.butler.dimensions.DimensionRecord`, optional
         The exposure record containing the timespan to query. If specified, all
         other options are disallowed.
-    noWarn : bool, optional
-        If True, don't warn when no data is found. Useful for utility code
-        which is checking for data.
+    warn : bool, optional
+        If ``True``, warn when no data is found. Exists so that utility code
+        can disable warnings when checking for data, and therefore defaults to
+        ``True``.
 
     Returns
     -------
@@ -238,7 +239,7 @@ def getEfdData(client, topic, *,
                                               columns,
                                               begin.utc,
                                               end.utc))
-    if ret.empty and not noWarn:
+    if ret.empty and warn:
         log = logging.getLogger(__name__)
         log.warning(f"Topic {topic} is in the schema, but no data was returned by the query for the specified"
                     " time range")
@@ -308,7 +309,7 @@ def getMostRecentRowWithDataBefore(client, topic, timeToLookBefore, warnStaleAft
     df = pd.DataFrame()
     beginTime = timeToLookBefore
     while df.empty:
-        df = getEfdData(client, topic, begin=beginTime, timespan=-TIME_CHUNKING, noWarn=True)
+        df = getEfdData(client, topic, begin=beginTime, timespan=-TIME_CHUNKING, warn=False)
         beginTime -= TIME_CHUNKING
 
     lastRow = df.iloc[-1]

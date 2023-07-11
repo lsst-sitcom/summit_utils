@@ -345,7 +345,7 @@ def getCommandsDuringEvent(client, event, commands=['raDecTarget'], log=None, do
 
     ret = {}
     for command in fullCommands:
-        data = getEfdData(client, command, event=event, noWarn=True)
+        data = getEfdData(client, command, event=event, warn=False)
         if data.empty:
             if doLog:
                 log.info(f'Found no command issued for {command} during event')
@@ -1055,7 +1055,7 @@ class TMAEventMaker:
             self._inPositionComponents,
             self._stateComponents
         ):
-            data[component] = getEfdData(self.client, component, dayObs=dayObs, noWarn=True)
+            data[component] = getEfdData(self.client, component, dayObs=dayObs, warn=False)
             self.log.debug(f"Found {len(data[component])} for {component}")
 
         if all([dataframe.empty for dataframe in data.values()]):
@@ -1229,7 +1229,7 @@ class TMAEventMaker:
                              "lsst.sal.Script.logevent_state",
                              begin=events[0].begin,  # time ordered, so this is the start of the window
                              end=events[-1].end,  # and this is the end
-                             noWarn=True)
+                             warn=False)
         if allData.empty:
             self.log.info('No block data found for the specified events')
             return {}
