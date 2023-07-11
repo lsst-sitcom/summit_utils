@@ -139,8 +139,8 @@ def _getBeginEnd(dayObs, begin, end, timespan, event, expRecord):
             end = begin  # the case where timespan is negative
             begin = begin + timespan  # adding the negative to the start, i.e. subtracting it to bring back
 
-    assert (begin is not None)
-    assert (end is not None)
+    assert begin is not None
+    assert end is not None
     return begin, end
 
 
