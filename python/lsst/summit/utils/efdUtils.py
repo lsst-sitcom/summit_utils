@@ -445,10 +445,10 @@ def astropyToEfdTimestamp(time):
     Returns
     -------
     timestamp : `float`
-        The timestamp, as a float.
+        The timestamp, in UTC, in unix seconds.
     """
 
-    return time.value
+    return time.utc.unix
 
 
 def clipDataToEvent(df, event):
