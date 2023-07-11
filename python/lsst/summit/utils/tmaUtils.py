@@ -1050,20 +1050,19 @@ class TMAEventMaker:
         workingLive = self.isToday(dayObs)
         data = None
 
-        # get or update the data as required
-        if dayObs in self._data and not workingLive:
+        if workingLive:
+            # it's potentially updating data, so we must update the date
+            # regarless of whether we have it already or not
+            self.log.info(f'Updating mount data for {dayObs} from the EFD')
+            self._getEfdDataForDayObs(dayObs)
+            data = self._data[dayObs]
+        elif dayObs in self._data:
             # data is in the cache and it's not being updated, so use it
             data = self._data[dayObs]
-        elif dayObs not in self._data and not workingLive:
+        elif dayObs not in self._data:
             # we don't have the data yet, but it's not growing, so put it in
             # the cache and use it from there
             self.log.info(f'Retrieving mount data for {dayObs} from the EFD')
-            self._getEfdDataForDayObs(dayObs)
-            data = self._data[dayObs]
-        elif workingLive:
-            # it's potentially updating data, so we must update the regarless
-            # of whether we have it already or not
-            self.log.info(f'Updating mount data for {dayObs} from the EFD')
             self._getEfdDataForDayObs(dayObs)
             data = self._data[dayObs]
         else:
