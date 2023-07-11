@@ -689,8 +689,9 @@ class TMAStateMachine:
     def apply(self, row):
         """Apply a row of data to the TMA state.
 
-        Checks that the row contains data for a later time, and applies the
-        relevant column entry to the relevant component.
+        Checks that the row contains data for a later time than any data
+        previously applied, and applies the relevant column entry to the
+        relevant component.
 
         Parameters
         ----------
