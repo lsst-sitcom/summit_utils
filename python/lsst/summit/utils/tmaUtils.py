@@ -885,6 +885,19 @@ class TMAStateMachine:
 
 
 class TMAEventMaker:
+    """A class to create per-dayObs TMAEvents for the TMA's movements.
+
+    Example usage:
+    >>> dayObs = 20230630
+    >>> eventMaker = TMAEventMaker()
+    >>> events = eventMaker.getEvents(dayObs)
+    >>> print(f'Found {len(events)} for {dayObs=}')
+
+    Parameters
+    ----------
+    client : `lsst_efd_client.efd_helper.EfdClient`, optional
+        The EFD client to use, created if not provided.
+    """
     # the topics which need logical combination to determine the overall mount
     # state. Will need updating as new components are added to the system.
 
