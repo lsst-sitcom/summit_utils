@@ -1139,11 +1139,6 @@ class TMAEventMaker:
         ----------
         dayObs : `int`
             The dayObs to query.
-
-        Raises
-        ------
-        ValueError
-            If the dayObs is in the future.
         """
         data = {}
         for component in itertools.chain(
