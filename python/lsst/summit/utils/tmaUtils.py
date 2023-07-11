@@ -1171,8 +1171,8 @@ class TMAEventMaker:
         events : `list` of `lsst.summit.utils.tmaUtils.TMAEvent`
             The events for the specified dayObs.
         """
-        engineering = True
-        tma = TMAStateMachine(engineeringMode=engineering)
+        engineeringMode = True
+        tma = TMAStateMachine(engineeringMode=engineeringMode)
 
         # For now, we assume that the TMA starts each day able to move, but
         # stationary. If this turns out to cause problems, we will need to
