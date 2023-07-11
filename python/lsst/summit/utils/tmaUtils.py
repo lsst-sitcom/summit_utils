@@ -600,13 +600,14 @@ def getAxisAndType(rowFor):
     return axis, rowType
 
 
-class ReferenceList:
-    """A class to allow making lists which contain references to a dictionary.
+class ListViewOfDict:
+    """A class to allow making lists which contain references to an underlying
+    dictionary.
 
     Normally, making a list of items from a dictionary would make a copy of the
     items, but this class allows making a list which contains references to the
-    underlying dictionary. This is useful for making a list of components, such
-    that they can be manipulated in their logical sets.
+    underlying dictionary items themselves. This is useful for making a list of
+    components, such that they can be manipulated in their logical sets.
     """
     def __init__(self, underlyingDictionary, keysToLink):
         self.dictionary = underlyingDictionary
@@ -664,9 +665,9 @@ class TMAStateMachine:
         motionKeys = ['azimuthMotionState', 'elevationMotionState']
 
         # references to the _parts as conceptual groupings
-        self.system = ReferenceList(self._parts, systemKeys)
-        self.motion = ReferenceList(self._parts, motionKeys)
-        self.inPosition = ReferenceList(self._parts, positionKeys)
+        self.system = ListViewOfDict(self._parts, systemKeys)
+        self.motion = ListViewOfDict(self._parts, motionKeys)
+        self.inPosition = ListViewOfDict(self._parts, positionKeys)
 
         # tuples of states for state collapsing. Note that STOP_LIKE +
         # MOVING_LIKE must cover the full set of AxisMotionState enums
