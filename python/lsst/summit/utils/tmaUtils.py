@@ -589,7 +589,7 @@ def getAxisAndType(rowFor):
     rowType : `str`
         The type of the row, e.g. "MotionState", "SystemState", "InPosition".
     """
-    regex = r'(azimuth|elevation)(InPosition|MotionState|SystemState)'
+    regex = r'(azimuth|elevation)(InPosition|MotionState|SystemState)$'  # matches the end of the line
     matches = re.search(regex, rowFor)
     if matches is None:
         raise ValueError(f"Could not parse axis and rowType from {rowFor=}")
