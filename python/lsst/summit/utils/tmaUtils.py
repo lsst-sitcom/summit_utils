@@ -1131,7 +1131,7 @@ class TMAEventMaker:
             data[component] = getEfdData(self.client, component, dayObs=dayObs, warn=False)
             self.log.debug(f"Found {len(data[component])} for {component}")
 
-        if all([dataframe.empty for dataframe in data.values()]):
+        if all(dataframe.empty for dataframe in data.values()):
             # if every single dataframe is empty, set the sentinel and don't
             # try to merge anything, otherwise merge all the data we found
             self.log.debug(f"No data found for {dayObs=}")
