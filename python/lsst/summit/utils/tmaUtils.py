@@ -419,7 +419,11 @@ class BlockInfo:
         print(self.__str__())
 
     def __str__(self):
-        newline = '  \n'  # no \n allowed in f-strings until python 3.12
+        # You can't put the characters '\n' directly into the evaluated part of
+        # an f-string i.e. inside the {} part, until py 3.12, so this must go
+        # in via a variable until then.
+        newline = '  \n'
+
         return (
             f"blockNumber: {self.blockNumber}\n"
             f"blockId: {self.blockId}\n"
