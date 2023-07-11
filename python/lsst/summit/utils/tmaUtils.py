@@ -376,16 +376,6 @@ def _initializeTma(tma):
     tma._parts['elevationSystemState'] = PowerState.ON
 
 
-def _turnOn(tma):
-    """Helper function to turn TMA axes on for testing.
-
-    Do not call directly in normal usage or code, as this just arbitrarily
-    sets values to turn the axes on.
-    """
-    tma._parts['azimuthSystemState'] = PowerState.ON
-    tma._parts['elevationSystemState'] = PowerState.ON
-
-
 @dataclass(slots=True, kw_only=True, frozen=True)
 class BlockInfo:
     """The block info relating to a TMAEvent.

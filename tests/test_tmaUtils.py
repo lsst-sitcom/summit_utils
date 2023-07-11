@@ -32,6 +32,7 @@ import matplotlib.pyplot as plt
 from astropy.time import TimeDelta
 
 from lsst.utils import getPackageDir
+from lsst.summit.utils.enums import PowerState
 from lsst.summit.utils.efdUtils import makeEfdClient, getDayObsStartTime, calcNextDay
 from lsst.summit.utils.tmaUtils import (
     getSlewsFromEventList,
@@ -46,7 +47,6 @@ from lsst.summit.utils.tmaUtils import (
     AxisMotionState,
     getAxisAndType,
     _initializeTma,
-    _turnOn,  # move definition into here to discourage elsewhere?
 )
 
 __all__ = [
@@ -118,6 +118,16 @@ def makeValid(tma):
     for name, value in tma._parts.items():
         if value == tma._UNINITIALIZED_VALUE:
             tma._parts[name] = 1
+
+
+def _turnOn(tma):
+    """Helper function to turn TMA axes on for testing.
+
+    Do not call directly in normal usage or code, as this just arbitrarily
+    sets values to turn the axes on.
+    """
+    tma._parts['azimuthSystemState'] = PowerState.ON
+    tma._parts['elevationSystemState'] = PowerState.ON
 
 
 class TmaUtilsTestCase(lsst.utils.tests.TestCase):
