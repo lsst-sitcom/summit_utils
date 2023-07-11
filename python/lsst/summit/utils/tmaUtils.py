@@ -306,7 +306,7 @@ def plotEvent(client, event, fig=None, prePadding=0, postPadding=0, commands={},
     return fig
 
 
-def getCommandsDuringEvent(client, event, commands=['raDecTarget'], log=None, doLog=True):
+def getCommandsDuringEvent(client, event, commands=('raDecTarget'), log=None, doLog=True):
     """Get the commands issued during an event.
 
     Get the times at which the specified commands were issued during the event.
