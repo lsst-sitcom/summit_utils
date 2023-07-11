@@ -282,13 +282,13 @@ def plotEvent(client, event, fig=None, prePadding=0, postPadding=0, commands={},
         colorCounter += 1
 
     # combine the legends and put inside the plot
-    handles1, labels1 = ax1.get_legend_handles_labels()
-    handles2, labels2 = ax1_twin.get_legend_handles_labels()
-    handles3, labels3 = ax2.get_legend_handles_labels()
-    handles4, labels4 = ax2_twin.get_legend_handles_labels()
+    handles1a, labels1a = ax1.get_legend_handles_labels()
+    handles1b, labels1b = ax1_twin.get_legend_handles_labels()
+    handles2a, labels2a = ax2.get_legend_handles_labels()
+    handles2b, labels2b = ax2_twin.get_legend_handles_labels()
 
-    handles = handles1 + handles2 + handles3 + handles4
-    labels = labels1 + labels2 + labels3 + labels4
+    handles = handles1a + handles1b + handles2a + handles2b
+    labels = labels1a + labels1b + labels2a + labels2b
     # ax2 is "in front" of ax1 because it has the vlines plotted on it, and
     # vlines are on ax2 so that they appear at the bottom of the legend, so
     # make sure to plot the legend on ax2, otherwise the vlines will go on top
