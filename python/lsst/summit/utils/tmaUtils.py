@@ -626,6 +626,9 @@ class ListViewOfDict:
 class TMAStateMachine:
     """A state machine model of the TMA.
 
+    Note that this is currently only implemented for the azimuth and elevation
+    axes, but will be extended to include the rotator in the future.
+
     Note that when used for event generation, changing ``engineeringMode`` to
     False might change the resulting list of events, and that if the TMA moves
     with some axis in fault, then these events will be missed. It is therefore
