@@ -201,6 +201,11 @@ def plotEvent(client, event, fig=None, prePadding=0, postPadding=0, commands={},
         # tick_number is unused.
         return f"{value:.2f}"
 
+    # plot any commands we might have
+    if not isinstance(commands, dict):
+        raise TypeError('commands must be a dict of command names with values as'
+                        ' astropy.time.Time values')
+
     if fig is None:
         fig = plt.figure(figsize=(10, 8))
         log = logging.getLogger(__name__)
@@ -263,10 +268,6 @@ def plotEvent(client, event, fig=None, prePadding=0, postPadding=0, commands={},
         ax2_twin.axvline(event.begin.utc.datetime, c='k', ls='--', alpha=0.5)
         ax2_twin.axvline(event.end.utc.datetime, c='k', ls='--', alpha=0.5)
 
-    # plot any commands we might have
-    if not isinstance(commands, dict):
-        raise TypeError('commands must be a dict of command names with values as'
-                        ' astropy.time.Time values')
     for command, commandTime in commands.items():
         # if commands weren't found, the item is set to None. This is common
         # for events so handle it gracefully and silently. The command finding
