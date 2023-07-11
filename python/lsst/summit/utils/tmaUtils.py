@@ -832,7 +832,7 @@ class TMAStateMachine:
         """The overall state of the TMA.
 
         Note that this is both a property, and also the method which applies
-        the logic sieve to determine the state.
+        the logic sieve to determine the state at a given point in time.
 
         Returns
         -------
@@ -917,6 +917,26 @@ class TMAEventMaker:
 
     @staticmethod
     def isToday(dayObs):
+        """Find out if the specified dayObs is today, or in the past.
+
+        If the day is today, the function returns ``True``, if it is in the
+        past it returns ``False``. If the day is in the future, a
+        ``ValueError`` is raised, as this indicates there is likely an
+        off-by-one type error somewhere in the logic.
+
+        Parameters
+        ----------
+        dayObs : `int`
+            The dayObs to check, in the format YYYYMMDD.
+
+        Returns
+        -------
+        isToday : `bool`
+            ``True`` if the dayObs is today, ``False`` if it is in the past.
+
+        Raises
+            ValueError: if the dayObs is in the future.
+        """
         todayDayObs = getCurrentDayObs_int()
         if dayObs == todayDayObs:
             return True
