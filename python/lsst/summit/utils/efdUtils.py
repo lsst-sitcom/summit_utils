@@ -67,17 +67,17 @@ COMMAND_ALIASES = {
 TIME_CHUNKING = datetime.timedelta(minutes=15)
 
 
-def _getBeginEnd(dayObs, begin, end, timespan, event, expRecord):
+def _getBeginEnd(dayObs=None, begin=None, end=None, timespan=None, event=None, expRecord=None):
     """Calculate the begin and end times to pass to _getEfdData, given the
     kwargs passed to getEfdData.
 
     Parameters
     ----------
-    dayObs : `int
+    dayObs : `int`
         The dayObs to query. If specified, this is used to determine the begin
         and end times.
     begin : `astropy.Time`
-        The begin time for the query. If specified, either a end time or a
+        The begin time for the query. If specified, either an end time or a
         timespan must be supplied.
     end : `astropy.Time`
         The end time for the query. If specified, a begin time must also be
@@ -101,7 +101,7 @@ def _getBeginEnd(dayObs, begin, end, timespan, event, expRecord):
     """
     if expRecord is not None:
         forbiddenOpts = [event, begin, end, timespan, dayObs]
-        if any([x is not None for x in forbiddenOpts]):
+        if any(x is not None for x in forbiddenOpts):
             raise ValueError("You can't specify both an expRecord and a begin/end or timespan or dayObs")
         begin = expRecord.timespan.begin
         end = expRecord.timespan.end
@@ -109,7 +109,7 @@ def _getBeginEnd(dayObs, begin, end, timespan, event, expRecord):
 
     if event is not None:
         forbiddenOpts = [begin, end, timespan, dayObs]
-        if any([x is not None for x in forbiddenOpts]):
+        if any(x is not None for x in forbiddenOpts):
             raise ValueError("You can't specify both an event and a begin/end or timespan or dayObs")
         begin = event.begin
         end = event.end
@@ -118,7 +118,7 @@ def _getBeginEnd(dayObs, begin, end, timespan, event, expRecord):
     # check for dayObs, and that other options aren't inconsistently specified
     if dayObs is not None:
         forbiddenOpts = [begin, end, timespan]
-        if any([x is not None for x in forbiddenOpts]):
+        if any(x is not None for x in forbiddenOpts):
             raise ValueError("You can't specify both a dayObs and a begin/end or timespan")
         begin = getDayObsStartTime(dayObs)
         end = getDayObsEndTime(dayObs)
