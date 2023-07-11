@@ -312,6 +312,11 @@ class TMAEventMakerTestCase(lsst.utils.tests.TestCase):
         eventMaker = self.tmaEventMaker
         events = eventMaker.getEvents(self.dayObs)
 
+        # test str(), repr(), and _ipython_display_() for an event
+        print(str(events[0]))
+        print(repr(events[0]))
+        print(events[0]._ipython_display_())
+
         # spot-check both a slow and a track to print
         slews = [e for e in events if e.type == TMAState.SLEWING]
         tracks = [e for e in events if e.type == TMAState.TRACKING]

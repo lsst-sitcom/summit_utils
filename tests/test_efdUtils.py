@@ -73,8 +73,6 @@ class EfdUtilsTestCase(lsst.utils.tests.TestCase):
             duration=0.47125244140625,
             begin=Time(1685578353.2265284, scale='utc', format='unix'),
             end=Time(1685578353.6977808, scale='utc', format='unix'),
-            beginFloat=1685578353.2265284,
-            endFloat=1685578353.6977808,
             blockInfo=None,
             version=0,
             _startRow=254,

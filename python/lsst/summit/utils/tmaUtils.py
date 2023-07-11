@@ -461,8 +461,6 @@ class TMAEvent:
     duration: float  # seconds
     begin: Time
     end: Time
-    beginFloat: float
-    endFloat: float
     blockInfo: BlockInfo = None
     version: int = 0  # update this number any time a code change which could change event definitions is made
     _startRow: int
@@ -479,7 +477,7 @@ class TMAEvent:
         return (
             f"TMAEvent(dayObs={self.dayObs}, seqNum={self.seqNum}, type={self.type!r},"
             f" endReason={self.endReason!r}, duration={self.duration}, begin={self.begin!r},"
-            f" end={self.end!r}, beginFloat={self.beginFloat}, endFloat={self.endFloat})"
+            f" end={self.end!r}"
         )
 
     def _ipython_display_(self):
@@ -489,7 +487,7 @@ class TMAEvent:
         return (
             f"dayObs: {self.dayObs}\nseqNum: {self.seqNum}\ntype: {self.type.name}"
             f"\nendReason: {self.endReason.name}\nduration: {self.duration}\nbegin: {self.begin!r},"
-            f"\nend: {self.end!r}\nbeginFloat: {self.beginFloat}\nendFloat: {self.endFloat}"
+            f"\nend: {self.end!r}"
         )
 
 
@@ -1360,8 +1358,6 @@ class TMAEventMaker:
                 duration=duration,
                 begin=beginAstropy,
                 end=endAstropy,
-                beginFloat=begin,
-                endFloat=end,
                 blockInfo=None,  # this is added later
                 _startRow=eventStart,
                 _endRow=eventEnd,
@@ -1403,8 +1399,6 @@ class TMAEventMaker:
             duration=-1,  # anything will do
             begin=efdTimestampToAstropy(data.iloc[0]['private_efdStamp']),
             end=efdTimestampToAstropy(data.iloc[-1]['private_efdStamp']),
-            beginFloat=-1,
-            endFloat=-1,
             _startRow=0,
             _endRow=lastRowNum
         )
