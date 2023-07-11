@@ -1069,7 +1069,7 @@ class TMAEventMaker:
             raise RuntimeError("This should never happen")
 
         # if we don't have something to work with, log a warning and return
-        if self._noDataFound(data):
+        if not self.dataFound(data):
             self.log.warning(f"No EFD data found for {dayObs=}")
             return []
 
@@ -1081,7 +1081,7 @@ class TMAEventMaker:
         return events
 
     @staticmethod
-    def _noDataFound(data):
+    def dataFound(data):
         """Check if any data was found.
 
         Parameters
@@ -1091,13 +1091,13 @@ class TMAEventMaker:
 
         Returns
         -------
-        noDataFound : `bool`
-            Whether no data was found.
+        dataFound : `bool`
+            Whether data was found.
         """
         # You can't just compare to with data == NO_DATA_SENTINEL because
         # `data` is usually a dataframe, and you can't compare a dataframe to a
         # string directly.
-        return isinstance(data, str) and data == NO_DATA_SENTINEL
+        return not (isinstance(data, str) and data == NO_DATA_SENTINEL)
 
     def _getEfdDataForDayObs(self, dayObs):
         """Get the EFD data for the specified dayObs and store it in the cache.
