@@ -368,6 +368,11 @@ def _initializeTma(tma):
 
     Do not call directly in normal usage or code, as this just arbitrarily
     sets values to make the TMA valid.
+
+    Parameters
+    ----------
+    tma : `lsst.summit.utils.tmaUtils.TMAStateMachine`
+        The TMA state machine model to initialize.
     """
     tma._parts['azimuthInPosition'] = False
     tma._parts['azimuthMotionState'] = AxisMotionState.STOPPED

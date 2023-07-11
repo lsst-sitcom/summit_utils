@@ -125,6 +125,11 @@ def _turnOn(tma):
 
     Do not call directly in normal usage or code, as this just arbitrarily
     sets values to turn the axes on.
+
+    Parameters
+    ----------
+    tma : `lsst.summit.utils.tmaUtils.TMAStateMachine`
+        The TMA state machine model to initialize.
     """
     tma._parts['azimuthSystemState'] = PowerState.ON
     tma._parts['elevationSystemState'] = PowerState.ON
