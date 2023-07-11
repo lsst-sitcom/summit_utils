@@ -51,16 +51,6 @@ __all__ = [
 ]
 
 
-TOPIC_ALIASES = {
-    # the real alises with the database itself
-    'MtAz': 'lsst.sal.MTMount.logevent_azimuthMotionState',
-    'MtEl': 'lsst.sal.MTMount.logevent_elevationMotionState',
-    'MtAzInPosition': 'lsst.sal.MTMount.logevent_azimuthInPosition',
-    'MtElInPosition': 'lsst.sal.MTMount.logevent_elevationInPosition',
-    'MtAzState': 'lsst.sal.MTMount.logevent_azimuthSystemState',
-    'MtElState': 'lsst.sal.MTMount.logevent_elevationSystemState',
-}
-
 COMMAND_ALIASES = {
     'raDecTarget': 'lsst.sal.MTPtg.command_raDecTarget',
     'moveToTarget': 'lsst.sal.MTMount.command_moveToTarget',
@@ -68,10 +58,6 @@ COMMAND_ALIASES = {
     'stopTracking': 'lsst.sal.MTMount.command_stopTracking',
     'trackTarget': 'lsst.sal.MTMount.command_trackTarget',  # issued at 20Hz - don't plot
 }
-
-# setting aliases within the dictionary itself: making alt an alias for el
-TOPIC_ALIASES['MtAlt'] = TOPIC_ALIASES['MtEl']
-TOPIC_ALIASES['MtAltInPosition'] = TOPIC_ALIASES['MtElInPosition']
 
 # When looking backwards in time to find the most recent state event, look back
 # in chunks of this size. Too small, and there will be too many queries, too
@@ -283,14 +269,10 @@ async def _getEfdData(client, topic, columns, begin, end):
 
     availableTopics = await client.get_topics()
 
-    topicToQuery = topic
-    if topic in TOPIC_ALIASES:
-        topicToQuery = TOPIC_ALIASES[topic]
+    if topic not in availableTopics:
+        raise ValueError(f"Topic {topic} not in EFD schema")
 
-    if topicToQuery not in availableTopics:
-        raise ValueError(f"Topic {topicToQuery} not in EFD schema")
-
-    data = await client.select_time_series(topicToQuery, columns, begin.utc, end.utc)
+    data = await client.select_time_series(topic, columns, begin.utc, end.utc)
 
     return data
 
