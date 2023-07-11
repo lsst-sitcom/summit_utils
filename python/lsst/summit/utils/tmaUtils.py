@@ -117,14 +117,14 @@ def getTorqueMaxima(table):
 
 
 def getAzimuthElevationDataForEvent(client, event, prePadding=0, postPadding=0):
-    """Get the azimuth and elevation data for a given TMAEvent.
+    """Get the data for the az/el telemetry topics for a given TMAEvent.
 
     Parameters
     ----------
     client : `lsst_efd_client.efd_helper.EfdClient`
         The EFD client to use.
     event : `lsst.summit.utils.tmaUtils.TMAEvent`
-        The event to plot.
+        The event to get the data for.
     prePadding : `float`, optional
         The amount of time to pad the event with before the start time, in
         seconds.
