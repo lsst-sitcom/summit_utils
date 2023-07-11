@@ -299,7 +299,8 @@ def getMostRecentRowWithDataBefore(client, topic, timeToLookBefore, warnStaleAft
     Returns
     -------
     row : `pd.Series`
-        The row of data.
+        The row of data from the EFD containing the most recent data before the
+        specified time.
 
     Raises
     ------
