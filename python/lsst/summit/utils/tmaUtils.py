@@ -69,12 +69,12 @@ def getSlewsFromEventList(events):
 
     Parameters
     ----------
-    events : `list` of `TMAEvent`
+    events : `list` of `lsst.summit.utils.tmaUtils.TMAEvent`
         The list of events to filter.
 
     Returns
     -------
-    events : `list` of `TMAEvent`
+    events : `list` of `lsst.summit.utils.tmaUtils.TMAEvent`
         The filtered list of events.
     """
     return [e for e in events if e.type == TMAState.SLEWING]
@@ -85,12 +85,12 @@ def getTracksFromEventList(events):
 
     Parameters
     ----------
-    events : `list` of `TMAEvent`
+    events : `list` of `lsst.summit.utils.tmaUtils.TMAEvent`
         The list of events to filter.
 
     Returns
     -------
-    events : `list` of `TMAEvent`
+    events : `list` of `lsst.summit.utils.tmaUtils.TMAEvent`
         The filtered list of events.
     """
     return [e for e in events if e.type == TMAState.TRACKING]
@@ -836,7 +836,7 @@ class TMAStateMachine:
 
         Returns
         -------
-        state : `TMAState`
+        state : `lsst.summit.utils.tmaUtils.TMAState`
             The overall state of the TMA.
         """
         # first, check we're valid, and if not, return UNINITIALIZED state, as
@@ -1158,16 +1158,16 @@ class TMAEventMaker:
         """Calculate the list of events from the merged data.
 
         Runs the merged data, row by row, through the TMA state machine (with
-        `tma.apply`) to get the overall TMA state at each row, building a dict
-        of these states, keyed by row number.
+        ``tma.apply``) to get the overall TMA state at each row, building a
+        dict of these states, keyed by row number.
 
         This time-series of TMA states are then looped over (in
         `_statesToEventTuples`), building a list of tuples representing the
         start and end of each event, the type of the event, and the reason for
         the event ending.
 
-        This list of tuples is then passed to `_makeEventsFromStateTuples`,
-        which actually creates the `TMAEvent` objects.
+        This list of tuples is then passed to ``_makeEventsFromStateTuples``,
+        which actually creates the ``TMAEvent`` objects.
 
         Parameters
         ----------
@@ -1408,7 +1408,7 @@ class TMAEventMaker:
         return
 
     def _makeEventsFromStateTuples(self, states, dayObs, data):
-        """For the list of state-tuples, create a list of `TMAEvent` objects.
+        """For the list of state-tuples, create a list of ``TMAEvent`` objects.
 
         Given the underlying data, and the start/stop points for each event,
         create the TMAEvent objects for the dayObs.
