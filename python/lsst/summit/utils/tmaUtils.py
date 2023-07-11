@@ -591,6 +591,8 @@ def getAxisAndType(rowFor):
     """
     regex = r'(azimuth|elevation)(InPosition|MotionState|SystemState)'
     matches = re.search(regex, rowFor)
+    if matches is None:
+        raise ValueError(f"Could not parse axis and rowType from {rowFor=}")
     axis = matches.group(1)
     rowType = matches.group(2)
 
