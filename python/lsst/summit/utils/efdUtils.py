@@ -393,7 +393,7 @@ def makeEfdClient():
     if site in ['staff-rsp', 'rubin-devl']:
         return EfdClient('usdf_efd')
 
-    raise RuntimeError(f"Could not create EFD client as the site {site} is not recognized")
+    raise RuntimeError(f"Could not create EFD client as the {site=} is not recognized")
 
 
 def expRecordToTimespan(expRecord):
