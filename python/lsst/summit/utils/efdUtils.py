@@ -38,7 +38,6 @@ except ImportError:
 __all__ = [
     'getEfdData',
     'getMostRecentRowWithDataBefore',
-    'getStateAtTime',
     'makeEfdClient',
     'expRecordToTimespan',
     'efdTimestampToAstropy',
@@ -334,53 +333,6 @@ def getMostRecentRowWithDataBefore(client, topic, timeToLookBefore, warnStaleAft
                     " before the requested time")
 
     return lastRow
-
-
-def getStateAtTime(client, topic, time, warnStaleAfterNMinutes=12*60):
-    """Get the state of a component at a given time.
-
-    Parameters
-    ----------
-    client : `lsst_efd_client.efd_helper.EfdClient`
-        The EFD client to use.
-    topic : `str`
-        The topic to query.
-    time : `astropy.Time`
-        The time at which to get the state.
-    warnStaleAfterNMinutes : `float`, optional
-        The number of minutes after which to consider the data stale and issue
-        a warning.
-
-    Returns
-    -------
-    state : `Enum`
-        The appropriate enumClass for the topic, holding the value it was set
-        to at ``commandTime``.
-    commandTime : `astropy.Time`
-        The time the component was set to the returned state.
-
-    Raises
-    ------
-    ValueError:
-        If the topic is not in the EFD schema.
-    """
-    row = getMostRecentRowWithDataBefore(client=client,
-                                         topic=topic,
-                                         timeToLookBefore=time,
-                                         warnStaleAfterNMinutes=warnStaleAfterNMinutes)
-
-    commandTime = efdTimestampToAstropy(row['private_efdStamp'])
-    # TODO: need to:
-    # a) know which column to get the value from depending on topic, and
-    # b) cast it to the appropriate enum class, and
-    # c) be able to import all the enums, rather than having a few of them them
-    # copied & pasted
-
-    # example: for lsst.sal.MTMount.logevent_azimuthMotionState
-    value = row['state']
-    # state = AxisMotionState(value)
-
-    return value, commandTime
 
 
 def makeEfdClient():

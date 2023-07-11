@@ -185,10 +185,6 @@ class EfdUtilsTestCase(lsst.utils.tests.TestCase):
         stateTime = efdTimestampToAstropy(rowData['private_efdStamp'])
         self.assertLess(stateTime, time)
 
-    def test_getStateAtTime(self):
-        # getStateAtTime()
-        return
-
     def test_efdTimestampToAstropy(self):
         time = efdTimestampToAstropy(1687845854.736784)
         self.assertIsInstance(time, astropy.time.Time)
