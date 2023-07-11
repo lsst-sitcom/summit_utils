@@ -304,7 +304,8 @@ def getMostRecentRowWithDataBefore(client, topic, timeToLookBefore, warnStaleAft
 
     Raises
     ------
-    ValueError: If the topic is not in the EFD schema.
+    ValueError:
+        If the topic is not in the EFD schema.
     """
     staleAge = datetime.timedelta(warnStaleAfterNMinutes)
 
@@ -351,7 +352,8 @@ def getStateAtTime(client, topic, time, warnStaleAfterNMinutes=12*60):
 
     Raises
     ------
-    ValueError: If the topic is not in the EFD schema.
+    ValueError:
+        If the topic is not in the EFD schema.
     """
     row = getMostRecentRowWithDataBefore(client=client,
                                          topic=topic,
