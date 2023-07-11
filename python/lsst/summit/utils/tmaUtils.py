@@ -1456,6 +1456,16 @@ class TMAEventMaker:
 
     @staticmethod
     def printTmaDetailedState(tma):
+        """Print the full state of all the components of the TMA.
+
+        Currently this is the azimuth and elevation axes' power and motion
+        states, and their respective inPosition statuses.
+
+        Parameters
+        ----------
+        tma : `lsst.summit.utils.tmaUtils.TMAStateMachine`
+            The TMA state machine in the state we want to print.
+        """
         axes = ['azimuth', 'elevation']
         p = tma._parts
         axisPad = len(max(axes, key=len))  # length of the longest axis string == 9 here, but this is general
@@ -1472,10 +1482,24 @@ class TMAEventMaker:
                   f"InPosition: {p[f'{axis}InPosition']}")
         print(f"Overall system state: {tma.state.name}")
 
-    def printFullDayStateEvolution(self, dayObs, taiOrUtc='tai'):
+    def printFullDayStateEvolution(self, dayObs, taiOrUtc='utc'):
+        """Print the full TMA state evolution for the specified dayObs.
+
+        Replays all the data from the EFD for the specified dayObs through
+        the TMA state machine, and prints both the overall and detailed state
+        of the TMA for each row.
+
+        Parameters
+        ----------
+        dayObs : `int`
+            The dayObs for which to print the state evolution.
+        taiOrUtc : `str`, optional
+            Whether to print the timestamps in TAI or UTC. Default is UTC.
+        """
         # create a fake event which spans the whole day, and then use
         # printEventDetails code while skipping the header to print the
         # evolution.
+        _ = self.getEvents(dayObs)  # ensure the data has been retrieved from the EFD
         data = self._data[dayObs]
         lastRowNum = len(data) - 1
 
