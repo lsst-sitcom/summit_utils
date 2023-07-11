@@ -156,7 +156,7 @@ def getEfdData(client, topic, *,
                expRecord=None,
                noWarn=False,
                ):
-    """Get one or more EFD topics over a time range in a non-blocking manner.
+    """Get one or more EFD topics over a time range, synchronously.
 
     The time range can be specified as either:
         * a dayObs, in which case the full 24 hour period is used,
@@ -178,9 +178,11 @@ def getEfdData(client, topic, *,
     columns : `list` of `str`, optional
         The columns to query. If not specified, all columns are queried.
     prePadding : `float`
-        The amount of time before the nominal start of the query to include.
+        The amount of time before the nominal start of the query to include, in
+        seconds.
     postPadding : `float`
-        The amount of extra time after the nominal end of the query to include.
+        The amount of extra time after the nominal end of the query to include,
+        in seconds.
     dayObs : `int`, optional
         The dayObs to query. If specified, this is used to determine the begin
         and end times.
@@ -205,7 +207,7 @@ def getEfdData(client, topic, *,
 
     Returns
     -------
-    data : `pandas.DataFrame`
+    data : `pd.DataFrame`
         The merged data from all topics.
 
     Raises
@@ -261,7 +263,7 @@ async def _getEfdData(client, topic, columns, begin, end):
 
     Returns
     -------
-    data : `pandas.DataFrame`
+    data : `pd.DataFrame`
         The data from the query.
     """
     if columns is None:
@@ -294,7 +296,7 @@ def getMostRecentRowWithDataBefore(client, topic, timeToLookBefore, warnStaleAft
 
     Returns
     -------
-    row : `pandas.Series`
+    row : `pd.Series`
         The row of data.
 
     Raises
@@ -453,14 +455,14 @@ def clipDataToEvent(df, event):
 
     Parameters
     ----------
-    df : `pandas.DataFrame`
+    df : `pd.DataFrame`
         The dataframe to clip.
     event : `lsst.summit.utils.efdUtils.TmaEvent`
         The event to clip to.
 
     Returns
     -------
-    clipped : `pandas.DataFrame`
+    clipped : `pd.DataFrame`
         The clipped dataframe.
     """
     mask = (df['private_efdStamp'] >= event.begin.value) & (df['private_efdStamp'] <= event.end.value)
