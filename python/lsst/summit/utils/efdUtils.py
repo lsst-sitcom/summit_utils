@@ -22,6 +22,7 @@
 import asyncio
 import nest_asyncio
 from astropy.time import Time, TimeDelta
+from astropy import units as u
 import datetime
 import logging
 import pandas as pd
@@ -509,11 +510,7 @@ def getDayObsStartTime(dayObs):
         The start of the dayObs as an astropy.time.Time object.
     """
     pythonDateTime = datetime.datetime.strptime(str(dayObs), "%Y%m%d")
-    astroPyTime = Time(pythonDateTime)
-    twelveHours = datetime.timedelta(hours=-12)
-    oneDay = datetime.timedelta(hours=24)
-    offset = TimeDelta(twelveHours, format='datetime')
-    return astroPyTime + offset + oneDay
+    return Time(pythonDateTime) + 12 * u.hour
 
 
 def getDayObsEndTime(dayObs):
