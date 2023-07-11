@@ -454,6 +454,61 @@ class ScriptStatePoint:
 
 @dataclass(slots=True, kw_only=True, frozen=True)
 class TMAEvent:
+    """A movement event for the TMA.
+
+    Contains the dayObs on which the event occured, using the standard
+    observatory definition of the dayObs, and the sequence number of the event,
+    which is unique for each event on a given dayObs.
+
+    The event type can be either 'SLEWING' or 'TRACKING', defined as:
+        - SLEWING: some part of the TMA is in motion
+        - TRACKING: both axes are in position and tracking the sky
+
+    The end reason can be 'STOPPED', 'TRACKING', 'FAULT', 'SLEWING', or 'OFF'.
+        - SLEWING: The previous event was a TRACKING event, and one or more of
+            the TMA components either stopped being in position, or stopped
+            moving, or went into fault, or was turned off, and hence we are now
+            only slewing and no longer tracking the sky.
+        - TRACKING: the TMA started tracking the sky when it wasn't previously.
+            Usualy this would always be preceded by directly by a SLEWING
+            event, but this is not strictly true, as the EUI seems to be able
+            to make the TMA start tracking the sky without slewing first.
+        - STOPPED: the components of the TMA transitioned to the STOPPED state.
+        - FAULT: the TMA went into fault.
+        - OFF: the TMA components were turned off.
+
+    Note that this class is not intended to be instantiated directly, but
+    rather to be returned by the ``TMAEventMaker.getEvents()`` function.
+
+    Parameters
+    ----------
+    dayObs : `int`
+        The dayObs on which the event occured.
+    seqNum : `int`
+        The sequence number of the event,
+    type : `lsst.summit.utils.tmaUtils.TMAState`
+        The type of the event, either 'SLEWING' or 'TRACKING'.
+    endReason : `lsst.summit.utils.tmaUtils.TMAState`
+        The reason the event ended, either 'STOPPED', 'TRACKING', 'FAULT',
+        'SLEWING', or 'OFF'.
+    duration : `float`
+        The duration of the event, in seconds.
+    begin : `astropy.time.Time`
+        The time the event began.
+    end : `astropy.time.Time`
+        The time the event ended.
+    blockInfo : `lsst.summit.utils.tmaUtils.BlockInfo`
+        The block info relating to the event.
+    version : `int`
+        The version of the TMAEvent class. Equality between events is only
+        valid for a given version of the class. If the class definition
+        changes, the time ranges can change, and hence the equality between
+        events is ``False``.
+    _startRow : `int`
+        The first row in the merged EFD data which is part of the event.
+    _endRow : `int`
+        The last row in the merged EFD data which is part of the event.
+    """
     dayObs: int
     seqNum: int
     type: str  # can be 'SLEWING', 'TRACKING'
@@ -467,6 +522,10 @@ class TMAEvent:
     _endRow: int
 
     def __lt__(self, other):
+        if self.version != other.version:
+            raise ValueError(
+                f"Cannot compare TMAEvents with different versions: {self.version} != {other.version}"
+            )
         if self.dayObs < other.dayObs:
             return True
         elif self.dayObs == other.dayObs:
