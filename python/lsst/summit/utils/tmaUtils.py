@@ -1433,9 +1433,7 @@ class TMAEventMaker:
         """
         seqNum = 0
         events = []
-        for row in states:
-            eventStart, eventEnd, eventType, endReason = row
-
+        for eventStart, eventEnd, eventType, endReason in states:
             begin = data.iloc[eventStart]['private_efdStamp']
             end = data.iloc[eventEnd]['private_efdStamp']
             beginAstropy = efdTimestampToAstropy(begin)
