@@ -235,11 +235,11 @@ def getEfdData(client, topic, *,
 
     nest_asyncio.apply()
     loop = asyncio.get_event_loop()
-    ret = loop.run_until_complete(_getEfdData(client,
-                                              topic,
-                                              columns,
-                                              begin.utc,
-                                              end.utc))
+    ret = loop.run_until_complete(_getEfdData(client=client,
+                                              topic=topic,
+                                              begin=begin,
+                                              end=end,
+                                              columns=columns))
     if ret.empty and warn:
         log = logging.getLogger(__name__)
         log.warning(f"Topic {topic} is in the schema, but no data was returned by the query for the specified"
@@ -247,7 +247,7 @@ def getEfdData(client, topic, *,
     return ret
 
 
-async def _getEfdData(client, topic, columns, begin, end):
+async def _getEfdData(client, topic, begin, end, columns=None):
     """Get data for a topic from the EFD over the specified time range.
 
     Parameters
@@ -256,12 +256,12 @@ async def _getEfdData(client, topic, columns, begin, end):
         The EFD client to use.
     topic : `str`
         The topic to query.
-    columns : `list` of `str`, optional
-        The columns to query. If not specified, all columns are queried.
-    begin : `astropy.Time`, optional
+    begin : `astropy.Time`
         The begin time for the query.
-    end : `astropy.Time`, optional
+    end : `astropy.Time`
         The end time for the query.
+    columns : `list` of `str`, optional
+        The columns to query. If not specified, all columns are returned.
 
     Returns
     -------
