@@ -668,7 +668,7 @@ class NightReport():
             altAzes = [self.data[seqNum]['altaz_begin'] for seqNum in seqNums]
             alts = [altAz.alt.deg for altAz in altAzes if altAz is not None]
             azes = [altAz.az.deg for altAz in altAzes if altAz is not None]
-            assert(len(alts) == len(azes))
+            assert len(alts) == len(azes)
             if len(azes) == 0:
                 self.log.warning(f"Found no alt/az data for {obj}")
             zens = [90 - alt for alt in alts]

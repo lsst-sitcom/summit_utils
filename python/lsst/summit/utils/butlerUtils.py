@@ -135,7 +135,7 @@ def makeDefaultLatissButler(*, extraCollections=None, writeable=False, embargo=F
                                   collections=collections,
                                   writeable=writeable,
                                   instrument='LATISS')
-    except(FileNotFoundError, RuntimeError):
+    except (FileNotFoundError, RuntimeError):
         # Depending on the value of DAF_BUTLER_REPOSITORY_INDEX and whether
         # it is present and blank, or just not set, both these exception
         # types can be raised, see tests/test_butlerUtils.py:ButlerInitTestCase
