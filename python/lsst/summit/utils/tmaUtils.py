@@ -938,6 +938,13 @@ class TMAEventMaker:
         self.log = logging.getLogger(__name__)
         self._data = {}
 
+    @dataclass(frozen=True)
+    class ParsedState:
+        eventStart: Time
+        eventEnd: int
+        previousState: TMAState
+        state: TMAState
+
     @staticmethod
     def isToday(dayObs):
         """Find out if the specified dayObs is today, or in the past.
@@ -1266,14 +1273,21 @@ class TMAEventMaker:
                 if rowNum == nRows:
                     break
                 state = states[rowNum]
-            parsedStates.append((eventStart, rowNum, previousState, state))
+            parsedStates.append(
+                self.ParsedState(
+                    eventStart=eventStart,
+                    eventEnd=rowNum,
+                    previousState=previousState,
+                    state=state
+                )
+            )
             if state in skipStates:
                 eventStart = None
 
         # done parsing, just check the last event is valid
         if parsedStates:  # ensure we have at least one event
             lastEvent = parsedStates[-1]
-            if lastEvent[1] == nRows:
+            if lastEvent.eventEnd == nRows:
                 # Generally, you *want* the timespan for an event to be the
                 # first row of the next event, because you were in that state
                 # right up until that state change. However, if that event is
@@ -1295,7 +1309,12 @@ class TMAEventMaker:
                 else:
                     self.log.warning("Last event ends open, forcing it to end at end of the day's data")
                     # it's a tuple, so (deliberately) awkward to modify
-                    parsedStates[-1] = (lastEvent[0], lastEvent[1] - 1, lastEvent[2], lastEvent[3])
+                    parsedStates[-1] = self.ParsedState(
+                        eventStart=lastEvent.eventStart,
+                        eventEnd=lastEvent.eventEnd - 1,
+                        previousState=lastEvent.previousState,
+                        state=lastEvent.state
+                    )
 
         return parsedStates
 
@@ -1433,23 +1452,23 @@ class TMAEventMaker:
         """
         seqNum = 0
         events = []
-        for eventStart, eventEnd, eventType, endReason in states:
-            begin = data.iloc[eventStart]['private_efdStamp']
-            end = data.iloc[eventEnd]['private_efdStamp']
+        for parsedState in states:
+            begin = data.iloc[parsedState.eventStart]['private_efdStamp']
+            end = data.iloc[parsedState.eventEnd]['private_efdStamp']
             beginAstropy = efdTimestampToAstropy(begin)
             endAstropy = efdTimestampToAstropy(end)
             duration = end - begin
             event = TMAEvent(
                 dayObs=dayObs,
                 seqNum=seqNum,
-                type=eventType,
-                endReason=endReason,
+                type=parsedState.previousState,
+                endReason=parsedState.state,
                 duration=duration,
                 begin=beginAstropy,
                 end=endAstropy,
                 blockInfo=None,  # this is added later
-                _startRow=eventStart,
-                _endRow=eventEnd,
+                _startRow=parsedState.eventStart,
+                _endRow=parsedState.eventEnd,
             )
             events.append(event)
             seqNum += 1
