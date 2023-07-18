@@ -247,8 +247,8 @@ def plotEvent(client, event, fig=None, prePadding=0, postPadding=0, commands={},
     colorCounter += 1
     ax2_twin.plot(elevationData['actualTorque'], label='Elevation torque', c=lineColors[colorCounter])
     colorCounter += 1
-    ax2.set_ylabel('Azimuth torque (nM)')
-    ax2_twin.set_ylabel('Elevation torque (nM)')
+    ax2.set_ylabel('Azimuth torque (Nm)')
+    ax2_twin.set_ylabel('Elevation torque (Nm)')
     ax2.set_xlabel('Time (UTC)')  # yes, it really is UTC, matplotlib converts this automatically!
 
     # put the ticks at an angle, and right align with the tick marks
