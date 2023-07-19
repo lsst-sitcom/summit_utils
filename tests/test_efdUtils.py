@@ -22,13 +22,16 @@
 """Test cases for utils."""
 
 import unittest
+import os
 import lsst.utils.tests
 import astropy
 import pandas as pd
 import datetime
 import asyncio
 from astropy.time import Time
+import vcr
 
+from lsst.utils import getPackageDir
 from lsst.summit.utils.tmaUtils import TMAEvent, TMAState
 
 from lsst.summit.utils.efdUtils import (
@@ -51,12 +54,24 @@ try:
 except ImportError:
     HAS_EFD_CLIENT = False
 
+# Use mode="none" to run tests for normal operation.
+# To update files or generate new ones, make sure you have a working
+# connection to lsst-schema-registry-efd.ncsa.illinois.edu
+# and temporarily run with mode="once".
+packageDir = getPackageDir('summit_utils')
+safe_vcr = vcr.VCR(
+    record_mode="none",
+    cassette_library_dir=os.path.join(packageDir, "tests", "data", "cassettes"),
+    path_transformer=vcr.VCR.ensure_suffix(".yaml"),
+)
+
 
 @unittest.skipIf(not HAS_EFD_CLIENT, "No EFD client available")
-@unittest.skip("Skipping until DM-40101 is resolved.")
+@safe_vcr.use_cassette()
 class EfdUtilsTestCase(lsst.utils.tests.TestCase):
 
     @classmethod
+    @safe_vcr.use_cassette()
     def setUpClass(cls):
         try:
             cls.client = makeEfdClient()
@@ -80,10 +95,12 @@ class EfdUtilsTestCase(lsst.utils.tests.TestCase):
             _endRow=255,
         )
 
+    @safe_vcr.use_cassette()
     def tearDown(self):
         loop = asyncio.get_event_loop()
         loop.run_until_complete(self.client.influx_client.close())
 
+    @safe_vcr.use_cassette()
     def test_makeEfdClient(self):
         self.assertIsInstance(self.client, lsst_efd_client.efd_helper.EfdClient)
 
@@ -111,6 +128,7 @@ class EfdUtilsTestCase(lsst.utils.tests.TestCase):
             self.assertGreater(dayEnd, dayStart)
             self.assertEqual(dayEnd.jd, dayStart.jd + 1)
 
+    @safe_vcr.use_cassette()
     def test_getSubTopics(self):
         subTopics = getSubTopics(self.client, 'lsst.sal.MTMount')
         self.assertIsInstance(subTopics, list)
@@ -120,6 +138,7 @@ class EfdUtilsTestCase(lsst.utils.tests.TestCase):
         self.assertIsInstance(subTopics, list)
         self.assertEqual(len(subTopics), 0)
 
+    @safe_vcr.use_cassette()
     def test_getEfdData(self):
         dayStart = getDayObsStartTime(self.dayObs)
         dayEnd = getDayObsEndTime(self.dayObs)
@@ -176,6 +195,7 @@ class EfdUtilsTestCase(lsst.utils.tests.TestCase):
             # good query, except the topic doesn't exist
             _ = getEfdData(self.client, 'badTopic', begin=dayStart, end=dayEnd)
 
+    @safe_vcr.use_cassette()
     def test_getMostRecentRowWithDataBefore(self):
         time = Time(1687845854.736784, scale='utc', format='unix')
         rowData = getMostRecentRowWithDataBefore(self.client,
@@ -197,6 +217,7 @@ class EfdUtilsTestCase(lsst.utils.tests.TestCase):
         self.assertIsInstance(efdTimestamp, float)
         return
 
+    @safe_vcr.use_cassette()
     def test_clipDataToEvent(self):
         # get 10 mins of data either side of the event we'll clip to
         duration = datetime.timedelta(seconds=10*60)

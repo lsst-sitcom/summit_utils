@@ -24,6 +24,7 @@
 import unittest
 import os
 import lsst.utils.tests
+import vcr
 
 import pandas as pd
 import numpy as np
@@ -52,6 +53,17 @@ from lsst.summit.utils.tmaUtils import (
 __all__ = [
     'writeNewTmaEventTestTruthValues',
 ]
+
+# Use mode="none" to run tests for normal operation.
+# To update files or generate new ones, make sure you have a working
+# connection to lsst-schema-registry-efd.ncsa.illinois.edu
+# and temporarily run with mode="once".
+packageDir = getPackageDir('summit_utils')
+safe_vcr = vcr.VCR(
+    record_mode="none",
+    cassette_library_dir=os.path.join(packageDir, "tests", "data", "cassettes"),
+    path_transformer=vcr.VCR.ensure_suffix(".yaml"),
+)
 
 
 def getTmaEventTestTruthValues():
@@ -135,7 +147,6 @@ def _turnOn(tma):
     tma._parts['elevationSystemState'] = PowerState.ON
 
 
-@unittest.skip("Skipping until DM-40101 is resolved.")
 class TmaUtilsTestCase(lsst.utils.tests.TestCase):
 
     def test_tmaInit(self):
@@ -216,9 +227,11 @@ class TmaUtilsTestCase(lsst.utils.tests.TestCase):
         # tma._axesInPosition()
 
 
-@unittest.skip("Skipping until DM-40101 is resolved.")
+@safe_vcr.use_cassette()
 class TMAEventMakerTestCase(lsst.utils.tests.TestCase):
+
     @classmethod
+    @safe_vcr.use_cassette()
     def setUpClass(cls):
         try:
             cls.client = makeEfdClient()
@@ -231,15 +244,18 @@ class TMAEventMakerTestCase(lsst.utils.tests.TestCase):
         cls.events = cls.tmaEventMaker.getEvents(cls.dayObs)  # does the fetch
         cls.sampleData = cls.tmaEventMaker._data[cls.dayObs]  # pull the data from the object and test length
 
+    @safe_vcr.use_cassette()
     def tearDown(self):
         loop = asyncio.get_event_loop()
         loop.run_until_complete(self.client.influx_client.close())
 
+    @safe_vcr.use_cassette()
     def test_events(self):
         data = self.sampleData
         self.assertIsInstance(data, pd.DataFrame)
         self.assertEqual(len(data), 993)
 
+    @safe_vcr.use_cassette()
     def test_rowDataForValues(self):
         rowsFor = set(self.sampleData['rowFor'])
         self.assertEqual(len(rowsFor), 6)
@@ -254,11 +270,13 @@ class TMAEventMakerTestCase(lsst.utils.tests.TestCase):
                    'elevationSystemState'}
         self.assertSetEqual(rowsFor, correct)
 
+    @safe_vcr.use_cassette()
     def test_monotonicTimeInDataframe(self):
         # ensure that each row is later than the previous
         times = self.sampleData['private_efdStamp']
         self.assertTrue(np.all(np.diff(times) > 0))
 
+    @safe_vcr.use_cassette()
     def test_monotonicTimeApplicationOfRows(self):
         # ensure you can apply rows in the correct order
         tma = TMAStateMachine()
@@ -275,6 +293,7 @@ class TMAEventMakerTestCase(lsst.utils.tests.TestCase):
             tma.apply(row2)
             tma.apply(row1)
 
+    @safe_vcr.use_cassette()
     def test_fullDaySequence(self):
         # make sure we can apply all the data from the day without falling
         # through the logic sieve
@@ -286,6 +305,7 @@ class TMAEventMakerTestCase(lsst.utils.tests.TestCase):
             for rowNum, row in self.sampleData.iterrows():
                 tma.apply(row)
 
+    @safe_vcr.use_cassette()
     def test_endToEnd(self):
         eventMaker = self.tmaEventMaker
         events = eventMaker.getEvents(self.dayObs)
@@ -306,6 +326,7 @@ class TMAEventMakerTestCase(lsst.utils.tests.TestCase):
             self.assertEqual(event.type.name, types[eventNum])
             self.assertEqual(event.endReason.name, endReasons[eventNum])
 
+    @safe_vcr.use_cassette()
     def test_noDataBehaviour(self):
         eventMaker = self.tmaEventMaker
         noDataDayObs = 19500101  # do not use 19700101 - there is data for that day!
@@ -314,6 +335,7 @@ class TMAEventMakerTestCase(lsst.utils.tests.TestCase):
             self.assertIsInstance(events, list)
             self.assertEqual(len(events), 0)
 
+    @safe_vcr.use_cassette()
     def test_helperFunctions(self):
         eventMaker = self.tmaEventMaker
         events = eventMaker.getEvents(self.dayObs)
@@ -325,6 +347,7 @@ class TMAEventMakerTestCase(lsst.utils.tests.TestCase):
         self.assertEqual(slews, foundSlews)
         self.assertEqual(tracks, foundTracks)
 
+    @safe_vcr.use_cassette()
     def test_printing(self):
         eventMaker = self.tmaEventMaker
         events = eventMaker.getEvents(self.dayObs)
@@ -348,6 +371,7 @@ class TMAEventMakerTestCase(lsst.utils.tests.TestCase):
         _initializeTma(tma)  # the uninitialized state contains wrong types for printing
         eventMaker.printTmaDetailedState(tma)
 
+    @safe_vcr.use_cassette()
     def test_getAxisData(self):
         eventMaker = self.tmaEventMaker
         events = eventMaker.getEvents(self.dayObs)
@@ -367,6 +391,7 @@ class TMAEventMakerTestCase(lsst.utils.tests.TestCase):
         # data in
         plotEvent(self.client, events[0], azimuthData=azData, elevationData=elData)
 
+    @safe_vcr.use_cassette()
     def test_plottingAndCommands(self):
         eventMaker = self.tmaEventMaker
         events = eventMaker.getEvents(self.dayObs)
@@ -388,6 +413,7 @@ class TMAEventMakerTestCase(lsst.utils.tests.TestCase):
 
         del fig
 
+    @safe_vcr.use_cassette()
     def test_findEvent(self):
         eventMaker = self.tmaEventMaker
         events = eventMaker.getEvents(self.dayObs)
