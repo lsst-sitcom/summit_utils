@@ -20,7 +20,6 @@
 # along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
 import asyncio
-import nest_asyncio
 from astropy.time import Time, TimeDelta
 from astropy import units as u
 import datetime
@@ -227,6 +226,9 @@ def getEfdData(client, topic, *,
     # supports aliases so that you can query with them. If there is no entry in
     # the alias dict then it queries with the supplied key. The fact the schema
     # is now being checked means this shouldn't be a problem now.
+
+    # TODO: RFC-948 Move this import back to top of file once is implemented.
+    import nest_asyncio
 
     begin, end = _getBeginEnd(dayObs, begin, end, timespan, event, expRecord)
     begin -= TimeDelta(prePadding, format='sec')
