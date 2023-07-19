@@ -33,6 +33,7 @@ import vcr
 
 from lsst.utils import getPackageDir
 from lsst.summit.utils.tmaUtils import TMAEvent, TMAState
+from lsst.summit.utils.utils import getSite
 
 from lsst.summit.utils.efdUtils import (
     getEfdData,
@@ -65,8 +66,14 @@ safe_vcr = vcr.VCR(
     path_transformer=vcr.VCR.ensure_suffix(".yaml"),
 )
 
+# all EFD and TMA tests must be skipped on the TTS because the TTS EFD
+# contains different data to the real EFD instances, so all the tests will
+# always (and should) fail
+ON_THE_TTS = getSite() == 'tucson'
+
 
 @unittest.skipIf(not HAS_EFD_CLIENT, "No EFD client available")
+@unittest.skipIf(ON_THE_TTS, "No EFD client available")
 @safe_vcr.use_cassette()
 class EfdUtilsTestCase(lsst.utils.tests.TestCase):
 

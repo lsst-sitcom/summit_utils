@@ -34,6 +34,7 @@ from astropy.time import TimeDelta
 
 from lsst.utils import getPackageDir
 from lsst.summit.utils.enums import PowerState
+from lsst.summit.utils.utils import getSite
 from lsst.summit.utils.efdUtils import makeEfdClient, getDayObsStartTime, calcNextDay
 from lsst.summit.utils.tmaUtils import (
     getSlewsFromEventList,
@@ -64,6 +65,11 @@ safe_vcr = vcr.VCR(
     cassette_library_dir=os.path.join(packageDir, "tests", "data", "cassettes"),
     path_transformer=vcr.VCR.ensure_suffix(".yaml"),
 )
+
+# all EFD and TMA tests must be skipped on the TTS because the TTS EFD
+# contains different data to the real EFD instances, so all the tests will
+# always (and should) fail
+ON_THE_TTS = getSite() == 'tucson'
 
 
 def getTmaEventTestTruthValues():
@@ -147,6 +153,7 @@ def _turnOn(tma):
     tma._parts['elevationSystemState'] = PowerState.ON
 
 
+@unittest.skipIf(ON_THE_TTS, "Skipping EFD-based tests on the TTS")
 class TmaUtilsTestCase(lsst.utils.tests.TestCase):
 
     def test_tmaInit(self):
@@ -227,6 +234,7 @@ class TmaUtilsTestCase(lsst.utils.tests.TestCase):
         # tma._axesInPosition()
 
 
+@unittest.skipIf(ON_THE_TTS, "Skipping EFD-based tests on the TTS")
 @safe_vcr.use_cassette()
 class TMAEventMakerTestCase(lsst.utils.tests.TestCase):
 
