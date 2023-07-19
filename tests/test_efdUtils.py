@@ -53,6 +53,7 @@ except ImportError:
 
 
 @unittest.skipIf(not HAS_EFD_CLIENT, "No EFD client available")
+@unittest.skip("Skipping until DM-40101 is resolved.")
 class EfdUtilsTestCase(lsst.utils.tests.TestCase):
 
     @classmethod

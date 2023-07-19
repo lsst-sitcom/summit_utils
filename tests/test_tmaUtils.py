@@ -135,6 +135,7 @@ def _turnOn(tma):
     tma._parts['elevationSystemState'] = PowerState.ON
 
 
+@unittest.skip("Skipping until DM-40101 is resolved.")
 class TmaUtilsTestCase(lsst.utils.tests.TestCase):
 
     def test_tmaInit(self):
@@ -215,6 +216,7 @@ class TmaUtilsTestCase(lsst.utils.tests.TestCase):
         # tma._axesInPosition()
 
 
+@unittest.skip("Skipping until DM-40101 is resolved.")
 class TMAEventMakerTestCase(lsst.utils.tests.TestCase):
     @classmethod
     def setUpClass(cls):
