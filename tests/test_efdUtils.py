@@ -60,7 +60,7 @@ except ImportError:
 # and temporarily run with mode="once".
 packageDir = getPackageDir('summit_utils')
 safe_vcr = vcr.VCR(
-    record_mode="all",
+    record_mode="none",
     cassette_library_dir=os.path.join(packageDir, "tests", "data", "cassettes"),
     path_transformer=vcr.VCR.ensure_suffix(".yaml"),
 )
