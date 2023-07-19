@@ -337,6 +337,7 @@ class TMAEventMakerTestCase(lsst.utils.tests.TestCase):
         tracks = [e for e in events if e.type == TMAState.TRACKING]
         eventMaker.printEventDetails(slews[0])
         eventMaker.printEventDetails(tracks[0])
+        eventMaker.printEventDetails(events[-1])
 
         # check the full day trick works
         eventMaker.printFullDayStateEvolution(self.dayObs)
@@ -420,6 +421,18 @@ class TMAEventMakerTestCase(lsst.utils.tests.TestCase):
         tooLateOnDay = getDayObsStartTime(calcNextDay(self.dayObs)) - dt
         found = eventMaker.findEvent(tooLateOnDay)
         self.assertIsNone(found)
+
+        # going just inside the last event of the day should be fine
+        lastEvent = events[-1]
+        found = eventMaker.findEvent(lastEvent.end - dt)
+        self.assertEqual(found, lastEvent)
+
+        # going at the very end of the last event of the day should actually
+        # find nothing, because the last moment of an event isn't actually in
+        # the event itself, because of how contiguous events are defined to
+        # behave (being half-open intervals)
+        found = eventMaker.findEvent(lastEvent.end)
+        self.assertIsNone(found, lastEvent)
 
 
 class TestMemory(lsst.utils.tests.MemoryTestCase):

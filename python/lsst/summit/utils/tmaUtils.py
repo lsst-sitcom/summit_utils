@@ -1640,7 +1640,7 @@ class TMAEventMaker:
             The event which contains the specified time, or ``None`` if the
             time doesn't fall during an event.
         """
-        # there are four possible cases:
+        # there are five possible cases:
         # 1) the time lies before the first event of the day
         # 2) the time lies after the last event of the day
         # 3) the time lies within an event
@@ -1648,6 +1648,12 @@ class TMAEventMaker:
         #   3b) if so, time can be shared by the end of the previous event if
         #       they are contiguous
         # 4) the time lies between two events
+        # 5) the time is exactly at end of the last event of the day. This is
+        #    an issue because event end times are exclusive, so this time is
+        #    not technically in that event, it's the moment it closes (and if
+        #    there *was* an event which followed contiguously, it would be in
+        #    that event instead, which is what motivates this definition of
+        #    lies within what event)
 
         dayObs = getDayObsForTime(time)
         # we know this is on the right day, and definitely before the specified
@@ -1672,6 +1678,13 @@ class TMAEventMaker:
         # check case 2)
         if time > events[-1].end:
             self.log.warning(f'{logStart} and is after the last event of the day')
+            return None
+
+        # check case 5)
+        if time == events[-1].end:
+            self.log.warning(f'{logStart} and is exactly at the end of the last event of the day'
+                             f' (seqnum={events[-1].seqNum}). Because event intervals are half-open, this'
+                             ' time does not technically lie in any event')
             return None
 
         # we are now either in an event, or between events. Walk through the
@@ -1713,4 +1726,5 @@ class TMAEventMaker:
                                   )
                     return None
 
-        raise RuntimeError('This should never happen')
+        raise RuntimeError('Event finding logic fundamentally failed, which should never happen - the code'
+                           ' needs fixing')
