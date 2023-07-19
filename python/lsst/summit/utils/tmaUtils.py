@@ -331,12 +331,12 @@ def getCommandsDuringEvent(client, event, commands=('raDecTarget'), log=None, do
     commands : `dict` of `str` : `astropy.time.Time`
         A dictionary of the commands and the times at which they were issued.
     """
-    # TODO: Add support for padding the event here to allow looking for
-    # triggering commands before the event
+    # TODO: DM-40100 Add support for padding the event here to allow looking
+    # for triggering commands before the event
 
-    # TODO: Change this to always return a list of times, and remove warning
-    # about finding multiple commands. Remember to update docs and plotting
-    # code.
+    # TODO: DM-40100 Change this to always return a list of times, and remove
+    # warning about finding multiple commands. Remember to update docs and
+    # plotting code.
     if log is None and doLog:
         log = logging.getLogger(__name__)
 
