@@ -355,8 +355,10 @@ def makeEfdClient():
 
     if site == 'summit':
         return EfdClient('summit_efd')
+    if site == 'tucson':
+        return EfdClient('tucson_teststand_efd')
     if site == 'base':
-        return EfdClient('summit_efd_copy')
+        return EfdClient('base_efd')
     if site in ['staff-rsp', 'rubin-devl']:
         return EfdClient('usdf_efd')
 
