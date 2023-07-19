@@ -361,6 +361,8 @@ def makeEfdClient():
         return EfdClient('base_efd')
     if site in ['staff-rsp', 'rubin-devl']:
         return EfdClient('usdf_efd')
+    if site == 'jenkins':
+        return EfdClient('usdf_efd')
 
     raise RuntimeError(f"Could not create EFD client as the {site=} is not recognized")
 

@@ -586,6 +586,10 @@ def getSite():
     if hostname.startswith('sdfrome'):
         return 'rubin-devl'
 
+    jenkinsHome = os.getenv('JENKINS_HOME', "")
+    if jenkinsHome != "":
+        return 'jenkins'
+
     # we have failed
     raise ValueError('Location could not be determined')
 

@@ -73,7 +73,7 @@ ON_THE_TTS = getSite() == 'tucson'
 
 
 @unittest.skipIf(not HAS_EFD_CLIENT, "No EFD client available")
-@unittest.skipIf(ON_THE_TTS, "No EFD client available")
+@unittest.skipIf(ON_THE_TTS, "Skipping EFD-based tests on the TTS")
 @safe_vcr.use_cassette()
 class EfdUtilsTestCase(lsst.utils.tests.TestCase):
 
