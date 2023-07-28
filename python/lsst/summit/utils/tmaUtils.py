@@ -33,7 +33,8 @@ import matplotlib.dates as mdates
 import matplotlib.pyplot as plt
 from lsst.utils.iteration import ensure_iterable
 
-from .enums import ScriptState, AxisMotionState, PowerState
+from .enums import AxisMotionState, PowerState
+from .blockUtils import BlockParser, BlockInfo
 from .utils import getCurrentDayObs_int, dayObsIntToString
 from .efdUtils import (getEfdData,
                        makeEfdClient,
@@ -42,7 +43,6 @@ from .efdUtils import (getEfdData,
                        getDayObsForTime,
                        getDayObsStartTime,
                        getDayObsEndTime,
-                       clipDataToEvent,
                        )
 
 __all__ = (
@@ -380,76 +380,6 @@ def _initializeTma(tma):
     tma._parts['elevationInPosition'] = False
     tma._parts['elevationMotionState'] = AxisMotionState.STOPPED
     tma._parts['elevationSystemState'] = PowerState.ON
-
-
-@dataclass(slots=True, kw_only=True, frozen=True)
-class BlockInfo:
-    """The block info relating to a TMAEvent.
-
-    Parameters
-    ----------
-    blockNumber : `int`
-        The block number, as an integer.
-    blockId : `str`
-        The block ID, as a string.
-    salIndices : `list` of `int`
-        One or more SAL indices, relating to the block.
-    tickets : `list` of `str`
-        One or more SITCOM tickets, relating to the block.
-    states : `list` of `ScriptStatePoint`
-        The states of the script during the block. Each element is a
-        ``ScriptStatePoint`` which contains:
-            - the time, as an astropy.time.Time
-            - the state, as a ``ScriptState`` enum
-            - the reason for state change, as a string
-    """
-    blockNumber: int
-    blockId: str
-    salIndices: int
-    tickets: list
-    states: list
-
-    def __repr__(self):
-        return (
-            f"BlockInfo(blockNumber={self.blockNumber}, blockId={self.blockId}, salIndices={self.salIndices},"
-            f" tickets={self.tickets}, states={self.states!r}"
-        )
-
-    def _ipython_display_(self):
-        print(self.__str__())
-
-    def __str__(self):
-        # You can't put the characters '\n' directly into the evaluated part of
-        # an f-string i.e. inside the {} part, until py 3.12, so this must go
-        # in via a variable until then.
-        newline = '  \n'
-
-        return (
-            f"blockNumber: {self.blockNumber}\n"
-            f"blockId: {self.blockId}\n"
-            f"salIndices: {self.salIndices}\n"
-            f"tickets: {self.tickets}\n"
-            f"states: \n{newline.join([str(state) for state in self.states])}"
-        )
-
-
-@dataclass(slots=True, kw_only=True, frozen=True)
-class ScriptStatePoint:
-    time: Time
-    state: ScriptState
-    reason: str
-
-    def __repr__(self):
-        return (
-            f"ScriptStatePoint(time={self.time!r}, state={self.state!r}, reason={self.reason!r})"
-        )
-
-    def _ipython_display_(self):
-        print(self.__str__())
-
-    def __str__(self):
-        reasonStr = f" - {self.reason}" if self.reason else ""
-        return (f"{self.state.name:>10} @ {self.time.isot}{reasonStr}")
 
 
 @dataclass(slots=True, kw_only=True, frozen=True)
@@ -1214,7 +1144,7 @@ class TMAEventMaker:
 
         stateTuples = self._statesToEventTuples(tmaStates, dataIsForCurrentDay)
         events = self._makeEventsFromStateTuples(stateTuples, dayObs, data)
-        self.addBlockDataToEvents(events)
+        self.addBlockDataToEvents(dayObs, events)
         return events
 
     def _statesToEventTuples(self, states, dataIsForCurrentDay):
@@ -1318,7 +1248,7 @@ class TMAEventMaker:
 
         return parsedStates
 
-    def addBlockDataToEvents(self, events):
+    def addBlockDataToEvents(self, dayObs, events):
         """Find all the block data in the EFD for the specified events.
 
         Finds all the block data in the EFD relating to the events, parses it,
@@ -1330,104 +1260,29 @@ class TMAEventMaker:
                  `list` of `lsst.summit.utils.tmaUtils.TMAEvent`
             One or more events to get the block data for.
         """
+        blockParser = BlockParser(dayObs, client=self.client)
+        blocks = blockParser.getBlockNums()
+        blockDict = {}
+        for block in blocks:
+            blockDict[block] = blockParser.getSeqNums(block)
+
         events = ensure_iterable(events)
-        events = sorted(events)
 
-        # Get all the data in one go and then clip to the events in the loop.
-        # This is orders of magnitude faster than querying individually.
-        allData = getEfdData(self.client,
-                             "lsst.sal.Script.logevent_state",
-                             begin=events[0].begin,  # time ordered, so this is the start of the window
-                             end=events[-1].end,  # and this is the end
-                             warn=False)
-        if allData.empty:
-            self.log.info('No block data found for the specified events')
-            return {}
+        for block, seqNums in blockDict.items():
+            for seqNum in seqNums:
+                blockInfo = blockParser.getBlockInfo(block=block, seqNum=seqNum)
 
-        blockPattern = r"BLOCK-(\d+)"
-        blockIdPattern = r"BL\d+(?:_\w+)+"
-        sitcomPattern = r"SITCOM-(\d+)"
+                relatedEvents = blockParser.getEventsForBlock(events, block=block, seqNum=seqNum)
+                for event in relatedEvents:
+                    if event.blockInfo is not None:
+                        raise RuntimeError("Tried to add block info to an event with already existing block"
+                                           f"information: {event=} and tried to add {blockInfo=}")
 
-        for event in events:
-            eventData = clipDataToEvent(allData, event)
-            if eventData.empty:
-                continue
-
-            blockNums = set()
-            blockIds = set()
-            tickets = set()
-            salIndices = set()
-            stateList = []
-
-            # for each for in the data which corresponds to the event, extract
-            # the block number, block id, sitcom tickets, sal index and state
-            # some may have multiple values, some may be None, so collect in
-            # sets and then remove None, and validate on ones which must not
-            # contain duplicate values
-            for rowNum, row in eventData.iterrows():
-                # the lastCheckpoint column contains the block number, blockId,
-                # and any sitcom tickets.
-                rowStr = row['lastCheckpoint']
-
-                blockMatch = re.search(blockPattern, rowStr)
-                blockNumber = int(blockMatch.group(1)) if blockMatch else None
-                blockNums.add(blockNumber)
-
-                blockIdMatch = re.search(blockIdPattern, rowStr)
-                blockId = blockIdMatch.group(0) if blockIdMatch else None
-                blockIds.add(blockId)
-
-                sitcomMatches = re.findall(sitcomPattern, rowStr)
-                sitcomTicketNumbers = [int(match) for match in sitcomMatches]
-                tickets.update(sitcomTicketNumbers)
-
-                salIndices.add(row['salIndex'])
-
-                state = row['state']
-                state = ScriptState(state)  # cast this back to its native enum
-                stateReason = row['reason']  # might be empty, might contain useful error messages
-                stateTimestamp = efdTimestampToAstropy(row['private_efdStamp'])
-                scriptStatePoint = ScriptStatePoint(time=stateTimestamp,
-                                                    state=state,
-                                                    reason=stateReason)
-                stateList.append(scriptStatePoint)
-
-            # remove all the Nones from the sets, and then check the lengths
-            for fieldSet in (blockNums, blockIds, salIndices):
-                if None in fieldSet:
-                    fieldSet.remove(None)
-
-            # if we didn't find any block numbers at all, that is fine, just
-            # continue as this event doesn't relate to a BLOCK
-            if not blockNums:
-                continue
-
-            # but if it does related to a BLOCK then it must not have more than
-            # one. If this is the case something is wrong with a SAL script, so
-            # raise here to indicate the something needs debugging in the
-            # scriptQueue or something like that.
-            if len(blockNums) > 1:
-                raise RuntimeError(f"Found multiple BLOCK values ({blockNums}) for {event}")
-            blockNumber = blockNums.pop()
-
-            # likewise for the blockIds
-            if len(blockIds) > 1:
-                raise RuntimeError(f"Found multiple blockIds ({blockIds}) for {event}")
-            blockId = blockIds.pop()
-
-            blockInfo = BlockInfo(
-                blockNumber=blockNumber,
-                blockId=blockId,
-                salIndices=sorted([i for i in salIndices]),
-                tickets=[f'SITCOM-{ticket}' for ticket in tickets],
-                states=stateList,
-            )
-
-            # Add the blockInfo to the TMAEvent. Because this is a frozen
-            # dataclass, use object.__setattr__ to set the attribute. This is
-            # the correct way to set a frozen dataclass attribute after
-            # creation.
-            object.__setattr__(event, 'blockInfo', blockInfo)
+                    # Add the blockInfo to the TMAEvent. Because this is a
+                    # frozen dataclass, use object.__setattr__ to set the
+                    # attribute. This is the correct way to set a frozen
+                    # dataclass attribute after creation.
+                    object.__setattr__(event, 'blockInfo', blockInfo)
 
     def _makeEventsFromStateTuples(self, states, dayObs, data):
         """For the list of state-tuples, create a list of ``TMAEvent`` objects.

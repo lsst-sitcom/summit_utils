@@ -26,7 +26,6 @@ from dataclasses import dataclass
 from astropy.time import Time
 
 from .enums import ScriptState
-from .tmaUtils import ScriptStatePoint
 from .efdUtils import (getEfdData,
                        makeEfdClient,
                        efdTimestampToAstropy,
@@ -35,6 +34,7 @@ from .efdUtils import (getEfdData,
 __all__ = (
     'BlockParser',
     'BlockInfo',
+    'ScriptStatePoint'
 )
 
 
@@ -91,6 +91,25 @@ class BlockInfo:
             f"tickets: {self.tickets}\n"
             f"states: \n{newline.join([str(state) for state in self.states])}"
         )
+
+
+@dataclass(slots=True, kw_only=True, frozen=True)
+class ScriptStatePoint:
+    time: Time
+    state: ScriptState
+    reason: str
+
+    def __repr__(self):
+        return (
+            f"ScriptStatePoint(time={self.time!r}, state={self.state!r}, reason={self.reason!r})"
+        )
+
+    def _ipython_display_(self):
+        print(self.__str__())
+
+    def __str__(self):
+        reasonStr = f" - {self.reason}" if self.reason else ""
+        return (f"{self.state.name:>10} @ {self.time.isot}{reasonStr}")
 
 
 class BlockParser:
@@ -229,20 +248,17 @@ class BlockParser:
 
         return blockInfo
 
-    def getEventsForBlock(self, eventMaker, block, seqNum):
+    def getEventsForBlock(self, events, block, seqNum):
         blockInfo = self.getBlockInfo(block, seqNum)
         begin = blockInfo.begin
         end = blockInfo.end
-
-        allEvents = eventMaker.getEvents(dayObs=self.dayObs)
 
         # each event's end being past the begin time and their
         # starts being before the end time means we get all the
         # events in the window and also those that overlap the
         # start/end too
-        events = [e for e in allEvents if e.end >= begin and e.begin <= end]
-        return events
+        return [e for e in events if e.end >= begin and e.begin <= end]
 
-    def getBlocksForEvent(self, event):
+    def getBlockForEvent(self, event):
 
         raise NotImplementedError
