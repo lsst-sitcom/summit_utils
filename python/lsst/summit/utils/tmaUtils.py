@@ -473,6 +473,13 @@ class TMAEvent:
         print(self.__str__())
 
     def __str__(self):
+        def indent(string):
+            return '\n' + '\n'.join(['    ' + s for s in string.splitlines()])
+
+        blockInfoStr = 'None'
+        if self.blockInfo is not None:
+            blockInfoStr = ''.join(indent(str(i)) for i in self.blockInfo)
+
         return (
             f"dayObs: {self.dayObs}\n"
             f"seqNum: {self.seqNum}\n"
@@ -480,7 +487,8 @@ class TMAEvent:
             f"endReason: {self.endReason.name}\n"
             f"duration: {self.duration}\n"
             f"begin: {self.begin!r}\n"
-            f"end: {self.end!r}"
+            f"end: {self.end!r}\n"
+            f"blockInfo: {blockInfoStr}"
         )
 
 
@@ -1270,23 +1278,23 @@ class TMAEventMaker:
         for block in blocks:
             blockDict[block] = blockParser.getSeqNums(block)
 
-        events = ensure_iterable(events)
-
         for block, seqNums in blockDict.items():
             for seqNum in seqNums:
                 blockInfo = blockParser.getBlockInfo(block=block, seqNum=seqNum)
 
                 relatedEvents = blockParser.getEventsForBlock(events, block=block, seqNum=seqNum)
                 for event in relatedEvents:
+                    toSet = [blockInfo]
                     if event.blockInfo is not None:
-                        raise RuntimeError("Tried to add block info to an event with already existing block"
-                                           f"information: {event=} and tried to add {blockInfo=}")
+                        existingInfo = event.blockInfo
+                        existingInfo.append(blockInfo)
+                        toSet = existingInfo
 
                     # Add the blockInfo to the TMAEvent. Because this is a
                     # frozen dataclass, use object.__setattr__ to set the
                     # attribute. This is the correct way to set a frozen
                     # dataclass attribute after creation.
-                    object.__setattr__(event, 'blockInfo', blockInfo)
+                    object.__setattr__(event, 'blockInfo', toSet)
 
     def _makeEventsFromStateTuples(self, states, dayObs, data):
         """For the list of state-tuples, create a list of ``TMAEvent`` objects.
