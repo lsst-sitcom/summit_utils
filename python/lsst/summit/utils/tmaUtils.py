@@ -474,9 +474,13 @@ class TMAEvent:
 
     def __str__(self):
         return (
-            f"dayObs: {self.dayObs}\nseqNum: {self.seqNum}\ntype: {self.type.name}"
-            f"\nendReason: {self.endReason.name}\nduration: {self.duration}\nbegin: {self.begin!r},"
-            f"\nend: {self.end!r}"
+            f"dayObs: {self.dayObs}\n"
+            f"seqNum: {self.seqNum}\n"
+            f"type: {self.type.name}\n"
+            f"endReason: {self.endReason.name}\n"
+            f"duration: {self.duration}\n"
+            f"begin: {self.begin!r}\n"
+            f"end: {self.end!r}"
         )
 
 
