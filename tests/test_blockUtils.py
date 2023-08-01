@@ -21,15 +21,78 @@
 
 """Test cases for utils."""
 
+import os
 import unittest
 import lsst.utils.tests
 import pandas as pd
 import asyncio
+import json
 
+from lsst.utils import getPackageDir
 from lsst.summit.utils.efdUtils import makeEfdClient
 from lsst.summit.utils.blockUtils import (
     BlockParser,
 )
+
+__all__ = (
+    "writeNewBlockInfoTestTruthValues",
+)
+
+DELIMITER = "||"  # don't use a comma, as str(list) will naturally contain commas
+
+
+def getBlockInfoTestTruthValues():
+    """Get the current truth values for the block information.
+
+    Returns
+    -------
+    data : `dict` [`tuple` [`int`, `int`], `str`]
+        The block info truth data.
+    """
+    packageDir = getPackageDir("summit_utils")
+    dataFilename = os.path.join(packageDir, "tests", "data", "blockInfoData.json")
+
+    with open(dataFilename, 'r') as f:
+        loaded = json.loads(f.read())
+
+    data = {}
+    for dayObsSeqNumStr, line in loaded.items():
+        dayObs = int(dayObsSeqNumStr.split(f'{DELIMITER}')[0])
+        seqNum = int(dayObsSeqNumStr.split(f'{DELIMITER}')[1])
+        data[dayObs, seqNum] = line
+    return data
+
+
+def writeNewBlockInfoTestTruthValues():
+    """This function is used to write out the truth values for the test cases.
+
+    If bugs are found in the parsing, it's possible these values could change,
+    and would need to be updated. If that happens, run this function, and check
+    the new values into git.
+    """
+    dayObs = 20230615
+    blockParser = BlockParser(dayObs)
+
+    data = {}
+    for block in blockParser.getBlockNums():
+        seqNums = blockParser.getSeqNums(block)
+        for seqNum in seqNums:
+            blockInfo = blockParser.getBlockInfo(block, seqNum)
+            line = (
+                f"{blockInfo.blockId}{DELIMITER}"
+                f"{blockInfo.begin}{DELIMITER}"
+                f"{blockInfo.end}{DELIMITER}"
+                f"{blockInfo.salIndices}{DELIMITER}"
+                f"{blockInfo.tickets}{DELIMITER}"
+                f"{len(blockInfo.states)}"
+            )
+            # must store as string not tuple for json serialization
+            data[f'{block}{DELIMITER}{seqNum}'] = line
+
+    packageDir = getPackageDir("summit_utils")
+    dataFilename = os.path.join(packageDir, "tests", "data", "blockInfoData.json")
+    with open(dataFilename, 'w') as f:
+        json.dump(data, f)
 
 
 # @unittest.skip("Skipping until DM-40101 is resolved.")
@@ -101,6 +164,25 @@ class BlockParserTestCase(lsst.utils.tests.TestCase):
 
         # just check this doesn't raise
         blockParser.getBlockInfo(block=9999999, seqNum=9999999)
+
+    def test_actualValues(self):
+        data = getBlockInfoTestTruthValues()
+
+        dayObs = 20230615
+        blockParser = BlockParser(dayObs)
+
+        for block in blockParser.getBlockNums():
+            seqNums = blockParser.getSeqNums(block)
+            for seqNum in seqNums:
+                blockInfo = blockParser.getBlockInfo(block, seqNum)
+                line = data[blockInfo.blockNumber, blockInfo.seqNum]
+                items = line.split(f'{DELIMITER}')
+                self.assertEqual(items[0], blockInfo.blockId)
+                self.assertEqual(items[1], str(blockInfo.begin.value))
+                self.assertEqual(items[2], str(blockInfo.end.value))
+                self.assertEqual(items[3], str(blockInfo.salIndices))
+                self.assertEqual(items[4], str(blockInfo.tickets))
+                self.assertEqual(items[5], str(len(blockInfo.states)))
 
 
 class TestMemory(lsst.utils.tests.MemoryTestCase):
