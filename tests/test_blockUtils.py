@@ -66,14 +66,14 @@ class BlockParserTestCase(lsst.utils.tests.TestCase):
             found = self.blockParser.getSeqNums(block)
             self.assertTrue(all(isinstance(s, int) for s in found))
             self.assertEqual(found, seqNums)
-            self.blockParser.getBlockEvolution(block)
+            self.blockParser.printBlockEvolution(block)
 
             for seqNum in seqNums:
                 data = self.blockParser.getRows(block, seqNum)
                 self.assertIsInstance(data, pd.DataFrame)
                 self.assertGreater(len(data), 0)
                 self.blockParser.getBlockInfo(block=block, seqNum=seqNum)
-                self.blockParser.getBlockEvolution(block, seqNum=seqNum)
+                self.blockParser.printBlockEvolution(block, seqNum=seqNum)
 
     def test_notFoundBehavior(self):
         # no block data on this day so check init doesn't raise
