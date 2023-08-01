@@ -396,8 +396,8 @@ class BlockParser:
             seqNum=seqNum,
             begin=efdTimestampToAstropy(rows.iloc[0]['private_efdStamp']),
             end=efdTimestampToAstropy(rows.iloc[-1]['private_efdStamp']),
-            salIndices=sorted([i for i in salIndices]),
-            tickets=[f'SITCOM-{ticket}' for ticket in tickets],
+            salIndices=sorted(salIndices),
+            tickets=[f'SITCOM-{ticket}' for ticket in sorted(tickets)],
             states=statePoints,
         )
 
