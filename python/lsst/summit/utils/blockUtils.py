@@ -344,8 +344,10 @@ class BlockParser:
             print(blockInfo, '\n')
 
     def getBlockInfo(self, block, seqNum):
-        """XXX change this to use the already-parsed columns!
-        Maybe leave the SITCOM parsing in here though?!
+        """Get the block info for the specified block.
+
+        Parses the rows relating to this block execution, and returns
+        the information as a ``BlockInfo`` instance.
 
         Parameters
         ----------
