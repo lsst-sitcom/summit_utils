@@ -989,6 +989,16 @@ class TMAEventMaker:
         if len(merged) != originalRowCounter:
             self.log.warning("Merged data has a different number of rows to the original data, some"
                              " timestamps (rows) will contain more than one piece of actual information.")
+
+        # if the index is still a DatetimeIndex here then we didn't actually
+        # merge any data, so there is only data from a single component.
+        # This is likely to result in no events, but not necessarily, and for
+        # generality, instead we convert to a range index to ensure consistency
+        # in the returned data, and allow processing to continue.
+        if isinstance(merged.index, pd.DatetimeIndex):
+            self.log.warning("Data was only found for a single component in the EFD.")
+            merged.reset_index(drop=True, inplace=True)
+
         return merged
 
     def getEvents(self, dayObs):
