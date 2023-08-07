@@ -95,7 +95,6 @@ def writeNewBlockInfoTestTruthValues():
         json.dump(data, f)
 
 
-# @unittest.skip("Skipping until DM-40101 is resolved.")
 class BlockParserTestCase(lsst.utils.tests.TestCase):
     @classmethod
     def setUpClass(cls):
