@@ -277,7 +277,7 @@ def getImageStats(exp):
 
 
 def detectObjectsInExp(exp, nSigma=10, nPixMin=10, grow=0):
-    """Quick and dirty object detection for an expsure.
+    """Quick and dirty object detection for an exposure.
 
     Return the footPrintSet for the objects in a preferably-postISR exposure.
 
@@ -585,6 +585,10 @@ def getSite():
     hostname = os.getenv('HOSTNAME', "")
     if hostname.startswith('sdfrome'):
         return 'rubin-devl'
+
+    jenkinsHome = os.getenv('JENKINS_HOME', "")
+    if jenkinsHome != "":
+        return 'jenkins'
 
     # we have failed
     raise ValueError('Location could not be determined')
