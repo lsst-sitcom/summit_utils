@@ -427,8 +427,9 @@ class TMAEvent:
         The time the event began.
     end : `astropy.time.Time`
         The time the event ended.
-    blockInfo : `lsst.summit.utils.tmaUtils.BlockInfo`
-        The block info relating to the event.
+    blockInfos : `list` of `lsst.summit.utils.tmaUtils.BlockInfo`, or `None`
+        The block infomation, if any, relating to the event. Could be `None`,
+        or one or more block informations.
     version : `int`
         The version of the TMAEvent class. Equality between events is only
         valid for a given version of the class. If the class definition
@@ -446,7 +447,7 @@ class TMAEvent:
     duration: float  # seconds
     begin: Time
     end: Time
-    blockInfo: BlockInfo = None
+    blockInfos: list = None
     version: int = 0  # update this number any time a code change which could change event definitions is made
     _startRow: int
     _endRow: int
@@ -477,8 +478,8 @@ class TMAEvent:
             return '\n' + '\n'.join(['    ' + s for s in string.splitlines()])
 
         blockInfoStr = 'None'
-        if self.blockInfo is not None:
-            blockInfoStr = ''.join(indent(str(i)) for i in self.blockInfo)
+        if self.blockInfos is not None:
+            blockInfoStr = ''.join(indent(str(i)) for i in self.blockInfos)
 
         return (
             f"dayObs: {self.dayObs}\n"
@@ -488,7 +489,7 @@ class TMAEvent:
             f"duration: {self.duration}\n"
             f"begin: {self.begin!r}\n"
             f"end: {self.end!r}\n"
-            f"blockInfo: {blockInfoStr}"
+            f"blockInfos: {blockInfoStr}"
         )
 
 
@@ -1295,8 +1296,8 @@ class TMAEventMaker:
                 relatedEvents = blockParser.getEventsForBlock(events, block=block, seqNum=seqNum)
                 for event in relatedEvents:
                     toSet = [blockInfo]
-                    if event.blockInfo is not None:
-                        existingInfo = event.blockInfo
+                    if event.blockInfos is not None:
+                        existingInfo = event.blockInfos
                         existingInfo.append(blockInfo)
                         toSet = existingInfo
 
@@ -1304,7 +1305,7 @@ class TMAEventMaker:
                     # frozen dataclass, use object.__setattr__ to set the
                     # attribute. This is the correct way to set a frozen
                     # dataclass attribute after creation.
-                    object.__setattr__(event, 'blockInfo', toSet)
+                    object.__setattr__(event, 'blockInfos', toSet)
 
     def _makeEventsFromStateTuples(self, states, dayObs, data):
         """For the list of state-tuples, create a list of ``TMAEvent`` objects.
@@ -1343,7 +1344,7 @@ class TMAEventMaker:
                 duration=duration,
                 begin=beginAstropy,
                 end=endAstropy,
-                blockInfo=None,  # this is added later
+                blockInfos=None,  # this is added later
                 _startRow=parsedState.eventStart,
                 _endRow=parsedState.eventEnd,
             )
