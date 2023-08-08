@@ -34,7 +34,7 @@ import matplotlib.pyplot as plt
 from lsst.utils.iteration import ensure_iterable
 
 from .enums import AxisMotionState, PowerState
-from .blockUtils import BlockParser, BlockInfo
+from .blockUtils import BlockParser
 from .utils import getCurrentDayObs_int, dayObsIntToString
 from .efdUtils import (getEfdData,
                        makeEfdClient,

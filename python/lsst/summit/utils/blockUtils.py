@@ -193,7 +193,7 @@ class BlockParser:
     def getDataForDayObs(self):
         """Retrieve the data for the specified dayObs from the EFD.
         """
-        data = getEfdData(self.client, 'lsst.sal.Script.logevent_state', dayObs=self.dayObs)  # , prePadding=86400*365)
+        data = getEfdData(self.client, 'lsst.sal.Script.logevent_state', dayObs=self.dayObs)
         self.data = data
 
     def augmentDataSlow(self):
@@ -203,7 +203,6 @@ class BlockParser:
         data = self.data
         blockPattern = r"BLOCK-(\d+)"
         blockIdPattern = r"BL\d+(?:_\w+)+"
-        sitcomPattern = r"SITCOM-(\d+)"
 
         data['blockNum'] = pd.Series()
         data['blockId'] = pd.Series()
@@ -237,13 +236,14 @@ class BlockParser:
         data = self.data
         blockPattern = r"BLOCK-(\d+)"
         blockIdPattern = r"(BL\d+(?:_\w+)+)"
-        sitcomPattern = r"SITCOM-(\d+)"
 
-        data['blockNum'] = data['lastCheckpoint'].str.extract(blockPattern, expand=False).astype(float).astype(pd.Int64Dtype())
-        data['blockId'] = data['lastCheckpoint'].str.extract(blockIdPattern, expand=False)
+        col = data['lastCheckpoint']
+        data['blockNum'] = col.str.extract(blockPattern, expand=False).astype(float).astype(pd.Int64Dtype())
+        data['blockId'] = col.str.extract(blockIdPattern, expand=False)
 
-        # TODO: add SITCOM tickets, making sure it does the equivalent of re.findall and add them delimited somehow
-        # data['sitcomTickets'] = data['lastCheckpoint'].str.extract(sitcomPattern, expand=False)
+        # TODO: add SITCOM tickets, making sure it does the equivalent of
+        # re.findall and add them delimited somehow data['sitcomTickets'] =
+        # data['lastCheckpoint'].str.extract(sitcomPattern, expand=False)
 
         blockIdSplit = data['blockId'].str.split('_', expand=True)
         data['blockDayObs'] = blockIdSplit[2].astype(float).astype(pd.Int64Dtype())
