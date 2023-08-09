@@ -2573,4 +2573,106 @@ interactions:
       code: 200
       message: OK
     url: https://summit-lsp.lsst.codes:443/influxdb/query
+- request:
+    body: null
+    headers:
+      Accept:
+      - '*/*'
+      Accept-Encoding:
+      - gzip, deflate, br
+      Connection:
+      - keep-alive
+      User-Agent:
+      - python-requests/2.31.0
+    method: GET
+    uri: https://roundtable.lsst.codes/segwarides/
+  response:
+    body:
+      string: '{"_metadata": {"name": "segwarides", "version": "0.4.2", "description":
+        "A simple app to serve credentials to other services.", "repository_url":
+        "https://github.com/lsst-sqre/segwarides", "documentation_url": "https://github.com/lsst-sqre/segwarides"}}'
+    headers:
+      Connection:
+      - keep-alive
+      Content-Length:
+      - '253'
+      Content-Type:
+      - application/json; charset=utf-8
+      Date:
+      - Wed, 09 Aug 2023 16:32:51 GMT
+      Strict-Transport-Security:
+      - max-age=15724800; includeSubDomains
+    status:
+      code: 200
+      message: OK
+- request:
+    body: null
+    headers:
+      Accept:
+      - '*/*'
+      Accept-Encoding:
+      - gzip, deflate, br
+      Connection:
+      - keep-alive
+      User-Agent:
+      - python-requests/2.31.0
+    method: GET
+    uri: https://roundtable.lsst.codes/segwarides/creds/usdf_efd
+  response:
+    body:
+      string: '{"host": "usdf-rsp.slac.stanford.edu", "username": "efdreader", "password":
+        "cD32sDoymy69EWAmD5nsSA==", "schema_registry": "http://sasquatch-schema-registry.sasquatch:8081",
+        "port": "443", "path": "/influxdb/"}'
+    headers:
+      Connection:
+      - keep-alive
+      Content-Length:
+      - '210'
+      Content-Type:
+      - application/json; charset=utf-8
+      Date:
+      - Wed, 09 Aug 2023 16:32:52 GMT
+      Strict-Transport-Security:
+      - max-age=15724800; includeSubDomains
+    status:
+      code: 200
+      message: OK
+- request:
+    body: null
+    headers:
+      Accept:
+      - '*/*'
+      Accept-Encoding:
+      - gzip, deflate, br
+      Connection:
+      - keep-alive
+      User-Agent:
+      - python-requests/2.31.0
+    method: GET
+    uri: https://usdf-rsp.slac.stanford.edu/influxdb/health
+  response:
+    body:
+      string: '{"checks":[],"message":"ready for queries and writes","name":"influxdb","status":"pass","version":"1.8.10"}'
+    headers:
+      Connection:
+      - keep-alive
+      Content-Length:
+      - '107'
+      Content-Type:
+      - application/json
+      Date:
+      - Wed, 09 Aug 2023 16:32:52 GMT
+      Request-Id:
+      - 5ae59e7ab05d7fc31978a1ab09732921
+      Strict-Transport-Security:
+      - max-age=16070400
+      X-Influxdb-Build:
+      - OSS
+      X-Influxdb-Version:
+      - 1.8.10
+      X-Request-Id:
+      - 5ae59e7ab05d7fc31978a1ab09732921
+    status:
+      code: 200
+      message: OK
 version: 1
