@@ -337,8 +337,18 @@ def getMostRecentRowWithDataBefore(client, topic, timeToLookBefore, warnStaleAft
     return lastRow
 
 
-def makeEfdClient():
+def makeEfdClient(testing=False):
     """Automatically create an EFD client based on the site.
+
+    Parameters
+    ----------
+    testing : `bool`, optional
+        Set to ``True`` if running in a test suite. This will default to using
+        the USDF EFD, for which data has been recorded for replay by the ``vcr`
+        package. Note data must be re-recorded to ``vcr`` from both inside and
+        outside the USDF when the package/data changes, due to the use of a
+        proxy meaning that the web requests are different depending on whether
+        the EFD is being contacted from inside and outside the USDF.
 
     Returns
     -------
@@ -347,6 +357,9 @@ def makeEfdClient():
     """
     if not HAS_EFD_CLIENT:
         raise RuntimeError("Could not create EFD client because importing lsst_efd_client failed.")
+
+    if testing:
+        return EfdClient('usdf_efd')
 
     try:
         site = getSite()

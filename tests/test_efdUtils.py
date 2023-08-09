@@ -84,7 +84,7 @@ class EfdUtilsTestCase(lsst.utils.tests.TestCase):
     @safe_vcr.use_cassette()
     def setUpClass(cls):
         try:
-            cls.client = makeEfdClient()
+            cls.client = makeEfdClient(testing=True)
         except RuntimeError:
             raise unittest.SkipTest("Could not instantiate an EFD client")
         cls.dayObs = 20230531
