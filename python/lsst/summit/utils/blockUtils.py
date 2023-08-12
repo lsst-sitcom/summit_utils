@@ -21,6 +21,7 @@
 
 import re
 import time
+import logging
 import pandas as pd
 from dataclasses import dataclass
 from astropy.time import Time
@@ -176,6 +177,10 @@ class BlockParser:
     """
 
     def __init__(self, dayObs, client=None):
+        # TODO change mode of operation to not take dayObs on init, but instead
+        # to work like the TMAEventMaker where the EFD data is cached as long
+        # as the day isn't current.
+        self.log = logging.getLogger("lsst.summit.utils.blockUtils.BlockParser")
         self.dayObs = dayObs
 
         self.client = client
@@ -184,11 +189,11 @@ class BlockParser:
 
         t0 = time.time()
         self.getDataForDayObs()
-        print(f"Getting data took {(time.time()-t0):.2f} seconds")
+        self.log.debug(f"Getting data took {(time.time()-t0):.2f} seconds")
         t0 = time.time()
-        # self.augmentData()
-        self.augmentDataSlow()
-        print(f"Parsing data took {(time.time()-t0):.5f} seconds")
+        self.augmentData()
+        # self.augmentDataSlow()
+        self.log.debug(f"Parsing data took {(time.time()-t0):.5f} seconds")
 
     def getDataForDayObs(self):
         """Retrieve the data for the specified dayObs from the EFD.
