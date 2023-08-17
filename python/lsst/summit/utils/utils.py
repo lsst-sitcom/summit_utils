@@ -561,7 +561,9 @@ def getSite():
     Returns
     -------
     location : `str`
-        One of ['tucson', 'summit', 'base', 'staff-rsp', 'rubin-devl']
+        One of:
+        ['tucson', 'summit', 'base', 'staff-rsp', 'rubin-devl', 'jenkins',
+         'usdf-k8s']
 
     Raises
     ------
@@ -589,6 +591,15 @@ def getSite():
     jenkinsHome = os.getenv('JENKINS_HOME', "")
     if jenkinsHome != "":
         return 'jenkins'
+
+    # we're probably inside a k8s pod doing rapid analysis work at this point
+    location = os.getenv('RAPID_ANALYSIS_LOCATION', "")
+    if location == "TTS":
+        return 'tucson'
+    if location == "SUMMIT":
+        return 'summit'
+    if location == "USDF":
+        return 'usdf-k8s'
 
     # we have failed
     raise ValueError('Location could not be determined')
