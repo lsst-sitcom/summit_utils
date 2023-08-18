@@ -372,7 +372,7 @@ def makeEfdClient(testing=False):
         return EfdClient('tucson_teststand_efd')
     if site == 'base':
         return EfdClient('base_efd')
-    if site in ['staff-rsp', 'rubin-devl']:
+    if site in ['staff-rsp', 'rubin-devl', 'usdf-k8s']:
         return EfdClient('usdf_efd')
     if site == 'jenkins':
         return EfdClient('usdf_efd')
