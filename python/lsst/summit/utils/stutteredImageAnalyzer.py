@@ -17,7 +17,10 @@ from lsst.meas.extensions import shapeHSM
 import lsst.afw.math as afwMath
 
 from scipy.fft import fft
+from scipy.ndimage import gaussian_filter
 from photutils.detection import find_peaks
+
+from dataclasses import dataclass
 
 
 class StutteredImageAnalyzer():
@@ -188,7 +191,7 @@ class StutteredImageAnalyzer():
             strip.image.array -= background
         return backgrounds
 
-    def detect_sources(self, exp, threshold=5000, do_plot=False):
+    def detect_sources(self, exp, threshold=100, do_plot=False, sigma=2):
         """ Detect all sources in the image.
 
         Find mean x and y positions of all sources that are above a given
@@ -218,8 +221,8 @@ class StutteredImageAnalyzer():
                 else:
                     summed_strip += strip.image.array
             # detect sources in full strip
-            peak_locations = find_peaks(summed_strip, threshold=threshold, box_size=strip_height)
-            self.peak_locations = peak_locations
+            filtered_strip = gaussian_filter(summed_strip, sigma=sigma)
+            peak_locations = find_peaks(filtered_strip, threshold=threshold, box_size=strip_height)
             half_sources = pd.DataFrame(data={'x_peak': peak_locations['x_peak'],
                                               'y_peak': peak_locations['y_peak'],
                                               'peak_value': peak_locations['peak_value'],
@@ -230,9 +233,34 @@ class StutteredImageAnalyzer():
                 sources = pd.concat([sources, half_sources], ignore_index=True)
             if do_plot:
                 plt.figure(figsize=(20, 20))
-                plt.imshow(np.arcsinh(10*summed_strip)/10, cmap="magma", origin="lower")
+                plt.imshow(np.arcsinh(10*filtered_strip)/10, cmap="magma", origin="lower")
                 plt.plot(sources.x_peak[sources.image_half == image_half],
                          sources.y_peak[sources.image_half == image_half], 'rx')
                 plt.show()
-            summed_strip = []
         return sources
+
+    def catalog_all_sources(self, exp, do_plot=True):
+        """ Make a catalog of all sources in the image
+
+        Find mean x and y positions of all sources that are above a given
+        threshold.
+
+        Parameters
+        ----------
+        exp : `lsst.afw.image.Exposure`
+            The exposure, probably with background subtracted, although this is
+            not essential.
+
+        Returns
+        -------
+        source_catalog : `dataclass`
+            Pandas dataframe with x and y location within single strip and
+            column saying which half it's in.
+        """
+        return 0
+
+
+@dataclass
+class StutteredImageSourceCatalog:
+    """Class for stuttered image source results"""
+    
