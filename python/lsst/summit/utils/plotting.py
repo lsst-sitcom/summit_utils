@@ -49,8 +49,8 @@ def plot(inputData,
 
     Parameters
     ----------
-    inputData : `numpy.array`, `lsst.afw.image.exposure`, or
-        `lsst.afw.image.Image`
+    inputData : `numpy.array`, `lsst.afw.image.Exposure`,
+        `lsst.afw.image.Image`, or `lsst.afw.image.MaskedImage`
         The input data.
     imageType : `str`, optional
         If input data is an exposure, plot either 'image', or 'masked' image.
