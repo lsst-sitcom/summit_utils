@@ -25,7 +25,7 @@ from lsst.afw.detection import FootprintSet
 from lsst.afw.table import SourceCatalog
 import lsst.geom as geom
 from lsst.summit.utils import getQuantiles
-import lsst.afw.image as Image
+import lsst.afw.image as afwImage
 
 import matplotlib.pyplot as plt
 import matplotlib.colors as colors
@@ -103,15 +103,15 @@ def plot(inputData,
     match inputData:
         case np.ndarray():
             imageData = inputData
-        case Image.MaskedImage():
-            imageData = inputData.getImage().array
-        case Image.Image():
+        case afwImage.MaskedImage():
+            imageData = inputData.image.array
+        case afwImage.Image():
             imageData = inputData.array
-        case Image.Exposure():
+        case afwImage.Exposure():
             imageData = inputData.image.array
         case _:
             raise TypeError("This function accepts numpy array, lsst.afw.image.Exposure components. "
-                  f"Got {type(inputData)}: {inputData}")
+                  "Got type(inputData)")
 
     match stretch:
         case 'ccs':
@@ -138,7 +138,8 @@ def plot(inputData,
                                       interval=vis.PercentileInterval(percentile),
                                       stretch=vis.SqrtStretch())
         case _:
-            norm = None
+            raise ValueError(f"Invalid value for stretch : {stretch}. "
+                    "Accepted options are: ccs, asinh, power, log, linear, sqrt.")
 
     ax.imshow(imageData, cmap=cmap, origin='lower', norm=norm)
 

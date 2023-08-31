@@ -42,12 +42,12 @@ class PlottingTestCase(lsst.utils.tests.TestCase):
         cls.dataId = {'day_obs': 20200315, 'seq_num': 120, 'detector': 0}
         cls.outputDir = tempfile.mkdtemp()
 
-    def test_plotting(self):
+    def test_plot(self):
         """Test that the the plot is made and saved
         """
         exp = self.butler.get('raw', self.dataId)
         centroids = [(567, 746), (576, 599), (678, 989)]
-
+        
         # Input is an exposure
         outputFilename = os.path.join(self.outputDir, 'testPlotting_exp.jpg')
         plot(exp,
@@ -59,7 +59,7 @@ class PlottingTestCase(lsst.utils.tests.TestCase):
 
         # Input is a numpy array
         outputFilename = os.path.join(self.outputDir, 'testPlotting_nparr.jpg')
-        nparr = exp.getImage().array
+        nparr = exp.image.array
         plot(nparr,
              showCompass=True,
              centroids=[centroids],
@@ -69,7 +69,7 @@ class PlottingTestCase(lsst.utils.tests.TestCase):
 
         # Input is an image
         outputFilename = os.path.join(self.outputDir, 'testPlotting_image.jpg')
-        im = exp.getImage()
+        im = exp.image
         plot(im,
              showCompass=True,
              centroids=[centroids],
@@ -78,14 +78,14 @@ class PlottingTestCase(lsst.utils.tests.TestCase):
         self.assertTrue(os.path.getsize(outputFilename) > 10000)
 
         # Input is a masked image
-#       outputFilename = os.path.join(self.outputDir, 'testPloting_mask.jpg')
-#        plot(exp,
-#             showCompass=True,
-#             centroids=[centroids],
-#             savePlotAs=outputFilename)
-#        plot4.plot()
-#        self.assertTrue(os.path.isfile(outputFilename))
-#        self.assertTrue(os.path.getsize(outputFilename) > 10000)
+        outputFilename = os.path.join(self.outputDir, 'testPloting_mask.jpg')
+        masked = exp.maskedImage
+        plot(masked,
+             showCompass=True,
+             centroids=[centroids],
+             savePlotAs=outputFilename)
+        self.assertTrue(os.path.isfile(outputFilename))
+        self.assertTrue(os.path.getsize(outputFilename) > 10000)
 
 
 def setup_module(module):
