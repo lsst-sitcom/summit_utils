@@ -47,7 +47,7 @@ class PlottingTestCase(lsst.utils.tests.TestCase):
         """
         exp = self.butler.get('raw', self.dataId)
         centroids = [(567, 746), (576, 599), (678, 989)]
-        
+
         # Input is an exposure
         outputFilename = os.path.join(self.outputDir, 'testPlotting_exp.jpg')
         plot(exp,

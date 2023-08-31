@@ -139,7 +139,7 @@ def plot(inputData,
                                       stretch=vis.SqrtStretch())
         case _:
             raise ValueError(f"Invalid value for stretch : {stretch}. "
-                    "Accepted options are: ccs, asinh, power, log, linear, sqrt.")
+                             "Accepted options are: ccs, asinh, power, log, linear, sqrt.")
 
     ax.imshow(imageData, cmap=cmap, origin='lower', norm=norm)
 
