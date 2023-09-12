@@ -936,6 +936,9 @@ def getCdf(data, scale):
     """Return an approximate cumulative distribution function scaled to
     the [0, scale] range.
 
+    If the input data is all nan, then the output cdf will be nan as well as
+    the min and max values.
+
     Parameters
     ----------
     data : `np.array`
@@ -960,6 +963,12 @@ def getCdf(data, scale):
     minVal = np.floor(np.nanmin(flatData))
     maxVal = np.ceil(np.nanmax(flatData)) + 1.0
 
+    if np.isnan(minVal) or np.isnan(maxVal):
+        # if either the min or max are nan, then the data is all nan as we're
+        # using nanmin and nanmax. Given this, we can't calculate a cdf, so
+        # return nans for all values
+        return np.nan, np.nan, np.nan
+
     hist, binEdges = np.histogram(
         flatData, bins=int(maxVal - minVal), range=(minVal, maxVal)
     )
@@ -970,13 +979,16 @@ def getCdf(data, scale):
 
 def getQuantiles(data, nColors):
     """Get a set of boundaries that equally distribute data into
-    nColors intervals. The output can be used to make a colormap
-    of nColors colors.
+    nColors intervals. The output can be used to make a colormap of nColors
+    colors.
 
     This is equivalent to using the numpy function:
         np.quantile(data, np.linspace(0, 1, nColors + 1))
-    but with a coarser precision, yet sufficient for our use case.
-    This implementation gives a speed-up.
+    but with a coarser precision, yet sufficient for our use case. This
+    implementation gives a significant speed-up.
+
+    If all elements of ``data`` are nan then the output ``boundaries`` will
+    also all be ``nan`` to keep the interface consistent.
 
     Parameters
     ----------
@@ -988,10 +1000,13 @@ def getQuantiles(data, nColors):
     Returns
     -------
     boundaries: `list` of `float`
-        A monotonically increasing sequence of size (nColors + 1).
-        These are the edges of nColors intervals.
+        A monotonically increasing sequence of size (nColors + 1). These are
+        the edges of nColors intervals.
     """
     cdf, minVal, maxVal = getCdf(data, nColors)
+    if np.isnan(minVal):  # cdf calculation has failed because all data is nan
+        return np.asarray([np.nan for _ in range(nColors)])
+
     boundaries = np.asarray(
         [np.argmax(cdf >= i) + minVal for i in range(nColors)] + [maxVal]
     )
