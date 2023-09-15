@@ -124,7 +124,7 @@ class BlockInfo:
         )
 
 
-@dataclass(slots=True, kw_only=True, frozen=True)
+@dataclass(kw_only=True, frozen=True)
 class ScriptStatePoint:
     """The execution state of a script at a point in time.
 
