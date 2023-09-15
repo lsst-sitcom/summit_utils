@@ -39,7 +39,7 @@ __all__ = (
 )
 
 
-@dataclass(slots=True, kw_only=True, frozen=True)
+@dataclass(kw_only=True, frozen=True)
 class BlockInfo:
     """Information about the execution of a "block".
 
