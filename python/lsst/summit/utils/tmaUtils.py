@@ -382,7 +382,7 @@ def _initializeTma(tma):
     tma._parts['elevationSystemState'] = PowerState.ON
 
 
-@dataclass(slots=True, kw_only=True, frozen=True)
+@dataclass(kw_only=True, frozen=True)
 class TMAEvent:
     """A movement event for the TMA.
 
