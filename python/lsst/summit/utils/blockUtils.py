@@ -23,6 +23,7 @@ import re
 import time
 import logging
 import pandas as pd
+import numpy as np
 from dataclasses import dataclass
 from astropy.time import Time
 
@@ -192,7 +193,6 @@ class BlockParser:
         self.log.debug(f"Getting data took {(time.time()-t0):.2f} seconds")
         t0 = time.time()
         self.augmentData()
-        # self.augmentDataSlow()
         self.log.debug(f"Parsing data took {(time.time()-t0):.5f} seconds")
 
     def getDataForDayObs(self):
@@ -246,13 +246,14 @@ class BlockParser:
         data['blockNum'] = col.str.extract(blockPattern, expand=False).astype(float).astype(pd.Int64Dtype())
         data['blockId'] = col.str.extract(blockIdPattern, expand=False)
 
-        # TODO: add SITCOM tickets, making sure it does the equivalent of
-        # re.findall and add them delimited somehow data['sitcomTickets'] =
-        # data['lastCheckpoint'].str.extract(sitcomPattern, expand=False)
-
         blockIdSplit = data['blockId'].str.split('_', expand=True)
-        data['blockDayObs'] = blockIdSplit[2].astype(float).astype(pd.Int64Dtype())
-        data['blockSeqNum'] = blockIdSplit[3].astype(float).astype(pd.Int64Dtype())
+        if blockIdSplit.columns.max() > 1:  # parsing the blockId succeeded
+            data['blockDayObs'] = blockIdSplit[2].astype(float).astype(pd.Int64Dtype())
+            data['blockSeqNum'] = blockIdSplit[3].astype(float).astype(pd.Int64Dtype())
+        else:  # make nan filled columns for these
+            nanSeries = pd.Series([np.nan] * len(data))
+            data['blockDayObs'] = nanSeries
+            data['blockSeqNum'] = nanSeries
 
     def _listColumnValues(self, column, removeNone=True):
         """Get all the different values for the specified column, as a list.

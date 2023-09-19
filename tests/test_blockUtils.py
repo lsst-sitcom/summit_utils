@@ -25,6 +25,7 @@ import os
 import unittest
 import lsst.utils.tests
 import pandas as pd
+import numpy as np
 import asyncio
 import json
 
@@ -117,16 +118,16 @@ class BlockParserTestCase(lsst.utils.tests.TestCase):
 
     def test_parsing(self):
         blockNums = self.blockParser.getBlockNums()
-        self.assertTrue(all(isinstance(n, int) for n in blockNums))
+        self.assertTrue(all(np.issubdtype(n, int)) for n in blockNums)
         self.assertEqual(blockNums, list(self.blockDict.keys()))
 
         for block, seqNums in self.blockDict.items():
-            self.assertIsInstance(block, int)
+            self.assertTrue(np.issubdtype(block, int))
             self.assertIsInstance(seqNums, list)
-            self.assertTrue(all(isinstance(s, int) for s in seqNums))
+            self.assertTrue(all(np.issubdtype(s, int)) for s in seqNums)
 
             found = self.blockParser.getSeqNums(block)
-            self.assertTrue(all(isinstance(s, int) for s in found))
+            self.assertTrue(all(np.issubdtype(s, int) for s in found))
             self.assertEqual(found, seqNums)
             self.blockParser.printBlockEvolution(block)
 
