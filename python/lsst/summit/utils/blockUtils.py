@@ -180,9 +180,6 @@ class BlockParser:
     """
 
     def __init__(self, dayObs, client=None):
-        # TODO change mode of operation to not take dayObs on init, but instead
-        # to work like the TMAEventMaker where the EFD data is cached as long
-        # as the day isn't current.
         self.log = logging.getLogger("lsst.summit.utils.blockUtils.BlockParser")
         self.dayObs = dayObs
 
