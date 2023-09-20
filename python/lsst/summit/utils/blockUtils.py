@@ -436,6 +436,3 @@ class BlockParser:
         # events in the window and also those that overlap the
         # start/end too
         return [e for e in events if e.end >= begin and e.begin <= end]
-
-    def getBlocksForEvent(self, event):
-        return event.blockInfos
