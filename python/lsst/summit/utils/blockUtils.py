@@ -111,7 +111,9 @@ class BlockInfo:
         print(self.__str__())
 
     def __str__(self):
-        newline = '  \n'  # no \n allowed in f-strings until python 3.12
+        # no literal \n allowed inside {} portion of f-strings until python
+        # 3.12, but it can go in via a variable
+        newline = '  \n'
         return (
             f"dayObs: {self.dayObs}\n"
             f"seqNum: {self.seqNum}\n"
