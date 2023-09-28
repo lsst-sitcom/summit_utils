@@ -42,16 +42,23 @@ __all__ = (
 DELIMITER = "||"  # don't use a comma, as str(list) will naturally contain commas
 
 
-def getBlockInfoTestTruthValues():
+def getBlockInfoTestTruthValues(dataFilename=None):
     """Get the current truth values for the block information.
+
+    Parameters
+    ----------
+    dataFilename : `str`, optional
+        The filename to read the truth values from. If not provided, the
+        default is to read from the file in the tests/data directory.
 
     Returns
     -------
     data : `dict` [`tuple` [`int`, `int`], `str`]
         The block info truth data.
     """
-    packageDir = getPackageDir("summit_utils")
-    dataFilename = os.path.join(packageDir, "tests", "data", "blockInfoData.json")
+    if dataFilename is None:
+        packageDir = getPackageDir("summit_utils")
+        dataFilename = os.path.join(packageDir, "tests", "data", "blockInfoData.json")
 
     with open(dataFilename, 'r') as f:
         loaded = json.loads(f.read())
