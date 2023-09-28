@@ -27,6 +27,7 @@ import pandas as pd
 import numpy as np
 import asyncio
 import json
+import vcr
 
 import lsst.utils.tests
 from lsst.utils import getPackageDir
@@ -37,6 +38,26 @@ from lsst.summit.utils.blockUtils import (
 
 __all__ = (
     "writeNewBlockInfoTestTruthValues",
+)
+
+HAS_EFD_CLIENT = True
+try:
+    import lsst_efd_client  # noqa: F401 just need to check this is available
+except ImportError:
+    HAS_EFD_CLIENT = False
+
+# Use record_mode="none" to run tests for normal operation. To update files or
+# generate new ones, make sure you have a working connection to the EFD at all
+# the relevant sites, and temporarily run with mode="all" via *both*
+# python/pytest *and* with scons, as these generate slightly different HTTP
+# requests for some reason. Also make sure to do all this at both the summit
+# and USDF. The TTS is explicitly skipped and does not need to follow this
+# procedure.
+packageDir = getPackageDir('summit_utils')
+safe_vcr = vcr.VCR(
+    record_mode="none",
+    cassette_library_dir=os.path.join(packageDir, "tests", "data", "cassettes"),
+    path_transformer=vcr.VCR.ensure_suffix(".yaml"),
 )
 
 DELIMITER = "||"  # don't use a comma, as str(list) will naturally contain commas
@@ -103,8 +124,11 @@ def writeNewBlockInfoTestTruthValues():
         json.dump(data, f)
 
 
+@unittest.skipIf(not HAS_EFD_CLIENT, "No EFD client available")
+@safe_vcr.use_cassette()
 class BlockParserTestCase(lsst.utils.tests.TestCase):
     @classmethod
+    @safe_vcr.use_cassette()
     def setUpClass(cls):
         try:
             cls.client = makeEfdClient()
@@ -119,10 +143,12 @@ class BlockParserTestCase(lsst.utils.tests.TestCase):
         for block in cls.blockNums:
             cls.blockDict[block] = cls.blockParser.getSeqNums(block)
 
+    @safe_vcr.use_cassette()
     def tearDown(self):
         loop = asyncio.get_event_loop()
         loop.run_until_complete(self.client.influx_client.close())
 
+    @safe_vcr.use_cassette()
     def test_parsing(self):
         blockNums = self.blockParser.getBlockNums()
         self.assertTrue(all(np.issubdtype(n, int)) for n in blockNums)
@@ -145,6 +171,7 @@ class BlockParserTestCase(lsst.utils.tests.TestCase):
                 self.blockParser.getBlockInfo(block=block, seqNum=seqNum)
                 self.blockParser.printBlockEvolution(block, seqNum=seqNum)
 
+    @safe_vcr.use_cassette()
     def test_notFoundBehavior(self):
         # no block data on this day so check init doesn't raise
         blockParser = BlockParser(dayObs=self.dayObsNoBlocks, client=self.client)
@@ -172,11 +199,12 @@ class BlockParserTestCase(lsst.utils.tests.TestCase):
         # just check this doesn't raise
         blockParser.getBlockInfo(block=9999999, seqNum=9999999)
 
+    @safe_vcr.use_cassette()
     def test_actualValues(self):
         data = getBlockInfoTestTruthValues()
 
         dayObs = 20230615
-        blockParser = BlockParser(dayObs)
+        blockParser = BlockParser(dayObs, client=self.client)
 
         for block in blockParser.getBlockNums():
             seqNums = blockParser.getSeqNums(block)
