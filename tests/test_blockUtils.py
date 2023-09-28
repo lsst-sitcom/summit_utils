@@ -23,12 +23,12 @@
 
 import os
 import unittest
-import lsst.utils.tests
 import pandas as pd
 import numpy as np
 import asyncio
 import json
 
+import lsst.utils.tests
 from lsst.utils import getPackageDir
 from lsst.summit.utils.efdUtils import makeEfdClient
 from lsst.summit.utils.blockUtils import (
