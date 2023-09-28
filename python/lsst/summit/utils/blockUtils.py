@@ -303,7 +303,8 @@ class BlockParser:
 
         If the seqNum is specified, only the rows for that sequence number are
         returned, otherwise all the rows relating to any block execution that
-        day are returned.
+        day are returned. If the specified seqNum doesn't occur on the current
+        day, an empty dataframe is returned.
 
         Parameters
         ----------
