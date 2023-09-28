@@ -320,6 +320,8 @@ class BlockParser:
             The row data.
         """
         rowsForBlock = self.data[self.data['blockNum'] == block]
+        if rowsForBlock.empty:
+            self.log.warning(f"No rows found for {block=} on dayObs={self.dayObs}")
         if seqNum is None:
             return rowsForBlock
         return rowsForBlock[rowsForBlock['blockSeqNum'] == seqNum]
