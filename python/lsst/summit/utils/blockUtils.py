@@ -163,12 +163,12 @@ class ScriptStatePoint:
 class BlockParser:
     """A class to parse BLOCK data from the EFD.
 
-    Information on executed blocks is stored in the EFD in the
-    ``lsst.sal.Script.logevent_state`` topic. This class parses that topic and
-    provides methods to get information on the blocks which were run on a given
-    dayObs. It also provides methods to get the events which occurred during a
-    given block, and also to get the block in which a specified event occurred,
-    if any.
+    Information on executed blocks is stored in the EFD (Electronic Facilities
+    Database) in the ``lsst.sal.Script.logevent_state`` topic. This class
+    parses that topic and provides methods to get information on the blocks
+    which were run on a given dayObs. It also provides methods to get the
+    events which occurred during a given block, and also to get the block in
+    which a specified event occurred, if any.
 
     Parameters
     ----------
