@@ -222,7 +222,7 @@ class BlockParser:
             blockIdMatch = re.search(blockIdPattern, rowStr)
             blockId = blockIdMatch.group(0) if blockIdMatch else None
             data.loc[index, 'blockId'] = blockId
-            if blockId:
+            if blockId is not None:
                 blockDayObs = int(blockId.split('_')[2])
                 blockSeqNum = int(blockId.split('_')[3])
                 data.loc[index, 'blockDayObs'] = blockDayObs
