@@ -46,8 +46,7 @@ class BlockInfo:
 
     Each BlockInfo instance contains information about a single block
     execution. This is identified by the block number and sequence number,
-    which, when combined with the dayObs, are exactly degenerate with the
-    blockId.
+    which, when combined with the dayObs, define the block ID.
 
     Each BlockInfo instance contains the following information:
         * The block ID - this is the primary identifier, as a string, for
