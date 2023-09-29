@@ -66,6 +66,7 @@ safe_vcr = vcr.VCR(
     record_mode="none",
     cassette_library_dir=os.path.join(packageDir, "tests", "data", "cassettes"),
     path_transformer=vcr.VCR.ensure_suffix(".yaml"),
+    match_on=['method', 'scheme', 'host', 'port', 'path', 'query', 'body']
 )
 
 
@@ -92,7 +93,7 @@ class EfdUtilsTestCase(lsst.utils.tests.TestCase):
             duration=0.47125244140625,
             begin=Time(1685578353.2265284, scale='utc', format='unix'),
             end=Time(1685578353.6977808, scale='utc', format='unix'),
-            blockInfo=None,
+            blockInfos=None,
             version=0,
             _startRow=254,
             _endRow=255,

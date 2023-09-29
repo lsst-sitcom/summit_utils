@@ -66,6 +66,7 @@ safe_vcr = vcr.VCR(
     record_mode="none",
     cassette_library_dir=os.path.join(packageDir, "tests", "data", "cassettes"),
     path_transformer=vcr.VCR.ensure_suffix(".yaml"),
+    match_on=['method', 'scheme', 'host', 'port', 'path', 'query', 'body']
 )
 
 
