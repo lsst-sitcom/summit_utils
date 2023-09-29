@@ -321,10 +321,13 @@ class TMAEventMakerTestCase(lsst.utils.tests.TestCase):
     def test_noDataBehaviour(self):
         eventMaker = self.tmaEventMaker
         noDataDayObs = 19500101  # do not use 19700101 - there is data for that day!
-        with self.assertWarns(Warning, msg=f"No EFD data found for dayObs={noDataDayObs}"):
+        with self.assertLogs(level='WARNING') as cm:
+            correctMsg = f"No EFD data found for dayObs={noDataDayObs}"
             events = eventMaker.getEvents(noDataDayObs)
             self.assertIsInstance(events, list)
             self.assertEqual(len(events), 0)
+            msg = cm.output[0]
+            self.assertIn(correctMsg, msg)
 
     @vcr.use_cassette()
     def test_helperFunctions(self):
@@ -337,6 +340,25 @@ class TMAEventMakerTestCase(lsst.utils.tests.TestCase):
         foundTracks = getTracksFromEventList(events)
         self.assertEqual(slews, foundSlews)
         self.assertEqual(tracks, foundTracks)
+
+    @vcr.use_cassette()
+    def test_getEvent(self):
+        # test the singular event getter, and what happens if the event doesn't
+        # exist for the day
+        eventMaker = self.tmaEventMaker
+        events = eventMaker.getEvents(self.dayObs)
+        nEvents = len(events)
+
+        event = eventMaker.getEvent(self.dayObs, 0)
+        self.assertIsInstance(event, TMAEvent)
+        event = eventMaker.getEvent(self.dayObs, 100)
+        self.assertIsInstance(event, TMAEvent)
+
+        with self.assertLogs(level='WARNING') as cm:
+            correctMsg = f"Event {nEvents+1} not found for {self.dayObs}"
+            event = eventMaker.getEvent(self.dayObs, nEvents+1)
+            msg = cm.output[0]
+            self.assertIn(correctMsg, msg)
 
     @vcr.use_cassette()
     def test_printing(self):
