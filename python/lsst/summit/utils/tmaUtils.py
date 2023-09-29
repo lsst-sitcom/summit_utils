@@ -1002,6 +1002,41 @@ class TMAEventMaker:
 
         return merged
 
+    def getEvent(self, dayObs, seqNum):
+        """Get a specific event for a given dayObs and seqNum.
+
+        Repeated calls for the same ``dayObs`` will use the cached data if the
+        day is in the past, and so will be much quicker. If the ``dayObs`` is
+        the current day then the EFD will be queried for new data for each
+        call, so a call which returns ```None` on the first try might return an
+        event on the next, if the TMA is still moving and thus generating
+        events.
+
+        Parameters
+        ----------
+        dayObs : `int`
+            The dayObs to get the event for.
+        seqNum : `int`
+            The sequence number of the event to get.
+
+        Returns
+        -------
+        event : `lsst.summit.utils.tmaUtils.TMAEvent`
+            The event for the specified dayObs and seqNum, or `None` if the
+            event was not found.
+        """
+        events = self.getEvents(dayObs)
+        if seqNum <= len(events):
+            event = events[seqNum]
+            if event.seqNum != seqNum:
+                # it's zero-indexed and contiguous so this must be true but
+                # a sanity check doesn't hurt.
+                raise AssertionError(f"Event sequence number mismatch: {event.seqNum} != {seqNum}")
+            return event
+        else:
+            self.log.warning(f"Event {seqNum} not found for {dayObs}")
+            return None
+
     def getEvents(self, dayObs):
         """Get the TMA events for the specified dayObs.
 
