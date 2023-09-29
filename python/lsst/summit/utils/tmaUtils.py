@@ -1008,7 +1008,7 @@ class TMAEventMaker:
         Repeated calls for the same ``dayObs`` will use the cached data if the
         day is in the past, and so will be much quicker. If the ``dayObs`` is
         the current day then the EFD will be queried for new data for each
-        call, so a call which returns ```None` on the first try might return an
+        call, so a call which returns ``None`` on the first try might return an
         event on the next, if the TMA is still moving and thus generating
         events.
 

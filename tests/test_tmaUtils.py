@@ -351,8 +351,10 @@ class TMAEventMakerTestCase(lsst.utils.tests.TestCase):
 
         event = eventMaker.getEvent(self.dayObs, 0)
         self.assertIsInstance(event, TMAEvent)
+        self.assertEqual(event, events[0])
         event = eventMaker.getEvent(self.dayObs, 100)
         self.assertIsInstance(event, TMAEvent)
+        self.assertEqual(event, events[100])
 
         with self.assertLogs(level='WARNING') as cm:
             correctMsg = f"Event {nEvents+1} not found for {self.dayObs}"
