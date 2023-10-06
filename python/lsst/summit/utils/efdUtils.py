@@ -25,6 +25,7 @@ from astropy import units as u
 import datetime
 import logging
 import pandas as pd
+import re
 
 from .utils import getSite
 
@@ -46,7 +47,7 @@ __all__ = [
     'getDayObsStartTime',
     'getDayObsEndTime',
     'getDayObsForTime',
-    'getSubTopics',
+    'getTopics',
 ]
 
 
@@ -530,26 +531,40 @@ def getDayObsForTime(time):
     return int((time + offset).utc.isot[:10].replace('-', ''))
 
 
-def getSubTopics(client, topic):
-    """Get all the sub topics within a given topic.
+def getTopics(client, toFind, caseSensitive=False):
+    """Return all the strings in topics which match the topic query string.
 
-    Note that the topic need not be a complete one, for example, rather than
-    doing `getSubTopics(client, 'lsst.sal.ATMCS')` to get all the topics for
-    the AuxTel Mount Control System, you can do `getSubTopics(client,
-    'lsst.sal.AT')` to get all which relate to the AuxTel in general.
+    Supports wildcards, which are denoted as `*``, as per shell globs.
+
+    Example:
+    >>> # assume topics are ['apple', 'banana', 'grape']
+    >>> getTopics(, 'a*p*')
+    ['apple', 'grape']
 
     Parameters
     ----------
     client : `lsst_efd_client.efd_helper.EfdClient`
         The EFD client to use.
-    topic : `str`
-        The topic to query.
+    toFind : `str`
+        The query string, with optional wildcards denoted as *.
+    caseSensitive : `bool`, optional
+        If ``True``, the query is case sensitive. Defaults to ``False``.
 
     Returns
     -------
-    subTopics : `list` of `str`
-        The sub topics.
+    matches : `list` of `str`
+        The list of matching topics.
     """
     loop = asyncio.get_event_loop()
     topics = loop.run_until_complete(client.get_topics())
-    return sorted([t for t in topics if t.startswith(topic)])
+
+    # Replace wildcard with regex equivalent
+    pattern = toFind.replace('*', '.*')
+    flags = re.IGNORECASE if not caseSensitive else 0
+
+    matches = []
+    for topic in topics:
+        if re.match(pattern, topic, flags):
+            matches.append(topic)
+
+    return matches
