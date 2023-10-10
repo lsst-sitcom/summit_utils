@@ -25,6 +25,8 @@ from astropy import units as u
 import datetime
 import logging
 import pandas as pd
+import re
+from deprecated.sphinx import deprecated
 
 from .utils import getSite
 
@@ -46,7 +48,8 @@ __all__ = [
     'getDayObsStartTime',
     'getDayObsEndTime',
     'getDayObsForTime',
-    'getSubTopics',
+    'getSubTopics',  # deprecated, being removed in w_2023_50
+    'getTopics',
 ]
 
 
@@ -530,6 +533,12 @@ def getDayObsForTime(time):
     return int((time + offset).utc.isot[:10].replace('-', ''))
 
 
+@deprecated(
+    reason="getSubTopics() has been replaced by getTopics() and using wildcards. "
+           "Will be removed after w_2023_50.",
+    version="w_2023_40",
+    category=FutureWarning,
+)
 def getSubTopics(client, topic):
     """Get all the sub topics within a given topic.
 
@@ -553,3 +562,42 @@ def getSubTopics(client, topic):
     loop = asyncio.get_event_loop()
     topics = loop.run_until_complete(client.get_topics())
     return sorted([t for t in topics if t.startswith(topic)])
+
+
+def getTopics(client, toFind, caseSensitive=False):
+    """Return all the strings in topics which match the topic query string.
+
+    Supports wildcards, which are denoted as `*``, as per shell globs.
+
+    Example:
+    >>> # assume topics are ['apple', 'banana', 'grape']
+    >>> getTopics(, 'a*p*')
+    ['apple', 'grape']
+
+    Parameters
+    ----------
+    client : `lsst_efd_client.efd_helper.EfdClient`
+        The EFD client to use.
+    toFind : `str`
+        The query string, with optional wildcards denoted as *.
+    caseSensitive : `bool`, optional
+        If ``True``, the query is case sensitive. Defaults to ``False``.
+
+    Returns
+    -------
+    matches : `list` of `str`
+        The list of matching topics.
+    """
+    loop = asyncio.get_event_loop()
+    topics = loop.run_until_complete(client.get_topics())
+
+    # Replace wildcard with regex equivalent
+    pattern = toFind.replace('*', '.*')
+    flags = re.IGNORECASE if not caseSensitive else 0
+
+    matches = []
+    for topic in topics:
+        if re.match(pattern, topic, flags):
+            matches.append(topic)
+
+    return matches

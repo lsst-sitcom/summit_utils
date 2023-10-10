@@ -41,7 +41,7 @@ from lsst.summit.utils.efdUtils import (
     getDayObsStartTime,
     getDayObsEndTime,
     getDayObsForTime,
-    getSubTopics,
+    getTopics,
 )
 
 from utils import getVcr
@@ -118,14 +118,24 @@ class EfdUtilsTestCase(lsst.utils.tests.TestCase):
             self.assertEqual(dayEnd.jd, dayStart.jd + 1)
 
     @vcr.use_cassette()
-    def test_getSubTopics(self):
-        subTopics = getSubTopics(self.client, 'lsst.sal.MTMount')
-        self.assertIsInstance(subTopics, list)
-        self.assertGreater(len(subTopics), 0)
+    def test_getTopics(self):
+        topics = getTopics(self.client, 'lsst.sal.MTMount*')
+        self.assertIsInstance(topics, list)
+        self.assertGreater(len(topics), 0)
 
-        subTopics = getSubTopics(self.client, 'fake.topics.does.not.exist')
-        self.assertIsInstance(subTopics, list)
-        self.assertEqual(len(subTopics), 0)
+        topics = getTopics(self.client, '*fake.topics.does.not.exist*')
+        self.assertIsInstance(topics, list)
+        self.assertEqual(len(topics), 0)
+
+        # check we can find the mount with a preceding wildcard
+        topics = getTopics(self.client, '*mTmoUnt*')
+        self.assertIsInstance(topics, list)
+        self.assertGreater(len(topics), 0)
+
+        # check it fails if we don't allow case insensitivity
+        topics = getTopics(self.client, '*mTmoUnt*', caseSensitive=True)
+        self.assertIsInstance(topics, list)
+        self.assertEqual(len(topics), 0)
 
     @vcr.use_cassette()
     def test_getEfdData(self):

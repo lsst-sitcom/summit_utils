@@ -59,6 +59,7 @@ from lsst.summit.utils.butlerUtils import (makeDefaultLatissButler,
                                            )
 from lsst.summit.utils.butlerUtils import removeDataProduct  # noqa: F401
 import lsst.daf.butler as dafButler
+from lsst.daf.butler import DatasetRef, NamedKeyMapping
 from lsst.resources import ResourcePath
 
 
@@ -108,10 +109,7 @@ class ButlerUtilsTestCase(lsst.utils.tests.TestCase):
         self.dataCoordFullView = self.butler.registry.expandDataId(self.rawDataIdNoDayObSeqNum,
                                                                    detector=0).full
         self.assertIsInstance(self.dataCoordMinimal, dafButler.dimensions.DataCoordinate)
-        # NB the type check below is currently using a non-public API, but
-        # at present there isn't a good alternative
-        viewType = dafButler.core.dimensions._coordinate._DataCoordinateFullView
-        self.assertIsInstance(self.dataCoordFullView, viewType)
+        self.assertIsInstance(self.dataCoordFullView, NamedKeyMapping)
 
     def test_getLatissDefaultCollections(self):
         defaultCollections = getLatissDefaultCollections()
@@ -178,14 +176,14 @@ class ButlerUtilsTestCase(lsst.utils.tests.TestCase):
 
     def test_getDatasetRefForDataId(self):
         dRef = getDatasetRefForDataId(self.butler, 'raw', self.rawDataId)
-        self.assertIsInstance(dRef, lsst.daf.butler.core.datasets.ref.DatasetRef)
+        self.assertIsInstance(dRef, DatasetRef)
 
         dRef = getDatasetRefForDataId(self.butler, 'raw', self.rawDataIdNoDayObSeqNum)
-        self.assertIsInstance(dRef, lsst.daf.butler.core.datasets.ref.DatasetRef)
+        self.assertIsInstance(dRef, DatasetRef)
         dRef = getDatasetRefForDataId(self.butler, 'raw', self.dataCoordMinimal)
-        self.assertIsInstance(dRef, lsst.daf.butler.core.datasets.ref.DatasetRef)
+        self.assertIsInstance(dRef, DatasetRef)
         dRef = getDatasetRefForDataId(self.butler, 'raw', self.dataCoordFullView)
-        self.assertIsInstance(dRef, lsst.daf.butler.core.datasets.ref.DatasetRef)
+        self.assertIsInstance(dRef, DatasetRef)
 
     def test__dayobs_present(self):
         goods = [{'day_obs': 123}, {'exposure.day_obs': 234}, {'day_obs': 345, 'otherkey': -1}]
