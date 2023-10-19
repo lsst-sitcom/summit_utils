@@ -6,8 +6,7 @@ import numpy as np
 import pandas as pd
 from astropy import units as u
 from astropy.time import Time
-from lsst.summit.testing.analysis.m1m3.plots import inertia_compensation_system
-from lsst.summit.testing.analysis.utils import create_logger
+from lsst.summit.utils.m1m3.plots import inertia_compensation_system
 from lsst.summit.utils.efdUtils import EfdClient, getEfdData
 from lsst.summit.utils.tmaUtils import TMAEvent, TMAEventMaker
 from lsst.ts.xml.tables.m1m3 import FATABLE_XFA, FATABLE_YFA, FATABLE_ZFA, HP_COUNT
@@ -315,7 +314,7 @@ class M1M3ICSAnalysis:
         stable_slew_stats = pd.DataFrame(
             data=[
                 self.get_stats_in_torqueless_interval(
-                    self.df[col].loc[begin.isot : end.isot]
+                    self.df[col].loc[begin.isot: end.isot]
                 )
                 for col in cols
             ],
@@ -437,27 +436,28 @@ class M1M3ICSAnalysis:
 
         # Create a pandas Series from the dictionary
         event_series = pd.Series(event_dict)
-        
+
         # Create a new Pandas Series correlating event and system information
-        system_series = pd.Series({
-            "az_start": self.get_nearest_value("az_actual_torque", self.event.begin),
-            "az_end": self.get_nearest_value("az_actual_torque", self.event.end),
-            "az_extreme_vel": self.get_extreme_value("az_actual_velocity"),
-            "az_extreme_torque": self.get_extreme_value("az_actual_torque"),
-            "el_start": self.get_nearest_value("el_actual_torque", self.event.begin),
-            "el_end": self.get_nearest_value("el_actual_torque", self.event.end),
-            "el_extreme_vel": self.get_extreme_value("el_actual_velocity"),
-            "el_extreme_torque": self.get_extreme_value("el_actual_torque"),
-            "ics_enabled": self.get_ics_status() 
+        system_series = pd.Series(
+            {
+                "az_start": self.get_nearest_value("az_actual_torque", self.event.begin),
+                "az_end": self.get_nearest_value("az_actual_torque", self.event.end),
+                "az_extreme_vel": self.get_extreme_value("az_actual_velocity"),
+                "az_extreme_torque": self.get_extreme_value("az_actual_torque"),
+                "el_start": self.get_nearest_value("el_actual_torque", self.event.begin),
+                "el_end": self.get_nearest_value("el_actual_torque", self.event.end),
+                "el_extreme_vel": self.get_extreme_value("el_actual_velocity"),
+                "el_extreme_torque": self.get_extreme_value("el_actual_torque"),
+                "ics_enabled": self.get_ics_status()
             }
         )
-        
+
         system_series["az_diff"] = system_series["az_end"] - system_series["az_start"]
-        system_series["el_diff"] = system_series["el_end"] - system_series["el_start"]  
+        system_series["el_diff"] = system_series["el_end"] - system_series["el_start"]
 
         # Concatenate the two Series
         result_series = pd.concat([event_series, system_series, result_series])
-        
+
         # Rename the series columns
         result_series = result_series.rename(
             {
@@ -473,17 +473,17 @@ class M1M3ICSAnalysis:
         )
 
         # Display the resulting Series
-        return result_series   
-    
+        return result_series
+
     def get_extreme_value(self, column):
         """
         Return the most extreme (either max or min) value from a given column.
-        
+
         Parameters
         ----------
         column : str
             The column to query.
-        
+
         Returns
         -------
         extreme_val : float
@@ -496,7 +496,7 @@ class M1M3ICSAnalysis:
     def get_nearest_value(self, column, timestamp):
         """
         Return the nearest value to a given timestamp from a given column.
-        
+
         Parameters
         ----------
         column : str
@@ -508,23 +508,23 @@ class M1M3ICSAnalysis:
         time_diff = abs(self.df.index - timestamp)
         idx = time_diff.argmin()
         return self.df[column].iloc[idx]
-    
+
     def get_ics_status(self, threshold: float = 1e-6) -> bool:
         """
-        Evaluate the values of the applied velocity and acceleration forces 
-        inside the padded stable time window. 
-        If the values are all zero, 
-        then this function will return False as the ICS is not enabled. 
+        Evaluate the values of the applied velocity and acceleration forces
+        inside the padded stable time window.
+        If the values are all zero,
+        then this function will return False as the ICS is not enabled.
         Otherwise, it will return True.
-        
+
         Parameters
         ----------
         threshold : float, optional
-            Threshold value used to determine if the ICS is enabled or not. 
+            Threshold value used to determine if the ICS is enabled or not.
             If all the values of the applied velocity and acceleration forces
-            are below this threshold, then the ICS is considered to be 
+            are below this threshold, then the ICS is considered to be
             disabled.
-        
+
         Returns
         -------
         bool
@@ -533,6 +533,7 @@ class M1M3ICSAnalysis:
         avf0 = (self.df[[c for c in self.df.columns if "avf" in c]].abs() < threshold).all().eq(True).all()
         aaf0 = (self.df[[c for c in self.df.columns if "aaf" in c]].abs() < threshold).all().eq(True).all()
         return not (avf0 and aaf0)
+
 
 def find_adjacent_true_regions(
     series: pd.Series, min_adjacent: None | int = None
@@ -596,8 +597,13 @@ def evaluate_m1m3_ics_single_slew(
 
     Returns
     -------
-    InertiaCompensationSystemAnalysis
-        Object containing the results of the analysis.
+    result : `lsst.summit.utils.m1m3.inertia_compensation_system.M1M3ICSAnalysis`
+        The results of the analysis.
+
+    Raises
+    ------
+    ValueError
+        Raised if there is no hardpoint data for the specified event.
     """
     log = log.getChild(__name__) if log is not None else logging.getLogger(__name__)
 
@@ -690,28 +696,20 @@ def evaluate_m1m3_ics_day_obs(
 
 if __name__ == "__main__":
     import time
-    
 
-    # dayObs = 20230802
     dayObs = 20230728
     seqNum = 38
 
-    log = create_logger("M1M3ICSAnalysis")
-    log.info("Start - Single Slew")
+    print("Start - Single Slew")
     event_maker = TMAEventMaker()
-    
+
     t0 = time.time()
-    results = evaluate_m1m3_ics_single_slew(dayObs, seqNum, event_maker, log=log)
+    results = evaluate_m1m3_ics_single_slew(dayObs, seqNum, event_maker)
     t1 = time.time()
     print(f"That took {(t1-t0):.2f} seconds")
-    
+
     results.stats.to_csv(f"m1m3_ics_stats_{dayObs}_{seqNum}.csv")
     results.df.to_csv(f"m1m3_ics_df_{dayObs}_{seqNum}.csv")
-    log.debug(f"Result Series:\n{results.stats}")
-    inertia_compensation_system.plot_hp_measured_data(results, log=log)
-    log.info("End - Single Slew")
-    
-    # log.info("Start - Day Obs")
-    # results_df = evaluate_m1m3_ics_day_obs(dayObs, event_maker, log=log)
-    # results_df.to_csv(f"m1m3_ics_{dayObs}.csv", index=False)
-    # log.info("End - Day Obs")
+    print(f"Result Series:\n{results.stats}")
+    inertia_compensation_system.plot_hp_measured_data(results)
+    print("End - Single Slew")
