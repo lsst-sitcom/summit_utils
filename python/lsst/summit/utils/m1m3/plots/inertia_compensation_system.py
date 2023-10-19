@@ -3,7 +3,8 @@ import logging
 import matplotlib.pyplot as plt
 import pandas as pd
 from astropy.time import Time
-from lsst.summit.testing.analysis.type_utils import M1M3ICSAnalysis
+
+M1M3ICSAnalysis = None  # add type checking back in later once it's supported in summit utils
 
 
 def plot_hp_data(ax: plt.Axes, data: pd.Series | list, label: str) -> list[plt.Line2D]:
