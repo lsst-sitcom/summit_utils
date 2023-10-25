@@ -203,7 +203,7 @@ def finalize_and_save_figure(
     log = log.getChild(__name__) if log is not None else logging.getLogger(__name__)
 
     fig.tight_layout()
-    plt.show()
+    fig.subplots_adjust(hspace=0)
 
     filename = (
         name.replace("/", "")
