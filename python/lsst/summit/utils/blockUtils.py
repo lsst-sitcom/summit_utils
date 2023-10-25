@@ -236,6 +236,15 @@ class BlockParser:
         but is also much harder to maintain/debug, as the vectorized regexes
         are hard to work with, and to know which row is causing problems.
         """
+        if 'lastCheckpoint' not in self.data.columns:
+            self.log.warning("No lastCheckpoint column in data, can't parse block data")
+            # add the columns that would have been added for consistency
+            self.data['blockNum'] = pd.Series()
+            self.data['blockId'] = pd.Series()
+            self.data['blockDayObs'] = pd.Series()
+            self.data['blockSeqNum'] = pd.Series()
+            return
+
         data = self.data
         blockPattern = r"BLOCK-(\d+)"
         blockIdPattern = r"(BL\d+(?:_\w+)+)"
