@@ -237,7 +237,9 @@ class BlockParser:
         are hard to work with, and to know which row is causing problems.
         """
         if 'lastCheckpoint' not in self.data.columns:
-            self.log.warning("No lastCheckpoint column in data, can't parse block data")
+            nRows = len(self.data)
+            self.log.warning(f"Found {nRows} rows of data and no 'lastCheckpoint' column was in the data,"
+                             " so block data cannot be parsed.")
             # add the columns that would have been added for consistency
             self.data['blockNum'] = pd.Series()
             self.data['blockId'] = pd.Series()
