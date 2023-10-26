@@ -212,6 +212,11 @@ class BlockParser:
         data['blockDayObs'] = pd.Series()
         data['blockSeqNum'] = pd.Series()
 
+        if 'lastCheckpoint' not in self.data.columns:
+            nRows = len(self.data)
+            self.log.warning(f"Found {nRows} rows of data and no 'lastCheckpoint' column was in the data,"
+                             " so block data cannot be parsed.")
+
         for index, row in data.iterrows():
             rowStr = row['lastCheckpoint']
 
@@ -236,6 +241,17 @@ class BlockParser:
         but is also much harder to maintain/debug, as the vectorized regexes
         are hard to work with, and to know which row is causing problems.
         """
+        if 'lastCheckpoint' not in self.data.columns:
+            nRows = len(self.data)
+            self.log.warning(f"Found {nRows} rows of data and no 'lastCheckpoint' column was in the data,"
+                             " so block data cannot be parsed.")
+            # add the columns that would have been added for consistency
+            self.data['blockNum'] = pd.Series()
+            self.data['blockId'] = pd.Series()
+            self.data['blockDayObs'] = pd.Series()
+            self.data['blockSeqNum'] = pd.Series()
+            return
+
         data = self.data
         blockPattern = r"BLOCK-(\d+)"
         blockIdPattern = r"(BL\d+(?:_\w+)+)"

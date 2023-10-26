@@ -1318,7 +1318,15 @@ class TMAEventMaker:
                  `list` of `lsst.summit.utils.tmaUtils.TMAEvent`
             One or more events to get the block data for.
         """
-        blockParser = BlockParser(dayObs, client=self.client)
+        try:
+            blockParser = BlockParser(dayObs, client=self.client)
+        except Exception as e:
+            # adding the block data should never cause a failure so if we can't
+            # get the block data, log a warning and return. It is, however,
+            # never expected, so use log.exception to get the full traceback
+            # and scare users so it gets reported
+            self.log.exception(f'Failed to parse block data for {dayObs=}, {e}')
+            return
         blocks = blockParser.getBlockNums()
         blockDict = {}
         for block in blocks:
