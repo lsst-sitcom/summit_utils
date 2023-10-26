@@ -212,6 +212,11 @@ class BlockParser:
         data['blockDayObs'] = pd.Series()
         data['blockSeqNum'] = pd.Series()
 
+        if 'lastCheckpoint' not in self.data.columns:
+            nRows = len(self.data)
+            self.log.warning(f"Found {nRows} rows of data and no 'lastCheckpoint' column was in the data,"
+                             " so block data cannot be parsed.")
+
         for index, row in data.iterrows():
             rowStr = row['lastCheckpoint']
 
