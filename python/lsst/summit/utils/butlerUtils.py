@@ -432,7 +432,7 @@ def fillDataId(butler, dataId):
     # using _rewrite_data_id is perhaps ever so slightly slower than popping
     # the bad keys, or making a minimal dataId by hand, but is more
     # reliable/general, so we choose that over the other approach here
-    dataId, _ = butler._rewrite_data_id(dataId, butler.registry.getDatasetType('raw'))
+    dataId, _ = butler._rewrite_data_id(dataId, butler.get_dataset_type('raw'))
 
     # now expand and turn back to a dict
     dataId = butler.registry.expandDataId(dataId, detector=0).full  # this call is VERY slow
@@ -581,7 +581,7 @@ def getDatasetRefForDataId(butler, datasetType, dataId):
         assert _dayobs_present(dataId) and _seqnum_present(dataId)
         dataId.update(getExpIdFromDayObsSeqNum(butler, dataId))
 
-    dRef = butler.registry.findDataset(datasetType, dataId)
+    dRef = butler.find_dataset(datasetType, dataId)
     return dRef
 
 
