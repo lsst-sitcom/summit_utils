@@ -64,9 +64,9 @@ class M1M3ICSAnalysis:
         ]
 
         self.applied_forces_topics = (
-            [f"xForces{actuator}" for actuator in range(FATABLE_XFA)]
-            + [f"yForces{actuator}" for actuator in range(FATABLE_YFA)]
-            + [f"zForces{actuator}" for actuator in range(FATABLE_ZFA)]
+            [f"xForces{actuator}" for actuator in range(FATABLE_XFA)] +
+            [f"yForces{actuator}" for actuator in range(FATABLE_YFA)] +
+            [f"zForces{actuator}" for actuator in range(FATABLE_ZFA)]
         )
 
         self.log.info(f"Query datasets for {event.dayObs} {event.seqNum}")
@@ -597,7 +597,7 @@ def evaluate_m1m3_ics_single_slew(
 
     Returns
     -------
-    result : `lsst.summit.utils.m1m3.inertia_compensation_system.M1M3ICSAnalysis`
+    result : `lsst.summit.utils.m1m3.inertia_compensation_system.M1M3ICSAnalysis`  # noqa: W505
         The results of the analysis.
 
     Raises
@@ -698,7 +698,7 @@ if __name__ == "__main__":
     import time
     import matplotlib.pyplot as plt
 
-    # Setup 
+    # Setup
     day_obs = 20230728
     seq_num = 38
 
@@ -715,7 +715,7 @@ if __name__ == "__main__":
     results.stats.to_csv(f"m1m3_ics_stats_{day_obs}_{seq_num}.csv")
     results.df.to_csv(f"m1m3_ics_df_{day_obs}_{seq_num}.csv")
     print(f"Result Series:\n{results.stats}")
-    
+
     # Start plotting
     dpi = 180
     fig_size = (15, 10)

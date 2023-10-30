@@ -188,7 +188,7 @@ def plot_stable_region(
 
 def plot_hp_measured_data(
     dataset: M1M3ICSAnalysis,
-    fig : plt.figure,
+    fig: plt.figure,
     log: None | logging.Logger = None,
 ) -> None:
     """
@@ -209,8 +209,8 @@ def plot_hp_measured_data(
     fig.clear()
 
     # Add subplots
-    ax_hp = fig.add_subplot(311)  
-    ax_tor = fig.add_subplot(312, sharex=ax_hp)  
+    ax_hp = fig.add_subplot(311)
+    ax_tor = fig.add_subplot(312, sharex=ax_hp)
     ax_vel = fig.add_subplot(313, sharex=ax_hp)
 
     # Adjusting the height ratios
@@ -261,7 +261,7 @@ def plot_hp_measured_data(
     lines.extend([span_stable, span_with_padding])
 
     customize_hp_plot(ax_hp, dataset, lines)
-    
+
     fig.tight_layout()
     plt.show()
 
