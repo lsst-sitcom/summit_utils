@@ -696,20 +696,32 @@ def evaluate_m1m3_ics_day_obs(
 
 if __name__ == "__main__":
     import time
+    import matplotlib.pyplot as plt
 
-    dayObs = 20230728
-    seqNum = 38
+    # Setup 
+    day_obs = 20230728
+    seq_num = 38
 
     print("Start - Single Slew")
     event_maker = TMAEventMaker()
 
+    # Start analysis
     t0 = time.time()
-    results = evaluate_m1m3_ics_single_slew(dayObs, seqNum, event_maker)
+    results = evaluate_m1m3_ics_single_slew(day_obs, seq_num, event_maker)
     t1 = time.time()
     print(f"That took {(t1-t0):.2f} seconds")
 
-    results.stats.to_csv(f"m1m3_ics_stats_{dayObs}_{seqNum}.csv")
-    results.df.to_csv(f"m1m3_ics_df_{dayObs}_{seqNum}.csv")
+    # Save Results
+    results.stats.to_csv(f"m1m3_ics_stats_{day_obs}_{seq_num}.csv")
+    results.df.to_csv(f"m1m3_ics_df_{day_obs}_{seq_num}.csv")
     print(f"Result Series:\n{results.stats}")
-    inertia_compensation_system.plot_hp_measured_data(results)
+    
+    # Start plotting
+    dpi = 180
+    fig_size = (15, 10)
+    filename = "m1m3_ics_hp_measured_data.png"
+    fig = plt.figure(figsize=fig_size, dpi=dpi)
+
+    fig = inertia_compensation_system.plot_hp_measured_data(results, fig)
+    fig.savefig(filename)
     print("End - Single Slew")
