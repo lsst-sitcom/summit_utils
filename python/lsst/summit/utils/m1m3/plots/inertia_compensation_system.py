@@ -262,7 +262,6 @@ def plot_hp_measured_data(
 
     customize_hp_plot(ax_hp, dataset, lines)
 
-    fig.tight_layout()
     fig.subplots_adjust(hspace=0)
 
     return fig
