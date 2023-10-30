@@ -3,8 +3,7 @@ import logging
 import matplotlib.pyplot as plt
 import pandas as pd
 from astropy.time import Time
-
-M1M3ICSAnalysis = None  # add type checking back in later once it's supported in summit utils
+from lsst.summit.utils.type_utils import M1M3ICSAnalysis
 
 
 def plot_hp_data(ax: plt.Axes, data: pd.Series | list, label: str) -> list[plt.Line2D]:
@@ -187,40 +186,9 @@ def plot_stable_region(
     return span
 
 
-def finalize_and_save_figure(
-    fig: plt.figure, name: str, log: None | logging.Logger = None
-) -> None:
-    """
-    Finalize the appearance of the figure and save it to a file.
-
-    Parameters
-    ----------
-    fig : matplotlib.figure.Figure
-        The figure to be finalized and saved.
-    name : str
-        The name of the file to which the figure is saved.
-    """
-    log = log.getChild(__name__) if log is not None else logging.getLogger(__name__)
-
-    fig.tight_layout()
-    fig.subplots_adjust(hspace=0)
-
-    filename = (
-        name.replace("/", "")
-        .replace("  ", "_")
-        .replace(" ", "_")
-        .replace(",", "")
-        .replace("%", "pc")
-    )
-    log.info(f"Saving figure to {filename}.png")
-    fig.savefig(filename)
-    log.info("Done")
-
-
 def plot_hp_measured_data(
     dataset: M1M3ICSAnalysis,
-    dpi: float = 180,
-    figsize: tuple[float, float] = (15, 10),
+    fig : plt.figure,
     log: None | logging.Logger = None,
 ) -> None:
     """
@@ -230,28 +198,29 @@ def plot_hp_measured_data(
     ----------
     dataset : M1M3ICSAnalysis
         The dataset object containing the data to be plotted and metadata.
+    fig : matplotlib.figure.Figure
+        The figure to be plotted on.
+    log : logging.Logger, optional
+        The logger object to log progress.
     """
     log = log.getChild(__name__) if log is not None else logging.getLogger(__name__)
 
-    figure_name = (
-        f"hp_measured_forces_"
-        f"{dataset.event.dayObs}_"
-        f"sn{dataset.event.seqNum}_"
-        f"v{dataset.event.version}"
-    )
-
-    fig = plt.figure(figure_name)
+    # Start clean
     fig.clear()
 
-    fig, (ax_hp, ax_tor, ax_vel) = plt.subplots(
-        num=figure_name,
-        dpi=dpi,
-        figsize=figsize,
-        nrows=3,
-        sharex=True,
-        height_ratios=[2, 1, 1],
-    )
+    # Add subplots
+    ax_hp = fig.add_subplot(311)  
+    ax_tor = fig.add_subplot(312, sharex=ax_hp)  
+    ax_vel = fig.add_subplot(313, sharex=ax_hp)
 
+    # Adjusting the height ratios
+    fig.subplots_adjust(hspace=0.4)
+    gs = fig.add_gridspec(3, 1, height_ratios=[2, 1, 1])
+    ax_hp.set_subplotspec(gs[0])
+    ax_tor.set_subplotspec(gs[1])
+    ax_vel.set_subplotspec(gs[2])
+
+    # Plotting
     lines = []
     for hp in range(dataset.number_of_hardpoints):
         topic = dataset.measured_forces_topics[hp]
@@ -292,6 +261,8 @@ def plot_hp_measured_data(
     lines.extend([span_stable, span_with_padding])
 
     customize_hp_plot(ax_hp, dataset, lines)
-    finalize_and_save_figure(fig, figure_name, log=log)
+    
+    fig.tight_layout()
+    plt.show()
 
     return fig
