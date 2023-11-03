@@ -26,3 +26,4 @@ from .imageExaminer import *
 from .quickLook import *
 from .butlerUtils import *
 from .utils import *
+from .peekExposure import *
