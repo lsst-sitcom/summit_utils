@@ -932,7 +932,7 @@ def getFilterSeeingCorrection(filterName):
             raise ValueError(f"Unknown filter name: {filterName}")
 
 
-def getCdf(data, scale):
+def getCdf(data, scale, minNBins=256, maxNBins=131072):
     """Return an approximate cumulative distribution function scaled to
     the [0, scale] range.
 
@@ -956,6 +956,10 @@ def getCdf(data, scale):
         An integer smaller than the minimum value in the input data.
     maxVal : `float`
         An integer larger than the maximum value in the input data.
+    minNBins : `int`, optional
+        Minimum number of bins to use.
+    maxNBins : `int`, optional
+        Maximum number of bins to use.
     """
     flatData = data.ravel()
     size = flatData.size - np.count_nonzero(np.isnan(flatData))
@@ -969,8 +973,10 @@ def getCdf(data, scale):
         # return nans for all values
         return np.nan, np.nan, np.nan
 
+    nBins = np.clip(int(maxVal) - int(minVal), minNBins, maxNBins)
+
     hist, binEdges = np.histogram(
-        flatData, bins=int(maxVal - minVal), range=(minVal, maxVal)
+        flatData, bins=nBins, range=(int(minVal), int(maxVal))
     )
 
     cdf = (scale*np.cumsum(hist)/size).astype(np.int64)
