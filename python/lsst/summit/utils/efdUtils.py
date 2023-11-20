@@ -28,6 +28,8 @@ import pandas as pd
 import re
 from deprecated.sphinx import deprecated
 
+from lsst.utils.iteration import ensure_iterable
+
 from .utils import getSite
 
 HAS_EFD_CLIENT = True
@@ -274,6 +276,7 @@ async def _getEfdData(client, topic, begin, end, columns=None):
     """
     if columns is None:
         columns = ['*']
+    columns = list(ensure_iterable(columns))
 
     availableTopics = await client.get_topics()
 
