@@ -1011,8 +1011,10 @@ def getQuantiles(data, nColors):
     if np.isnan(minVal):  # cdf calculation has failed because all data is nan
         return np.asarray([np.nan for _ in range(nColors)])
 
+    scale = (maxVal - minVal)/len(cdf)
+
     boundaries = np.asarray(
-        [np.argmax(cdf >= i) + minVal for i in range(nColors)] + [maxVal]
+        [np.argmax(cdf >= i)*scale + minVal for i in range(nColors)] + [maxVal]
     )
     return boundaries
 
@@ -1034,5 +1036,6 @@ def digitizeData(data, nColors=256):
         Scaled data in the [0, nColors - 1] range.
     """
     cdf, minVal, maxVal = getCdf(data, nColors - 1)
-    bins = np.floor((data - minVal)).astype(np.int64)
+    scale = (maxVal - minVal)/len(cdf)
+    bins = np.floor((data*scale - minVal)).astype(np.int64)
     return cdf[bins]
