@@ -233,8 +233,7 @@ class QuantileTestCase(lsst.utils.tests.TestCase):
         # We understand that our algorithm gives very large rounding error
         # compared to the generic numpy method. But still test it.
         np.random.seed(1234)
-        # too big of a width violates the tolerance in the test to cap at 10k
-        dataRanges = [(50, 1, -1), (100_000, 5_000, -1), (5_000_000, 10_000, -2)]
+        dataRanges = [(50, 1, -1), (100_000, 5_000, -2), (5_000_000, 10_000, -2), (50_000, 100_000, -3)]
         colorRanges = [2, 256, 999]  # [very few, nominal, lots and an odd number]
         for nColors, (mean, width, decimal) in itertools.product(colorRanges, dataRanges):
             data = np.random.normal(mean, width, (100, 100))
