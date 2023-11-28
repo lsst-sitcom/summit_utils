@@ -470,6 +470,22 @@ class TMAEvent:
             f" end={self.end!r}"
         )
 
+    def __hash__(self):
+        # deliberately don't hash the blockInfos here, as they are not
+        # a core part of the event itself, and are listy and cause problems
+        return hash((self.dayObs,
+                     self.seqNum,
+                     self.type,
+                     self.endReason,
+                     self.duration,
+                     self.begin,
+                     self.end,
+                     self.version,
+                     self._startRow,
+                     self._endRow
+                     )
+                    )
+
     def _ipython_display_(self):
         print(self.__str__())
 
