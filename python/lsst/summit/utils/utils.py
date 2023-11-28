@@ -987,9 +987,10 @@ def getQuantiles(data, nColors):
     colors.
 
     This is equivalent to using the numpy function:
-        np.quantile(data, np.linspace(0, 1, nColors + 1))
+        np.nanquantile(data, np.linspace(0, 1, nColors + 1))
     but with a coarser precision, yet sufficient for our use case. This
-    implementation gives a significant speed-up.
+    implementation gives a significant speed-up. In the case of large
+    ranges, np.nanquantile is used because it is more memory efficient.
 
     If all elements of ``data`` are nan then the output ``boundaries`` will
     also all be ``nan`` to keep the interface consistent.
@@ -1007,15 +1008,20 @@ def getQuantiles(data, nColors):
         A monotonically increasing sequence of size (nColors + 1). These are
         the edges of nColors intervals.
     """
-    cdf, minVal, maxVal = getCdf(data, nColors)
-    if np.isnan(minVal):  # cdf calculation has failed because all data is nan
-        return np.asarray([np.nan for _ in range(nColors)])
+    if (np.nanmax(data) - np.nanmin(data)) > 131072:
+        # Use slower but memory efficient nanquantile
+        boundaries = np.nanquantile(data, np.linspace(0, 1, nColors + 1))
+    else:
+        cdf, minVal, maxVal = getCdf(data, nColors)
+        if np.isnan(minVal):  # cdf calculation has failed because all data is nan
+            return np.asarray([np.nan for _ in range(nColors)])
 
-    scale = (maxVal - minVal)/len(cdf)
+        scale = (maxVal - minVal)/len(cdf)
 
-    boundaries = np.asarray(
-        [np.argmax(cdf >= i)*scale + minVal for i in range(nColors)] + [maxVal]
-    )
+        boundaries = np.asarray(
+            [np.argmax(cdf >= i)*scale + minVal for i in range(nColors)] + [maxVal]
+        )
+
     return boundaries
 
 
