@@ -237,6 +237,32 @@ class EfdUtilsTestCase(lsst.utils.tests.TestCase):
 
         self.assertGreaterEqual(dataStart, self.event.begin)
         self.assertLessEqual(dataEnd, self.event.end)
+
+        # test the pre/post padding options
+        clippedPaddedData = clipDataToEvent(dayObsData, self.event, prePadding=1, postPadding=2)
+        self.assertIsInstance(clippedPaddedData, pd.DataFrame)
+        self.assertGreater(len(clippedPaddedData), 0)
+        self.assertLess(len(clippedPaddedData), len(dayObsData))
+        self.assertGreater(len(clippedPaddedData), len(clippedData))
+
+        paddedDataStart = efdTimestampToAstropy(clippedPaddedData.iloc[0]['private_efdStamp'])
+        paddedDataEnd = efdTimestampToAstropy(clippedPaddedData.iloc[-1]['private_efdStamp'])
+        self.assertLessEqual(paddedDataStart, dataStart)
+        self.assertGreaterEqual(paddedDataEnd, dataEnd)
+
+        # Get the minimum and maximum timestamps before padding
+        startTimeUnpadded = clippedData['private_efdStamp'].min()
+        endTimeUnpadded = clippedData['private_efdStamp'].max()
+
+        # Get the minimum and maximum timestamps after padding
+        startTimePadded = clippedPaddedData['private_efdStamp'].min()
+        endTimePadded = clippedPaddedData['private_efdStamp'].max()
+
+        # Check that the difference between the min times and max times is
+        # approximately equal to the padding. Not exact as data sampling is
+        # not infinite.
+        self.assertAlmostEqual(startTimeUnpadded - startTimePadded, 1, delta=0.1)
+        self.assertAlmostEqual(endTimePadded - endTimeUnpadded, 2, delta=0.1)
         return
 
     def test_getDayObsForTime(self):

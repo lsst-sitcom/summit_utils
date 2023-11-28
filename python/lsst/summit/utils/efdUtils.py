@@ -28,6 +28,8 @@ import pandas as pd
 import re
 from deprecated.sphinx import deprecated
 
+from lsst.utils.iteration import ensure_iterable
+
 from .utils import getSite
 
 HAS_EFD_CLIENT = True
@@ -274,6 +276,7 @@ async def _getEfdData(client, topic, begin, end, columns=None):
     """
     if columns is None:
         columns = ['*']
+    columns = list(ensure_iterable(columns))
 
     availableTopics = await client.get_topics()
 
@@ -438,7 +441,7 @@ def astropyToEfdTimestamp(time):
     return time.utc.unix
 
 
-def clipDataToEvent(df, event):
+def clipDataToEvent(df, event, prePadding=0, postPadding=0, logger=None):
     """Clip a padded dataframe to an event.
 
     Parameters
@@ -447,13 +450,32 @@ def clipDataToEvent(df, event):
         The dataframe to clip.
     event : `lsst.summit.utils.efdUtils.TmaEvent`
         The event to clip to.
+    prePadding : `float`, optional
+        The amount of time before the nominal start of the event to include, in
+        seconds.
+    postPadding : `float`, optional
+        The amount of extra time after the nominal end of the event to include,
+        in seconds.
+    logger : `logging.Logger`, optional
+        The logger to use. If not specified, a new one is created.
 
     Returns
     -------
     clipped : `pd.DataFrame`
         The clipped dataframe.
     """
-    mask = (df['private_efdStamp'] >= event.begin.value) & (df['private_efdStamp'] <= event.end.value)
+    begin = event.begin.value - prePadding
+    end = event.end.value + postPadding
+
+    if logger is None:
+        logger = logging.getLogger(__name__)
+
+    if begin < df['private_efdStamp'].min():
+        logger.warning(f"Requested begin time {begin} is before the start of the data")
+    if end > df['private_efdStamp'].max():
+        logger.warning(f"Requested end time {end} is after the end of the data")
+
+    mask = (df['private_efdStamp'] >= begin) & (df['private_efdStamp'] <= end)
     clipped_df = df.loc[mask].copy()
     return clipped_df
 
