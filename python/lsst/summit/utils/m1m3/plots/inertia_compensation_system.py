@@ -189,6 +189,7 @@ def plot_stable_region(
 def plot_hp_measured_data(
     dataset: M1M3ICSAnalysis,
     fig: plt.figure,
+    commands: dict[str, Time] = None,
     log: None | logging.Logger = None,
 ) -> None:
     """
@@ -259,6 +260,22 @@ def plot_hp_measured_data(
         fig, stat_begin, stat_end, "Stable w/ Padding", color="b"
     )
     lines.extend([span_stable, span_with_padding])
+
+    lineColors = [p['color'] for p in plt.rcParams['axes.prop_cycle']]  # cycle through the colors
+    colorCounter = 0
+    if commands is not None:
+        for command, commandTime in commands.items():
+            # if commands weren't found, the item is set to None. This is
+            # common for events so handle it gracefully and silently. The
+            # command finding code logs about lack of commands found so no need
+            # to mention here.
+            if commandTime is None:
+                continue
+            for ax in (ax_hp, ax_tor, ax_vel):  # so that the line spans all plots
+                line = ax.axvline(commandTime.utc.datetime, c=lineColors[colorCounter],
+                                  ls='--', alpha=0.75, label=f'{command}')
+            lines.append(line)  # put it in the legend
+            colorCounter += 1  # increment color so each line is different
 
     customize_hp_plot(ax_hp, dataset, lines)
 
