@@ -317,6 +317,10 @@ class TMAEventMakerTestCase(lsst.utils.tests.TestCase):
             self.assertEqual(event.type.name, types[eventNum])
             self.assertEqual(event.endReason.name, endReasons[eventNum])
 
+        eventSet = set(slews)  # check we can hash
+        eventSet.update(slews)  # check it ignores duplicates
+        self.assertEqual(len(eventSet), len(slews))
+
     @vcr.use_cassette()
     def test_noDataBehaviour(self):
         eventMaker = self.tmaEventMaker
