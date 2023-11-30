@@ -13,6 +13,10 @@ from lsst.ts.xml.tables.m1m3 import FATABLE_XFA, FATABLE_YFA, FATABLE_ZFA, HP_CO
 
 __all__ = ["M1M3ICSAnalysis"]
 
+# Default Plot Figure Size
+FIGURE_WIDTH = 10
+FIGURE_HEIGHT = 7
+
 
 class M1M3ICSAnalysis:
     """
@@ -718,9 +722,8 @@ if __name__ == "__main__":
 
     # Start plotting
     dpi = 180
-    fig_size = (15, 10)
     filename = "m1m3_ics_hp_measured_data.png"
-    fig = plt.figure(figsize=fig_size, dpi=dpi)
+    fig = plt.figure(figsize=(FIGURE_WIDTH, FIGURE_HEIGHT), dpi=dpi)
 
     fig = inertia_compensation_system.plot_hp_measured_data(results, fig)
     fig.savefig(filename)
