@@ -346,6 +346,7 @@ def plot_hp_measured_data(
             # to mention here.
             if commandTime is None:
                 continue
+            command = command.replace("lsst.sal.", "")
             for ax in (ax_hp, ax_tor, ax_vel):  # so that the line spans all plots
                 line = ax.axvline(commandTime.utc.datetime, c=lineColors[colorCounter],
                                   ls='--', alpha=0.75, label=f'{command}')
