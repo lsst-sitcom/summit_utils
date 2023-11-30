@@ -5,6 +5,15 @@ import pandas as pd
 from astropy.time import Time
 from lsst.summit.utils.type_utils import M1M3ICSAnalysis
 
+# Approximate value for breakaway
+HP_BREAKAWAY_LIMIT = 3000  # [N] 
+
+# limit that can still damage the mirror with fatigue
+HP_FATIGUE_LIMIT = 900 # [N] 
+
+# desired operational limit
+HP_OPERATIONAL_LIMIT = 450 # [N] 
+
 
 def plot_hp_data(ax: plt.Axes, data: pd.Series | list, label: str) -> list[plt.Line2D]:
     """
@@ -88,6 +97,30 @@ def mark_padded_slew_begin_end(ax: plt.Axes, begin: Time, end: Time) -> plt.Line
     return line
 
 
+def customize_fig(fig : plt.Figure, dataset: M1M3ICSAnalysis):
+    """
+    Add a title to a figure and adjust its subplots spacing
+    
+    Paramters
+    ---------
+    fig : matplotlib.pyplot.Figure
+        Figure to be custoized.
+    dataset : M1M3ICSAnalysis
+        The dataset object containing the data to be plotted and metadata.
+    """
+    t_fmt = "%Y%m%d %H:%M:%S"
+    fig.suptitle(
+        f"HP Measured Data\n "
+        f"DayObs {dataset.event.dayObs} "
+        f"SeqNum {dataset.event.seqNum} "
+        f"v{dataset.event.version}\n "
+        f"{dataset.df.index[0].strftime(t_fmt)} - "
+        f"{dataset.df.index[-1].strftime(t_fmt)}"
+    )
+
+    fig.subplots_adjust(hspace=0)
+    
+
 def customize_hp_plot(
     ax: plt.Axes, dataset: M1M3ICSAnalysis, lines: list[plt.Line2D]
 ) -> None:
@@ -102,21 +135,63 @@ def customize_hp_plot(
         The dataset object containing the data to be plotted and metadata.
     lines : list
         The list of Line2D objects representing the plotted data lines.
-    """
-    t_fmt = "%Y%m%d %H:%M:%S"
-    ax.set_title(
-        f"HP Measured Data\n "
-        f"DayObs {dataset.event.dayObs} "
-        f"SeqNum {dataset.event.seqNum} "
-        f"v{dataset.event.version}\n "
-        f"{dataset.df.index[0].strftime(t_fmt)} - "
-        f"{dataset.df.index[-1].strftime(t_fmt)}"
-    )
-    ax.set_xlabel("Time [UTC]")
-    ax.set_ylabel("HP Measured Forces [N]")
-    ax.grid(":", alpha=0.2)
-    ax.legend(ncol=4, handles=lines, fontsize="x-small")
+    """    
+    limit_lines = add_hp_limits(ax)
+    lines.extend(limit_lines)
 
+    ax.set_xlabel("Time [UTC]")
+    ax.set_ylabel("HP Measured\n Forces [N]")
+    ax.set_ylim(-3100, 3100)
+    ax.grid(":", alpha=0.2)
+    
+def add_hp_limits(ax: plt.Axes):
+    """
+    Add horizontal lines to represent the breakaway limits, the fatigue limits,
+    and the operational limits. 
+    
+    This was first discussed on Slack. From Doug Neil we got:
+    
+    > A fracture statistics estimate of the fatigue limit of a borosilicate 
+    > glass. The fatigue limit of borosilicate glass is 0.21 MPa (~30 psi). This
+    > implies that repeated loads of 30% of our breakaway limit would eventually
+    > produce failure. To ensure that the system is safe for the life of the 
+    > project we should provide a factor of safety of at least two. I recommend 
+    > a 30% repeated load limit, and a project goal to keep the stress below 15%
+    > of the breakaway during normal operations.
+    
+    Parameters
+    ----------
+    ax : matplotlib.axes._axes.Axes
+        The axes on which the velocity data is plotted.
+    """
+    hp_limits = {
+        "HP Breakaway Limit": {
+            "pos_limit": HP_BREAKAWAY_LIMIT,
+            "neg_limit": -HP_BREAKAWAY_LIMIT,
+            "ls": "-"
+        },
+        "Repeated Load Limit (30% breakaway)": {
+            "pos_limit": HP_FATIGUE_LIMIT,
+            "neg_limit": -HP_FATIGUE_LIMIT,
+            "ls": "--"
+        },
+        "Normal Ops Limit (15% breakaway)": {
+            "pos_limit": HP_OPERATIONAL_LIMIT,
+            "neg_limit": -HP_OPERATIONAL_LIMIT,
+            "ls": ":"        
+        }
+    }
+    
+    kwargs = dict(alpha=0.5, lw=1.0, c="r", zorder=-1)
+    lines = []
+    
+    for key, sub_dict in hp_limits.items():
+        ax.axhline(sub_dict["pos_limit"], ls=sub_dict["ls"], **kwargs)
+        line = ax.axhline(sub_dict["neg_limit"], ls=sub_dict["ls"], label=key, **kwargs)
+        lines.append(line)
+        
+    return lines
+    
 
 def plot_velocity_data(ax: plt.Axes, dataset: M1M3ICSAnalysis) -> None:
     """
@@ -179,7 +254,7 @@ def plot_stable_region(
     matplotlib.patches.Polygon
         The Polygon object representing the highlighted region.
     """
-    for ax in fig.axes:
+    for ax in fig.axes[1:]:
         span = ax.axvspan(
             begin.datetime, end.datetime, fc=color, alpha=0.1, zorder=-2, label=label
         )
@@ -194,6 +269,7 @@ def plot_hp_measured_data(
 ) -> None:
     """
     Create and plot hardpoint measured data, velocity, and torque on subplots.
+    This plot was designed for a figure with `figsize=(10, 7)` and `dpi=120`.
 
     Parameters
     ----------
@@ -210,16 +286,15 @@ def plot_hp_measured_data(
     fig.clear()
 
     # Add subplots
-    ax_hp = fig.add_subplot(311)
-    ax_tor = fig.add_subplot(312, sharex=ax_hp)
-    ax_vel = fig.add_subplot(313, sharex=ax_hp)
+    gs = fig.add_gridspec(4, 1, height_ratios=[1, 2, 1, 1])
 
-    # Adjusting the height ratios
-    fig.subplots_adjust(hspace=0.4)
-    gs = fig.add_gridspec(3, 1, height_ratios=[2, 1, 1])
-    ax_hp.set_subplotspec(gs[0])
-    ax_tor.set_subplotspec(gs[1])
-    ax_vel.set_subplotspec(gs[2])
+    ax_label = fig.add_subplot(gs[0])
+    ax_hp = fig.add_subplot(gs[1])
+    ax_tor = fig.add_subplot(gs[2], sharex=ax_hp)
+    ax_vel = fig.add_subplot(gs[3], sharex=ax_hp)
+    
+    # Remove frame from axis dedicated to label
+    ax_label.axis('off')
 
     # Plotting
     lines = []
@@ -278,7 +353,10 @@ def plot_hp_measured_data(
             colorCounter += 1  # increment color so each line is different
 
     customize_hp_plot(ax_hp, dataset, lines)
-
-    fig.subplots_adjust(hspace=0)
-
+    
+    handles, labels = ax_hp.get_legend_handles_labels()
+    ax_label.legend(handles, labels, loc='center', frameon=False, ncol=4, fontsize="x-small")
+    
+    customize_fig(fig, dataset)
+    
     return fig
