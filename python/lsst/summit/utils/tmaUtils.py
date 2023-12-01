@@ -26,7 +26,7 @@ import logging
 import pandas as pd
 import numpy as np
 import humanize
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from astropy.time import Time
 from matplotlib.ticker import FuncFormatter
 import matplotlib.dates as mdates
@@ -447,7 +447,7 @@ class TMAEvent:
     duration: float  # seconds
     begin: Time
     end: Time
-    blockInfos: list = None
+    blockInfos: list = field(default_factory=list)
     version: int = 0  # update this number any time a code change which could change event definitions is made
     _startRow: int
     _endRow: int
@@ -507,6 +507,43 @@ class TMAEvent:
             f"end: {self.end!r}\n"
             f"blockInfos: {blockInfoStr}"
         )
+
+    def relatesTo(self, block=None, ticket=None, salIndex=None):
+        """Check whether an event relates to a set of specified parameters.
+
+        Check if an event relates to a specific block and/or ticket and/or
+        salIndex. All specified parameters must match for the function to
+        return True.
+
+        Parameters
+        ----------
+        block : `int`, optional
+            The block number to check for.
+        ticket : `str`, optional
+            The ticket number to check for.
+        salIndex : `int`, optional
+            The salIndex to check for.
+
+        Returns
+        -------
+        relates : `bool`
+            Whether the event relates to the specified block, ticket, and
+            salIndex.
+        """
+        if all([block is None, ticket is None, salIndex is None]):
+            raise ValueError('Must specify at least one of block, ticket, or salIndex')
+
+        for blockInfo in self.blockInfos:
+            # "X is None or" is used for each parameter to allow it to be None
+            # in the kwargs
+            blockMatches = (block is None or blockInfo.blockNumber == block)
+            salIndexMatches = (salIndex is None or salIndex in blockInfo.salIndices)
+            ticketMatches = (ticket is None or ticket in blockInfo.tickets)
+
+            if blockMatches and salIndexMatches and ticketMatches:
+                return True
+
+        return False
 
 
 class TMAState(enum.IntEnum):

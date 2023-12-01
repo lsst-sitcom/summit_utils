@@ -92,7 +92,7 @@ class BlockInfo:
     seqNum: int
     begin: Time
     end: Time
-    salIndices: int
+    salIndices: list
     tickets: list
     states: list
 
