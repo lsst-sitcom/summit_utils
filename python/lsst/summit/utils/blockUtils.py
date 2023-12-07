@@ -313,7 +313,7 @@ class BlockParser:
             The sequence numbers for the specified block.
         """
         print(block)
-        print(self.data)
+        print(self.data['blockNum'])
 
         return sorted(set(self.data[self.data['blockNum'] == block]['blockSeqNum']))
 
