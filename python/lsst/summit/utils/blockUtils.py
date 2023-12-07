@@ -312,6 +312,9 @@ class BlockParser:
         seqNums : `list` of `int`
             The sequence numbers for the specified block.
         """
+        print(block)
+        print(self.data)
+
         return sorted(set(self.data[self.data['blockNum'] == block]['blockSeqNum']))
 
     def getRows(self, block, seqNum=None):
