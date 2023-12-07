@@ -313,9 +313,9 @@ class BlockParser:
             The sequence numbers for the specified block.
         """
         print(block)
-        print(self.data['blockNum'])
+        values = set(self.data.dropna())
 
-        return sorted(set(self.data[self.data['blockNum'] == block]['blockSeqNum']))
+        return sorted(set(values[values['blockNum'] == block]['blockSeqNum']))
 
     def getRows(self, block, seqNum=None):
         """Get all rows of data which relate to the specified block.
