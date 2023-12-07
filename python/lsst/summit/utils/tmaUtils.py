@@ -353,8 +353,9 @@ def getCommandsDuringEvent(client, event, commands=('raDecTarget'), log=None, do
             ret[command] = None
         elif len(data) > 1:
             if doLog:
-                log.warning(f'Found multiple commands issued for {command} during event, returning None')
-            ret[command] = None
+                log.warning(f'Found multiple commands issued for {command} during event, returning the first')
+            commandTime = data.iloc[0].private_efdStamp
+            ret[command] = Time(commandTime, format='unix')
         else:
             assert len(data) == 1  # this must be true now
             commandTime = data.private_efdStamp
