@@ -306,7 +306,13 @@ def plotEvent(client, event, fig=None, prePadding=0, postPadding=0, commands={},
     return fig
 
 
-def getCommandsDuringEvent(client, event, commands=('raDecTarget'), log=None, doLog=True):
+def getCommandsDuringEvent(client,
+                           event,
+                           commands=('raDecTarget'),
+                           prePadding=0,
+                           postPadding=0,
+                           log=None,
+                           doLog=True):
     """Get the commands issued during an event.
 
     Get the times at which the specified commands were issued during the event.
@@ -320,6 +326,12 @@ def getCommandsDuringEvent(client, event, commands=('raDecTarget'), log=None, do
     commands : `list` of `str`, optional
         The commands or command aliases to look for. Defaults to
         ['raDecTarget'].
+    prePadding : `float`, optional
+        The amount of time to pad the event with before the start time, in
+        seconds.
+    postPadding : `float`, optional
+        The amount of time to pad the event with after the end time, in
+        seconds.
     log : `logging.Logger`, optional
         The logger to use. If not specified, a new logger will be created if
         needed.
@@ -331,9 +343,6 @@ def getCommandsDuringEvent(client, event, commands=('raDecTarget'), log=None, do
     commands : `dict` of `str` : `astropy.time.Time`
         A dictionary of the commands and the times at which they were issued.
     """
-    # TODO: DM-40100 Add support for padding the event here to allow looking
-    # for triggering commands before the event
-
     # TODO: DM-40100 Change this to always return a list of times, and remove
     # warning about finding multiple commands. Remember to update docs and
     # plotting code.
@@ -346,7 +355,12 @@ def getCommandsDuringEvent(client, event, commands=('raDecTarget'), log=None, do
 
     ret = {}
     for command in fullCommands:
-        data = getEfdData(client, command, event=event, warn=False)
+        data = getEfdData(client,
+                          command,
+                          event=event,
+                          prePadding=prePadding,
+                          postPadding=postPadding,
+                          warn=False)
         if data.empty:
             if doLog:
                 log.info(f'Found no command issued for {command} during event')
