@@ -52,6 +52,7 @@ __all__ = [
     'getDayObsForTime',
     'getSubTopics',  # deprecated, being removed in w_2023_50
     'getTopics',
+    'getCommands',
 ]
 
 
@@ -661,3 +662,74 @@ def getTopics(client, toFind, caseSensitive=False):
             matches.append(topic)
 
     return matches
+
+
+def getCommands(client, commands, begin, end, prePadding, postPadding, timeFormat='python'):
+    """Retrieve the commands issued within a specified time range.
+
+    Parameters
+    ----------
+    client : `EfdClient`
+        The client object used to retrieve EFD data.
+    commands : `list`
+        A list of commands to retrieve.
+    begin : `astropy.time.Time`
+        The start time of the time range.
+    end : `astropy.time.Time`
+        The end time of the time range.
+    prePadding : `float`
+        The amount of time to pad before the begin time.
+    postPadding : `float`
+        The amount of time to pad after the end time.
+    timeFormat : `str`
+        One of 'pandas' or 'astropy' or 'python'. If 'pandas', the dictionary
+        keys will be pandas timestamps, if 'astropy' they will be astropy times
+        and if 'python' they will be python datetimes.
+
+    Returns
+    -------
+    commandTimes : `dict`
+        A dictionary where the keys are the timestamps of the commands and the
+        values are the corresponding commands.
+
+    Raises
+    ------
+    ValueError
+        Raise if there is already a command at a timestamp in the dictionary,
+        i.e. there is a collision.
+    """
+    if timeFormat not in ['pandas', 'astropy', 'python']:
+        raise ValueError(f"format must be one of 'pandas', 'astropy' or 'python', not {timeFormat=}")
+
+    commandTimes = {}
+    for command in commands:
+        data = getEfdData(
+            client,
+            command,
+            begin=begin,
+            end=end,
+            prePadding=prePadding,
+            postPadding=postPadding,
+            warn=False  # most commands will not be issue so we expect many empty queries
+        )
+        if not data.empty:
+            for time, _ in data.iterrows():
+                # this is much the most simple data structure, and the chance
+                # of commands being *exactly* simultaneous is minimal so try
+                # it like this, and just raise if we get collisions for now. So
+                # far in testing this seems to be just fine.
+
+                timeKey = None
+                match timeFormat:
+                    case 'pandas':
+                        timeKey = time
+                    case 'astropy':
+                        timeKey = Time(time)
+                    case 'python':
+                        timeKey = time.to_pydatetime()
+
+                if timeKey in commandTimes:
+                    raise ValueError(f"There is already a command at {timeKey=} -"
+                                     " make a better data structure!")
+                commandTimes[timeKey] = command
+    return commandTimes
