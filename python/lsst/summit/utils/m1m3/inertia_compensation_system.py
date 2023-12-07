@@ -422,6 +422,7 @@ class M1M3ICSAnalysis:
 
         # Flatten the DataFrame and set the new index
         result_series = df.stack().reset_index(drop=True)
+        print(result_series.index, index_prefixes)
         result_series.index = index_prefixes
 
         # Append the event information to the Series
