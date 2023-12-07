@@ -313,7 +313,7 @@ class BlockParser:
             The sequence numbers for the specified block.
         """
         print(block)
-        values = set(self.data.dropna())
+        values = self.data.dropna()
 
         return sorted(set(values[values['blockNum'] == block]['blockSeqNum']))
 
