@@ -423,7 +423,10 @@ class M1M3ICSAnalysis:
         # Flatten the DataFrame and set the new index
         result_series = df.stack().reset_index(drop=True)
         print(result_series.index, index_prefixes)
-        result_series.index = index_prefixes
+        try:
+            result_series.index = index_prefixes
+        except:
+            self.log.exception("Error renaming indices.")
 
         # Append the event information to the Series
         event_keys = [
