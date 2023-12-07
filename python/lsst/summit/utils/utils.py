@@ -596,6 +596,8 @@ def getSite():
     location = os.getenv('RAPID_ANALYSIS_LOCATION', "")
     if location == "TTS":
         return 'tucson'
+    if location == "BTS":
+        return 'base'
     if location == "SUMMIT":
         return 'summit'
     if location == "USDF":
