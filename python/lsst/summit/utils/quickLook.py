@@ -61,7 +61,6 @@ class QuickLookIsrTaskConnections(IsrTaskConnections):
                 if name != "ccdExposure":  # need one input image always
                     args['minimum'] = 0
                 newConnection = type(connection)(**args)
-                self.allConnections[name] = newConnection
                 setattr(self, name, newConnection)
 
         exposure = cT.Output(  # called just "exposure" to mimic isrTask's return struct
