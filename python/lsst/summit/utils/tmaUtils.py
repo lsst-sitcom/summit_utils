@@ -162,14 +162,14 @@ def getAzimuthElevationDataForEvent(client, event, prePadding=0, postPadding=0):
         ptg_times = pointingData['timestamp'].values
         az_values = azimuthData['actualPosition'].values
         el_values = elevationData['actualPosition'].values
-        # Need to interpolate because demand and actual data streams 
+        # Need to interpolate because demand and actual data streams
         # have different lengths
         az_demand_interp = np.interp(az_times, ptg_times, pointingData['demandAz'])
         el_demand_interp = np.interp(el_times, ptg_times, pointingData['demandEl'])
         az_error = (az_values - az_demand_interp) * 3600
         el_error = (el_values - el_demand_interp) * 3600
-        # Because of small timebase errors, there can be an offset in the errors.
-        # I take this out by subtracting the median of the errors.
+        # Because of small timebase errors, there can be an offset in the
+        # errors. I take this out by subtracting the median of the errors.
         # This is a fudge, but I think better than the polynomial fit.
         az_error -= np.median(az_error)
         el_error -= np.median(el_error)
@@ -215,9 +215,6 @@ def plotEvent(client, event, fig=None, prePadding=0, postPadding=0, commands={},
         EFD.
     elevationData : `pd.DataFrame`, optional
         The elevation data to plot. If not specified, it will be queried from
-        the EFD.
-    pointingData : `pd.DataFrame`, optional
-        The az/el target data to plot. If not specified, it will be queried from
         the EFD.
 
     Returns
@@ -304,7 +301,7 @@ def plotEvent(client, event, fig=None, prePadding=0, postPadding=0, commands={},
         # Calculate Image impact RMS
         # We are less sensitive to Az errors near the zenith
         image_az_rms = az_rms * np.cos(el_vals[0] * np.pi / 180.0)
-        image_el_rms = el_rms 
+        image_el_rms = el_rms
 
         ax1p5.plot(azimuthData['azError'], label='Azimuth error', c=lineColors[colorCounter])
         colorCounter += 1
@@ -316,8 +313,8 @@ def plotEvent(client, event, fig=None, prePadding=0, postPadding=0, commands={},
         ax1p5.set_ylim(-0.5, 0.5)
         ax1p5.set_yticks([-0.25, 0.0, 0.25])
         ax1p5.legend()
-        ax1p5.text(0.2, 0.9, \
-                   f'Az image RMS = {image_az_rms:.3f} arsec,   El image RMS = {image_el_rms:.3f} arsec',\
+        ax1p5.text(0.2, 0.9,
+                   f'Az image RMS = {image_az_rms:.3f} arcsec,   El image RMS = {image_el_rms:.3f} arcsec',
                    transform=ax1p5.transAxes)
 
     if prePadding or postPadding:
