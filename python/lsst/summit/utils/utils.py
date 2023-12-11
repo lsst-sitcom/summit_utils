@@ -932,7 +932,7 @@ def getFilterSeeingCorrection(filterName):
             raise ValueError(f"Unknown filter name: {filterName}")
 
 
-def getCdf(data, scale, nBinsMax=131072):
+def getCdf(data, scale, nBinsMax=300_000):
     """Return an approximate cumulative distribution function scaled to
     the [0, scale] range.
 
@@ -1008,8 +1008,10 @@ def getQuantiles(data, nColors):
         A monotonically increasing sequence of size (nColors + 1). These are
         the edges of nColors intervals.
     """
-    if (np.nanmax(data) - np.nanmin(data)) > 131072:
+    if (np.nanmax(data) - np.nanmin(data)) > 300_000:
         # Use slower but memory efficient nanquantile
+        logger = logging.getLogger(__name__)
+        logger.warning("Data range is very large; using slower quantile code.")
         boundaries = np.nanquantile(data, np.linspace(0, 1, nColors + 1))
     else:
         cdf, minVal, maxVal = getCdf(data, nColors)

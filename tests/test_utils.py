@@ -238,7 +238,13 @@ class QuantileTestCase(lsst.utils.tests.TestCase):
         for nColors, (mean, width, decimal) in itertools.product(colorRanges, dataRanges):
             data = np.random.normal(mean, width, (100, 100))
             data[10, 10] = np.nan  # check we're still nan-safe
-            edges1 = getQuantiles(data, nColors)
+            if np.nanmax(data) - np.nanmin(data) > 300_000:
+                with self.assertLogs(level="WARNING") as cm:
+                    edges1 = getQuantiles(data, nColors)
+                self.assertIn("Data range is very large", cm.output[0])
+            else:
+                with self.assertNoLogs(level="WARNING") as cm:
+                    edges1 = getQuantiles(data, nColors)
             edges2 = np.nanquantile(data, np.linspace(0, 1, nColors + 1))  # must check with nanquantile
             np.testing.assert_almost_equal(edges1, edges2, decimal=decimal)
 
