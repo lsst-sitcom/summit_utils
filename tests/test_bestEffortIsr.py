@@ -24,6 +24,7 @@ import unittest
 import lsst.utils.tests
 
 from lsst.summit.utils.bestEffort import BestEffortIsr
+from lsst.summit.utils.quickLook import QuickLookIsrTask
 import lsst.summit.utils.butlerUtils as butlerUtils
 import lsst.afw.image as afwImage
 
@@ -77,6 +78,15 @@ class BestEffortIsrTestCase(lsst.utils.tests.TestCase):
         dataId.pop('detector')
         with self.assertRaises(ValueError):
             self.bestEffortIsr.getExposure(dataId)
+
+    def test_quicklook_connections(self):
+        """Test that various QuickLookIsrConnections inputs are no longer
+        required.
+        """
+        connections = QuickLookIsrTask.ConfigClass.ConnectionsClass(config=QuickLookIsrTask.ConfigClass())
+        self.assertEqual(connections.bias.minimum, 0)
+        self.assertEqual(connections.flat.minimum, 0)
+        self.assertEqual(connections.ccdExposure.minimum, 1)
 
 
 class TestMemory(lsst.utils.tests.MemoryTestCase):
