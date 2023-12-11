@@ -157,24 +157,25 @@ def getAzimuthElevationDataForEvent(client, event, prePadding=0, postPadding=0):
                                   prePadding=1.0,
                                   postPadding=1.0)
 
-        az_times = azimuthData['timestamp'].values
-        el_times = elevationData['timestamp'].values
-        ptg_times = pointingData['timestamp'].values
-        az_values = azimuthData['actualPosition'].values
-        el_values = elevationData['actualPosition'].values
+        azTimes = azimuthData['timestamp'].values
+        elTimes = elevationData['timestamp'].values
+        ptgTimes = pointingData['timestamp'].values
+        azValues = azimuthData['actualPosition'].values
+        elValues = elevationData['actualPosition'].values
         # Need to interpolate because demand and actual data streams
         # have different lengths
-        az_demand_interp = np.interp(az_times, ptg_times, pointingData['demandAz'])
-        el_demand_interp = np.interp(el_times, ptg_times, pointingData['demandEl'])
-        az_error = (az_values - az_demand_interp) * 3600
-        el_error = (el_values - el_demand_interp) * 3600
+        azDemandInterp = np.interp(azTimes, ptgTimes, pointingData['demandAz'])
+        elDemandInterp = np.interp(elTimes, ptgTimes, pointingData['demandEl'])
+        azError = (azValues - azDemandInterp) * 3600
+        elError = (elValues - elDemandInterp) * 3600
+
         # Because of small timebase errors, there can be an offset in the
         # errors. I take this out by subtracting the median of the errors.
         # This is a fudge, but I think better than the polynomial fit.
-        az_error -= np.median(az_error)
-        el_error -= np.median(el_error)
-        azimuthData['azError'] = az_error
-        elevationData['elError'] = el_error
+        azError -= np.median(azError)
+        elError -= np.median(elError)
+        azimuthData['azError'] = azError
+        elevationData['elError'] = elError
 
     return azimuthData, elevationData
 
