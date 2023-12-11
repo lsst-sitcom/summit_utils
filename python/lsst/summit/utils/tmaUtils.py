@@ -119,6 +119,11 @@ def getTorqueMaxima(table):
 def getAzimuthElevationDataForEvent(client, event, prePadding=0, postPadding=0):
     """Get the data for the az/el telemetry topics for a given TMAEvent.
 
+    The error between the actual and demanded positions is calculated and added
+    to the dataframes in the az/elError columns. For TRACKING type events, this
+    error should be extremely close to zero, whereas for SLEWING type events,
+    this error
+
     Parameters
     ----------
     client : `lsst_efd_client.efd_helper.EfdClient`
@@ -149,33 +154,34 @@ def getAzimuthElevationDataForEvent(client, event, prePadding=0, postPadding=0):
                                event=event,
                                prePadding=prePadding,
                                postPadding=postPadding)
-    if event.type.name == 'TRACKING':
-        # Need to pad this data for the interpolation to work right
-        pointingData = getEfdData(client,
-                                  'lsst.sal.MTPtg.currentTargetStatus',
-                                  event=event,
-                                  prePadding=1.0,
-                                  postPadding=1.0)
+    pointingData = getEfdData(client,
+                              'lsst.sal.MTPtg.currentTargetStatus',
+                              event=event,
+                              prePadding=0.1,
+                              postPadding=0.1)
 
-        azTimes = azimuthData['timestamp'].values
-        elTimes = elevationData['timestamp'].values
-        ptgTimes = pointingData['timestamp'].values
-        azValues = azimuthData['actualPosition'].values
-        elValues = elevationData['actualPosition'].values
-        # Need to interpolate because demand and actual data streams
-        # have different lengths
-        azDemandInterp = np.interp(azTimes, ptgTimes, pointingData['demandAz'])
-        elDemandInterp = np.interp(elTimes, ptgTimes, pointingData['demandEl'])
-        azError = (azValues - azDemandInterp) * 3600
-        elError = (elValues - elDemandInterp) * 3600
+    azTimes = azimuthData['timestamp'].values
+    elTimes = elevationData['timestamp'].values
+    ptgTimes = pointingData['timestamp'].values
+    azValues = azimuthData['actualPosition'].values
+    elValues = elevationData['actualPosition'].values
+    # Need to interpolate because demand and actual data streams
+    # have different lengths
+    azDemandInterp = np.interp(azTimes, ptgTimes, pointingData['demandAz'])
+    elDemandInterp = np.interp(elTimes, ptgTimes, pointingData['demandEl'])
+    azError = (azValues - azDemandInterp) * 3600
+    elError = (elValues - elDemandInterp) * 3600
 
+    if event.type == TMAEvent.TRACKING:
         # Because of small timebase errors, there can be an offset in the
         # errors. This is taken out by subtracting the median of the errors.
         # This is a fudge, but an improvement over the polynomial fit.
+        # This only makes sense to do when TRACKING though.
         azError -= np.median(azError)
         elError -= np.median(elError)
-        azimuthData['azError'] = azError
-        elevationData['elError'] = elError
+
+    azimuthData['azError'] = azError
+    elevationData['elError'] = elError
 
     return azimuthData, elevationData
 
