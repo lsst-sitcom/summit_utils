@@ -170,8 +170,8 @@ def getAzimuthElevationDataForEvent(client, event, prePadding=0, postPadding=0):
         elError = (elValues - elDemandInterp) * 3600
 
         # Because of small timebase errors, there can be an offset in the
-        # errors. I take this out by subtracting the median of the errors.
-        # This is a fudge, but I think better than the polynomial fit.
+        # errors. This is taken out by subtracting the median of the errors.
+        # This is a fudge, but an improvement over the polynomial fit.
         azError -= np.median(azError)
         elError -= np.median(elError)
         azimuthData['azError'] = azError
