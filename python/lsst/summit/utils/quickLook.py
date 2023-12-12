@@ -19,6 +19,7 @@
 # You should have received a copy of the GNU General Public License
 # along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
+import dataclasses
 import os
 from lsst.ip.isr import IsrTask
 from lsst.ip.isr.isrTask import IsrTaskConnections
@@ -31,17 +32,6 @@ from lsst.pipe.tasks.characterizeImage import CharacterizeImageTask
 from lsst.meas.algorithms.installGaussianPsf import InstallGaussianPsfTask
 
 __all__ = ['QuickLookIsrTask', 'QuickLookIsrTaskConfig']
-
-
-def _getArgs(connection):
-    """Get the all required args from a connection in order to reconstruct it.
-    """
-    newArgs = {}
-    for attr in ("name", "storageClass", "multiple", "doc", "dimensions", "isCalibration", "deferLoad",
-                 "minimum", "lookupFunction"):
-        if hasattr(connection, attr):
-            newArgs[attr] = getattr(connection, attr)
-    return newArgs
 
 
 class QuickLookIsrTaskConnections(IsrTaskConnections):
@@ -57,12 +47,11 @@ class QuickLookIsrTaskConnections(IsrTaskConnections):
         super().__init__(config=IsrTask.ConfigClass())  # need a dummy config, isn't used other than for ctor
         for name, connection in self.allConnections.items():
             if hasattr(connection, 'minimum'):
-                args = _getArgs(connection)
-                if name != "ccdExposure":  # need one input image always
-                    args['minimum'] = 0
-                newConnection = type(connection)(**args)
-                self.allConnections[name] = newConnection
-                setattr(self, name, newConnection)
+                setattr(
+                    self,
+                    name,
+                    dataclasses.replace(connection, minimum=(0 if name != "ccdExposure" else 1)),
+                )
 
         exposure = cT.Output(  # called just "exposure" to mimic isrTask's return struct
             name="quickLookExp",
