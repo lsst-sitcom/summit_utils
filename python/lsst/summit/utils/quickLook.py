@@ -224,7 +224,7 @@ class QuickLookIsrTask(pipeBase.PipelineTask):
             isrConfig.doCrosstalk = True
             self.log.info("Running with crosstalk correction")
 
-        if bfKernel:
+        if bfKernel is not None:
             isrConfig.doBrighterFatter = True
             self.log.info("Running with brighter-fatter correction")
 
