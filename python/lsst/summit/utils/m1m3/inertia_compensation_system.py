@@ -102,12 +102,17 @@ class M1M3ICSAnalysis:
             np.abs(el_torque - el_torque.mean()) < self.n_sigma * el_torque.std()
         )
 
-        stable_begin = max([reg[0] for reg in az_torque_regions + el_torque_regions])
-        stable_begin = Time(stable_begin, scale="utc")
+        if az_torque_regions and el_torque_regions:
+            stable_begin = max([reg[0] for reg in az_torque_regions + el_torque_regions])
+            stable_begin = Time(stable_begin, scale="utc")
 
-        stable_end = min([reg[-1] for reg in az_torque_regions + el_torque_regions])
-        stable_end = Time(stable_end, scale="utc")
-
+            stable_end = min([reg[-1] for reg in az_torque_regions + el_torque_regions])
+            stable_end = Time(stable_end, scale="utc")
+        else:
+            self.log.warning("No stable region found. Using full slew.")
+            stable_begin = self.event.begin
+            stable_end = self.event.end
+        
         return stable_begin, stable_end
 
     def query_dataset(self) -> pd.DataFrame:
