@@ -335,7 +335,13 @@ class BlockParser:
         data : `pandas.DataFrame`
             The row data.
         """
-        rowsForBlock = self.data[self.data['blockNum'] == block]
+        # Because we query for a whole dayObs, but BLOCKs can overlap the day
+        # start/end, it's possible for the block's blockDayObs not to be the
+        # same as self.dayObs around the beginning or end of the day, so filter
+        # with an extra `& (self.data['blockDayObs'] == self.dayObs` when
+        # getting the relevant rows.
+        rowsForBlock = self.data[np.logical_and(self.data['blockNum'] == block,
+                                                self.data['blockDayObs'] == self.dayObs)]
         if rowsForBlock.empty:
             self.log.warning(f"No rows found for {block=} on dayObs={self.dayObs}")
         if seqNum is None:
