@@ -19,13 +19,16 @@
 # You should have received a copy of the GNU General Public License
 # along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
+import tempfile
 import unittest
 
 import lsst.afw.image as afwImage
+import lsst.daf.butler.tests as butlerTests
 import lsst.ip.isr.isrMock as isrMock
 import lsst.ip.isr as ipIsr
 import lsst.pex.exceptions
 import lsst.pipe.base as pipeBase
+import lsst.pipe.base.testUtils
 from lsst.summit.utils.quickLook import QuickLookIsrTask, QuickLookIsrTaskConfig
 
 
@@ -36,8 +39,8 @@ class QuickLookIsrTaskTestCase(unittest.TestCase):
         self.camera = isrMock.IsrMock(config=self.mockConfig).getCamera()
 
         self.ccdExposure = isrMock.RawMock(config=self.mockConfig).run()
-        detector = self.ccdExposure.getDetector()
-        amps = detector.getAmplifiers()
+        self.detector = self.ccdExposure.getDetector()
+        amps = self.detector.getAmplifiers()
         ampNames = [amp.getName() for amp in amps]
 
         # # Mock other optional parameters
@@ -84,3 +87,98 @@ class QuickLookIsrTaskTestCase(unittest.TestCase):
         with self.assertRaises(lsst.pex.exceptions.wrappers.LengthError):
             self.task.run(self.ccdExposure, camera=self.camera, bias=self.bias,
                           dark=self.dark[bbox], flat=self.flat, defects=self.defects)
+
+
+class CalibrateImageTaskRunQuantumTests(lsst.utils.tests.TestCase):
+    """Tests of ``CalibrateImageTask.runQuantum``, which need a test butler,
+    but do not need real images.
+
+    Adapted from the unit tests of ``CalibrateImageTask.runQuantum``
+    """
+    def setUp(self):
+        QuickLookIsrTaskTestCase.setUp(self)
+        instrument = "testCam"
+        exposure = 100
+        visit = 100101
+        detector = self.detector.getId()
+        physical_filter = "testCam_filter"
+
+        # Create a and populate a test butler for runQuantum tests.
+        self.repo_path = tempfile.TemporaryDirectory()
+        self.repo = butlerTests.makeTestRepo(self.repo_path.name)
+
+        # dataIds for fake data
+        butlerTests.addDataIdValue(self.repo, "instrument", instrument)
+        butlerTests.addDataIdValue(self.repo, "exposure", exposure)
+        butlerTests.addDataIdValue(self.repo, "physical_filter", physical_filter)
+        butlerTests.addDataIdValue(self.repo, "detector", detector)
+        butlerTests.addDataIdValue(self.repo, "visit", visit)
+
+        # inputs
+        butlerTests.addDatasetType(self.repo, "ccdExposure", {"instrument", "exposure", "detector"},
+                                   "Exposure")
+        butlerTests.addDatasetType(self.repo, "camera", {"instrument"}, "Camera")
+        butlerTests.addDatasetType(self.repo, "bias", {"instrument", "detector"}, "Exposure")
+        butlerTests.addDatasetType(self.repo, "dark", {"instrument", "detector"}, "Exposure")
+        butlerTests.addDatasetType(self.repo, "flat", {"instrument", "physical_filter", "detector"},
+                                   "Exposure")
+        butlerTests.addDatasetType(self.repo, "defects", {"instrument", "detector"}, "Defects")
+        butlerTests.addDatasetType(self.repo, "linearizer", {"instrument", "detector"}, "Linearizer")
+        butlerTests.addDatasetType(self.repo, "crosstalk", {"instrument", "detector"}, "CrosstalkCalib")
+        butlerTests.addDatasetType(self.repo, "bfKernel", {"instrument"}, "NumpyArray")
+        butlerTests.addDatasetType(self.repo, "newBFKernel", {"instrument", "detector"},
+                                   "BrighterFatterKernel")
+        butlerTests.addDatasetType(self.repo, "ptc", {"instrument", "detector"}, "PhotonTransferCurveDataset")
+        butlerTests.addDatasetType(self.repo, "crosstalkSources", {"instrument", "exposure", "detector"},
+                                   "Exposure")
+
+        # dataIds
+        self.exposure_id = self.repo.registry.expandDataId(
+            {"instrument": instrument, "exposure": exposure, "detector": detector})
+        self.instrument_id = self.repo.registry.expandDataId(
+            {"instrument": instrument})
+        self.flat_id = self.repo.registry.expandDataId(
+            {"instrument": instrument, "physical_filter": physical_filter, "detector": detector})
+        self.detector_id = self.repo.registry.expandDataId(
+            {"instrument": instrument, "detector": detector})
+        self.visit_id = self.repo.registry.expandDataId(
+            {"instrument": instrument, "visit": visit, "detector": detector})
+
+        # put empty data
+        self.butler = butlerTests.makeTestCollection(self.repo)
+        self.butler.put(self.ccdExposure, "ccdExposure", self.exposure_id)
+        self.butler.put(self.camera, "camera", self.instrument_id)
+        self.butler.put(self.bias, "bias", self.detector_id)
+        self.butler.put(self.dark, "dark", self.detector_id)
+        self.butler.put(self.flat, "flat", self.flat_id)
+        self.butler.put(self.defects, "defects", self.detector_id)
+        # self.butler.put(self.ccdExposure, "linearizer", self.detector_id)
+        # self.butler.put(self.ccdExposure, "crosstalk", self.detector_id)
+        self.butler.put(self.bfKernel, "bfKernel", self.instrument_id)
+        # self.butler.put(self.bfGains, "newBFKernel", self.detector_id)
+        self.butler.put(self.ptc, "ptc", self.detector_id)
+        # self.butler.put(self.ccdExposure, "crosstalkSources", self.exposure_id)
+
+    def tearDown(self):
+        del self.repo_path  # this removes the temporary directory
+
+    def test_runQuantum(self):
+        task = self.task
+        lsst.pipe.base.testUtils.assertValidInitOutput(task)
+
+        quantum = lsst.pipe.base.testUtils.makeQuantum(
+            task, self.butler, self.exposure_id,
+            {"blah": [self.exposure_id],
+             "camera": [self.instrument_id],
+             "bias": [self.detector_id],
+             "dark": [self.detector_id],
+             "flat": [self.flat_id],
+             "defects": [self.detector_id],
+             "bfKernel": [self.instrument_id],
+             # "newBFKernel": [self.detector_id],
+             "ptc": [self.detector_id],
+             # outputs
+             })
+        mock_run = lsst.pipe.base.testUtils.runTestQuantum(task, self.butler, quantum)
+        # Check that the proper kwargs are passed to run().
+        self.assertEqual(mock_run.call_args.kwargs.keys(), {"exposures"})

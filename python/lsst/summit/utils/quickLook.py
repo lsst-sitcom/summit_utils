@@ -105,7 +105,7 @@ class QuickLookIsrTask(pipeBase.PipelineTask):
             ptc=None,
             crosstalkSources=None,
             isrBaseConfig=None,
-            **kwargs
+            # **kwargs
             ):
         """Run isr and cosmic ray repair using, doing as much isr as possible.
 
@@ -248,7 +248,8 @@ class QuickLookIsrTask(pipeBase.PipelineTask):
                              bfGains=bfGains,
                              ptc=ptc,
                              crosstalkSources=crosstalkSources,
-                             **kwargs)
+                             # **kwargs
+                             )
 
         postIsr = result.exposure
 
