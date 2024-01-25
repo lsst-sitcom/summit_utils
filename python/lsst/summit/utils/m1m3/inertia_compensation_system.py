@@ -1,4 +1,24 @@
-#!/usr/bin/python
+# This file is part of summit_utils.
+#
+# Developed for the LSST Data Management System.
+# This product includes software developed by the LSST Project
+# (https://www.lsst.org).
+# See the COPYRIGHT file at the top-level directory of this distribution
+# for details of code ownership.
+#
+# This program is free software: you can redistribute it and/or modify
+# it under the terms of the GNU General Public License as published by
+# the Free Software Foundation, either version 3 of the License, or
+# (at your option) any later version.
+#
+# This program is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU General Public License for more details.
+#
+# You should have received a copy of the GNU General Public License
+# along with this program.  If not, see <https://www.gnu.org/licenses/>.
+
 import logging
 from datetime import timedelta
 
@@ -11,11 +31,12 @@ from lsst.summit.utils.efdUtils import EfdClient, getEfdData
 from lsst.summit.utils.tmaUtils import TMAEvent, TMAEventMaker
 from lsst.ts.xml.tables.m1m3 import FATABLE_XFA, FATABLE_YFA, FATABLE_ZFA, HP_COUNT
 
-__all__ = ["M1M3ICSAnalysis"]
-
-# Default Plot Figure Size
-FIGURE_WIDTH = 10
-FIGURE_HEIGHT = 7
+__all__ = [
+    "M1M3ICSAnalysis",
+    "find_adjacent_true_regions",
+    "evaluate_m1m3_ics_single_slew",
+    "evaluate_m1m3_ics_day_obs",
+]
 
 
 class M1M3ICSAnalysis:
@@ -112,7 +133,7 @@ class M1M3ICSAnalysis:
             self.log.warning("No stable region found. Using full slew.")
             stable_begin = self.event.begin
             stable_end = self.event.end
-        
+
         return stable_begin, stable_end
 
     def query_dataset(self) -> pd.DataFrame:
