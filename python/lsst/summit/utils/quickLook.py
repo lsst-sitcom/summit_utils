@@ -97,15 +97,22 @@ class QuickLookIsrTask(pipeBase.PipelineTask):
             bias=None,
             dark=None,
             flat=None,
+            fringes=pipeBase.Struct(fringes=None),
             defects=None,
             linearizer=None,
             crosstalk=None,
             bfKernel=None,
-            bfGains=None,
+            newBFKernel=None,
             ptc=None,
             crosstalkSources=None,
             isrBaseConfig=None,
-            # **kwargs
+            filterTransmission=None,
+            opticsTransmission=None,
+            strayLightData=None,
+            sensorTransmission=None,
+            atmosphereTransmission=None,
+            deferredChargeCalib=None,
+            illumMaskedImage=None,
             ):
         """Run isr and cosmic ray repair using, doing as much isr as possible.
 
@@ -225,7 +232,17 @@ class QuickLookIsrTask(pipeBase.PipelineTask):
             isrConfig.doCrosstalk = True
             self.log.info("Running with crosstalk correction")
 
-        if bfKernel is not None:
+        if newBFKernel is not None:
+            try:
+                bfGains = newBFKernel.gain
+                isrConfig.doBrighterFatter = True
+                self.log.info("Running with new brighter-fatter correction")
+            except AttributeError:
+                bfGains = None
+        else:
+            bfGains = None
+
+        if bfKernel is not None and bfGains is None:
             isrConfig.doBrighterFatter = True
             self.log.info("Running with brighter-fatter correction")
 
@@ -240,7 +257,7 @@ class QuickLookIsrTask(pipeBase.PipelineTask):
                              bias=bias,
                              dark=dark,
                              flat=flat,
-                             #  fringes=pipeBase.Struct(fringes=None),
+                             fringes=fringes,
                              defects=defects,
                              linearizer=linearizer,
                              crosstalk=crosstalk,
@@ -248,7 +265,13 @@ class QuickLookIsrTask(pipeBase.PipelineTask):
                              bfGains=bfGains,
                              ptc=ptc,
                              crosstalkSources=crosstalkSources,
-                             # **kwargs
+                             filterTransmission=filterTransmission,
+                             opticsTransmission=opticsTransmission,
+                             sensorTransmission=sensorTransmission,
+                             atmosphereTransmission=atmosphereTransmission,
+                             strayLightData=strayLightData,
+                             deferredChargeCalib=deferredChargeCalib,
+                             illumMaskedImage=illumMaskedImage,
                              )
 
         postIsr = result.exposure
