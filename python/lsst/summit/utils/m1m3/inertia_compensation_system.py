@@ -597,7 +597,7 @@ def find_adjacent_true_regions(
 
 def evaluate_m1m3_ics_single_slew(
     day_obs: int,
-    seq_number: int,
+    seq_num: int,
     event_maker: TMAEventMaker,
     inner_pad: float = 1.0,
     outer_pad: float = 1.0,
@@ -612,7 +612,7 @@ def evaluate_m1m3_ics_single_slew(
     ----------
     day_obs : int
         Observation day in the YYYYMMDD format.
-    seq_number : int
+    seq_num : int
         Sequence number associated with the slew event.
     event_maker : TMAEventMaker
         Object to retrieve TMA events.
@@ -638,9 +638,9 @@ def evaluate_m1m3_ics_single_slew(
     log = log.getChild(__name__) if log is not None else logging.getLogger(__name__)
 
     log.info("Retrieving TMA slew event.")
-    event = event_maker.getEvent(day_obs, seq_number)
+    event = event_maker.getEvent(day_obs, seq_num)
     if event is None:
-        raise ValueError(f"Could not find event with {seq_number} in {day_obs}")
+        raise ValueError(f"Could not find event with {seq_num=} in {day_obs=}")
 
     log.info("Start inertia compensation system analysis.")
     performance_analysis = M1M3ICSAnalysis(
