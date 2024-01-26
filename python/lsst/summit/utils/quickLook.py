@@ -92,6 +92,9 @@ class QuickLookIsrTask(pipeBase.PipelineTask):
     def __init__(self, isrTask=IsrTask, **kwargs):
         super().__init__(**kwargs)
         # Pass in IsrTask so that we can modify it slightly for unit tests.
+        # Note that this is not an instance of the IsrTask class, but the class
+        # itself, which is then instantiated later on, in the run() method,
+        # with the dynamically generated config.
         self.isrTask = IsrTask
 
     def run(self, ccdExposure, *,
@@ -99,7 +102,7 @@ class QuickLookIsrTask(pipeBase.PipelineTask):
             bias=None,
             dark=None,
             flat=None,
-            fringes=pipeBase.Struct(fringes=None),
+            fringes=None,
             defects=None,
             linearizer=None,
             crosstalk=None,
@@ -154,12 +157,11 @@ class QuickLookIsrTask(pipeBase.PipelineTask):
             the detector in question.
         defects : `lsst.ip.isr.Defects`, optional
             List of defects.
-        fringes : `lsst.pipe.base.Struct`, optional
-            Struct containing the fringe correction data, with
-            elements:
-            - ``fringes``: fringe calibration frame (`afw.image.Exposure`)
-            - ``seed``: random seed derived from the ccdExposureId for random
-                number generator (`uint32`)
+        fringes : `afw.image.Exposure`, optional
+            The fringe correction data.
+            This input is slightly different than the `fringes` keyword to
+            `lsst.ip.isr.IsrTask`, since the processing done in that task's
+            `runQuantum` method is instead done here.
         opticsTransmission: `lsst.afw.image.TransmissionCurve`, optional
             A ``TransmissionCurve`` that represents the throughput of the,
             optics, to be evaluated in focal-plane coordinates.
@@ -221,7 +223,10 @@ class QuickLookIsrTask(pipeBase.PipelineTask):
             isrConfig.doFlat = True
             self.log.info("Running with flat correction")
 
-        # TODO: deal with fringes here
+        if fringes:
+            isrConfig.doFringe = True
+            self.log.info("Running with fringe correction")
+
         if defects:
             isrConfig.doDefect = True
             self.log.info("Running with defect correction")
@@ -239,7 +244,8 @@ class QuickLookIsrTask(pipeBase.PipelineTask):
                 bfGains = newBFKernel.gain
                 isrConfig.doBrighterFatter = True
                 self.log.info("Running with new brighter-fatter correction")
-            except AttributeError:
+            except AttributeError as e:
+                self.log.warning(f"Error loading brighter-fatter correction: {e}")
                 bfGains = None
         else:
             bfGains = None
@@ -254,6 +260,14 @@ class QuickLookIsrTask(pipeBase.PipelineTask):
 
         isrConfig.doWrite = False
         isrTask = self.isrTask(config=isrConfig)
+
+        if fringes:
+            # Must be run after isrTask is instantiated.
+            isrTask.fringe.loadFringes(fringes,
+                                       expId=ccdExposure.info.id,
+                                       assembler=isrTask.assembleCcd
+                                       if isrConfig.doAssembleIsrExposures else None)
+
         result = isrTask.run(ccdExposure,
                              camera=camera,
                              bias=bias,

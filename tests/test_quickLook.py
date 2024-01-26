@@ -38,7 +38,6 @@ from lsst.summit.utils.quickLook import QuickLookIsrTask, QuickLookIsrTaskConfig
 
 
 class QuickLookIsrTaskTestCase(unittest.TestCase):
-
     """Tests of the run method with fake data.
     """
 
@@ -149,7 +148,6 @@ class QuickLookIsrTaskRunQuantumTests(lsst.utils.tests.TestCase):
         butlerTests.addDataIdValue(self.repo, "instrument", instrument)
         butlerTests.addDataIdValue(self.repo, "physical_filter", physical_filter, band=band)
         butlerTests.addDataIdValue(self.repo, "detector", detector)
-        # butlerTests.addDataIdValue(self.repo, "detector", detector + 1)
         butlerTests.addDataIdValue(self.repo, "exposure", exposureId, physical_filter=physical_filter)
         butlerTests.addDataIdValue(self.repo, "visit", visit)
 
@@ -258,7 +256,7 @@ class QuickLookIsrTaskRunQuantumTests(lsst.utils.tests.TestCase):
         config.doDeferredCharge = True
         config.usePtcReadNoise = True
         config.doCrosstalk = True
-        config.doBrighterFatter = False
+        config.doBrighterFatter = True
 
         # Override a method in IsrTask that is executed early, to instead raise
         # a custom exception called ExitMock that we can catch and ignore.
