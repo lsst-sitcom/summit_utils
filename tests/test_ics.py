@@ -72,7 +72,9 @@ class M1M3ICSTestCase(lsst.utils.tests.TestCase):
         statFilename = os.path.join(self.outputDir, 'm1m3_ics_stats.csv')
         dataFilename = os.path.join(self.outputDir, 'm1m3_ics_df.csv')
 
-        results = evaluate_m1m3_ics_single_slew(self.dayObs, self.seqNumToPlot, self.tmaEventMaker)
+        event = self.events[self.seqNumToPlot]
+
+        results = evaluate_m1m3_ics_single_slew(event, self.client)
         results.stats.to_csv(statFilename)
         results.df.to_csv(dataFilename)
 

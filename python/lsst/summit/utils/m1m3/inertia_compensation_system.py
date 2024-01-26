@@ -94,13 +94,13 @@ class M1M3ICSAnalysis:
             [f"zForces{actuator}" for actuator in range(FATABLE_ZFA)]
         )
 
-        self.log.info(f"Query datasets for {event.dayObs} {event.seqNum}")
+        self.log.info(f"Querying datasets for {event.dayObs=} {event.seqNum=}")
         self.df = self.query_dataset()
 
-        self.log.info("Calculate statistics")
+        self.log.info("Calculating statistics")
         self.stats = self.get_stats()
 
-        self.log.info("Pack results into a Series")
+        self.log.info("Packing results into a Series")
         self.stats = self.pack_stats_series()
 
     def find_stable_region(self) -> tuple[Time, Time]:
@@ -138,12 +138,13 @@ class M1M3ICSAnalysis:
 
     def query_dataset(self) -> pd.DataFrame:
         """
-        Query all the relevant data, resample them to have the same requency
-        and merge them in a single dataframe.
+        Queries all the relevant data, resampling them to have the same
+        frequency, and merges them into a single dataframe.
 
         Returns
         -------
-        pd.DataFrame
+        data : pd.DataFrame
+            The data.
         """
         evt = self.event
         query_config = {
@@ -314,11 +315,11 @@ class M1M3ICSAnalysis:
 
     def get_stats(self) -> pd.DataFrame:
         """
-        Calculate statistics for each column in a given dataset.
+        Calculate the statistics for each column in the retrieved dataset.
 
         Returns
         -------
-        pandas.DataFrame
+        data : pd.DataFrame
             A DataFrame containing calculated statistics for each column in the
             dataset. For each column, the statistics include minimum, maximum,
             and peak-to-peak values.
@@ -333,14 +334,14 @@ class M1M3ICSAnalysis:
         full_slew_stats = pd.DataFrame(
             data=[self.get_slew_minmax(self.df[col]) for col in cols], index=cols
         )
-        self.log.info("Find stable time window")
+        self.log.info("Finding stable time window")
         begin, end = self.find_stable_region()
 
-        self.log.debug("Update begin and end times")
+        self.log.debug("Updating begin and end times")
         begin = begin + self.inner_pad
         end = end - self.inner_pad
 
-        self.log.debug("Calculate statistics in stable time window from M1M3")
+        self.log.debug("Calculating statistics in stable time window from M1M3")
         stable_slew_stats = pd.DataFrame(
             data=[
                 self.get_stats_in_torqueless_interval(
@@ -351,7 +352,7 @@ class M1M3ICSAnalysis:
             index=cols,
         )
 
-        self.log.debug("Concatenate statistics")
+        self.log.debug("Concatenating statistics")
         stats = pd.concat((full_slew_stats, stable_slew_stats), axis=1)
 
         return stats
@@ -359,7 +360,7 @@ class M1M3ICSAnalysis:
     @staticmethod
     def get_stats_in_torqueless_interval(s: pd.Series) -> pd.Series:
         """
-        Calculate statistical measures within a torqueless interval.
+        Calculates the statistical measures within a torqueless interval.
 
         This static method computes descriptive statistics for a given pandas
         Series within a torqueless interval. The torqueless interval represents
@@ -372,7 +373,7 @@ class M1M3ICSAnalysis:
 
         Returns
         -------
-        pandas.Series
+        stats : pd.Series
             A pandas Series containing the following statistical measures:
             - Mean: The arithmetic mean of the data.
             - Median: The median value of the data.
@@ -388,7 +389,7 @@ class M1M3ICSAnalysis:
     @staticmethod
     def get_slew_minmax(s: pd.Series) -> pd.Series:
         """
-        Calculate minimum, maximum, and peak-to-peak values for a data-series.
+        Calculates the min, max, and peak-to-peak values for a data series.
 
         Parameters
         ----------
@@ -397,7 +398,7 @@ class M1M3ICSAnalysis:
 
         Returns
         -------
-        pandas.Series
+        stats : pd.Series
             A Series containing the following calculated values for the two
             halves of the input Series:
             - min: Minimum value of the Series.
@@ -413,7 +414,7 @@ class M1M3ICSAnalysis:
 
     def pack_stats_series(self) -> pd.Series:
         """
-        Pack the stats DataFrame into a Series with custom index labels.
+        Packs the stats DataFrame into a Series with custom index labels.
 
         This method takes the DataFrame of statistics stored in the 'stats'
         attribute of the current object and reshapes it into a Series where the
@@ -423,7 +424,7 @@ class M1M3ICSAnalysis:
 
         Returns
         -------
-        pandas.Series
+        stats : pd.Series
             A Series with custom index labels based on the column names and
             index positions. The Series contains values from all columns of the
             DataFrame.
@@ -507,7 +508,7 @@ class M1M3ICSAnalysis:
 
     def get_extreme_value(self, column):
         """
-        Return the most extreme (either max or min) value from a given column.
+        Returns the most extreme (either max or min) value from a given column.
 
         Parameters
         ----------
@@ -525,7 +526,7 @@ class M1M3ICSAnalysis:
 
     def get_nearest_value(self, column, timestamp):
         """
-        Return the nearest value to a given timestamp from a given column.
+        Returns the nearest value to a given timestamp from a given column.
 
         Parameters
         ----------
@@ -533,6 +534,11 @@ class M1M3ICSAnalysis:
             The column to query.
         timestamp : astropy.time.Time
             The timestamp to query.
+
+        Returns
+        -------
+        nearest_val : float
+            The nearest value to the given timestamp from the given column.
         """
         timestamp = pd.Timestamp(timestamp.iso, tz="UTC")
         time_diff = abs(self.df.index - timestamp)
@@ -540,24 +546,23 @@ class M1M3ICSAnalysis:
         return self.df[column].iloc[idx]
 
     def get_ics_status(self, threshold: float = 1e-6) -> bool:
-        """
-        Evaluate the values of the applied velocity and acceleration forces
-        inside the padded stable time window.
-        If the values are all zero,
-        then this function will return False as the ICS is not enabled.
-        Otherwise, it will return True.
+        """Get the status of the ICS for the given event.
+
+        Evaluates the values of the applied velocity and acceleration forces
+        inside the padded stable time window. If the values are all zero, then
+        this function will return False as the ICS was not enabled. Otherwise,
+        it will return True.
 
         Parameters
         ----------
         threshold : float, optional
-            Threshold value used to determine if the ICS is enabled or not.
-            If all the values of the applied velocity and acceleration forces
-            are below this threshold, then the ICS is considered to be
-            disabled.
+            Threshold value used to determine if the ICS is enabled or not. If
+            all the values of the applied velocity and acceleration forces are
+            below this threshold, then the ICS is considered to be disabled.
 
         Returns
         -------
-        bool
+        status : bool
             True if the ICS is enabled, False otherwise.
         """
         avf0 = (self.df[[c for c in self.df.columns if "avf" in c]].abs() < threshold).all().eq(True).all()
@@ -568,21 +573,19 @@ class M1M3ICSAnalysis:
 def find_adjacent_true_regions(
     series: pd.Series, min_adjacent: None | int = None
 ) -> list[tuple[pd.DatetimeIndex, pd.DatetimeIndex]]:
-    """
-    Find regions in a boolean Series containing adjacent True values.
+    """Find regions in a boolean Series containing adjacent True values.
 
     Parameters
     ----------
     series : pd.Series
         The boolean Series to search for regions.
-
     min_adjacent : int, optional
-        Minimum number of adjacent True values in a region.
-        Defaults to half size of the series.
+        Minimum number of adjacent True values in a region. Defaults to half
+        size of the series.
 
     Returns
     -------
-    list[tuple[pd.DatetimeIndex, pd.DatetimeIndex]]
+    true_regions : list[tuple[pd.DatetimeIndex, pd.DatetimeIndex]]
         A list of tuples representing the start and end indices of regions
         containing more than or equal to min_adjacent adjacent True values.
     """
@@ -596,26 +599,22 @@ def find_adjacent_true_regions(
 
 
 def evaluate_m1m3_ics_single_slew(
-    day_obs: int,
-    seq_num: int,
-    event_maker: TMAEventMaker,
+    event: TMAEvent,
+    efd_client: EfdClient,
     inner_pad: float = 1.0,
     outer_pad: float = 1.0,
     n_sigma: float = 1.0,
     log: logging.Logger | None = None,
 ) -> M1M3ICSAnalysis:
     """
-    Evaluate the M1M3 Inertia Compensation System in a single slew with a
-    `seqNumber` sequence number and observed during `dayObs`.
+    Evaluate the M1M3 Inertia Compensation System for a single TMAEvent.
 
     Parameters
     ----------
-    day_obs : int
-        Observation day in the YYYYMMDD format.
-    seq_num : int
-        Sequence number associated with the slew event.
-    event_maker : TMAEventMaker
-        Object to retrieve TMA events.
+    event : TMAEvent
+        The TMA event to analyze.
+    efd_client : EfdClient
+        The EFD client to use to retrieve data.
     inner_pad : float, optional
         Time padding inside the stable time window of the slew.
     outer_pad : float, optional
@@ -627,7 +626,7 @@ def evaluate_m1m3_ics_single_slew(
 
     Returns
     -------
-    result : `lsst.summit.utils.m1m3.inertia_compensation_system.M1M3ICSAnalysis`  # noqa: W505
+    result : `M1M3ICSAnalysis`
         The results of the analysis.
 
     Raises
@@ -637,15 +636,10 @@ def evaluate_m1m3_ics_single_slew(
     """
     log = log.getChild(__name__) if log is not None else logging.getLogger(__name__)
 
-    log.info("Retrieving TMA slew event.")
-    event = event_maker.getEvent(day_obs, seq_num)
-    if event is None:
-        raise ValueError(f"Could not find event with {seq_num=} in {day_obs=}")
-
-    log.info("Start inertia compensation system analysis.")
+    log.info("Starting inertia compensation system analysis.")
     performance_analysis = M1M3ICSAnalysis(
         event,
-        event_maker.client,
+        efd_client,
         inner_pad=inner_pad,
         outer_pad=outer_pad,
         n_sigma=n_sigma,
@@ -684,8 +678,8 @@ def evaluate_m1m3_ics_day_obs(
 
     Returns
     -------
-    pd.DataFrame
-        Data-frame containing statistical summary of the analysis.
+    results : pd.DataFrame
+        A data-frame containing the statistical summary of the analysis.
     """
     log = log.getChild(__name__) if log is not None else logging.getLogger(__name__)
     log.setLevel(logging.DEBUG)
