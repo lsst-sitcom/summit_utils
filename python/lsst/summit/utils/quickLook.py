@@ -89,8 +89,10 @@ class QuickLookIsrTask(pipeBase.PipelineTask):
     ConfigClass = QuickLookIsrTaskConfig
     _DefaultName = "quickLook"
 
-    def __init__(self, **kwargs):
+    def __init__(self, isrTask=IsrTask, **kwargs):
         super().__init__(**kwargs)
+        # Pass in IsrTask so that we can modify it slightly for unit tests.
+        self.isrTask = IsrTask
 
     def run(self, ccdExposure, *,
             camera=None,
@@ -251,7 +253,7 @@ class QuickLookIsrTask(pipeBase.PipelineTask):
             self.log.info("Running with ptc correction")
 
         isrConfig.doWrite = False
-        isrTask = IsrTask(config=isrConfig)
+        isrTask = self.isrTask(config=isrConfig)
         result = isrTask.run(ccdExposure,
                              camera=camera,
                              bias=bias,
