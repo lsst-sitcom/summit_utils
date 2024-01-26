@@ -240,13 +240,9 @@ class QuickLookIsrTask(pipeBase.PipelineTask):
             self.log.info("Running with crosstalk correction")
 
         if newBFKernel is not None:
-            try:
-                bfGains = newBFKernel.gain
-                isrConfig.doBrighterFatter = True
-                self.log.info("Running with new brighter-fatter correction")
-            except AttributeError as e:
-                self.log.warning(f"Error loading brighter-fatter correction: {e}")
-                bfGains = None
+            bfGains = newBFKernel.gain
+            isrConfig.doBrighterFatter = True
+            self.log.info("Running with new brighter-fatter correction")
         else:
             bfGains = None
 
