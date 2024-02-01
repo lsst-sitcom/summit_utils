@@ -93,46 +93,49 @@ def plot(exp, icSrc=None, filteredSources=None, saveAs=None,
         plt.plot(filteredSources['base_SdssCentroid_x'],
                  filteredSources['base_SdssCentroid_y'],
                  **markerStyle)
-    plt.arrow(compassCenter[0],
-              compassCenter[1],
-              -compassSize*np.sin(rotpa),
-              compassSize*np.cos(rotpa),
-              color='green', width=20)
-    plt.text(compassCenter[0] - textDistance*np.sin(rotpa),
-             compassCenter[1] + textDistance*np.cos(rotpa),
-             'N',
-             color='green', fontsize=fontsize, weight='bold')
-    plt.arrow(compassCenter[0],
-              compassCenter[1],
-              compassSize*np.cos(rotpa),
-              compassSize*np.sin(rotpa),
-              color='green', width=20)
-    plt.text(compassCenter[0] + textDistance*np.cos(rotpa),
-             compassCenter[1] + textDistance*np.sin(rotpa),
-             'E',
-             color='green', fontsize=fontsize, weight='bold')
+
+    if np.isfinite(rotpa):  # need a rotation angle for the compass
+        plt.arrow(compassCenter[0],
+                  compassCenter[1],
+                  -compassSize*np.sin(rotpa),
+                  compassSize*np.cos(rotpa),
+                  color='green', width=20)
+        plt.text(compassCenter[0] - textDistance*np.sin(rotpa),
+                 compassCenter[1] + textDistance*np.cos(rotpa),
+                 'N',
+                 color='green', fontsize=fontsize, weight='bold')
+        plt.arrow(compassCenter[0],
+                  compassCenter[1],
+                  compassSize*np.cos(rotpa),
+                  compassSize*np.sin(rotpa),
+                  color='green', width=20)
+        plt.text(compassCenter[0] + textDistance*np.cos(rotpa),
+                 compassCenter[1] + textDistance*np.sin(rotpa),
+                 'E',
+                 color='green', fontsize=fontsize, weight='bold')
 
     sinTheta = np.cos(AUXTEL_LOCATION.lat)/np.cos(dec)*np.sin(az)
     theta = Angle(np.arcsin(sinTheta))
     rotAzEl = rotpa - theta - Angle(90.0 * u.deg)
-    plt.arrow(compassAzElCent[0],
-              compassAzElCent[1],
-              -compassSize*np.sin(rotAzEl),
-              compassSize*np.cos(rotAzEl),
-              color='cyan', width=20)
-    plt.text(compassAzElCent[0] - textDistance*np.sin(rotAzEl),
-             compassAzElCent[1] + textDistance*np.cos(rotAzEl),
-             'EL',
-             color='cyan', fontsize=fontsize, weight='bold')
-    plt.arrow(compassAzElCent[0],
-              compassAzElCent[1],
-              compassSize*np.cos(rotAzEl),
-              compassSize*np.sin(rotAzEl),
-              color='cyan', width=20)
-    plt.text(compassAzElCent[0] + textDistance*np.cos(rotAzEl),
-             compassAzElCent[1] + textDistance*np.sin(rotAzEl),
-             'AZ',
-             color='cyan', fontsize=fontsize, weight='bold')
+    if np.isfinite(rotAzEl):  # need a rotation angle for the compass
+        plt.arrow(compassAzElCent[0],
+                  compassAzElCent[1],
+                  -compassSize*np.sin(rotAzEl),
+                  compassSize*np.cos(rotAzEl),
+                  color='cyan', width=20)
+        plt.text(compassAzElCent[0] - textDistance*np.sin(rotAzEl),
+                 compassAzElCent[1] + textDistance*np.cos(rotAzEl),
+                 'EL',
+                 color='cyan', fontsize=fontsize, weight='bold')
+        plt.arrow(compassAzElCent[0],
+                  compassAzElCent[1],
+                  compassSize*np.cos(rotAzEl),
+                  compassSize*np.sin(rotAzEl),
+                  color='cyan', width=20)
+        plt.text(compassAzElCent[0] + textDistance*np.cos(rotAzEl),
+                 compassAzElCent[1] + textDistance*np.sin(rotAzEl),
+                 'AZ',
+                 color='cyan', fontsize=fontsize, weight='bold')
 
     plt.ylim(0, height)
     plt.tight_layout()
