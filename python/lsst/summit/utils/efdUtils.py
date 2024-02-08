@@ -480,7 +480,7 @@ def clipDataToEvent(df, event, prePadding=0, postPadding=0, logger=None):
     return clipped_df
 
 
-def calcNextDay(dayObs):
+def calcNextDay(dayObs, previous=False):
     """Given an integer dayObs, calculate the next integer dayObs.
 
     Integers are used for dayObs, but dayObs values are therefore not
@@ -498,8 +498,29 @@ def calcNextDay(dayObs):
         The next dayObs, as an integer, e.g. 20240101
     """
     d1 = datetime.datetime.strptime(str(dayObs), '%Y%m%d')
-    oneDay = datetime.timedelta(days=1)
+    negative = -1 if previous else 1
+    oneDay = datetime.timedelta(days=1*negative)
     return int((d1 + oneDay).strftime('%Y%m%d'))
+
+
+def calcPreviousDay(dayObs):
+    """Given an integer dayObs, calculate the next integer dayObs.
+
+    Integers are used for dayObs, but dayObs values are therefore not
+    contiguous due to month/year ends etc, so this utility provides a robust
+    way to get the integer dayObs which follows the one specified.
+
+    Parameters
+    ----------
+    dayObs : `int`
+        The dayObs, as an integer, e.g. 20231231
+
+    Returns
+    -------
+    nextDayObs : `int`
+        The next dayObs, as an integer, e.g. 20240101
+    """
+    return calcNextDay(dayObs, previous=True)
 
 
 def getDayObsStartTime(dayObs):
