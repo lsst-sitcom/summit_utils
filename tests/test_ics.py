@@ -35,11 +35,6 @@ from lsst.summit.utils.m1m3.plots.inertia_compensation_system import (
     FIGURE_WIDTH,
     FIGURE_HEIGHT,
 )
-# from lsst.summit.utils.m1m3.inertia_compensation_system.plot import (
-#     plot_hp_measured_data,
-#     FIGURE_WIDTH,
-#     FIGURE_HEIGHT,
-# )
 
 from utils import getVcr
 
