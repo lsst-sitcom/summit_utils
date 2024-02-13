@@ -839,6 +839,44 @@ class PeekExposureTask(pipeBase.Task):
                 - pixelMode : `float`
                     Mode estimate of entire image.
         """
+        # Make a copy so the original image is unmodified.
+        exposure = exposure.clone()
+        try:
+            result = self._run(
+                exposure, doDisplay, doDisplayIndices, mode, binSize, donutDiameter
+            )
+        except Exception as e:
+            self.log.warning(f"Peek failed: {e}")
+            result = pipeBase.Struct(
+                mode="failed",
+                binSize=0,
+                binnedSourceCat=None,
+                table=None,
+                brightestIdx=0,
+                brightestCentroid=Point2D(np.nan, np.nan),
+                brightestPixelShape=Quadrupole(np.nan, np.nan, np.nan),
+                brightestEquatorialShape=Quadrupole(np.nan, np.nan, np.nan),
+                brightestAltAzShape=Quadrupole(np.nan, np.nan, np.nan),
+                psfPixelShape=Quadrupole(np.nan, np.nan, np.nan),
+                psfEquatorialShape=Quadrupole(np.nan, np.nan, np.nan),
+                psfAltAzShape=Quadrupole(np.nan, np.nan, np.nan),
+                pixelMedian=np.nan,
+                pixelMode=np.nan,
+            )
+        return result
+
+    def _run(self, exposure, doDisplay, doDisplayIndices, mode, binSize, donutDiameter):
+        """ The actual run method, called by run().
+        """
+        # If image is ~large, then use a subsampling of the image for
+        # speedy median/mode estimates.
+        arr = exposure.getMaskedImage().getImage().array
+        sampling = 1
+        if arr.size > 250_000:
+            sampling = int(np.floor(np.sqrt(arr.size / 250_000)))
+        pixelMedian = np.nanmedian(arr[::sampling, ::sampling])
+        pixelMode = _estimateMode(arr[::sampling, ::sampling])
+
         if donutDiameter is None:
             donutDiameter = self.getDonutDiameter(exposure)
 
@@ -873,13 +911,6 @@ class PeekExposureTask(pipeBase.Task):
                 exposure, binSize, binnedSourceCat, maxFluxIdx, doDisplayIndices
             )
 
-        # If image is still ~large, then use a subsampling of the image for
-        # speedy median/mode estimates.
-        arr = exposure.getMaskedImage().getImage().array
-        sampling = 1
-        if arr.size > 250_000:
-            sampling = int(np.floor(np.sqrt(arr.size / 250_000)))
-
         return pipeBase.Struct(
             mode=mode,
             binSize=binSize,
@@ -893,8 +924,8 @@ class PeekExposureTask(pipeBase.Task):
             psfPixelShape=psfShape,
             psfEquatorialShape=equatorialShapes[1],
             psfAltAzShape=altAzShapes[1],
-            pixelMedian=np.nanmedian(arr[::sampling, ::sampling]),
-            pixelMode=_estimateMode(arr[::sampling, ::sampling]),
+            pixelMedian=pixelMedian,
+            pixelMode=pixelMode,
         )
 
     def runPeek(self, exposure, mode, donutDiameter, binSize=None):
