@@ -5,6 +5,24 @@ import pandas as pd
 from astropy.time import Time
 from lsst.summit.utils.type_utils import M1M3ICSAnalysis
 
+__all__ = [
+    'plot_hp_data',
+    'mark_slew_begin_end',
+    'mark_padded_slew_begin_end',
+    'customize_fig',
+    'customize_hp_plot',
+    'add_hp_limits',
+    'plot_velocity_data',
+    'plot_torque_data',
+    'plot_stable_region',
+    'plot_hp_measured_data',
+    'HP_BREAKAWAY_LIMIT',
+    'HP_FATIGUE_LIMIT',
+    'HP_OPERATIONAL_LIMIT',
+    'FIGURE_WIDTH',
+    'FIGURE_HEIGHT',
+]
+
 # Approximate value for breakaway
 HP_BREAKAWAY_LIMIT = 3000  # [N]
 
@@ -13,6 +31,9 @@ HP_FATIGUE_LIMIT = 900  # [N]
 
 # desired operational limit
 HP_OPERATIONAL_LIMIT = 450  # [N]
+
+FIGURE_WIDTH = 10
+FIGURE_HEIGHT = 7
 
 
 def plot_hp_data(ax: plt.Axes, data: pd.Series | list, label: str) -> list[plt.Line2D]:

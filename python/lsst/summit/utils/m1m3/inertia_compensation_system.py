@@ -26,7 +26,7 @@ import numpy as np
 import pandas as pd
 from astropy import units as u
 from astropy.time import Time
-from lsst.summit.utils.m1m3.plots import inertia_compensation_system
+
 from lsst.summit.utils.efdUtils import EfdClient, getEfdData
 from lsst.summit.utils.tmaUtils import TMAEvent, TMAEventMaker
 from lsst.ts.xml.tables.m1m3 import FATABLE_XFA, FATABLE_YFA, FATABLE_ZFA, HP_COUNT

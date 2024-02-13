@@ -29,8 +29,12 @@ import matplotlib.pyplot as plt
 
 from lsst.summit.utils.efdUtils import makeEfdClient
 from lsst.summit.utils.tmaUtils import TMAEventMaker
-from lsst.summit.utils.m1m3.inertia_compensation_system import evaluate_m1m3_ics_single_slew, inertia_compensation_system
-
+from lsst.summit.utils.m1m3.inertia_compensation_system import evaluate_m1m3_ics_single_slew
+from lsst.summit.utils.m1m3.plots.inertia_compensation_system import (
+    plot_hp_measured_data,
+    FIGURE_WIDTH,
+    FIGURE_HEIGHT,
+)
 # from lsst.summit.utils.m1m3.inertia_compensation_system.plot import (
 #     plot_hp_measured_data,
 #     FIGURE_WIDTH,
@@ -86,10 +90,8 @@ class M1M3ICSTestCase(lsst.utils.tests.TestCase):
         self.assertTrue(os.path.getsize(statFilename) > 1000)
 
         dpi = 300
-        # fig = plt.figure(figsize=(FIGURE_WIDTH, FIGURE_HEIGHT), dpi=dpi)
-        fig = plt.figure(figsize=(10, 7), dpi=dpi)
-
-        fig = inertia_compensation_system.plot_hp_measured_data(results, fig)
+        fig = plt.figure(figsize=(FIGURE_WIDTH, FIGURE_HEIGHT), dpi=dpi)
+        fig = plot_hp_measured_data(results, fig)
         fig.savefig(plotFilename)
         self.assertTrue(os.path.isfile(plotFilename))
         self.assertTrue(os.path.getsize(plotFilename) > 200_000)  # plot is about 400kB at 300 dpi
