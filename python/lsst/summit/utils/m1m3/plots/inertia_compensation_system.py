@@ -42,18 +42,18 @@ def plot_hp_data(ax: plt.Axes, data: pd.Series | list, label: str) -> list[plt.L
 
     Parameters
     ----------
-    ax : matplotlib.axes._axes.Axes
+    ax : `matplotlib.axes._axes.Axes`
         The axes on which the data is plotted.
-    topic : str
+    topic : `str`
         The topic of the data.
-    data : Series or list
+    data : `Series` or `list`
         The data points to be plotted.
-    label : str
+    label : `str`
         The label for the plotted data.
 
     Returns
     -------
-    list
+    lines : `list[Line2D]`
         A list containing the Line2D objects representing the plotted data
         lines.
     """
@@ -68,16 +68,16 @@ def mark_slew_begin_end(ax: plt.Axes, slew_begin: Time, slew_end: Time) -> plt.L
 
     Parameters
     ----------
-    ax : matplotlib.axes._axes.Axes
+    ax : `matplotlib.axes._axes.Axes`
         The axes where the vertical lines are drawn.
-    slew_begin : astropy.time.Time
+    slew_begin : `astropy.time.Time`
         The slew beginning time.
-    slew_end : astropy.time.Time
+    slew_end : `astropy.time.Time`
         The slew ending time.
 
     Returns
     -------
-    matplotlib.lines.Line2D
+    line : `matplotlib.lines.Line2D`
         The Line2D object representing the line drawn at the slew end.
     """
     _ = ax.axvline(slew_begin.datetime, lw=0.5, ls="--", c="k", zorder=-1)
@@ -93,16 +93,16 @@ def mark_padded_slew_begin_end(ax: plt.Axes, begin: Time, end: Time) -> plt.Line
 
     Parameters
     ----------
-    ax : matplotlib.axes._axes.Axes
+    ax : `matplotlib.axes._axes.Axes`
         The axes where the vertical lines are drawn.
-    begin : astropy.time.Time
+    begin : `astropy.time.Time`
         The padded slew beginning time.
-    end : astropy.time.Time
+    end : `astropy.time.Time`
         The padded slew ending time.
 
     Returns
     -------
-    matplotlib.lines.Line2D
+    line : `matplotlib.lines.Line2D`
         The Line2D object representing the line drawn at the padded slew end.
     """
     _ = ax.axvline(begin.datetime, alpha=0.5, lw=0.5, ls="-", c="k", zorder=-1)
@@ -124,9 +124,9 @@ def customize_fig(fig: plt.Figure, dataset: M1M3ICSAnalysis):
 
     Paramters
     ---------
-    fig : matplotlib.pyplot.Figure
+    fig : `matplotlib.pyplot.Figure`
         Figure to be custoized.
-    dataset : M1M3ICSAnalysis
+    dataset : `M1M3ICSAnalysis`
         The dataset object containing the data to be plotted and metadata.
     """
     t_fmt = "%Y%m%d %H:%M:%S"
@@ -150,11 +150,11 @@ def customize_hp_plot(
 
     Parameters
     ----------
-    ax : matplotlib.axes._axes.Axes
+    ax : `matplotlib.axes._axes.Axes`
         The axes of the plot to be customized.
-    dataset : M1M3ICSAnalysis
+    dataset : `M1M3ICSAnalysis`
         The dataset object containing the data to be plotted and metadata.
-    lines : list
+    lines : `list`
         The list of Line2D objects representing the plotted data lines.
     """
     limit_lines = add_hp_limits(ax)
@@ -183,7 +183,7 @@ def add_hp_limits(ax: plt.Axes):
 
     Parameters
     ----------
-    ax : matplotlib.axes._axes.Axes
+    ax : `matplotlib.axes._axes.Axes`
         The axes on which the velocity data is plotted.
     """
     hp_limits = {
@@ -221,9 +221,9 @@ def plot_velocity_data(ax: plt.Axes, dataset: M1M3ICSAnalysis) -> None:
 
     Parameters
     ----------
-    ax : matplotlib.axes._axes.Axes
+    ax : `matplotlib.axes._axes.Axes`
         The axes on which the velocity data is plotted.
-    dataset : M1M3ICSAnalysis
+    dataset : `M1M3ICSAnalysis`
         The dataset object containing the data to be plotted and metadata.
     """
     ax.plot(dataset.df["az_actual_velocity"], color="royalblue", label="Az Velocity")
@@ -239,9 +239,9 @@ def plot_torque_data(ax: plt.Axes, dataset: M1M3ICSAnalysis) -> None:
 
     Parameters
     ----------
-    ax : matplotlib.axes._axes.Axes
+    ax : `matplotlib.axes._axes.Axes`
         The axes on which the torque data is plotted.
-    dataset : M1M3ICSAnalysis
+    dataset : `M1M3ICSAnalysis`
         The dataset object containing the data to be plotted and metadata.
     """
     ax.plot(dataset.df["az_actual_torque"], color="firebrick", label="Az Torque")
@@ -259,21 +259,21 @@ def plot_stable_region(
 
     Parameters
     ----------
-    fig : matplotlib.figure.Figure
+    fig : `matplotlib.figure.Figure`
         The figure containing the axes on which the stable region is
         highlighted.
-    begin : astropy.time.Time
+    begin : `astropy.time.Time`
         The beginning time of the stable region.
-    end : astropy.time.Time
+    end : `astropy.time.Time`
         The ending time of the stable region.
-    label : str, optional
+    label : `str`, optional
         The label for the highlighted region.
-    color : str, optional
+    color : `str`, optional
         The color of the highlighted region.
 
     Returns
     -------
-    matplotlib.patches.Polygon
+    polygon : `matplotlib.patches.Polygon`
         The Polygon object representing the highlighted region.
     """
     for ax in fig.axes[1:]:
@@ -295,11 +295,11 @@ def plot_hp_measured_data(
 
     Parameters
     ----------
-    dataset : M1M3ICSAnalysis
+    dataset : `M1M3ICSAnalysis`
         The dataset object containing the data to be plotted and metadata.
-    fig : matplotlib.figure.Figure
+    fig : `matplotlib.figure.Figure`
         The figure to be plotted on.
-    log : logging.Logger, optional
+    log : `logging.Logger`, optional
         The logger object to log progress.
     """
     log = log.getChild(__name__) if log is not None else logging.getLogger(__name__)

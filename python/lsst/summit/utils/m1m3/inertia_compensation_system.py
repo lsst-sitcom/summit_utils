@@ -41,24 +41,24 @@ __all__ = [
 
 class M1M3ICSAnalysis:
     """
-    Evaluate the M1M3 Inertia Compensation System's performance by
-    calculating the minima, maxima and peak-to-peak values during a
-    slew. In addition, calculates the mean, median and standard deviation
-    when the slew has contant velocity or zero acceleration.
+    Evaluate the M1M3 Inertia Compensation System's performance by calculating
+    the minima, maxima and peak-to-peak values during a slew. In addition,
+    calculates the mean, median and standard deviation when the slew has
+    contant velocity or zero acceleration.
 
     Parameters
     ----------
     event : `lsst.summit.utils.tmaUtils.TMAEvent`
         Abtract representation of a slew event.
-    efd_client : EfdClient
+    efd_client : `EfdClient`
         Client to access the EFD.
-    inner_pad : float, optional
+    inner_pad : `float`, optional
         Time padding inside the stable time window of the slew.
-    outer_pad : float, optional
+    outer_pad : `float`, optional
         Time padding outside the slew time window.
-    n_sigma : float, optional
+    n_sigma : `float`, optional
         Number of standard deviations to use for the stable region.
-    log : logging.Logger, optional
+    log : `logging.Logger`, optional
         Logger object to use for logging messages.
     """
 
@@ -110,7 +110,7 @@ class M1M3ICSAnalysis:
 
         Returns
         -------
-        tuple[Time, Time]:
+        stable_region : `tuple[Time, Time]`
             The begin and end times of the stable region.
         """
         az_torque = self.df["az_actual_torque"]
@@ -143,7 +143,7 @@ class M1M3ICSAnalysis:
 
         Returns
         -------
-        data : pd.DataFrame
+        data : `pd.DataFrame`
             The data.
         """
         evt = self.event
@@ -212,7 +212,7 @@ class M1M3ICSAnalysis:
 
         Returns
         -------
-        df : pd.DataFrame
+        df : `pd.DataFrame`
             A merged dataframe.
         """
         merge_cfg = {
@@ -245,26 +245,25 @@ class M1M3ICSAnalysis:
 
         Parameters
         ----------
-        topic : str
+        topic : `str`
             The topic to query.
-        columns : List[str]
+        columns : `List[str]`
             The columns to query.
-        err_msg : str, optional
-            The error message to raise if no data is found.
-            If None, it creates a dataframe padded with zeros.
-        reset_index : bool, optional
+        err_msg : `str`, optional
+            The error message to raise if no data is found. If None, it creates
+            a dataframe padded with zeros.
+        reset_index : `bool`, optional
             Whether to reset the index of the dataframe.
-        rename_columns : dict, optional
+        rename_columns : `dict`, optional
             A dictionary of column names to rename.
-        resample : float, optional
+        resample : `float`, optional
             The resampling frequency in seconds.
 
         Returns
         -------
-        df : pd.DataFrame
-            A dataframe containing the queried data.
-            If no data is found and `err_msg` is None,
-            returns a dataframe padded with zeros.
+        df : `pd.DataFrame`
+            A dataframe containing the queried data. If no data is found and
+            `err_msg` is None, returns a dataframe padded with zeros.
         """
         self.log.info(f"Querying dataset: {topic}")
         df = getEfdData(
@@ -319,7 +318,7 @@ class M1M3ICSAnalysis:
 
         Returns
         -------
-        data : pd.DataFrame
+        data : `pd.DataFrame`
             A DataFrame containing calculated statistics for each column in the
             dataset. For each column, the statistics include minimum, maximum,
             and peak-to-peak values.
@@ -368,12 +367,12 @@ class M1M3ICSAnalysis:
 
         Parameters
         ----------
-        s : pandas.Series
+        s : `pd.Series`
             A pandas Series containing data values for analysis.
 
         Returns
         -------
-        stats : pd.Series
+        stats : `pd.Series`
             A pandas Series containing the following statistical measures:
             - Mean: The arithmetic mean of the data.
             - Median: The median value of the data.
@@ -393,12 +392,12 @@ class M1M3ICSAnalysis:
 
         Parameters
         ----------
-        s : pandas.Series
+        s : `pd.Series`
             The input pandas Series containing data.
 
         Returns
         -------
-        stats : pd.Series
+        stats : `pd.Series`
             A Series containing the following calculated values for the two
             halves of the input Series:
             - min: Minimum value of the Series.
@@ -424,7 +423,7 @@ class M1M3ICSAnalysis:
 
         Returns
         -------
-        stats : pd.Series
+        stats : `pd.Series`
             A Series with custom index labels based on the column names and
             index positions. The Series contains values from all columns of the
             DataFrame.
@@ -512,12 +511,12 @@ class M1M3ICSAnalysis:
 
         Parameters
         ----------
-        column : str
+        column : `str`
             The column to query.
 
         Returns
         -------
-        extreme_val : float
+        extreme_val : `float`
             The most extreme value from the given column.
         """
         index_of_extreme = self.df[column].abs().idxmax()
@@ -530,9 +529,9 @@ class M1M3ICSAnalysis:
 
         Parameters
         ----------
-        column : str
+        column : `str`
             The column to query.
-        timestamp : astropy.time.Time
+        timestamp : `astropy.time.Time`
             The timestamp to query.
 
         Returns
@@ -555,14 +554,14 @@ class M1M3ICSAnalysis:
 
         Parameters
         ----------
-        threshold : float, optional
+        threshold : `float`, optional
             Threshold value used to determine if the ICS is enabled or not. If
             all the values of the applied velocity and acceleration forces are
             below this threshold, then the ICS is considered to be disabled.
 
         Returns
         -------
-        status : bool
+        status : `bool`
             True if the ICS is enabled, False otherwise.
         """
         avf0 = (self.df[[c for c in self.df.columns if "avf" in c]].abs() < threshold).all().eq(True).all()
@@ -577,9 +576,9 @@ def find_adjacent_true_regions(
 
     Parameters
     ----------
-    series : pd.Series
+    series : `pd.Series`
         The boolean Series to search for regions.
-    min_adjacent : int, optional
+    min_adjacent : `int`, optional
         Minimum number of adjacent True values in a region. Defaults to half
         size of the series.
 
@@ -611,17 +610,17 @@ def evaluate_m1m3_ics_single_slew(
 
     Parameters
     ----------
-    event : TMAEvent
+    event : `TMAEvent`
         The TMA event to analyze.
-    efd_client : EfdClient
+    efd_client : `EfdClient`
         The EFD client to use to retrieve data.
-    inner_pad : float, optional
+    inner_pad : `float`, optional
         Time padding inside the stable time window of the slew.
-    outer_pad : float, optional
+    outer_pad : `float`, optional
         Time padding outside the slew time window.
-    n_sigma : float, optional
+    n_sigma : `float`, optional
         Number of standard deviations to use for the stable region.
-    log : logging.Logger, optional
+    log : `logging.Logger`, optional
         Logger object to use for logging messages.
 
     Returns
@@ -663,22 +662,22 @@ def evaluate_m1m3_ics_day_obs(
 
     Parameters
     ----------
-    day_obs : int
+    day_obs : `int`
         Observation day in the YYYYMMDD format.
-    event_maker : TMAEventMaker
+    event_maker : `TMAEventMaker`
         Object to retrieve TMA events.
-    inner_pad : float, optional
+    inner_pad : `float`, optional
         Time padding inside the stable time window of the slew.
-    outer_pad : float, optional
+    outer_pad : `float`, optional
         Time padding outside the slew time window.
-    n_sigma : float, optional
+    n_sigma : `float`, optional
         Number of standard deviations to use for the stable region.
-    log : logging.Logger, optional
+    log : `logging.Logger`, optional
         Logger object to use for logging messages.
 
     Returns
     -------
-    results : pd.DataFrame
+    results : `pd.DataFrame`
         A data-frame containing the statistical summary of the analysis.
     """
     log = log.getChild(__name__) if log is not None else logging.getLogger(__name__)
