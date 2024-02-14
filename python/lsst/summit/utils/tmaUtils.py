@@ -154,31 +154,16 @@ def getAzimuthElevationDataForEvent(client, event, prePadding=0, postPadding=0):
                                event=event,
                                prePadding=prePadding,
                                postPadding=postPadding)
-    pointingData = getEfdData(client,
-                              'lsst.sal.MTPtg.currentTargetStatus',
-                              event=event,
-                              prePadding=0.1,
-                              postPadding=0.1)
 
     azTimes = azimuthData['timestamp'].values
     elTimes = elevationData['timestamp'].values
-    ptgTimes = pointingData['timestamp'].values
     azValues = azimuthData['actualPosition'].values
     elValues = elevationData['actualPosition'].values
-    # Need to interpolate because demand and actual data streams
-    # have different lengths
-    azDemandInterp = np.interp(azTimes, ptgTimes, pointingData['demandAz'])
-    elDemandInterp = np.interp(elTimes, ptgTimes, pointingData['demandEl'])
-    azError = (azValues - azDemandInterp) * 3600
-    elError = (elValues - elDemandInterp) * 3600
+    azDemand = azimuthData['demandPosition'].values
+    elDemand = elevationData['demandPosition'].values
 
-    if event.type == TMAEvent.TRACKING:
-        # Because of small timebase errors, there can be an offset in the
-        # errors. This is taken out by subtracting the median of the errors.
-        # This is a fudge, but an improvement over the polynomial fit.
-        # This only makes sense to do when TRACKING though.
-        azError -= np.median(azError)
-        elError -= np.median(elError)
+    azError = (azValues - azDemand) * 3600
+    elError = (elValues - elDemand) * 3600
 
     azimuthData['azError'] = azError
     elevationData['elError'] = elError
@@ -309,20 +294,21 @@ def plotEvent(client, event, fig=None, prePadding=0, postPadding=0, commands={},
         # We are less sensitive to Az errors near the zenith
         image_az_rms = az_rms * np.cos(el_vals[0] * np.pi / 180.0)
         image_el_rms = el_rms
-
+        image_impact_rms = np.sqrt(image_az_rms**2 + image_el_rms**2)
         ax1p5.plot(azimuthData['azError'], label='Azimuth error', c=lineColors[colorCounter])
         colorCounter += 1
         ax1p5.plot(elevationData['elError'], label='Elevation error', c=lineColors[colorCounter])
         colorCounter += 1
+        ax1p5.axhline(0.01, ls='-.', color='black')
+        ax1p5.axhline(-0.01, ls='-.', color='black')
         ax1p5.yaxis.set_major_formatter(FuncFormatter(tickFormatter))
         ax1p5.set_ylabel('Tracking error (arcsec)')
         ax1p5.set_xticks([])  # remove x tick labels on the hidden upper x-axis
-        ax1p5.set_ylim(-0.5, 0.5)
-        ax1p5.set_yticks([-0.25, 0.0, 0.25])
+        ax1p5.set_ylim(-0.05, 0.05)
+        ax1p5.set_yticks([-0.04, -0.02, 0.0, 0.02, 0.04])
         ax1p5.legend()
         ax1p5.text(0.2, 0.9,
-                   f'Az image RMS = {image_az_rms:.3f} arcsec,   El image RMS = {image_el_rms:.3f} arcsec',
-                   transform=ax1p5.transAxes)
+                   f'Image impact RMS = {image_impact_rms:.3f} arcsec', transform=ax1p5.transAxes)
 
     if prePadding or postPadding:
         # note the conversion to utc because the x-axis from the dataframe
