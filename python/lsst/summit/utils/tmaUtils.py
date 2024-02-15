@@ -154,16 +154,12 @@ def getAzimuthElevationDataForEvent(client,
     elevationData : `pd.DataFrame`
         The elevation data for the specified event.
     """
-    def filterBadValues(values, times, maxDelta):
-        # Fit the encoder stream with a polynomial and throw out non-physical
-        # points
-        zeroedTimes = times - times[0]  # remove the large offset to improve fitting robustness
-        fit = np.polyfit(zeroedTimes, values, 4)
-        model = np.polyval(fit, zeroedTimes)
-        for i, value in enumerate(values):
-            if abs(value - model[i]) > maxDelta:
-                # This is a bogus value - replace it with the model value
-                values[i] = model[i]
+    def filterBadValues(values, maxDelta):
+        # Find non-physical points and replace with extrapolation
+        for i in range(1, len(values) - 1):
+            if abs(values[i] - values[i-1]) > maxDelta:
+                # This is a bogus value - replace it with an extrapolation
+                values[i] = (values[i-1] + values[i+1]) / 2.0
         return
 
     azimuthData = getEfdData(client,
@@ -189,8 +185,8 @@ def getAzimuthElevationDataForEvent(client,
     if doFilterResiduals:
         if event.type.name != 'TRACKING':
             raise ValueError('Filtering tracking residuals is only supported for tracking events')
-        filterBadValues(azError, azTimes, maxDelta)
-        filterBadValues(elError, elTimes, maxDelta)
+        filterBadValues(azError, maxDelta)
+        filterBadValues(elError, maxDelta)
 
     azimuthData['azError'] = azError
     elevationData['elError'] = elError
