@@ -856,6 +856,11 @@ class TMAStateMachine:
 class TMAEventMaker:
     """A class to create per-dayObs TMAEvents for the TMA's movements.
 
+    If this class is being used in tests, make sure to pass the EFD client in,
+    and create it with `makeEfdClient(testing=True)`. This ensures that the
+    USDF EFD is "used" as this is the EFD which has the recorded data available
+    in the test suite via `vcr`.
+
     Example usage:
     >>> dayObs = 20230630
     >>> eventMaker = TMAEventMaker()
