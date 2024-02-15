@@ -27,9 +27,16 @@ import pandas as pd
 from astropy import units as u
 from astropy.time import Time
 
-from lsst.summit.utils.efdUtils import EfdClient, getEfdData
+from lsst.summit.utils.efdUtils import getEfdData
 from lsst.summit.utils.tmaUtils import TMAEvent, TMAEventMaker
 from lsst.ts.xml.tables.m1m3 import FATABLE_XFA, FATABLE_YFA, FATABLE_ZFA, HP_COUNT
+
+HAS_EFD_CLIENT = True
+try:
+    from lsst_efd_client import EfdClient
+except ImportError:
+    EfdClient = None  # this is currently just for mypy
+    HAS_EFD_CLIENT = False
 
 __all__ = [
     "M1M3ICSAnalysis",

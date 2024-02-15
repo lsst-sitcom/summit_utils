@@ -2,7 +2,13 @@ from typing import Protocol
 
 import pandas as pd
 from astropy import units as u
-from lsst.summit.utils.efdUtils import EfdClient
+
+HAS_EFD_CLIENT = True
+try:
+    from lsst_efd_client import EfdClient
+except ImportError:
+    EfdClient = None
+    HAS_EFD_CLIENT = False
 
 
 class Event(Protocol):
