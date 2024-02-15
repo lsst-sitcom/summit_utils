@@ -116,7 +116,7 @@ def getTorqueMaxima(table):
         print(f"Max negative {axis:9} torque during seqNum {minPos:>4}: {minVal/1000:>7.1f}kNm")
 
 
-def getAzimuthElevationDataForEvent(client, event, prePadding=0, postPadding=0):
+def getAzimuthElevationDataForEvent(client, event, prePadding=0, postPadding=0, filter=False):
     """Get the data for the az/el telemetry topics for a given TMAEvent.
 
     The error between the actual and demanded positions is calculated and added
@@ -136,7 +136,8 @@ def getAzimuthElevationDataForEvent(client, event, prePadding=0, postPadding=0):
     postPadding : `float`, optional
         The amount of time to pad the event with after the end time, in
         seconds.
-
+    filter : 'bool', optional
+        Enables a filter to filter out unphysical data points
     Returns
     -------
     azimuthData : `pd.DataFrame`
@@ -144,6 +145,19 @@ def getAzimuthElevationDataForEvent(client, event, prePadding=0, postPadding=0):
     elevationData : `pd.DataFrame`
         The elevation data for the specified event.
     """
+    def filterBadValues(values, times, maxDelta=0.10):
+        # Fit the encoder stream with a polynomial and throw out
+        # non-physical points
+        these_times = times - times[0]
+        fit = np.polyfit(these_times, values, 4)
+        model = np.polyval(fit, these_times)
+        for i, value in enumerate(values): 
+            if abs(value - model[i]) > maxDelta:
+                # This is a bogus value
+                # replace it with the model value
+                values[i] = model[i]
+        return
+
     azimuthData = getEfdData(client,
                              'lsst.sal.MTMount.azimuth',
                              event=event,
@@ -164,6 +178,9 @@ def getAzimuthElevationDataForEvent(client, event, prePadding=0, postPadding=0):
 
     azError = (azValues - azDemand) * 3600
     elError = (elValues - elDemand) * 3600
+    if filter:
+        filterBadValues(azError, azTimes)
+        filterBadValues(elError, elTimes)
 
     azimuthData['azError'] = azError
     elevationData['elError'] = elError
@@ -172,7 +189,7 @@ def getAzimuthElevationDataForEvent(client, event, prePadding=0, postPadding=0):
 
 
 def plotEvent(client, event, fig=None, prePadding=0, postPadding=0, commands={},
-              azimuthData=None, elevationData=None):
+              azimuthData=None, elevationData=None, filter=False):
     """Plot the TMA axis positions over the course of a given TMAEvent.
 
     Plots the axis motion profiles for the given event, with optional padding
@@ -208,7 +225,9 @@ def plotEvent(client, event, fig=None, prePadding=0, postPadding=0, commands={},
     elevationData : `pd.DataFrame`, optional
         The elevation data to plot. If not specified, it will be queried from
         the EFD.
-
+    filter : 'bool', optional
+        Enables a filter to filter out unphysical data points
+        will be passed to getAzimuthElevationDataForEvent
     Returns
     -------
     fig : `matplotlib.figure.Figure`
@@ -248,7 +267,8 @@ def plotEvent(client, event, fig=None, prePadding=0, postPadding=0, commands={},
         azimuthData, elevationData = getAzimuthElevationDataForEvent(client,
                                                                      event,
                                                                      prePadding=prePadding,
-                                                                     postPadding=postPadding)
+                                                                     postPadding=postPadding,
+                                                                     filter=filter)
 
     # Use the native color cycle for the lines. Because they're on different
     # axes they don't cycle by themselves
