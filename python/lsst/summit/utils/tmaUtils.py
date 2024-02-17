@@ -141,12 +141,6 @@ def getAzimuthElevationDataForEvent(client,
     postPadding : `float`, optional
         The amount of time to pad the event with after the end time, in
         seconds.
-    doFilterResiduals : 'bool', optional
-        Enables filtering of unphysical data points in the tracking residuals.
-    maxDelta : `float`, optional
-        The maximum difference between the model and the actual data, in
-        arcseconds, to allow before filtering the data point. Ignored if
-        ``filter`` is `False`.
     Returns
     -------
     azimuthData : `pd.DataFrame`
@@ -154,14 +148,6 @@ def getAzimuthElevationDataForEvent(client,
     elevationData : `pd.DataFrame`
         The elevation data for the specified event.
     """
-    def filterBadValues(values, maxDelta):
-        # Find non-physical points and replace with extrapolation
-        for i in range(1, len(values) - 1):
-            if abs(values[i] - values[i-1]) > maxDelta:
-                # This is a bogus value - replace it with an extrapolation
-                values[i] = (values[i-1] + values[i+1]) / 2.0
-        return
-
     azimuthData = getEfdData(client,
                              'lsst.sal.MTMount.azimuth',
                              event=event,
@@ -173,8 +159,6 @@ def getAzimuthElevationDataForEvent(client,
                                prePadding=prePadding,
                                postPadding=postPadding)
 
-    azTimes = azimuthData['timestamp'].values
-    elTimes = elevationData['timestamp'].values
     azValues = azimuthData['actualPosition'].values
     elValues = elevationData['actualPosition'].values
     azDemand = azimuthData['demandPosition'].values
@@ -182,11 +166,6 @@ def getAzimuthElevationDataForEvent(client,
 
     azError = (azValues - azDemand) * 3600
     elError = (elValues - elDemand) * 3600
-    if doFilterResiduals:
-        if event.type.name != 'TRACKING':
-            raise ValueError('Filtering tracking residuals is only supported for tracking events')
-        filterBadValues(azError, maxDelta)
-        filterBadValues(elError, maxDelta)
 
     azimuthData['azError'] = azError
     elevationData['elError'] = elError
@@ -250,6 +229,28 @@ def plotEvent(client,
     fig : `matplotlib.figure.Figure`
         The figure on which the plot was made.
     """
+    def filterBadValues(values, maxDelta=0.1):
+        # Find non-physical points and replace with extrapolation                                                                     
+        # No more than 3 successive data points can be replaced.
+        badCounter = 0
+        consecutiveCounter = 0
+        lastIndexReplaced = 0
+        for i in range(2, len(values)):
+            if consecutiveCounter > 3:
+                consecutiveCounter = 0
+                continue
+            if abs(values[i] - values[i-1]) > maxDelta:
+                # This is a bogus value - replace it with an extrapolation                                                            
+                # Of the preceding two values
+                if i == lastIndexReplaced + 1:
+                    consecutiveCounter += 1
+                else:
+                    consecutiveCounter = 0
+                values[i] = (2.0 * values[i-1] - values[i-2])
+                badCounter += 1
+                lastIndexReplaced = i
+        return badCounter
+
     def tickFormatter(value, tick_number):
         # Convert the value to a string without subtracting large numbers
         # tick_number is unused.
@@ -284,9 +285,7 @@ def plotEvent(client,
         azimuthData, elevationData = getAzimuthElevationDataForEvent(client,
                                                                      event,
                                                                      prePadding=prePadding,
-                                                                     postPadding=postPadding,
-                                                                     doFilterResiduals=doFilterResiduals,
-                                                                     maxDelta=maxDelta)
+                                                                     postPadding=postPadding)
 
     # Use the native color cycle for the lines. Because they're on different
     # axes they don't cycle by themselves
@@ -322,15 +321,22 @@ def plotEvent(client,
     ax2.xaxis.set_major_formatter(mdates.DateFormatter('%H:%M:%S'))
 
     if event.type.name == 'TRACKING':
+        azError = azimuthData['azError'].values
+        elError = elevationData['elError'].values
+        elVals = elevationData['actualPosition'].values
+        if doFilterResiduals:
+            # Filtering out bad values
+            azBadValues = filterBadValues(azError, maxDelta)
+            elBadValues = filterBadValues(elError, maxDelta)
+            azimuthData['azError'] = azError
+            elevationData['elError'] = elError
         # Calculate RMS
-        az_vals = azimuthData['azError'].values
-        el_vals = elevationData['elError'].values
-        az_rms = np.sqrt(np.mean(az_vals * az_vals))
-        el_rms = np.sqrt(np.mean(el_vals * el_vals))
+        az_rms = np.sqrt(np.mean(azError * azError))
+        el_rms = np.sqrt(np.mean(elError * elError))
 
         # Calculate Image impact RMS
         # We are less sensitive to Az errors near the zenith
-        image_az_rms = az_rms * np.cos(el_vals[0] * np.pi / 180.0)
+        image_az_rms = az_rms * np.cos(elVals[0] * np.pi / 180.0)
         image_el_rms = el_rms
         image_impact_rms = np.sqrt(image_az_rms**2 + image_el_rms**2)
         ax1p5.plot(azimuthData['azError'], label='Azimuth error', c=lineColors[colorCounter])
@@ -345,8 +351,12 @@ def plotEvent(client,
         ax1p5.set_ylim(-0.05, 0.05)
         ax1p5.set_yticks([-0.04, -0.02, 0.0, 0.02, 0.04])
         ax1p5.legend()
-        ax1p5.text(0.2, 0.9,
+        ax1p5.text(0.1, 0.9,
                    f'Image impact RMS = {image_impact_rms:.3f} arcsec', transform=ax1p5.transAxes)
+        if doFilterResiduals:
+            ax1p5.text(0.1, 0.8,
+                   f'{azBadValues} bad azimuth values and {elBadValues} bad elevation values were replaced', 
+                       transform=ax1p5.transAxes)
 
     if prePadding or postPadding:
         # note the conversion to utc because the x-axis from the dataframe
