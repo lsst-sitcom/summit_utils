@@ -55,6 +55,7 @@ __all__ = (
     'getSlewsFromEventList',
     'getTracksFromEventList',
     'getTorqueMaxima',
+    'filterBadValues',
 )
 
 # we don't want to use `None` for a no data sentinel because dict.get('key')
@@ -173,6 +174,64 @@ def getAzimuthElevationDataForEvent(client,
     return azimuthData, elevationData
 
 
+def filterBadValues(values, maxDelta=0.1):
+    """Filter out bad values from a dataset, replacing them in-place.
+
+    This function replaces non-physical points in the dataset with an
+    extrapolation of the preceding two values. No more than 3 successive data
+    points are allowed to be replaced. Minimum length of the input is 3 points.
+
+    Parameters
+    ----------
+    values : `list` or `np.ndarray`
+        The dataset containing the values to be filtered.
+    maxDelta : `float`, optional
+        The maximum allowed difference between consecutive values. Values with
+        a difference greater than `maxDelta` will be considered as bad values
+        and replaced with an extrapolation.
+
+    Returns
+    -------
+    nBadPoints : `int`
+        The number of bad values that were replaced out.
+    """
+    # Find non-physical points and replace with extrapolation. No more than 3
+    # successive data points can be replaced.
+    badCounter = 0
+    consecutiveCounter = 0
+    lastIndexReplaced = 0
+
+    log = logging.getLogger('lsst.s')
+
+    median = np.nanmedian(values)
+    # if either of the the first two points are more than maxDelta away from
+    # the median, replace them with the median
+    for i in range(2):
+        if abs(values[i] - median) > maxDelta:
+            values[i] = median
+            badCounter += 1
+            log.warning(f"Replacing bad value at index {i} with median value")
+
+    # from the second element of the array, walk through and calculate the
+    # difference between each element and the previous one. If the difference
+    # is greater than maxDelta, replace the element with an extrapolation of
+    # the previous two elements from the point where we started replacing.
+    for i in range(2, len(values)):
+        if abs(values[i] - values[i-1]) > maxDelta:
+            if consecutiveCounter < 3:
+                consecutiveCounter += 1
+                log.warning(f"Replacing value at index {i}")
+                # Use the value at lastIndexReplaced and the value before it for extrapolation
+                values[i] = 2*values[lastIndexReplaced] - values[lastIndexReplaced-1]
+                lastIndexReplaced = i
+                badCounter += 1
+            else:
+                log.warning(f"More than 3 consecutive replacements at index {i}. Stopping replacements.")
+        else:
+            consecutiveCounter = 0
+    return badCounter
+
+
 def plotEvent(client,
               event,
               fig=None,
@@ -229,28 +288,6 @@ def plotEvent(client,
     fig : `matplotlib.figure.Figure`
         The figure on which the plot was made.
     """
-    def filterBadValues(values, maxDelta=0.1):
-        # Find non-physical points and replace with extrapolation                                                                     
-        # No more than 3 successive data points can be replaced.
-        badCounter = 0
-        consecutiveCounter = 0
-        lastIndexReplaced = 0
-        for i in range(2, len(values)):
-            if consecutiveCounter > 3:
-                consecutiveCounter = 0
-                continue
-            if abs(values[i] - values[i-1]) > maxDelta:
-                # This is a bogus value - replace it with an extrapolation                                                            
-                # Of the preceding two values
-                if i == lastIndexReplaced + 1:
-                    consecutiveCounter += 1
-                else:
-                    consecutiveCounter = 0
-                values[i] = (2.0 * values[i-1] - values[i-2])
-                badCounter += 1
-                lastIndexReplaced = i
-        return badCounter
-
     def tickFormatter(value, tick_number):
         # Convert the value to a string without subtracting large numbers
         # tick_number is unused.
@@ -355,7 +392,7 @@ def plotEvent(client,
                    f'Image impact RMS = {image_impact_rms:.3f} arcsec', transform=ax1p5.transAxes)
         if doFilterResiduals:
             ax1p5.text(0.1, 0.8,
-                   f'{azBadValues} bad azimuth values and {elBadValues} bad elevation values were replaced', 
+                   f'{azBadValues} bad azimuth values and {elBadValues} bad elevation values were replaced',
                        transform=ax1p5.transAxes)
 
     if prePadding or postPadding:
