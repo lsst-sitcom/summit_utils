@@ -482,6 +482,7 @@ class TMAEventMakerTestCase(lsst.utils.tests.TestCase):
         found = eventMaker.findEvent(lastEvent.end)
         self.assertIsNone(found, lastEvent)
 
+    @vcr.use_cassette()
     def test_eventRelatesTo(self):
         eventMaker = self.tmaEventMaker
         events = eventMaker.getEvents(self.dayObsWithBlockInfo)
