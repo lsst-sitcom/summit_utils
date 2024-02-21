@@ -349,7 +349,8 @@ class TMAEventMakerTestCase(lsst.utils.tests.TestCase):
 
     def test_filterBadValues(self):
         # test no bad values
-        values = np.array([1.0, 0.96, 1.0, 1.04, 0.95, 1.0, 1.05, 1.0, 1.05, 1.0, 0.95])  # mean = median = 1.0
+        # mean = median = 1.0
+        values = np.array([1.0, 0.96, 1.0, 1.04, 0.95, 1.0, 1.05, 1.0, 1.05, 1.0, 0.95])
         mean = np.mean(values)
         nReplaced = filterBadValues(values)
         self.assertEqual(nReplaced, 0)

@@ -65,6 +65,10 @@ __all__ = (
 # means that we've not yet looked for the data.
 NO_DATA_SENTINEL = "NODATA"
 
+# The known time difference between the TMA demand position and the TMA
+# position when tracking. 20Hz data times three points = 150ms.
+TRACKING_RESIDUAL_TAIL_CLIP = -0.15  # seconds
+
 
 def getSlewsFromEventList(events):
     """Get the slew events from a list of TMAEvents.
@@ -360,9 +364,9 @@ def plotEvent(client,
     ax2.xaxis.set_major_formatter(mdates.DateFormatter('%H:%M:%S'))
 
     if event.type.name == 'TRACKING':
-        # XXX need to deal with clipping here
-        clippedAzimuthData = clipDataToEvent(azimuthData, event)  # returns a copy
-        clippedElevationData = clipDataToEvent(elevationData, event)  # returns a copy
+        # returns a copy
+        clippedAzimuthData = clipDataToEvent(azimuthData, event, postPadding=TRACKING_RESIDUAL_TAIL_CLIP)
+        clippedElevationData = clipDataToEvent(elevationData, event, postPadding=TRACKING_RESIDUAL_TAIL_CLIP)
 
         azError = clippedAzimuthData['azError'].values
         elError = clippedElevationData['elError'].values
@@ -382,9 +386,13 @@ def plotEvent(client,
         image_az_rms = az_rms * np.cos(elVals[0] * np.pi / 180.0)
         image_el_rms = el_rms
         image_impact_rms = np.sqrt(image_az_rms**2 + image_el_rms**2)
-        ax1p5.plot(clippedAzimuthData['azError'], label='Azimuth tracking error', c=lineColors[colorCounter])
+        ax1p5.plot(clippedAzimuthData['azError'],
+                   label='Azimuth tracking error',
+                   c=lineColors[colorCounter])
         colorCounter += 1
-        ax1p5.plot(clippedElevationData['elError'], label='Elevation tracking error', c=lineColors[colorCounter])
+        ax1p5.plot(clippedElevationData['elError'],
+                   label='Elevation tracking error',
+                   c=lineColors[colorCounter])
         colorCounter += 1
         ax1p5.axhline(0.01, ls='-.', color='black')
         ax1p5.axhline(-0.01, ls='-.', color='black')
@@ -397,9 +405,12 @@ def plotEvent(client,
         ax1p5.text(0.1, 0.9,
                    f'Image impact RMS = {image_impact_rms:.3f} arcsec', transform=ax1p5.transAxes)
         if doFilterResiduals:
-            ax1p5.text(0.1, 0.8,
-                   f'{nReplacedAz} bad azimuth values and {nReplacedEl} bad elevation values were replaced',
-                       transform=ax1p5.transAxes)
+            ax1p5.text(
+                0.1,
+                0.8,
+                f'{nReplacedAz} bad azimuth values and {nReplacedEl} bad elevation values were replaced',
+                transform=ax1p5.transAxes
+            )
 
     if prePadding or postPadding:
         # note the conversion to utc because the x-axis from the dataframe
