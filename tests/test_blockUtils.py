@@ -192,8 +192,7 @@ class BlockParserTestCase(lsst.utils.tests.TestCase):
     def test_actualValues(self):
         data = getBlockInfoTestTruthValues()
 
-        dayObs = 20230615
-        blockParser = BlockParser(dayObs, client=self.client)
+        blockParser = BlockParser(self.dayObs, client=self.client)
 
         for block in blockParser.getBlockNums():
             seqNums = blockParser.getSeqNums(block)
