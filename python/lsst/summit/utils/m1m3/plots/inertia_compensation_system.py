@@ -163,7 +163,7 @@ def customize_hp_plot(
     ax.set_xlabel("Time [UTC]")
     ax.set_ylabel("HP Measured\n Forces [N]")
     ax.set_ylim(-3100, 3100)
-    ax.grid(":", alpha=0.2)
+    ax.grid(linestyle=":", alpha=0.2)  # XXX Bruno - what is this doing?! It used to be a 1st position arg ":"
 
 
 def add_hp_limits(ax: plt.Axes):
