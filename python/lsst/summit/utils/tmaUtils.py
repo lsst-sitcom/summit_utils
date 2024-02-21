@@ -43,6 +43,7 @@ from .efdUtils import (getEfdData,
                        getDayObsForTime,
                        getDayObsStartTime,
                        getDayObsEndTime,
+                       clipDataToEvent,
                        )
 
 __all__ = (
@@ -305,6 +306,7 @@ def plotEvent(client,
                     " Pass in a figure with fig = plt.figure(figsize=(10, 8)) to avoid this warning.")
 
     fig.clear()
+    ax1p5 = None  # need to always be defined
     if event.type.name == 'TRACKING':
         ax1, ax1p5, ax2 = fig.subplots(3,
                                        sharex=True,
@@ -358,15 +360,19 @@ def plotEvent(client,
     ax2.xaxis.set_major_formatter(mdates.DateFormatter('%H:%M:%S'))
 
     if event.type.name == 'TRACKING':
-        azError = azimuthData['azError'].values
-        elError = elevationData['elError'].values
-        elVals = elevationData['actualPosition'].values
+        # XXX need to deal with clipping here
+        clippedAzimuthData = clipDataToEvent(azimuthData, event)  # returns a copy
+        clippedElevationData = clipDataToEvent(elevationData, event)  # returns a copy
+
+        azError = clippedAzimuthData['azError'].values
+        elError = clippedElevationData['elError'].values
+        elVals = clippedElevationData['actualPosition'].values
         if doFilterResiduals:
             # Filtering out bad values
-            azBadValues = filterBadValues(azError, maxDelta)
-            elBadValues = filterBadValues(elError, maxDelta)
-            azimuthData['azError'] = azError
-            elevationData['elError'] = elError
+            nReplacedAz = filterBadValues(azError, maxDelta)
+            nReplacedEl = filterBadValues(elError, maxDelta)
+            clippedAzimuthData['azError'] = azError
+            clippedElevationData['elError'] = elError
         # Calculate RMS
         az_rms = np.sqrt(np.mean(azError * azError))
         el_rms = np.sqrt(np.mean(elError * elError))
@@ -376,9 +382,9 @@ def plotEvent(client,
         image_az_rms = az_rms * np.cos(elVals[0] * np.pi / 180.0)
         image_el_rms = el_rms
         image_impact_rms = np.sqrt(image_az_rms**2 + image_el_rms**2)
-        ax1p5.plot(azimuthData['azError'], label='Azimuth error', c=lineColors[colorCounter])
+        ax1p5.plot(clippedAzimuthData['azError'], label='Azimuth tracking error', c=lineColors[colorCounter])
         colorCounter += 1
-        ax1p5.plot(elevationData['elError'], label='Elevation error', c=lineColors[colorCounter])
+        ax1p5.plot(clippedElevationData['elError'], label='Elevation tracking error', c=lineColors[colorCounter])
         colorCounter += 1
         ax1p5.axhline(0.01, ls='-.', color='black')
         ax1p5.axhline(-0.01, ls='-.', color='black')
@@ -392,7 +398,7 @@ def plotEvent(client,
                    f'Image impact RMS = {image_impact_rms:.3f} arcsec', transform=ax1p5.transAxes)
         if doFilterResiduals:
             ax1p5.text(0.1, 0.8,
-                   f'{azBadValues} bad azimuth values and {elBadValues} bad elevation values were replaced',
+                   f'{nReplacedAz} bad azimuth values and {nReplacedEl} bad elevation values were replaced',
                        transform=ax1p5.transAxes)
 
     if prePadding or postPadding:
@@ -404,6 +410,9 @@ def plotEvent(client,
         # extend lines down across lower plot, but do not re-add label
         ax2_twin.axvline(event.begin.utc.datetime, c='k', ls='--', alpha=0.5)
         ax2_twin.axvline(event.end.utc.datetime, c='k', ls='--', alpha=0.5)
+        if ax1p5:
+            ax1p5.axvline(event.begin.utc.datetime, c='k', ls='--', alpha=0.5)
+            ax1p5.axvline(event.end.utc.datetime, c='k', ls='--', alpha=0.5)
 
     for command, commandTime in commands.items():
         # if commands weren't found, the item is set to None. This is common
@@ -416,6 +425,9 @@ def plotEvent(client,
         # extend lines down across lower plot, but do not re-add label
         ax2_twin.axvline(commandTime.utc.datetime, c=lineColors[colorCounter],
                          ls='--', alpha=0.75)
+        if ax1p5:
+            ax1p5.axvline(commandTime.utc.datetime, c=lineColors[colorCounter],
+                          ls='--', alpha=0.75)
         colorCounter += 1
 
     # combine the legends and put inside the plot
