@@ -1445,7 +1445,7 @@ class TMAEventMaker:
                 duration=duration,
                 begin=beginAstropy,
                 end=endAstropy,
-                blockInfos=None,  # this is added later
+                blockInfos=[],  # this is added later
                 _startRow=parsedState.eventStart,
                 _endRow=parsedState.eventEnd,
             )
