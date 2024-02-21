@@ -23,6 +23,8 @@ import pickle
 import logging
 
 from dataclasses import dataclass
+from collections.abc import Callable
+from typing import Any
 import numpy as np
 import matplotlib
 import matplotlib.pyplot as plt
@@ -33,6 +35,7 @@ from astro_metadata_translator import ObservationInfo
 from .utils import obsInfoToDict, getFieldNameAndTileNumber
 
 try:  # TODO: Remove post RFC-896: add humanize to rubin-env
+    precisedelta: Callable[[Any], str]
     from humanize.time import precisedelta
     HAVE_HUMANIZE = True
 except ImportError:

@@ -223,9 +223,9 @@ class Source:
     centroidX: float = np.nan  # in image coordinates
     centroidY: float = np.nan  # in image coordinates
     rawFlux: float = np.nan
-    nPix: int = np.nan
-    bbox: geom.Box2I = None
-    cutout: np.array = None
+    nPix: int | float = np.nan
+    bbox: geom.Box2I | None = None
+    cutout: np.ndarray | None = None
     localCentroidX: float = np.nan  # in cutout coordinates
     localCentroidY: float = np.nan  # in cutout coordinates
 
@@ -233,13 +233,13 @@ class Source:
     hsmFittedFlux: float = np.nan
     hsmCentroidX: float = np.nan
     hsmCentroidY: float = np.nan
-    moments: galsim.hsm.ShapeData = None  # keep the full fit even though we pull some things out too
+    moments: galsim.hsm.ShapeData | None = None  # keep the full fit even though we pull some things out too
 
     imageBackground: float = np.nan
     imageStddev: float = np.nan
-    nSourcesInImage: int = np.nan
-    parentImageWidth: int = np.nan
-    parentImageHeight: int = np.nan
+    nSourcesInImage: int | float = np.nan
+    parentImageWidth: int | float = np.nan
+    parentImageHeight: int | float = np.nan
 
     def __repr__(self):
         """Print everything except the full details of the moments.
