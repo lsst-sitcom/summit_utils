@@ -199,9 +199,8 @@ def filterBadValues(values, maxDelta=0.1):
     # successive data points can be replaced.
     badCounter = 0
     consecutiveCounter = 0
-    lastIndexReplaced = 0
 
-    log = logging.getLogger('lsst.s')
+    log = logging.getLogger(__name__)
 
     median = np.nanmedian(values)
     # if either of the the first two points are more than maxDelta away from
@@ -214,21 +213,22 @@ def filterBadValues(values, maxDelta=0.1):
 
     # from the second element of the array, walk through and calculate the
     # difference between each element and the previous one. If the difference
-    # is greater than maxDelta, replace the element with an extrapolation of
-    # the previous two elements from the point where we started replacing.
+    # is greater than maxDelta, replace the element with the average of the
+    # previous two elements from the point where we started replacing.
+    replacementValue = (values[1] + values[0]) / 2.0  # in case we have to replace the first value
     for i in range(2, len(values)):
         if abs(values[i] - values[i-1]) > maxDelta:
             if consecutiveCounter < 3:
                 consecutiveCounter += 1
-                log.warning(f"Replacing value at index {i}")
-                # Use the value at lastIndexReplaced and the value before it for extrapolation
-                values[i] = 2*values[lastIndexReplaced] - values[lastIndexReplaced-1]
-                lastIndexReplaced = i
                 badCounter += 1
+                log.warning(f"Replacing value at index {i} with {replacementValue}")
+                values[i] = replacementValue
             else:
-                log.warning(f"More than 3 consecutive replacements at index {i}. Stopping replacements.")
+                log.warning(f"More than 3 consecutive replacements at index {i}. Stopping replacements"
+                            " until the next good value.")
         else:
             consecutiveCounter = 0
+            replacementValue = (values[1] + values[0]) / 2.0
     return badCounter
 
 
