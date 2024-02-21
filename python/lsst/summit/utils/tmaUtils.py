@@ -1058,7 +1058,7 @@ class TMAEventMaker:
             self.log.warning(f"Event {seqNum} not found for {dayObs}")
             return None
 
-    def getEvents(self, dayObs):
+    def getEvents(self, dayObs, addBlockInfo=True):
         """Get the TMA events for the specified dayObs.
 
         Gets the required mount data from the cache or the EFD as required,
@@ -1114,6 +1114,7 @@ class TMAEventMaker:
 
         # applies the data to the state machine, and generates events from the
         # series of states which results
+        self.addBlockInfo = addBlockInfo
         events = self._calculateEventsFromMergedData(data, dayObs, dataIsForCurrentDay=workingLive)
         if not events:
             self.log.warning(f"Failed to calculate any events for {dayObs=} despite EFD data existing!")
@@ -1223,7 +1224,8 @@ class TMAEventMaker:
 
         stateTuples = self._statesToEventTuples(tmaStates, dataIsForCurrentDay)
         events = self._makeEventsFromStateTuples(stateTuples, dayObs, data)
-        self.addBlockDataToEvents(dayObs, events)
+        if self.addBlockInfo:
+            self.addBlockDataToEvents(dayObs, events)
         return events
 
     def _statesToEventTuples(self, states, dataIsForCurrentDay):
