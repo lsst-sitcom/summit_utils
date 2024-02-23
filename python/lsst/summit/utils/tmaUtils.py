@@ -26,7 +26,7 @@ import logging
 import pandas as pd
 import numpy as np
 import humanize
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from astropy.time import Time
 from matplotlib.ticker import FuncFormatter
 import matplotlib.dates as mdates
@@ -447,7 +447,7 @@ class TMAEvent:
     duration: float  # seconds
     begin: Time
     end: Time
-    blockInfos: list = None
+    blockInfos: list = field(default_factory=list)
     version: int = 0  # update this number any time a code change which could change event definitions is made
     _startRow: int
     _endRow: int
@@ -507,6 +507,60 @@ class TMAEvent:
             f"end: {self.end!r}\n"
             f"blockInfos: {blockInfoStr}"
         )
+
+    def associatedWith(self, block=None, blockSeqNum=None, ticket=None, salIndex=None):
+        """Check whether an event is associated with a set of parameters.
+
+        Check if an event is associated with a specific block and/or ticket
+        and/or salIndex. All specified parameters must match for the function
+        to return True. If checking if an event is in a block, the blockSeqNum
+        can also be specified to identify events which related to a given
+        running the specified block.
+
+        Parameters
+        ----------
+        block : `int`, optional
+            The block number to check for.
+        blockSeqNum : `int`, optional
+            The block sequence number to check for, if the block is specified.
+        ticket : `str`, optional
+            The ticket number to check for.
+        salIndex : `int`, optional
+            The salIndex to check for.
+
+        Returns
+        -------
+        relates : `bool`
+            Whether the event is associated with the specified block, ticket,
+            and salIndex.
+        """
+        if all([block is None, ticket is None, salIndex is None]):
+            raise ValueError('Must specify at least one of block, ticket, or salIndex')
+
+        if blockSeqNum is not None and block is None:
+            raise ValueError('block must be specified if blockSeqNum is specified')
+
+        for blockInfo in self.blockInfos:
+            # "X is None or" is used for each parameter to allow it to be None
+            # in the kwargs
+            blockMatches = False
+            if block is not None:
+                if blockSeqNum is None and blockInfo.blockNumber == block:
+                    blockMatches = True
+                elif (blockSeqNum is not None and
+                      blockInfo.blockNumber == block and
+                      blockInfo.seqNum == blockSeqNum):
+                    blockMatches = True
+            else:
+                blockMatches = True  # no block specified at all, so it matches
+
+            salIndexMatches = (salIndex is None or salIndex in blockInfo.salIndices)
+            ticketMatches = (ticket is None or ticket in blockInfo.tickets)
+
+            if blockMatches and salIndexMatches and ticketMatches:
+                return True
+
+        return False
 
 
 class TMAState(enum.IntEnum):
@@ -1408,7 +1462,7 @@ class TMAEventMaker:
                 duration=duration,
                 begin=beginAstropy,
                 end=endAstropy,
-                blockInfos=None,  # this is added later
+                blockInfos=[],  # this is added later
                 _startRow=parsedState.eventStart,
                 _endRow=parsedState.eventEnd,
             )

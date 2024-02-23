@@ -230,6 +230,7 @@ class TMAEventMakerTestCase(lsst.utils.tests.TestCase):
             raise unittest.SkipTest("Could not instantiate an EFD client")
 
         cls.dayObs = 20230531
+        cls.dayObsWithBlockInfo = 20230615
         # get a sample expRecord here to test expRecordToTimespan
         cls.tmaEventMaker = TMAEventMaker(cls.client)
         cls.events = cls.tmaEventMaker.getEvents(cls.dayObs)  # does the fetch
@@ -480,6 +481,53 @@ class TMAEventMakerTestCase(lsst.utils.tests.TestCase):
         # behave (being half-open intervals)
         found = eventMaker.findEvent(lastEvent.end)
         self.assertIsNone(found, lastEvent)
+
+    @vcr.use_cassette()
+    def test_eventAssociatedWith(self):
+        eventMaker = self.tmaEventMaker
+        events = eventMaker.getEvents(self.dayObsWithBlockInfo)
+        eventsWithBlockInfo = [e for e in events if e.blockInfos]
+        eventsWithoutBlockInfo = [e for e in events if not e.blockInfos]
+        self.assertEqual(len(events), 69)
+        self.assertEqual(len(eventsWithBlockInfo), 65)
+        self.assertEqual(len(eventsWithoutBlockInfo), 4)
+
+        self.assertIsNotNone(eventsWithoutBlockInfo[0].blockInfos)
+        self.assertIsInstance(eventsWithoutBlockInfo[0].blockInfos, list)
+        self.assertEqual(len(eventsWithoutBlockInfo[0].blockInfos), 0)
+
+        event = eventsWithBlockInfo[0]
+        self.assertIsInstance(event, TMAEvent)
+        self.assertTrue(event.associatedWith(ticket='SITCOM-906'))
+        self.assertFalse(event.associatedWith(ticket='SITCOM-905'))
+
+        self.assertTrue(event.associatedWith(salIndex=100017))
+        self.assertFalse(event.associatedWith(salIndex=100018))
+
+        self.assertTrue(event.associatedWith(block=6))
+        self.assertFalse(event.associatedWith(block=5))
+
+        # check it works with any and all of the arguments
+        self.assertTrue(event.associatedWith(block=6, salIndex=100017))
+        self.assertTrue(event.associatedWith(block=6, salIndex=100017, ticket='SITCOM-906'))
+
+        # check it's false if any are false
+        self.assertFalse(event.associatedWith(block=7, salIndex=100017, ticket='SITCOM-906'))  # 1 wrong
+        self.assertFalse(event.associatedWith(block=6, salIndex=100018, ticket='SITCOM-906'))  # 1 wrong
+        self.assertFalse(event.associatedWith(block=6, salIndex=100017, ticket='SITCOM-907'))  # 1 wrong
+        self.assertFalse(event.associatedWith(block=1, salIndex=1, ticket='SITCOM-1'))  # all wrong
+
+        # check with the blockSeqNum, with and without the other items
+        self.assertTrue(event.associatedWith(block=6, blockSeqNum=1))
+        self.assertFalse(event.associatedWith(block=6, blockSeqNum=2))
+        self.assertTrue(event.associatedWith(block=6, blockSeqNum=1, salIndex=100017))
+        self.assertFalse(event.associatedWith(block=6, blockSeqNum=2, salIndex=100017))
+        self.assertTrue(event.associatedWith(block=6, blockSeqNum=1, salIndex=100017, ticket='SITCOM-906'))
+        self.assertFalse(event.associatedWith(block=6, blockSeqNum=2, salIndex=100017, ticket='SITCOM-906'))
+
+        with self.assertRaises(ValueError):
+            event.associatedWith()
+            event.associatedWith(blockSeqNum=1)  # nonsense to ask for a seqNum without a block number
 
 
 class TestMemory(lsst.utils.tests.MemoryTestCase):
