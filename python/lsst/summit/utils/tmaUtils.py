@@ -181,7 +181,7 @@ def getAzimuthElevationDataForEvent(client,
     return azimuthData, elevationData
 
 
-def filterBadValues(values, maxDelta=0.1):
+def filterBadValues(values, maxDelta=0.1, maxConsecutiveValues=3):
     """Filter out bad values from a dataset, replacing them in-place.
 
     This function replaces non-physical points in the dataset with an
@@ -196,14 +196,16 @@ def filterBadValues(values, maxDelta=0.1):
         The maximum allowed difference between consecutive values. Values with
         a difference greater than `maxDelta` will be considered as bad values
         and replaced with an extrapolation.
+    maxConsecutiveValues : `int`, optional
+        The maximum number of consecutive values to replace. Defaults to 3.
 
     Returns
     -------
     nBadPoints : `int`
         The number of bad values that were replaced out.
     """
-    # Find non-physical points and replace with extrapolation. No more than 3
-    # successive data points can be replaced.
+    # Find non-physical points and replace with extrapolation. No more than
+    # maxConsecutiveValues successive data points can be replaced.
     badCounter = 0
     consecutiveCounter = 0
 
@@ -225,7 +227,7 @@ def filterBadValues(values, maxDelta=0.1):
     replacementValue = (values[1] + values[0]) / 2.0  # in case we have to replace the first value
     for i in range(2, len(values)):
         if abs(values[i] - values[i-1]) > maxDelta:
-            if consecutiveCounter < 3:
+            if consecutiveCounter < maxConsecutiveValues:
                 consecutiveCounter += 1
                 badCounter += 1
                 log.warning(f"Replacing value at index {i} with {replacementValue}")
