@@ -126,14 +126,15 @@ def getAzimuthElevationDataForEvent(client,
                                     event,
                                     prePadding=0,
                                     postPadding=0,
-                                    doFilterResiduals=False,
-                                    maxDelta=0.1):
+                                    ):
     """Get the data for the az/el telemetry topics for a given TMAEvent.
 
     The error between the actual and demanded positions is calculated and added
     to the dataframes in the az/elError columns. For TRACKING type events, this
     error should be extremely close to zero, whereas for SLEWING type events,
-    this error
+    this error represents the how far the TMA is from the demanded position,
+    and is therefore arbitrarily large, and tends to zero as the TMA get closer
+    to tracking the sky.
 
     Parameters
     ----------
@@ -147,6 +148,7 @@ def getAzimuthElevationDataForEvent(client,
     postPadding : `float`, optional
         The amount of time to pad the event with after the end time, in
         seconds.
+
     Returns
     -------
     azimuthData : `pd.DataFrame`
@@ -212,9 +214,9 @@ def filterBadValues(values, maxDelta=0.1):
     # the median, replace them with the median
     for i in range(2):
         if abs(values[i] - median) > maxDelta:
+            log.warning(f"Replacing bad value of {values[i]} at index {i} with {median=}")
             values[i] = median
             badCounter += 1
-            log.warning(f"Replacing bad value at index {i} with median value")
 
     # from the second element of the array, walk through and calculate the
     # difference between each element and the previous one. If the difference
@@ -287,7 +289,7 @@ def plotEvent(client,
     maxDelta : `float`, optional
         The maximum difference between the model and the actual data, in
         arcseconds, to allow before filtering the data point. Ignored if
-        ``filter`` is `False`.
+        ``doFilterResiduals`` is `False`.
     Returns
     -------
     fig : `matplotlib.figure.Figure`
