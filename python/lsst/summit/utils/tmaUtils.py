@@ -508,12 +508,12 @@ class TMAEvent:
             f"blockInfos: {blockInfoStr}"
         )
 
-    def relatesTo(self, block=None, ticket=None, salIndex=None):
-        """Check whether an event relates to a set of specified parameters.
+    def associatedWith(self, block=None, ticket=None, salIndex=None):
+        """Check whether an event is associated with a set of parameters.
 
-        Check if an event relates to a specific block and/or ticket and/or
-        salIndex. All specified parameters must match for the function to
-        return True.
+        Check if an event is associated with a specific block and/or ticket
+        and/or salIndex. All specified parameters must match for the function
+        to return True.
 
         Parameters
         ----------
@@ -527,8 +527,8 @@ class TMAEvent:
         Returns
         -------
         relates : `bool`
-            Whether the event relates to the specified block, ticket, and
-            salIndex.
+            Whether the event is associated with the specified block, ticket,
+            and salIndex.
         """
         if all([block is None, ticket is None, salIndex is None]):
             raise ValueError('Must specify at least one of block, ticket, or salIndex')

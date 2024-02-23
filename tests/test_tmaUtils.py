@@ -483,7 +483,7 @@ class TMAEventMakerTestCase(lsst.utils.tests.TestCase):
         self.assertIsNone(found, lastEvent)
 
     @vcr.use_cassette()
-    def test_eventRelatesTo(self):
+    def test_eventAssociatedWith(self):
         eventMaker = self.tmaEventMaker
         events = eventMaker.getEvents(self.dayObsWithBlockInfo)
         eventsWithBlockInfo = [e for e in events if e.blockInfos]
@@ -498,24 +498,24 @@ class TMAEventMakerTestCase(lsst.utils.tests.TestCase):
 
         event = eventsWithBlockInfo[0]
         self.assertIsInstance(event, TMAEvent)
-        self.assertTrue(event.relatesTo(ticket='SITCOM-906'))
-        self.assertFalse(event.relatesTo(ticket='SITCOM-905'))
+        self.assertTrue(event.associatedWith(ticket='SITCOM-906'))
+        self.assertFalse(event.associatedWith(ticket='SITCOM-905'))
 
-        self.assertTrue(event.relatesTo(salIndex=100017))
-        self.assertFalse(event.relatesTo(salIndex=100018))
+        self.assertTrue(event.associatedWith(salIndex=100017))
+        self.assertFalse(event.associatedWith(salIndex=100018))
 
-        self.assertTrue(event.relatesTo(block=6))
-        self.assertFalse(event.relatesTo(block=5))
+        self.assertTrue(event.associatedWith(block=6))
+        self.assertFalse(event.associatedWith(block=5))
 
         # check it works with any and all of the arguments
-        self.assertTrue(event.relatesTo(block=6, salIndex=100017))
-        self.assertTrue(event.relatesTo(block=6, salIndex=100017, ticket='SITCOM-906'))
+        self.assertTrue(event.associatedWith(block=6, salIndex=100017))
+        self.assertTrue(event.associatedWith(block=6, salIndex=100017, ticket='SITCOM-906'))
 
         # check it's false if any are false
-        self.assertFalse(event.relatesTo(block=7, salIndex=100017, ticket='SITCOM-906'))  # 1 wrong
-        self.assertFalse(event.relatesTo(block=6, salIndex=100018, ticket='SITCOM-906'))  # 1 wrong
-        self.assertFalse(event.relatesTo(block=6, salIndex=100017, ticket='SITCOM-907'))  # 1 wrong
-        self.assertFalse(event.relatesTo(block=1, salIndex=1, ticket='SITCOM-1'))  # all wrong
+        self.assertFalse(event.associatedWith(block=7, salIndex=100017, ticket='SITCOM-906'))  # 1 wrong
+        self.assertFalse(event.associatedWith(block=6, salIndex=100018, ticket='SITCOM-906'))  # 1 wrong
+        self.assertFalse(event.associatedWith(block=6, salIndex=100017, ticket='SITCOM-907'))  # 1 wrong
+        self.assertFalse(event.associatedWith(block=1, salIndex=1, ticket='SITCOM-1'))  # all wrong
 
 
 class TestMemory(lsst.utils.tests.MemoryTestCase):
