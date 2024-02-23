@@ -398,6 +398,15 @@ class TMAEventMakerTestCase(lsst.utils.tests.TestCase):
         nReplaced = filterBadValues(values)
         self.assertEqual(nReplaced, 3)
 
+        # check that the last two good values are always used for correction,
+        # including when there are more than three consecutive bad values.
+        values = np.array([1.0, 0.96, 1.0, 1.02, 2.95, 3.0, 4.05, 5.0, 1.05, 1.0, 2.95])
+        expected = np.array([1.0, 0.96, 1.0, 1.02, 1.01, 1.01, 1.01, 5.0, 1.05, 1.0, 1.025])
+        nReplaced = filterBadValues(values)
+        self.assertEqual(nReplaced, 4)
+        residuals = np.abs(values - expected)
+        self.assertTrue(np.all(residuals < 1e-6))
+
     @vcr.use_cassette()
     def test_getEvent(self):
         # test the singular event getter, and what happens if the event doesn't

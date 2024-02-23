@@ -237,7 +237,7 @@ def filterBadValues(values, maxDelta=0.1, maxConsecutiveValues=3):
                             " until the next good value.")
         else:
             consecutiveCounter = 0
-            replacementValue = (values[1] + values[0]) / 2.0
+            replacementValue = (values[i] + values[i-1]) / 2.0
     return badCounter
 
 
