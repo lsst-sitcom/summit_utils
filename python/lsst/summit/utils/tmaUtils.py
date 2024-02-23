@@ -508,17 +508,21 @@ class TMAEvent:
             f"blockInfos: {blockInfoStr}"
         )
 
-    def associatedWith(self, block=None, ticket=None, salIndex=None):
+    def associatedWith(self, block=None, blockSeqNum=None, ticket=None, salIndex=None):
         """Check whether an event is associated with a set of parameters.
 
         Check if an event is associated with a specific block and/or ticket
         and/or salIndex. All specified parameters must match for the function
-        to return True.
+        to return True. If checking if an event is in a block, the blockSeqNum
+        can also be specified to identify events which related to a given
+        running the specified block.
 
         Parameters
         ----------
         block : `int`, optional
             The block number to check for.
+        blockSeqNum : `int`, optional
+            The block sequence number to check for, if the block is specified.
         ticket : `str`, optional
             The ticket number to check for.
         salIndex : `int`, optional
@@ -533,10 +537,23 @@ class TMAEvent:
         if all([block is None, ticket is None, salIndex is None]):
             raise ValueError('Must specify at least one of block, ticket, or salIndex')
 
+        if blockSeqNum is not None and block is None:
+            raise ValueError('block must be specified if blockSeqNum is specified')
+
         for blockInfo in self.blockInfos:
             # "X is None or" is used for each parameter to allow it to be None
             # in the kwargs
-            blockMatches = (block is None or blockInfo.blockNumber == block)
+            blockMatches = False
+            if block is not None:
+                if blockSeqNum is None and blockInfo.blockNumber == block:
+                    blockMatches = True
+                elif (blockSeqNum is not None and
+                      blockInfo.blockNumber == block and
+                      blockInfo.seqNum == blockSeqNum):
+                    blockMatches = True
+            else:
+                blockMatches = True  # no block specified at all, so it matches
+
             salIndexMatches = (salIndex is None or salIndex in blockInfo.salIndices)
             ticketMatches = (ticket is None or ticket in blockInfo.tickets)
 

@@ -517,6 +517,18 @@ class TMAEventMakerTestCase(lsst.utils.tests.TestCase):
         self.assertFalse(event.associatedWith(block=6, salIndex=100017, ticket='SITCOM-907'))  # 1 wrong
         self.assertFalse(event.associatedWith(block=1, salIndex=1, ticket='SITCOM-1'))  # all wrong
 
+        # check with the blockSeqNum, with and without the other items
+        self.assertTrue(event.associatedWith(block=6, blockSeqNum=1))
+        self.assertFalse(event.associatedWith(block=6, blockSeqNum=2))
+        self.assertTrue(event.associatedWith(block=6, blockSeqNum=1, salIndex=100017))
+        self.assertFalse(event.associatedWith(block=6, blockSeqNum=2, salIndex=100017))
+        self.assertTrue(event.associatedWith(block=6, blockSeqNum=1, salIndex=100017, ticket='SITCOM-906'))
+        self.assertFalse(event.associatedWith(block=6, blockSeqNum=2, salIndex=100017, ticket='SITCOM-906'))
+
+        with self.assertRaises(ValueError):
+            event.associatedWith()
+            event.associatedWith(blockSeqNum=1)  # nonsense to ask for a seqNum without a block number
+
 
 class TestMemory(lsst.utils.tests.MemoryTestCase):
     pass
