@@ -421,6 +421,15 @@ class TMAEventMakerTestCase(lsst.utils.tests.TestCase):
         self.assertEqual(nReplaced, 4)
         self.assertTrue(np.all(residuals < 1e-6))
 
+        # check with non-default maxDelta
+        values = np.array([1.0, 0.96, 1.0, 1.02, 2.95, 3.0, 4.05, 5.0, 1.05, 1.0, 2.95])
+        nReplaced = filterBadValues(values, maxDelta=10)
+        self.assertEqual(nReplaced, 0)
+
+        values = np.array([1.0, 1.0, 1.0, 1.1, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, ])
+        nReplaced = filterBadValues(values, maxDelta=0.01)
+        self.assertEqual(nReplaced, 1)
+
     @vcr.use_cassette()
     def test_getEvent(self):
         # test the singular event getter, and what happens if the event doesn't
