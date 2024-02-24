@@ -223,10 +223,15 @@ def filterBadValues(values, maxDelta=0.1, maxConsecutiveValues=3):
     # from the second element of the array, walk through and calculate the
     # difference between each element and the previous one. If the difference
     # is greater than maxDelta, replace the element with the average of the
-    # previous two elements from the point where we started replacing.
+    # previous two known good values, i.e. ones which have not been replaced.
+    # if the first two points differ from the median by more than maxDelta,
+    # replace them with the median
+    lastGoodValue1 = values[1]
+    lastGoodValue2 = values[0]
+    replacementValue = (lastGoodValue1 + lastGoodValue2) / 2.0  # in case we have to replace the first value
     replacementValue = (values[1] + values[0]) / 2.0  # in case we have to replace the first value
     for i in range(2, len(values)):
-        if abs(values[i] - values[i-1]) > maxDelta:
+        if abs(values[i] - lastGoodValue1) >= maxDelta:
             if consecutiveCounter < maxConsecutiveValues:
                 consecutiveCounter += 1
                 badCounter += 1
@@ -236,8 +241,10 @@ def filterBadValues(values, maxDelta=0.1, maxConsecutiveValues=3):
                 log.warning(f"More than 3 consecutive replacements at index {i}. Stopping replacements"
                             " until the next good value.")
         else:
+            lastGoodValue2 = lastGoodValue1
+            lastGoodValue1 = values[i]
+            replacementValue = (lastGoodValue1 + lastGoodValue2) / 2.0
             consecutiveCounter = 0
-            replacementValue = (values[i] + values[i-1]) / 2.0
     return badCounter
 
 

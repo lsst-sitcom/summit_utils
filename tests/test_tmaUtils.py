@@ -348,6 +348,10 @@ class TMAEventMakerTestCase(lsst.utils.tests.TestCase):
         self.assertEqual(tracks, foundTracks)
 
     def test_filterBadValues(self):
+        # NB: if you add enough spurious values that the median is no longer
+        # the value around which your "good" values are oscillating the first
+        # two points will get replaced and this can be very confusing!
+
         # test no bad values
         # mean = median = 1.0
         values = np.array([1.0, 0.96, 1.0, 1.04, 0.95, 1.0, 1.05, 1.0, 1.05, 1.0, 0.95])
@@ -394,7 +398,7 @@ class TMAEventMakerTestCase(lsst.utils.tests.TestCase):
         self.assertEqual(nReplaced, 2)
 
         # test with bad values in first two positions and one in the middle
-        values = np.array([2.0, 1.96, 1.0, 1.04, 0.95, 5.0, 1.05, 1.0, 1.05, 1.0, 0.95])  # median = 1.0
+        values = np.array([2.0, 1.96, 1.0, 1.04, 0.95, 5.0, 1.04, 1.0, 1.05, 1.0, 0.95])
         nReplaced = filterBadValues(values)
         self.assertEqual(nReplaced, 3)
 
@@ -403,8 +407,18 @@ class TMAEventMakerTestCase(lsst.utils.tests.TestCase):
         values = np.array([1.0, 0.96, 1.0, 1.02, 2.95, 3.0, 4.05, 5.0, 1.05, 1.0, 2.95])
         expected = np.array([1.0, 0.96, 1.0, 1.02, 1.01, 1.01, 1.01, 5.0, 1.05, 1.0, 1.025])
         nReplaced = filterBadValues(values)
-        self.assertEqual(nReplaced, 4)
         residuals = np.abs(values - expected)
+        self.assertEqual(nReplaced, 4)
+        self.assertTrue(np.all(residuals < 1e-6))
+
+        # check with one good point after an overflowing run of bad to make
+        # sure the correction is always applied with good values, not the naive
+        # average of the last two even if they might be bad
+        values = np.array([1.0, 0.96, 1.0, 1.02, 2.95, 3.0, 4.05, 5.0, 1.05, 2.95, 1.])
+        expected = np.array([1.0, 0.96, 1.0, 1.02, 1.01, 1.01, 1.01, 5.0, 1.05, 1.035, 1.0])
+        nReplaced = filterBadValues(values)
+        residuals = np.abs(values - expected)
+        self.assertEqual(nReplaced, 4)
         self.assertTrue(np.all(residuals < 1e-6))
 
     @vcr.use_cassette()
