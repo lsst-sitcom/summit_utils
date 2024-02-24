@@ -270,6 +270,18 @@ def plotEvent(client,
     strings, with values as astro.time.Time objects at which the command was
     issued.
 
+    Due to a problem with the way the data is uploaded to the EFD, there are
+    occasional points in the tracking error plots that are very much larger
+    than the typical mount jitter. These points are unphysical, since it is not
+    possible for the mount to move that fast. We don't want these points, which
+    are not true mount problems, to distract from any real mount problems, and
+    these can be filtered out via the ``doFilterResiduals`` kwarg, which
+    replaces these non-physical points with an extrapolation of the average of
+    the preceding two known-good points. If the first two points are bad these
+    are replaced with the median of the dataset. The maximum difference between
+    the model and the actual data, in arcseconds, to allow before filtering a
+    data point can be set with the ``maxDelta`` kwarg.
+
     Parameters
     ----------
     client : `lsst_efd_client.efd_helper.EfdClient`
