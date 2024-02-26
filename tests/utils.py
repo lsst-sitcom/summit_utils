@@ -21,10 +21,34 @@
 
 import os
 import vcr
+import gzip
+import yaml
+
+from yaml import CDumper as Dumper
+from yaml import CLoader as Loader
 
 __all__ = (
     "getVcr",
 )
+
+
+class GzipSerializer:
+    """
+    Serializes the cassette_dict to a compressed YAML string.
+    """
+
+    @staticmethod
+    def serialize(cassette_dict):
+        # Convert the cassette dictionary to a YAML string
+        # yaml_str = yaml.dump(cassette_dict)
+        # return yaml_str
+        return yaml.dump(cassette_dict, Dumper=Dumper)
+
+    @staticmethod
+    def deserialize(cassette_string):
+        # Convert the YAML string back to a dictionary
+        return yaml.load(cassette_string, Loader=Loader)
+        # return yaml.safe_load(yaml_str)
 
 
 def getVcr():
@@ -41,9 +65,12 @@ def getVcr():
     dirname = os.path.dirname(__file__)
     cassette_library_dir = os.path.join(dirname, "data", "cassettes")
     safe_vcr = vcr.VCR(
-        record_mode="none",
+        record_mode="all",
+        # serializer='gzip_yaml',
         cassette_library_dir=cassette_library_dir,
         path_transformer=vcr.VCR.ensure_suffix(".yaml"),
         match_on=['method', 'scheme', 'host', 'port', 'path', 'query', 'body']
     )
+    safe_vcr.register_serializer('gzip_yaml', GzipSerializer())
+    safe_vcr.serializer = 'gzip_yaml'
     return safe_vcr
