@@ -47,6 +47,7 @@ from lsst.summit.utils.tmaUtils import (
     AxisMotionState,
     getAxisAndType,
     _initializeTma,
+    filterBadValues,
 )
 from utils import getVcr
 
@@ -345,6 +346,89 @@ class TMAEventMakerTestCase(lsst.utils.tests.TestCase):
         foundTracks = getTracksFromEventList(events)
         self.assertEqual(slews, foundSlews)
         self.assertEqual(tracks, foundTracks)
+
+    def test_filterBadValues(self):
+        # NB: if you add enough spurious values that the median is no longer
+        # the value around which your "good" values are oscillating the first
+        # two points will get replaced and this can be very confusing!
+
+        # test no bad values
+        # mean = median = 1.0
+        values = np.array([1.0, 0.96, 1.0, 1.04, 0.95, 1.0, 1.05, 1.0, 1.05, 1.0, 0.95])
+        mean = np.mean(values)
+        nReplaced = filterBadValues(values)
+        self.assertEqual(nReplaced, 0)
+        self.assertEqual(np.mean(values), mean)
+
+        # test with one bad values
+        values = np.array([1.0, 0.96, 1.0, 1.04, 2.95, 1.0, 1.05, 1.0, 1.05, 1.0, 0.95])
+        nReplaced = filterBadValues(values)
+        self.assertEqual(nReplaced, 1)
+
+        # test with two consecutive bad values
+        values = np.array([1.0, 0.96, 1.0, 1.04, 2.95, 3.0, 1.05, 1.0, 1.05, 1.0, 0.95])
+        nReplaced = filterBadValues(values)
+        self.assertEqual(nReplaced, 2)
+
+        # test with three consecutive bad values
+        values = np.array([1.0, 0.96, 1.0, 1.04, 2.95, 3.0, 4.05, 1.0, 1.05, 1.0, 0.95])
+        nReplaced = filterBadValues(values)
+        self.assertEqual(nReplaced, 3)
+
+        # test with three consecutive bad values and another at the end
+        values = np.array([1.0, 0.96, 1.0, 1.04, 2.95, 3.0, 4.05, 1.0, 1.05, 1.0, 3.95])
+        nReplaced = filterBadValues(values)
+        self.assertEqual(nReplaced, 4)
+
+        # test with more than three consecutive bad values
+        values = np.array([1.0, 0.96, 1.0, 1.04, 2.95, 3.0, 4.05, 5.0, 1.05, 1.0, 0.95])
+        nReplaced = filterBadValues(values)
+        self.assertEqual(nReplaced, 3)
+        self.assertIn(5.0, values)  # check the last bad value is still there specifically
+
+        # test with more than three consecutive bad values and another bad
+        # value at the end
+        values = np.array([1.0, 0.96, 1.0, 1.04, 2.95, 3.0, 4.05, 5.0, 1.05, 1.0, 2.95])
+        nReplaced = filterBadValues(values)
+        self.assertEqual(nReplaced, 4)
+
+        # test with bad values in first two positions
+        values = np.array([2.0, 1.96, 1.0, 1.04, 0.95, 1.0, 1.05, 1.0, 1.05, 1.0, 0.95])  # median = 1.0
+        nReplaced = filterBadValues(values)
+        self.assertEqual(nReplaced, 2)
+
+        # test with bad values in first two positions and one in the middle
+        values = np.array([2.0, 1.96, 1.0, 1.04, 0.95, 5.0, 1.04, 1.0, 1.05, 1.0, 0.95])
+        nReplaced = filterBadValues(values)
+        self.assertEqual(nReplaced, 3)
+
+        # check that the last two good values are always used for correction,
+        # including when there are more than three consecutive bad values.
+        values = np.array([1.0, 0.96, 1.0, 1.02, 2.95, 3.0, 4.05, 5.0, 1.05, 1.0, 2.95])
+        expected = np.array([1.0, 0.96, 1.0, 1.02, 1.01, 1.01, 1.01, 5.0, 1.05, 1.0, 1.025])
+        nReplaced = filterBadValues(values)
+        residuals = np.abs(values - expected)
+        self.assertEqual(nReplaced, 4)
+        self.assertTrue(np.all(residuals < 1e-6))
+
+        # check with one good point after an overflowing run of bad to make
+        # sure the correction is always applied with good values, not the naive
+        # average of the last two even if they might be bad
+        values = np.array([1.0, 0.96, 1.0, 1.02, 2.95, 3.0, 4.05, 5.0, 1.05, 2.95, 1.])
+        expected = np.array([1.0, 0.96, 1.0, 1.02, 1.01, 1.01, 1.01, 5.0, 1.05, 1.035, 1.0])
+        nReplaced = filterBadValues(values)
+        residuals = np.abs(values - expected)
+        self.assertEqual(nReplaced, 4)
+        self.assertTrue(np.all(residuals < 1e-6))
+
+        # check with non-default maxDelta
+        values = np.array([1.0, 0.96, 1.0, 1.02, 2.95, 3.0, 4.05, 5.0, 1.05, 1.0, 2.95])
+        nReplaced = filterBadValues(values, maxDelta=10)
+        self.assertEqual(nReplaced, 0)
+
+        values = np.array([1.0, 1.0, 1.0, 1.1, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, ])
+        nReplaced = filterBadValues(values, maxDelta=0.01)
+        self.assertEqual(nReplaced, 1)
 
     @vcr.use_cassette()
     def test_getEvent(self):

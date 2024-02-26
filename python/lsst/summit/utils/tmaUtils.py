@@ -43,6 +43,7 @@ from .efdUtils import (getEfdData,
                        getDayObsForTime,
                        getDayObsStartTime,
                        getDayObsEndTime,
+                       clipDataToEvent,
                        )
 
 __all__ = (
@@ -55,6 +56,7 @@ __all__ = (
     'getSlewsFromEventList',
     'getTracksFromEventList',
     'getTorqueMaxima',
+    'filterBadValues',
 )
 
 # we don't want to use `None` for a no data sentinel because dict.get('key')
@@ -62,6 +64,10 @@ __all__ = (
 # was queried for and no data was found, whereas the key not being present
 # means that we've not yet looked for the data.
 NO_DATA_SENTINEL = "NODATA"
+
+# The known time difference between the TMA demand position and the TMA
+# position when tracking. 20Hz data times three points = 150ms.
+TRACKING_RESIDUAL_TAIL_CLIP = -0.15  # seconds
 
 
 def getSlewsFromEventList(events):
@@ -116,8 +122,19 @@ def getTorqueMaxima(table):
         print(f"Max negative {axis:9} torque during seqNum {minPos:>4}: {minVal/1000:>7.1f}kNm")
 
 
-def getAzimuthElevationDataForEvent(client, event, prePadding=0, postPadding=0):
+def getAzimuthElevationDataForEvent(client,
+                                    event,
+                                    prePadding=0,
+                                    postPadding=0,
+                                    ):
     """Get the data for the az/el telemetry topics for a given TMAEvent.
+
+    The error between the actual and demanded positions is calculated and added
+    to the dataframes in the az/elError columns. For TRACKING type events, this
+    error should be extremely close to zero, whereas for SLEWING type events,
+    this error represents the how far the TMA is from the demanded position,
+    and is therefore arbitrarily large, and tends to zero as the TMA get closer
+    to tracking the sky.
 
     Parameters
     ----------
@@ -150,11 +167,96 @@ def getAzimuthElevationDataForEvent(client, event, prePadding=0, postPadding=0):
                                prePadding=prePadding,
                                postPadding=postPadding)
 
+    azValues = azimuthData['actualPosition'].values
+    elValues = elevationData['actualPosition'].values
+    azDemand = azimuthData['demandPosition'].values
+    elDemand = elevationData['demandPosition'].values
+
+    azError = (azValues - azDemand) * 3600
+    elError = (elValues - elDemand) * 3600
+
+    azimuthData['azError'] = azError
+    elevationData['elError'] = elError
+
     return azimuthData, elevationData
 
 
-def plotEvent(client, event, fig=None, prePadding=0, postPadding=0, commands={},
-              azimuthData=None, elevationData=None):
+def filterBadValues(values, maxDelta=0.1, maxConsecutiveValues=3):
+    """Filter out bad values from a dataset, replacing them in-place.
+
+    This function replaces non-physical points in the dataset with an
+    extrapolation of the preceding two values. No more than 3 successive data
+    points are allowed to be replaced. Minimum length of the input is 3 points.
+
+    Parameters
+    ----------
+    values : `list` or `np.ndarray`
+        The dataset containing the values to be filtered.
+    maxDelta : `float`, optional
+        The maximum allowed difference between consecutive values. Values with
+        a difference greater than `maxDelta` will be considered as bad values
+        and replaced with an extrapolation.
+    maxConsecutiveValues : `int`, optional
+        The maximum number of consecutive values to replace. Defaults to 3.
+
+    Returns
+    -------
+    nBadPoints : `int`
+        The number of bad values that were replaced out.
+    """
+    # Find non-physical points and replace with extrapolation. No more than
+    # maxConsecutiveValues successive data points can be replaced.
+    badCounter = 0
+    consecutiveCounter = 0
+
+    log = logging.getLogger(__name__)
+
+    median = np.nanmedian(values)
+    # if either of the the first two points are more than maxDelta away from
+    # the median, replace them with the median
+    for i in range(2):
+        if abs(values[i] - median) > maxDelta:
+            log.warning(f"Replacing bad value of {values[i]} at index {i} with {median=}")
+            values[i] = median
+            badCounter += 1
+
+    # from the second element of the array, walk through and calculate the
+    # difference between each element and the previous one. If the difference
+    # is greater than maxDelta, replace the element with the average of the
+    # previous two known good values, i.e. ones which have not been replaced.
+    # if the first two points differ from the median by more than maxDelta,
+    # replace them with the median
+    lastGoodValue1 = values[1]  # the most recent good value
+    lastGoodValue2 = values[0]  # the second most recent good value
+    replacementValue = (lastGoodValue1 + lastGoodValue2) / 2.0  # in case we have to replace the first value
+    for i in range(2, len(values)):
+        if abs(values[i] - lastGoodValue1) >= maxDelta:
+            if consecutiveCounter < maxConsecutiveValues:
+                consecutiveCounter += 1
+                badCounter += 1
+                log.warning(f"Replacing value at index {i} with {replacementValue}")
+                values[i] = replacementValue
+            else:
+                log.warning(f"More than 3 consecutive replacements at index {i}. Stopping replacements"
+                            " until the next good value.")
+        else:
+            lastGoodValue2 = lastGoodValue1
+            lastGoodValue1 = values[i]
+            replacementValue = (lastGoodValue1 + lastGoodValue2) / 2.0
+            consecutiveCounter = 0
+    return badCounter
+
+
+def plotEvent(client,
+              event,
+              fig=None,
+              prePadding=0,
+              postPadding=0,
+              commands={},
+              azimuthData=None,
+              elevationData=None,
+              doFilterResiduals=False,
+              maxDelta=0.1):
     """Plot the TMA axis positions over the course of a given TMAEvent.
 
     Plots the axis motion profiles for the given event, with optional padding
@@ -166,6 +268,18 @@ def plotEvent(client, event, fig=None, prePadding=0, postPadding=0, commands={},
     are supplied. Commands are supplied as a dictionary of the command topic
     strings, with values as astro.time.Time objects at which the command was
     issued.
+
+    Due to a problem with the way the data is uploaded to the EFD, there are
+    occasional points in the tracking error plots that are very much larger
+    than the typical mount jitter. These points are unphysical, since it is not
+    possible for the mount to move that fast. We don't want these points, which
+    are not true mount problems, to distract from any real mount problems, and
+    these can be filtered out via the ``doFilterResiduals`` kwarg, which
+    replaces these non-physical points with an extrapolation of the average of
+    the preceding two known-good points. If the first two points are bad these
+    are replaced with the median of the dataset. The maximum difference between
+    the model and the actual data, in arcseconds, to allow before filtering a
+    data point can be set with the ``maxDelta`` kwarg.
 
     Parameters
     ----------
@@ -190,7 +304,12 @@ def plotEvent(client, event, fig=None, prePadding=0, postPadding=0, commands={},
     elevationData : `pd.DataFrame`, optional
         The elevation data to plot. If not specified, it will be queried from
         the EFD.
-
+    doFilterResiduals : 'bool', optional
+        Enables filtering of unphysical data points in the tracking residuals.
+    maxDelta : `float`, optional
+        The maximum difference between the model and the actual data, in
+        arcseconds, to allow before filtering the data point. Ignored if
+        ``doFilterResiduals`` is `False`.
     Returns
     -------
     fig : `matplotlib.figure.Figure`
@@ -213,11 +332,19 @@ def plotEvent(client, event, fig=None, prePadding=0, postPadding=0, commands={},
                     " Pass in a figure with fig = plt.figure(figsize=(10, 8)) to avoid this warning.")
 
     fig.clear()
-    ax1, ax2 = fig.subplots(2,
-                            sharex=True,
-                            gridspec_kw={'wspace': 0,
-                                         'hspace': 0,
-                                         'height_ratios': [2.5, 1]})
+    ax1p5 = None  # need to always be defined
+    if event.type.name == 'TRACKING':
+        ax1, ax1p5, ax2 = fig.subplots(3,
+                                       sharex=True,
+                                       gridspec_kw={'wspace': 0,
+                                                    'hspace': 0,
+                                                    'height_ratios': [2.5, 1, 1]})
+    else:
+        ax1, ax2 = fig.subplots(2,
+                                sharex=True,
+                                gridspec_kw={'wspace': 0,
+                                             'hspace': 0,
+                                             'height_ratios': [2.5, 1]})
 
     if azimuthData is None or elevationData is None:
         azimuthData, elevationData = getAzimuthElevationDataForEvent(client,
@@ -258,6 +385,55 @@ def plotEvent(client, event, fig=None, prePadding=0, postPadding=0, commands={},
     ax2.xaxis.set_major_locator(mdates.AutoDateLocator())
     ax2.xaxis.set_major_formatter(mdates.DateFormatter('%H:%M:%S'))
 
+    if event.type.name == 'TRACKING':
+        # returns a copy
+        clippedAzimuthData = clipDataToEvent(azimuthData, event, postPadding=TRACKING_RESIDUAL_TAIL_CLIP)
+        clippedElevationData = clipDataToEvent(elevationData, event, postPadding=TRACKING_RESIDUAL_TAIL_CLIP)
+
+        azError = clippedAzimuthData['azError'].values
+        elError = clippedElevationData['elError'].values
+        elVals = clippedElevationData['actualPosition'].values
+        if doFilterResiduals:
+            # Filtering out bad values
+            nReplacedAz = filterBadValues(azError, maxDelta)
+            nReplacedEl = filterBadValues(elError, maxDelta)
+            clippedAzimuthData['azError'] = azError
+            clippedElevationData['elError'] = elError
+        # Calculate RMS
+        az_rms = np.sqrt(np.mean(azError * azError))
+        el_rms = np.sqrt(np.mean(elError * elError))
+
+        # Calculate Image impact RMS
+        # We are less sensitive to Az errors near the zenith
+        image_az_rms = az_rms * np.cos(elVals[0] * np.pi / 180.0)
+        image_el_rms = el_rms
+        image_impact_rms = np.sqrt(image_az_rms**2 + image_el_rms**2)
+        ax1p5.plot(clippedAzimuthData['azError'],
+                   label='Azimuth tracking error',
+                   c=lineColors[colorCounter])
+        colorCounter += 1
+        ax1p5.plot(clippedElevationData['elError'],
+                   label='Elevation tracking error',
+                   c=lineColors[colorCounter])
+        colorCounter += 1
+        ax1p5.axhline(0.01, ls='-.', color='black')
+        ax1p5.axhline(-0.01, ls='-.', color='black')
+        ax1p5.yaxis.set_major_formatter(FuncFormatter(tickFormatter))
+        ax1p5.set_ylabel('Tracking error (arcsec)')
+        ax1p5.set_xticks([])  # remove x tick labels on the hidden upper x-axis
+        ax1p5.set_ylim(-0.05, 0.05)
+        ax1p5.set_yticks([-0.04, -0.02, 0.0, 0.02, 0.04])
+        ax1p5.legend()
+        ax1p5.text(0.1, 0.9,
+                   f'Image impact RMS = {image_impact_rms:.3f} arcsec', transform=ax1p5.transAxes)
+        if doFilterResiduals:
+            ax1p5.text(
+                0.1,
+                0.8,
+                f'{nReplacedAz} bad azimuth values and {nReplacedEl} bad elevation values were replaced',
+                transform=ax1p5.transAxes
+            )
+
     if prePadding or postPadding:
         # note the conversion to utc because the x-axis from the dataframe
         # already got automagically converted when plotting before, so this is
@@ -267,6 +443,9 @@ def plotEvent(client, event, fig=None, prePadding=0, postPadding=0, commands={},
         # extend lines down across lower plot, but do not re-add label
         ax2_twin.axvline(event.begin.utc.datetime, c='k', ls='--', alpha=0.5)
         ax2_twin.axvline(event.end.utc.datetime, c='k', ls='--', alpha=0.5)
+        if ax1p5:
+            ax1p5.axvline(event.begin.utc.datetime, c='k', ls='--', alpha=0.5)
+            ax1p5.axvline(event.end.utc.datetime, c='k', ls='--', alpha=0.5)
 
     for command, commandTime in commands.items():
         # if commands weren't found, the item is set to None. This is common
@@ -279,6 +458,9 @@ def plotEvent(client, event, fig=None, prePadding=0, postPadding=0, commands={},
         # extend lines down across lower plot, but do not re-add label
         ax2_twin.axvline(commandTime.utc.datetime, c=lineColors[colorCounter],
                          ls='--', alpha=0.75)
+        if ax1p5:
+            ax1p5.axvline(commandTime.utc.datetime, c=lineColors[colorCounter],
+                          ls='--', alpha=0.75)
         colorCounter += 1
 
     # combine the legends and put inside the plot
