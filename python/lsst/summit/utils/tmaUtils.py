@@ -226,10 +226,9 @@ def filterBadValues(values, maxDelta=0.1, maxConsecutiveValues=3):
     # previous two known good values, i.e. ones which have not been replaced.
     # if the first two points differ from the median by more than maxDelta,
     # replace them with the median
-    lastGoodValue1 = values[1]
-    lastGoodValue2 = values[0]
+    lastGoodValue1 = values[1]  # the most recent good value
+    lastGoodValue2 = values[0]  # the second most recent good value
     replacementValue = (lastGoodValue1 + lastGoodValue2) / 2.0  # in case we have to replace the first value
-    replacementValue = (values[1] + values[0]) / 2.0  # in case we have to replace the first value
     for i in range(2, len(values)):
         if abs(values[i] - lastGoodValue1) >= maxDelta:
             if consecutiveCounter < maxConsecutiveValues:
