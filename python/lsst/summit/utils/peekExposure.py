@@ -970,10 +970,15 @@ class PeekExposureTask(pipeBase.Task):
             # donut mode.
             if donutDiameter > self.config.donutThreshold:
                 mode = "donut"
-            elif isDispersedExp(exposure):
-                mode = "spec"
             else:
-                mode = "photo"
+                try:
+                    isDisp = isDispersedExp(exposure)
+                except Exception as e:
+                    isDisp = False
+                if isDisp:
+                    mode = "spec"
+                else:
+                    mode = "photo"
 
         match mode:
             case "donut":
