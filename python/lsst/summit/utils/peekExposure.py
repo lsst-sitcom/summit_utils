@@ -774,8 +774,10 @@ class PeekExposureTask(pipeBase.Task):
             case "LATISS":
                 focusZ *= 41  # magnification factor
                 fratio = 18.0
-            case "LSSTCam" | "ComCam":
+            case "LSSTCam" | "ComCam" | "LSSTComCamSim":
                 fratio = 1.234
+            case _:
+                raise ValueError(f"Unknown instrument label: {instrumentLabel}")
         # AuxTel/ComCam/LSSTCam all have 10 micron pixels (= 10e-3 mm)
         donutDiameter = abs(focusZ) / fratio / 10e-3
         self.log.info(f"{focusZ=} mm")
