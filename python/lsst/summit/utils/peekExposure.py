@@ -970,10 +970,13 @@ class PeekExposureTask(pipeBase.Task):
             # donut mode.
             if donutDiameter > self.config.donutThreshold:
                 mode = "donut"
-            elif isDispersedExp(exposure):
-                mode = "spec"
             else:
-                mode = "photo"
+                if exposure.getInfo().getVisitInfo().instrumentLabel == "LATISS":
+                    # only LATISS images *can* be dispersed, and isDispersedExp
+                    # only works cleanly for LATISS
+                    mode = "spec" if isDispersedExp(exposure) else "photo"
+                else:
+                    mode = "photo"
 
         match mode:
             case "donut":
