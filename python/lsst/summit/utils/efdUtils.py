@@ -712,24 +712,23 @@ def getCommands(client, commands, begin, end, prePadding, postPadding, timeForma
             postPadding=postPadding,
             warn=False  # most commands will not be issue so we expect many empty queries
         )
-        if not data.empty:
-            for time, _ in data.iterrows():
-                # this is much the most simple data structure, and the chance
-                # of commands being *exactly* simultaneous is minimal so try
-                # it like this, and just raise if we get collisions for now. So
-                # far in testing this seems to be just fine.
+        for time, _ in data.iterrows():
+            # this is much the most simple data structure, and the chance
+            # of commands being *exactly* simultaneous is minimal so try
+            # it like this, and just raise if we get collisions for now. So
+            # far in testing this seems to be just fine.
 
-                timeKey = None
-                match timeFormat:
-                    case 'pandas':
-                        timeKey = time
-                    case 'astropy':
-                        timeKey = Time(time)
-                    case 'python':
-                        timeKey = time.to_pydatetime()
+            timeKey = None
+            match timeFormat:
+                case 'pandas':
+                    timeKey = time
+                case 'astropy':
+                    timeKey = Time(time)
+                case 'python':
+                    timeKey = time.to_pydatetime()
 
-                if timeKey in commandTimes:
-                    raise ValueError(f"There is already a command at {timeKey=} -"
-                                     " make a better data structure!")
-                commandTimes[timeKey] = command
+            if timeKey in commandTimes:
+                raise ValueError(f"There is already a command at {timeKey=} -"
+                                    " make a better data structure!")
+            commandTimes[timeKey] = command
     return commandTimes
