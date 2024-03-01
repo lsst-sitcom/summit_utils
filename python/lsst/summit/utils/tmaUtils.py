@@ -19,6 +19,7 @@
 # You should have received a copy of the GNU General Public License
 # along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
+import datetime
 import re
 import enum
 import itertools
@@ -44,6 +45,7 @@ from .efdUtils import (getEfdData,
                        getDayObsStartTime,
                        getDayObsEndTime,
                        clipDataToEvent,
+                       getCommands,
                        )
 
 __all__ = (
@@ -295,9 +297,11 @@ def plotEvent(client,
     postPadding : `float`, optional
         The amount of time to pad the event with after the end time, in
         seconds.
-    commands : `dict` of `str` : `astropy.time.Time`, optional
-        A dictionary of commands to plot on the figure. The keys are the topic
-        names, and the values are the times at which the commands were sent.
+    commands : `dict` [`pd.Timestamp`, `str`], or
+               `dict` [`datetime.datetime`, `str`], oroptional
+        A dictionary of commands to plot on the figure. The keys are the times
+        at which a command was issued, and the value is the command string, as
+        returned by efdUtils.getCommands().
     azimuthData : `pd.DataFrame`, optional
         The azimuth data to plot. If not specified, it will be queried from the
         EFD.
@@ -319,6 +323,19 @@ def plotEvent(client,
         # Convert the value to a string without subtracting large numbers
         # tick_number is unused.
         return f"{value:.2f}"
+
+    def getPlotTime(time):
+        """Get the right time to plot a point from the various time formats.
+        """
+        match time:
+            case pd.Timestamp():
+                return time.to_pydatetime()
+            case Time():
+                return time.utc.datetime
+            case datetime.datetime():
+                return time
+            case _:
+                raise ValueError(f"Unknown type for commandTime: {type(time)}")
 
     # plot any commands we might have
     if not isinstance(commands, dict):
@@ -447,19 +464,15 @@ def plotEvent(client,
             ax1p5.axvline(event.begin.utc.datetime, c='k', ls='--', alpha=0.5)
             ax1p5.axvline(event.end.utc.datetime, c='k', ls='--', alpha=0.5)
 
-    for command, commandTime in commands.items():
-        # if commands weren't found, the item is set to None. This is common
-        # for events so handle it gracefully and silently. The command finding
-        # code logs about lack of commands found so no need to mention here.
-        if commandTime is None:
-            continue
-        ax1_twin.axvline(commandTime.utc.datetime, c=lineColors[colorCounter],
+    for commandTime, command in commands.items():
+        plotTime = getPlotTime(commandTime)
+        ax1_twin.axvline(plotTime, c=lineColors[colorCounter],
                          ls='--', alpha=0.75, label=f'{command}')
         # extend lines down across lower plot, but do not re-add label
-        ax2_twin.axvline(commandTime.utc.datetime, c=lineColors[colorCounter],
+        ax2_twin.axvline(plotTime, c=lineColors[colorCounter],
                          ls='--', alpha=0.75)
         if ax1p5:
-            ax1p5.axvline(commandTime.utc.datetime, c=lineColors[colorCounter],
+            ax1p5.axvline(plotTime, c=lineColors[colorCounter],
                           ls='--', alpha=0.75)
         colorCounter += 1
 
@@ -488,7 +501,14 @@ def plotEvent(client,
     return fig
 
 
-def getCommandsDuringEvent(client, event, commands=('raDecTarget'), log=None, doLog=True):
+def getCommandsDuringEvent(client,
+                           event,
+                           commands=('raDecTarget'),
+                           prePadding=0,
+                           postPadding=0,
+                           timeFormat='python',
+                           log=None,
+                           doLog=True):
     """Get the commands issued during an event.
 
     Get the times at which the specified commands were issued during the event.
@@ -502,6 +522,16 @@ def getCommandsDuringEvent(client, event, commands=('raDecTarget'), log=None, do
     commands : `list` of `str`, optional
         The commands or command aliases to look for. Defaults to
         ['raDecTarget'].
+    prePadding : `float`, optional
+        The amount of time to pad the event with before the start time, in
+        seconds.
+    postPadding : `float`, optional
+        The amount of time to pad the event with after the end time, in
+        seconds.
+    timeFormat : `str`, optional
+        One of 'pandas' or 'astropy' or 'python'. If 'pandas', the dictionary
+        keys will be pandas timestamps, if 'astropy' they will be astropy times
+        and if 'python' they will be python datetimes.
     log : `logging.Logger`, optional
         The logger to use. If not specified, a new logger will be created if
         needed.
@@ -510,39 +540,29 @@ def getCommandsDuringEvent(client, event, commands=('raDecTarget'), log=None, do
 
     Returns
     -------
-    commands : `dict` of `str` : `astropy.time.Time`
-        A dictionary of the commands and the times at which they were issued.
+    commandTimes : `dict` [`time`, `str`]
+        A dictionary of the times at which the commands where issued. The type
+        that `time` takes is determined by the format key, and defaults to
+        python datetime.
     """
-    # TODO: DM-40100 Add support for padding the event here to allow looking
-    # for triggering commands before the event
-
-    # TODO: DM-40100 Change this to always return a list of times, and remove
-    # warning about finding multiple commands. Remember to update docs and
-    # plotting code.
-    if log is None and doLog:
-        log = logging.getLogger(__name__)
-
-    commands = ensure_iterable(commands)
+    commands = list(ensure_iterable(commands))
     fullCommands = [c if c not in COMMAND_ALIASES else COMMAND_ALIASES[c] for c in commands]
     del commands  # make sure we always use their full names
 
-    ret = {}
-    for command in fullCommands:
-        data = getEfdData(client, command, event=event, warn=False)
-        if data.empty:
-            if doLog:
-                log.info(f'Found no command issued for {command} during event')
-            ret[command] = None
-        elif len(data) > 1:
-            if doLog:
-                log.warning(f'Found multiple commands issued for {command} during event, returning None')
-            ret[command] = None
-        else:
-            assert len(data) == 1  # this must be true now
-            commandTime = data.private_efdStamp
-            ret[command] = Time(commandTime, format='unix')
+    commandTimes = getCommands(client,
+                               fullCommands,
+                               begin=event.begin,
+                               end=event.end,
+                               prePadding=prePadding,
+                               postPadding=postPadding,
+                               timeFormat=timeFormat,
+                               )
 
-    return ret
+    if not commandTimes and doLog:
+        log = logging.getLogger(__name__)
+        log.info(f'Found no commands in {fullCommands} issued during event {event.seqNum}')
+
+    return commandTimes
 
 
 def _initializeTma(tma):
