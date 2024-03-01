@@ -1,9 +1,12 @@
 import logging
-
 import matplotlib.pyplot as plt
 import pandas as pd
+
 from astropy.time import Time
+from typing import Optional
+
 from lsst.summit.utils.type_utils import M1M3ICSAnalysis
+
 
 __all__ = [
     'plot_hp_data',
@@ -24,25 +27,25 @@ __all__ = [
 ]
 
 # Approximate value for breakaway
-HP_BREAKAWAY_LIMIT = 3000  # [N]
+HP_BREAKAWAY_LIMIT : float = 3000  # [N]
 
 # limit that can still damage the mirror with fatigue
-HP_FATIGUE_LIMIT = 900  # [N]
+HP_FATIGUE_LIMIT : float = 900  # [N]
 
 # desired operational limit
-HP_OPERATIONAL_LIMIT = 450  # [N]
+HP_OPERATIONAL_LIMIT : float = 450  # [N]
 
 FIGURE_WIDTH = 10
 FIGURE_HEIGHT = 7
 
 
-def plot_hp_data(ax: plt.Axes, data: pd.Series | list, label: str) -> list[plt.Line2D]:
+def plot_hp_data(ax: plt.Axes, data: pd.Series | list, label: str) -> plt.Line2D:
     """
     Plot hardpoint data on the given axes.
 
     Parameters
     ----------
-    ax : `matplotlib.axes._axes.Axes`
+    ax : `plt.Axes`
         The axes on which the data is plotted.
     topic : `str`
         The topic of the data.
@@ -53,12 +56,12 @@ def plot_hp_data(ax: plt.Axes, data: pd.Series | list, label: str) -> list[plt.L
 
     Returns
     -------
-    lines : `list[Line2D]`
-        A list containing the Line2D objects representing the plotted data
-        lines.
+    lines : `plt.Line2D`
+        The plotted data as a Line2D object.
     """
     line = ax.plot(data, "-", label=label, lw=0.5)
-    return line
+    #  Make this function consistent with others by returning single Line2D 
+    return line[0]  
 
 
 def mark_slew_begin_end(ax: plt.Axes, slew_begin: Time, slew_end: Time) -> plt.Line2D:
@@ -142,9 +145,7 @@ def customize_fig(fig: plt.Figure, dataset: M1M3ICSAnalysis):
     fig.subplots_adjust(hspace=0)
 
 
-def customize_hp_plot(
-    ax: plt.Axes, dataset: M1M3ICSAnalysis, lines: list[plt.Line2D]
-) -> None:
+def customize_hp_plot(ax: plt.Axes, lines: list[plt.Line2D]) -> None:
     """
     Customize the appearance of the hardpoint plot.
 
@@ -152,8 +153,6 @@ def customize_hp_plot(
     ----------
     ax : `matplotlib.axes._axes.Axes`
         The axes of the plot to be customized.
-    dataset : `M1M3ICSAnalysis`
-        The dataset object containing the data to be plotted and metadata.
     lines : `list`
         The list of Line2D objects representing the plotted data lines.
     """
@@ -163,7 +162,7 @@ def customize_hp_plot(
     ax.set_xlabel("Time [UTC]")
     ax.set_ylabel("HP Measured\n Forces [N]")
     ax.set_ylim(-3100, 3100)
-    ax.grid(linestyle=":", alpha=0.2)  # XXX Bruno - what is this doing?! It used to be a 1st position arg ":"
+    ax.grid(linestyle=":", alpha=0.2)
 
 
 def add_hp_limits(ax: plt.Axes):
@@ -183,7 +182,7 @@ def add_hp_limits(ax: plt.Axes):
 
     Parameters
     ----------
-    ax : `matplotlib.axes._axes.Axes`
+    ax : `plt.Axes`
         The axes on which the velocity data is plotted.
     """
     hp_limits = {
@@ -205,14 +204,14 @@ def add_hp_limits(ax: plt.Axes):
     }
 
     kwargs = dict(alpha=0.5, lw=1.0, c="r", zorder=-1)
-    lines = []
+    line_list = []
 
     for key, sub_dict in hp_limits.items():
         ax.axhline(sub_dict["pos_limit"], ls=sub_dict["ls"], **kwargs)
         line = ax.axhline(sub_dict["neg_limit"], ls=sub_dict["ls"], label=key, **kwargs)
-        lines.append(line)
+        line_list.append(line)
 
-    return lines
+    return line_list
 
 
 def plot_velocity_data(ax: plt.Axes, dataset: M1M3ICSAnalysis) -> None:
@@ -228,7 +227,7 @@ def plot_velocity_data(ax: plt.Axes, dataset: M1M3ICSAnalysis) -> None:
     """
     ax.plot(dataset.df["az_actual_velocity"], color="royalblue", label="Az Velocity")
     ax.plot(dataset.df["el_actual_velocity"], color="teal", label="El Velocity")
-    ax.grid(":", alpha=0.2)
+    ax.grid(linestyle=":", alpha=0.2)
     ax.set_ylabel("Actual Velocity\n [deg/s]")
     ax.legend(ncol=2, fontsize="x-small")
 
@@ -246,20 +245,20 @@ def plot_torque_data(ax: plt.Axes, dataset: M1M3ICSAnalysis) -> None:
     """
     ax.plot(dataset.df["az_actual_torque"], color="firebrick", label="Az Torque")
     ax.plot(dataset.df["el_actual_torque"], color="salmon", label="El Torque")
-    ax.grid(":", alpha=0.2)
+    ax.grid(linestyle=":", alpha=0.2)
     ax.set_ylabel("Actual Torque\n [kN.m]")
     ax.legend(ncol=2, fontsize="x-small")
 
 
 def plot_stable_region(
-    fig: plt.figure, begin: Time, end: Time, label: str = "", color: str = "b"
+    fig: plt.Figure, begin: Time, end: Time, label: str = "", color: str = "b"
 ) -> plt.Polygon:
     """
     Highlight a stable region on the plot with a colored span.
 
     Parameters
     ----------
-    fig : `matplotlib.figure.Figure`
+    fig : `plt.Figure`
         The figure containing the axes on which the stable region is
         highlighted.
     begin : `astropy.time.Time`
@@ -285,10 +284,10 @@ def plot_stable_region(
 
 def plot_hp_measured_data(
     dataset: M1M3ICSAnalysis,
-    fig: plt.figure,
-    commands: dict[str, Time] = None,
-    log: None | logging.Logger = None,
-) -> None:
+    fig: plt.Figure,
+    commands: Optional[dict[str, Time]],
+    log: Optional[logging.Logger],
+) -> plt.Figure:
     """
     Create and plot hardpoint measured data, velocity, and torque on subplots.
     This plot was designed for a figure with `figsize=(10, 7)` and `dpi=120`.
@@ -297,7 +296,7 @@ def plot_hp_measured_data(
     ----------
     dataset : `M1M3ICSAnalysis`
         The dataset object containing the data to be plotted and metadata.
-    fig : `matplotlib.figure.Figure`
+    fig : `plt.Figure`
         The figure to be plotted on.
     log : `logging.Logger`, optional
         The logger object to log progress.
@@ -319,11 +318,11 @@ def plot_hp_measured_data(
     ax_label.axis('off')
 
     # Plotting
-    lines = []
+    line_list: list[plt.Line2D] = []
     for hp in range(dataset.number_of_hardpoints):
         topic = dataset.measured_forces_topics[hp]
         line = plot_hp_data(ax_hp, dataset.df[topic], f"HP{hp+1}")
-        lines.extend(line)
+        line_list.append(line)
 
     slew_begin = Time(dataset.event.begin, scale="utc")
     slew_end = Time(dataset.event.end, scale="utc")
@@ -331,7 +330,7 @@ def plot_hp_measured_data(
     mark_slew_begin_end(ax_hp, slew_begin, slew_end)
     mark_slew_begin_end(ax_vel, slew_begin, slew_end)
     line = mark_slew_begin_end(ax_tor, slew_begin, slew_end)
-    lines.append(line)
+    line_list.append(line)
 
     mark_padded_slew_begin_end(
         ax_hp, slew_begin - dataset.outer_pad, slew_end + dataset.outer_pad
@@ -342,21 +341,10 @@ def plot_hp_measured_data(
     line = mark_padded_slew_begin_end(
         ax_tor, slew_begin - dataset.outer_pad, slew_end + dataset.outer_pad
     )
-    lines.append(line)
-
-    stable_begin, stable_end = dataset.find_stable_region()
-    stat_begin, stat_end = (
-        stable_begin + dataset.inner_pad,
-        stable_end - dataset.inner_pad,
-    )
+    line_list.append(line)
 
     plot_velocity_data(ax_vel, dataset)
     plot_torque_data(ax_tor, dataset)
-    span_stable = plot_stable_region(fig, stable_begin, stable_end, "Stable", color="k")
-    span_with_padding = plot_stable_region(
-        fig, stat_begin, stat_end, "Stable w/ Padding", color="b"
-    )
-    lines.extend([span_stable, span_with_padding])
 
     lineColors = [p['color'] for p in plt.rcParams['axes.prop_cycle']]  # cycle through the colors
     colorCounter = 0
@@ -372,10 +360,10 @@ def plot_hp_measured_data(
             for ax in (ax_hp, ax_tor, ax_vel):  # so that the line spans all plots
                 line = ax.axvline(commandTime.utc.datetime, c=lineColors[colorCounter],
                                   ls='--', alpha=0.75, label=f'{command}')
-            lines.append(line)  # put it in the legend
+            line_list.append(line)  # put it in the legend
             colorCounter += 1  # increment color so each line is different
 
-    customize_hp_plot(ax_hp, dataset, lines)
+    customize_hp_plot(ax_hp, line_list)
 
     handles, labels = ax_hp.get_legend_handles_labels()
     ax_label.legend(handles, labels, loc='center', frameon=False, ncol=4, fontsize="x-small")
