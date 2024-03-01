@@ -19,6 +19,7 @@
 # You should have received a copy of the GNU General Public License
 # along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
+import datetime
 import re
 import enum
 import itertools
@@ -323,6 +324,19 @@ def plotEvent(client,
         # tick_number is unused.
         return f"{value:.2f}"
 
+    def getPlotTime(time):
+        """Get the right time to plot a point from the various time formats.
+        """
+        match time:
+            case pd.Timestamp():
+                return time.to_pydatetime()
+            case Time():
+                return time.utc.datetime
+            case datetime.datetime():
+                return time
+            case _:
+                raise ValueError(f"Unknown type for commandTime: {type(time)}")
+
     # plot any commands we might have
     if not isinstance(commands, dict):
         raise TypeError('commands must be a dict of command names with values as'
@@ -450,19 +464,21 @@ def plotEvent(client,
             ax1p5.axvline(event.begin.utc.datetime, c='k', ls='--', alpha=0.5)
             ax1p5.axvline(event.end.utc.datetime, c='k', ls='--', alpha=0.5)
 
-    for command, commandTime in commands.items():
+    for commandTime, command in commands.items():
         # if commands weren't found, the item is set to None. This is common
         # for events so handle it gracefully and silently. The command finding
         # code logs about lack of commands found so no need to mention here.
         if commandTime is None:
             continue
-        ax1_twin.axvline(commandTime.utc.datetime, c=lineColors[colorCounter],
+
+        plotTime = getPlotTime(commandTime)
+        ax1_twin.axvline(plotTime, c=lineColors[colorCounter],
                          ls='--', alpha=0.75, label=f'{command}')
         # extend lines down across lower plot, but do not re-add label
-        ax2_twin.axvline(commandTime.utc.datetime, c=lineColors[colorCounter],
+        ax2_twin.axvline(plotTime, c=lineColors[colorCounter],
                          ls='--', alpha=0.75)
         if ax1p5:
-            ax1p5.axvline(commandTime.utc.datetime, c=lineColors[colorCounter],
+            ax1p5.axvline(plotTime, c=lineColors[colorCounter],
                           ls='--', alpha=0.75)
         colorCounter += 1
 
