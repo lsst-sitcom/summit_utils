@@ -266,13 +266,13 @@ def getSeqNumsForDayObs(butler, day_obs, extraWhere=''):
         order.
     """
     day_obs = sanitizeDayObs(day_obs)
-    where = "exposure.day_obs=day_obs"
+    where = "exposure.day_obs=dayObs"
     if extraWhere:
         extraWhere = extraWhere.replace('"', '\'')
         where += f" and {extraWhere}"
     records = butler.registry.queryDimensionRecords("exposure",
                                                     where=where,
-                                                    bind={'day_obs': day_obs},
+                                                    bind={'dayObs': day_obs},
                                                     datasets='raw')
     return sorted([r.seq_num for r in records])
 
@@ -507,10 +507,10 @@ def getExpRecordFromDataId(butler, dataId):
         seqNum = getSeqNum(dataId)
         if not (dayObs and seqNum):
             raise RuntimeError(f'Failed to find either expId or day_obs and seq_num in dataId {dataId}')
-        where = "exposure.day_obs=day_obs AND exposure.seq_num=seq_num"
+        where = "exposure.day_obs=dayObs AND exposure.seq_num=seq_num"
         expRecords = butler.registry.queryDimensionRecords("exposure",
                                                            where=where,
-                                                           bind={'day_obs': dayObs, 'seq_num': seqNum},
+                                                           bind={'dayObs': dayObs, 'seq_num': seqNum},
                                                            datasets='raw')
 
     expRecords = set(expRecords)
@@ -748,13 +748,13 @@ def getLatissOnSkyDataIds(butler, skipTypes=('bias', 'dark', 'flat'), checkObjec
         days = [d for d in days if d <= endDate]
     days = sorted(set(days))
 
-    where = "exposure.day_obs=day_obs"
+    where = "exposure.day_obs=dayObs"
     for day in days:
         # queryDataIds would be better here, but it's then hard/impossible
         # to do the filtering for which is on sky, so just take the dataIds
         records = butler.registry.queryDimensionRecords("exposure",
                                                         where=where,
-                                                        bind={'day_obs': day},
+                                                        bind={'dayObs': day},
                                                         datasets='raw')
         recordSets.append(sortRecordsByDayObsThenSeqNum(records))
 
