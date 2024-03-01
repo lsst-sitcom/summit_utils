@@ -465,12 +465,6 @@ def plotEvent(client,
             ax1p5.axvline(event.end.utc.datetime, c='k', ls='--', alpha=0.5)
 
     for commandTime, command in commands.items():
-        # if commands weren't found, the item is set to None. This is common
-        # for events so handle it gracefully and silently. The command finding
-        # code logs about lack of commands found so no need to mention here.
-        if commandTime is None:
-            continue
-
         plotTime = getPlotTime(commandTime)
         ax1_twin.axvline(plotTime, c=lineColors[colorCounter],
                          ls='--', alpha=0.75, label=f'{command}')
