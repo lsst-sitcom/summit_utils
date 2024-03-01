@@ -688,9 +688,10 @@ def getCommands(client, commands, begin, end, prePadding, postPadding, timeForma
 
     Returns
     -------
-    commandTimes : `dict`
-        A dictionary where the keys are the timestamps of the commands and the
-        values are the corresponding commands.
+    commandTimes : `dict` [`time`, `str`]
+        A dictionary of the times at which the commands where issued. The type
+        that `time` takes is determined by the format key, and defaults to
+        python datetime.
 
     Raises
     ------
@@ -700,6 +701,8 @@ def getCommands(client, commands, begin, end, prePadding, postPadding, timeForma
     """
     if timeFormat not in ['pandas', 'astropy', 'python']:
         raise ValueError(f"format must be one of 'pandas', 'astropy' or 'python', not {timeFormat=}")
+
+    commands = list(ensure_iterable(commands))
 
     commandTimes = {}
     for command in commands:
@@ -729,6 +732,6 @@ def getCommands(client, commands, begin, end, prePadding, postPadding, timeForma
 
             if timeKey in commandTimes:
                 raise ValueError(f"There is already a command at {timeKey=} -"
-                                    " make a better data structure!")
+                                 " make a better data structure!")
             commandTimes[timeKey] = command
     return commandTimes

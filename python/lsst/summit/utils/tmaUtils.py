@@ -296,9 +296,11 @@ def plotEvent(client,
     postPadding : `float`, optional
         The amount of time to pad the event with after the end time, in
         seconds.
-    commands : `dict` of `str` : `astropy.time.Time`, optional
-        A dictionary of commands to plot on the figure. The keys are the topic
-        names, and the values are the times at which the commands were sent.
+    commands : `dict` [`pd.Timestamp`, `str`], or
+               `dict` [`datetime.datetime`, `str`], oroptional
+        A dictionary of commands to plot on the figure. The keys are the times
+        at which a command was issued, and the value is the command string, as
+        returned by efdUtils.getCommands().
     azimuthData : `pd.DataFrame`, optional
         The azimuth data to plot. If not specified, it will be queried from the
         EFD.
@@ -528,16 +530,12 @@ def getCommandsDuringEvent(client,
 
     Returns
     -------
-    commands : `dict` of `time` : `command`
+    commandTimes : `dict` [`time`, `str`]
         A dictionary of the times at which the commands where issued. The type
-        that time takes is determined by the format key, and defaults to python
-        datetime.
+        that `time` takes is determined by the format key, and defaults to
+        python datetime.
     """
-    # TODO: DM-40100 Change this to always return a list of times, and remove
-    # warning about finding multiple commands. Remember to update docs and
-    # plotting code.
-
-    commands = ensure_iterable(commands)
+    commands = list(ensure_iterable(commands))
     fullCommands = [c if c not in COMMAND_ALIASES else COMMAND_ALIASES[c] for c in commands]
     del commands  # make sure we always use their full names
 
