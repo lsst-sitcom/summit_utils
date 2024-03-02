@@ -263,6 +263,7 @@ def runCharactierizeImage(exp, snr, minPix):
     charConfig.doMeasurePsf = False
     charConfig.doApCorr = False
     charConfig.doDeblend = False
+    charConfig.doMaskStreaks = False
     charConfig.repair.doCosmicRay = False
 
     charConfig.detection.minPixels = minPix
