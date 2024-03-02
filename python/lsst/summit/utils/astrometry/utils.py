@@ -150,19 +150,19 @@ def getAverageElFromHeader(header):
 def patchHeader(header):
     """This is a TEMPORARY function to patch some info into the headers.
     """
-    if header.get('SECPIX') == '3.11':
+    if header.get('CAMCODE') == 'GC102':  # regular aka narrow camera
         # the narrow camera currently is wrong about its place scale by of ~2.2
         header['SECPIX'] = '1.44'
         # update the boresight locations until this goes into the header
         # service
         header['CRPIX1'] = 1898.10
         header['CRPIX2'] = 998.47
-    if header.get('SECPIX') == '8.64':
+    if header.get('CAMCODE') == 'GC101':  # wide camera
         # update the boresight locations until this goes into the header
         # service
         header['CRPIX1'] = 1560.85
         header['CRPIX2'] = 1257.15
-    if header.get('SECPIX') == '0.67':
+    if header.get('CAMCODE') == 'GC103':  # fast camera
         # use the fast camera chip centre until we know better
         header['SECPIX'] = '0.6213'  # measured from a fit
         header['CRPIX1'] = 329.5
