@@ -269,6 +269,7 @@ def runCharactierizeImage(exp, snr, minPix):
     charConfig.detection.minPixels = minPix
     charConfig.detection.thresholdValue = snr
     charConfig.detection.includeThresholdMultiplier = 1
+    charConfig.detection.thresholdType = 'stdev'
 
     # fit background with the most simple thing possible as we don't need
     # much sophistication here. weighting=False is *required* for very
