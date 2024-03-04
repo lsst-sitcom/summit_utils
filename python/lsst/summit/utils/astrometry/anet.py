@@ -105,7 +105,7 @@ class AstrometryNetResult:
         return self.rmsErrorPixels * self.plateScale
 
 
-class CommandLineSolver():
+class CommandLineSolver:
     """An interface for the solve-field command line tool from astrometry.net.
 
     Parameters
@@ -306,7 +306,7 @@ class CommandLineSolver():
         return None
 
 
-class OnlineSolver():
+class OnlineSolver:
     """A class to solve an image using the Astrometry.net online service.
     """
 

@@ -60,7 +60,7 @@ class ColorAndMarker:
     marker: str = '*'
 
 
-class NightReport():
+class NightReport:
     _version = 1
 
     def __init__(self, butler, dayObs, loadFromFile=None):
