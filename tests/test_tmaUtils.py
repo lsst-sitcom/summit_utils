@@ -31,7 +31,6 @@ import asyncio
 import matplotlib.pyplot as plt
 from astropy.time import TimeDelta
 
-from lsst.utils import getPackageDir
 from lsst.summit.utils.enums import PowerState
 from lsst.summit.utils.efdUtils import makeEfdClient, getDayObsStartTime, calcNextDay
 from lsst.summit.utils.tmaUtils import (
@@ -55,6 +54,7 @@ __all__ = [
     'writeNewTmaEventTestTruthValues',
 ]
 
+TESTDIR = os.path.abspath(os.path.dirname(__file__))
 vcr = getVcr()
 
 
@@ -76,8 +76,7 @@ def getTmaEventTestTruthValues():
         The event end reasons, as a string, i.e. the ``TMAEvent.name`` of the
         event's ``event.endReason``.
     """
-    packageDir = getPackageDir("summit_utils")
-    dataFilename = os.path.join(packageDir, "tests", "data", "tmaEventData.txt")
+    dataFilename = os.path.join(TESTDIR, "data", "tmaEventData.txt")
 
     seqNums, startRows, endRows, types, endReasons = np.genfromtxt(dataFilename,
                                                                    delimiter=',',
@@ -104,8 +103,7 @@ def writeNewTmaEventTestTruthValues():
     eventMaker = TMAEventMaker()
     events = eventMaker.getEvents(dayObs)
 
-    packageDir = getPackageDir("summit_utils")
-    dataFilename = os.path.join(packageDir, "tests", "data", "tmaEventData.txt")
+    dataFilename = os.path.join(TESTDIR, "data", "tmaEventData.txt")
 
     columnHeader = "seqNum,startRow,endRow,type,endReason"
     with open(dataFilename, 'w') as f:

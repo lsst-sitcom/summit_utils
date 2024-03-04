@@ -46,7 +46,7 @@ def gauss(x, a, x0, sigma):
     return a*np.exp(-(x-x0)**2/(2*sigma**2))
 
 
-class ImageExaminer():
+class ImageExaminer:
     """Class for the reproducing some of the functionality of imexam.
 
     For an input image create a summary plot showing:

@@ -243,9 +243,9 @@ class ButlerUtilsTestCase(lsst.utils.tests.TestCase):
         return
 
     def test_sortRecordsByDayObsThenSeqNum(self):
-        where = "exposure.day_obs=day_obs"
+        where = "exposure.day_obs=dayObs"
         expRecords = self.butler.registry.queryDimensionRecords("exposure", where=where,
-                                                                bind={'day_obs': RECENT_DAY})
+                                                                bind={'dayObs': RECENT_DAY})
         expRecords = list(expRecords)
         self.assertGreaterEqual(len(expRecords), 1)  # just ensure we're not doing a no-op test
         random.shuffle(expRecords)  # they are often already in order, so make sure they're not
@@ -256,7 +256,7 @@ class ButlerUtilsTestCase(lsst.utils.tests.TestCase):
         # Check that ambiguous sorts raise as expected
         with self.assertRaises(ValueError):
             expRecords = self.butler.registry.queryDimensionRecords("exposure", where=where,
-                                                                    bind={'day_obs': RECENT_DAY})
+                                                                    bind={'dayObs': RECENT_DAY})
             expRecords = list(expRecords)
             self.assertGreaterEqual(len(expRecords), 1)  # just ensure we're not doing a no-op test
             expRecords.append(expRecords[0])  # add a duplicate

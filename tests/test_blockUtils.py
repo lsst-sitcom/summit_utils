@@ -29,7 +29,6 @@ import asyncio
 import json
 
 import lsst.utils.tests
-from lsst.utils import getPackageDir
 from lsst.summit.utils.efdUtils import makeEfdClient
 from lsst.summit.utils.blockUtils import (
     BlockParser,
@@ -50,6 +49,7 @@ except ImportError:
 vcr = getVcr()
 
 DELIMITER = "||"  # don't use a comma, as str(list) will naturally contain commas
+TESTDIR = os.path.abspath(os.path.dirname(__file__))
 
 
 def getBlockInfoTestTruthValues(dataFilename=None):
@@ -67,8 +67,7 @@ def getBlockInfoTestTruthValues(dataFilename=None):
         The block info truth data.
     """
     if dataFilename is None:
-        packageDir = getPackageDir("summit_utils")
-        dataFilename = os.path.join(packageDir, "tests", "data", "blockInfoData.json")
+        dataFilename = os.path.join(TESTDIR, "data", "blockInfoData.json")
 
     with open(dataFilename, 'r') as f:
         loaded = json.loads(f.read())
@@ -107,8 +106,7 @@ def writeNewBlockInfoTestTruthValues():
             # must store as string not tuple for json serialization
             data[f'{block}{DELIMITER}{seqNum}'] = line
 
-    packageDir = getPackageDir("summit_utils")
-    dataFilename = os.path.join(packageDir, "tests", "data", "blockInfoData.json")
+    dataFilename = os.path.join(TESTDIR, "data", "blockInfoData.json")
     with open(dataFilename, 'w') as f:
         json.dump(data, f)
 

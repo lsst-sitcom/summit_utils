@@ -34,7 +34,7 @@ from lsst.summit.utils.butlerUtils import getLatissDefaultCollections
 CURRENT_RUN = "LATISS/runs/quickLook/1"
 
 
-class BestEffortIsr():
+class BestEffortIsr:
     """Class for getting an assembled image with the maximum amount of isr.
 
     BestEffortIsr.getExposure(dataId) returns an assembled image with as much

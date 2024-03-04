@@ -60,7 +60,7 @@ class ColorAndMarker:
     marker: str = '*'
 
 
-class NightReport():
+class NightReport:
     _version = 1
 
     def __init__(self, butler, dayObs, loadFromFile=None):
@@ -149,8 +149,8 @@ class NightReport():
         Runs in ~0.05s for 1000 records.
         """
         expRecords = self.butler.registry.queryDimensionRecords("exposure",
-                                                                where="exposure.day_obs=day_obs",
-                                                                bind={'day_obs': dayObs},
+                                                                where="exposure.day_obs=dayObs",
+                                                                bind={'dayObs': dayObs},
                                                                 datasets='raw')
         expRecords = list(expRecords)
         records = {e.seq_num: e.toDict() for e in expRecords}  # not guaranteed to be in order

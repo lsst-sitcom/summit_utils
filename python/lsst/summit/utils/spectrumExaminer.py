@@ -37,7 +37,7 @@ from lsst.obs.lsst.translators.lsst import FILTER_DELIMITER
 from lsst.summit.utils.utils import getImageStats
 
 
-class SpectrumExaminer():
+class SpectrumExaminer:
     """Task for the QUICK spectral extraction of single-star dispersed images.
 
     For a full description of how this tasks works, see the run() method.
