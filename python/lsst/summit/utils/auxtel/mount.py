@@ -27,6 +27,13 @@ from ..efdUtils import getEfdData
 def hasTimebaseErrors(expRecord, client, maxDiff=1.05):
     """Check if an exposure has cRIO timebase errors.
 
+    Data in the lsst.sal.ATMCS.mount_AzEl_Encoders topic is a packed
+    time-series, and if the amount of data that is packed in isn't packed for a
+    period of almost exactly one second then the unpacking code will
+    incorrectly assign the intra-second timestamps, causing misalignment, as
+    this breaks the fundamental assumption required to have a packed
+    timeseries.
+
     Parameters
     ----------
     expRecord : `lsst.daf.butler.dimensions.DimensionRecord`
@@ -48,9 +55,9 @@ def hasTimebaseErrors(expRecord, client, maxDiff=1.05):
         log.warning(f"No mount data was found for {expRecord.obs_id}, so there is technically no"
                     " timebase error present")
         return False
-    cRIO_ts = mountPosition["cRIO_timestamp"]
-    if len(cRIO_ts) == 1:
+    cRIOtimestamps = mountPosition["cRIO_timestamp"]
+    if len(cRIOtimestamps) == 1:
         log.warning(f"cRIO_timestamp data had length 1 for {expRecord.obs_id}, so timebase errors are"
                     " impossible")
         return False
-    return np.max(np.diff(cRIO_ts.values)) > maxDiff
+    return np.max(np.diff(cRIOtimestamps.values)) > maxDiff
