@@ -678,7 +678,7 @@ def getAltAzFromSkyPosition(skyPos, visitInfo, doCorrectRefraction=False,
             relativeHumidity = relativeHumidityOverride
         else:
             relativeHumidity = visitInfo.weather.getHumidity() / 100.0  # this is in percent
-        relativeHumidity = relativeHumidity*u.deg_C
+        relativeHumidity = relativeHumidity
 
         refractionKwargs = dict(pressure=pressure,
                                 temperature=temperature,
