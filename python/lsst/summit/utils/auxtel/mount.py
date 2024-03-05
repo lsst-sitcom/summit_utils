@@ -19,8 +19,10 @@
 # You should have received a copy of the GNU General Public License
 # along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
-import numpy as np
 import logging
+
+import numpy as np
+
 from ..efdUtils import getEfdData
 
 
@@ -50,14 +52,23 @@ def hasTimebaseErrors(expRecord, client, maxDiff=1.05):
         `True` if the exposure has timebase errors, `False` otherwise.
     """
     log = logging.getLogger(__name__)
-    mountPosition = getEfdData(client, "lsst.sal.ATMCS.mount_AzEl_Encoders", expRecord=expRecord, warn=False)
+    mountPosition = getEfdData(
+        client, "lsst.sal.ATMCS.mount_AzEl_Encoders", expRecord=expRecord, warn=False
+    )
+
     if mountPosition.empty:
-        log.warning(f"No mount data was found for {expRecord.obs_id}, so there is technically no"
-                    " timebase error present")
+        log.warning(
+            f"No mount data was found for {expRecord.obs_id}, so there is technically no"
+            " timebase error present"
+        )
         return False
+
     cRIOtimestamps = mountPosition["cRIO_timestamp"]
     if len(cRIOtimestamps) == 1:
-        log.warning(f"cRIO_timestamp data had length 1 for {expRecord.obs_id}, so timebase errors are"
-                    " impossible")
+        log.warning(
+            f"cRIO_timestamp data had length 1 for {expRecord.obs_id}, so timebase errors are"
+            " impossible"
+        )
         return False
+
     return np.max(np.diff(cRIOtimestamps.values)) > maxDiff
