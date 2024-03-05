@@ -44,7 +44,8 @@ def hasTimebaseErrors(expRecord, client, maxDiff=1.05):
         The EFD client to use.
     maxDiff : `float`, optional
         The maximum difference in cRIO timestamps to consider as a timebase
-        error.
+        error, in seconds. The correct spacing is 1s, so 1.05 denotes a 50ms
+        difference when the jitter should be on the order of microseconds.
 
     Returns
     -------
@@ -71,4 +72,8 @@ def hasTimebaseErrors(expRecord, client, maxDiff=1.05):
         )
         return False
 
-    return np.max(np.diff(cRIOtimestamps.values)) > maxDiff
+    diff = np.diff(cRIOtimestamps.values)
+    if np.min(diff) < 0:
+        raise ValueError("cRIO timestamps are not monotonically increasing - time is running backwards!")
+
+    return np.max(diff) > maxDiff
