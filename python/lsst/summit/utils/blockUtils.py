@@ -196,7 +196,16 @@ class BlockParser:
     def getDataForDayObs(self):
         """Retrieve the data for the specified dayObs from the EFD.
         """
-        data = getEfdData(self.client, 'lsst.sal.Script.logevent_state', dayObs=self.dayObs)
+        # Tiago thinks no individual block seqNums should take more than an
+        # hour to run, so pad the dayObs by 1.5 hours to make sure we catch
+        # any blocks which might span the end of the day.
+        padding = 1.5*60*60
+        data = getEfdData(
+            self.client,
+            'lsst.sal.Script.logevent_state',
+            dayObs=self.dayObs,
+            postPadding=padding
+        )
         self.data = data
 
     def augmentDataSlow(self):
@@ -335,7 +344,13 @@ class BlockParser:
         data : `pandas.DataFrame`
             The row data.
         """
-        rowsForBlock = self.data[self.data['blockNum'] == block]
+        # Because we query for a whole dayObs, but BLOCKs can overlap the day
+        # start/end, it's possible for the block's blockDayObs not to be the
+        # same as self.dayObs around the beginning or end of the day, so filter
+        # with an extra `& (self.data['blockDayObs'] == self.dayObs` when
+        # getting the relevant rows.
+        rowsForBlock = self.data[np.logical_and(self.data['blockNum'] == block,
+                                                self.data['blockDayObs'] == self.dayObs)]
         if rowsForBlock.empty:
             self.log.warning(f"No rows found for {block=} on dayObs={self.dayObs}")
         if seqNum is None:
