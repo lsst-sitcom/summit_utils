@@ -3,7 +3,6 @@ import matplotlib.pyplot as plt
 import pandas as pd
 
 from astropy.time import Time
-from typing import Optional
 
 from lsst.summit.utils.type_utils import M1M3ICSAnalysis
 
@@ -285,8 +284,8 @@ def plot_stable_region(
 def plot_hp_measured_data(
     dataset: M1M3ICSAnalysis,
     fig: plt.Figure,
-    commands: Optional[dict[str, Time]],
-    log: Optional[logging.Logger],
+    commands: dict[Time, str] | None = None,
+    log: logging.Logger | None = None,
 ) -> plt.Figure:
     """
     Create and plot hardpoint measured data, velocity, and torque on subplots.
@@ -298,6 +297,9 @@ def plot_hp_measured_data(
         The dataset object containing the data to be plotted and metadata.
     fig : `plt.Figure`
         The figure to be plotted on.
+    commands : `dict`, optional
+        A dictionary times at which commands were issued, and with the values
+        as the command strings themselves.
     log : `logging.Logger`, optional
         The logger object to log progress.
     """
@@ -349,13 +351,7 @@ def plot_hp_measured_data(
     lineColors = [p['color'] for p in plt.rcParams['axes.prop_cycle']]  # cycle through the colors
     colorCounter = 0
     if commands is not None:
-        for command, commandTime in commands.items():
-            # if commands weren't found, the item is set to None. This is
-            # common for events so handle it gracefully and silently. The
-            # command finding code logs about lack of commands found so no need
-            # to mention here.
-            if commandTime is None:
-                continue
+        for commandTime, command in commands.items():
             command = command.replace("lsst.sal.", "")
             for ax in (ax_hp, ax_tor, ax_vel):  # so that the line spans all plots
                 line = ax.axvline(commandTime.utc.datetime, c=lineColors[colorCounter],
