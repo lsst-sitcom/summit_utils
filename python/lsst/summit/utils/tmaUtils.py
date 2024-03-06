@@ -1314,7 +1314,7 @@ class TMAEventMaker:
             self.log.warning(f"Event {seqNum} not found for {dayObs}")
             return None
 
-    def getEvents(self, dayObs):
+    def getEvents(self, dayObs, addBlockInfo=True):
         """Get the TMA events for the specified dayObs.
 
         Gets the required mount data from the cache or the EFD as required,
@@ -1336,6 +1336,10 @@ class TMAEventMaker:
         ----------
         dayObs : `int`
             The dayObs for which to get the events.
+        addBlockInfo : `bool`, optional
+            Whether to add block information to the events. This allows
+            skipping this step for speed when generating events for purposes
+            which don't need block information.
 
         Returns
         -------
@@ -1370,7 +1374,10 @@ class TMAEventMaker:
 
         # applies the data to the state machine, and generates events from the
         # series of states which results
-        events = self._calculateEventsFromMergedData(data, dayObs, dataIsForCurrentDay=workingLive)
+        events = self._calculateEventsFromMergedData(data,
+                                                     dayObs,
+                                                     dataIsForCurrentDay=workingLive,
+                                                     addBlockInfo=addBlockInfo)
         if not events:
             self.log.warning(f"Failed to calculate any events for {dayObs=} despite EFD data existing!")
         return events
@@ -1431,7 +1438,7 @@ class TMAEventMaker:
             merged = self._mergeData(data)
             self._data[dayObs] = merged
 
-    def _calculateEventsFromMergedData(self, data, dayObs, dataIsForCurrentDay):
+    def _calculateEventsFromMergedData(self, data, dayObs, dataIsForCurrentDay, addBlockInfo):
         """Calculate the list of events from the merged data.
 
         Runs the merged data, row by row, through the TMA state machine (with
@@ -1455,6 +1462,10 @@ class TMAEventMaker:
         dataIsForCurrentDay : `bool`
             Whether the data is for the current day. Determines whether to
             allow an open last event or not.
+        addBlockInfo : `bool`
+            Whether to add block information to the events. This allows
+            skipping this step for speed when generating events for purposes
+            which don't need block information.
 
         Returns
         -------
@@ -1479,7 +1490,8 @@ class TMAEventMaker:
 
         stateTuples = self._statesToEventTuples(tmaStates, dataIsForCurrentDay)
         events = self._makeEventsFromStateTuples(stateTuples, dayObs, data)
-        self.addBlockDataToEvents(dayObs, events)
+        if addBlockInfo:
+            self.addBlockDataToEvents(dayObs, events)
         return events
 
     def _statesToEventTuples(self, states, dataIsForCurrentDay):
