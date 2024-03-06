@@ -19,25 +19,19 @@
 # You should have received a copy of the GNU General Public License
 # along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
+import logging
 import re
 import time
-import logging
-import pandas as pd
-import numpy as np
 from dataclasses import dataclass
+
+import numpy as np
+import pandas as pd
 from astropy.time import Time
 
+from .efdUtils import efdTimestampToAstropy, getEfdData, makeEfdClient
 from .enums import ScriptState
-from .efdUtils import (getEfdData,
-                       makeEfdClient,
-                       efdTimestampToAstropy,
-                       )
 
-__all__ = (
-    'BlockParser',
-    'BlockInfo',
-    'ScriptStatePoint'
-)
+__all__ = ("BlockParser", "BlockInfo", "ScriptStatePoint")
 
 
 @dataclass(kw_only=True, frozen=True)
@@ -86,6 +80,7 @@ class BlockInfo:
             - the state, as a ``ScriptState`` enum
             - the reason for state change, as a string, if present
     """
+
     blockNumber: int
     blockId: str
     dayObs: int
@@ -112,7 +107,7 @@ class BlockInfo:
     def __str__(self):
         # no literal \n allowed inside {} portion of f-strings until python
         # 3.12, but it can go in via a variable
-        newline = '  \n'
+        newline = "  \n"
         return (
             f"dayObs: {self.dayObs}\n"
             f"seqNum: {self.seqNum}\n"
@@ -139,14 +134,13 @@ class ScriptStatePoint:
     reason : `str`
         The reason for the state change, if given.
     """
+
     time: Time
     state: ScriptState
     reason: str
 
     def __repr__(self):
-        return (
-            f"ScriptStatePoint(time={self.time!r}, state={self.state!r}, reason={self.reason!r})"
-        )
+        return f"ScriptStatePoint(time={self.time!r}, state={self.state!r}, reason={self.reason!r})"
 
     def _ipython_display_(self):
         """This is the function which runs when someone executes a cell in a
@@ -157,7 +151,7 @@ class ScriptStatePoint:
 
     def __str__(self):
         reasonStr = f" - {self.reason}" if self.reason else ""
-        return (f"{self.state.name:>10} @ {self.time.isot}{reasonStr}")
+        return f"{self.state.name:>10} @ {self.time.isot}{reasonStr}"
 
 
 class BlockParser:
@@ -194,17 +188,13 @@ class BlockParser:
         self.log.debug(f"Parsing data took {(time.time()-t0):.5f} seconds")
 
     def getDataForDayObs(self):
-        """Retrieve the data for the specified dayObs from the EFD.
-        """
+        """Retrieve the data for the specified dayObs from the EFD."""
         # Tiago thinks no individual block seqNums should take more than an
         # hour to run, so pad the dayObs by 1.5 hours to make sure we catch
         # any blocks which might span the end of the day.
-        padding = 1.5*60*60
+        padding = 1.5 * 60 * 60
         data = getEfdData(
-            self.client,
-            'lsst.sal.Script.logevent_state',
-            dayObs=self.dayObs,
-            postPadding=padding
+            self.client, "lsst.sal.Script.logevent_state", dayObs=self.dayObs, postPadding=padding
         )
         self.data = data
 
@@ -216,31 +206,33 @@ class BlockParser:
         blockPattern = r"BLOCK-(\d+)"
         blockIdPattern = r"BL\d+(?:_\w+)+"
 
-        data['blockNum'] = pd.Series()
-        data['blockId'] = pd.Series()
-        data['blockDayObs'] = pd.Series()
-        data['blockSeqNum'] = pd.Series()
+        data["blockNum"] = pd.Series()
+        data["blockId"] = pd.Series()
+        data["blockDayObs"] = pd.Series()
+        data["blockSeqNum"] = pd.Series()
 
-        if 'lastCheckpoint' not in self.data.columns:
+        if "lastCheckpoint" not in self.data.columns:
             nRows = len(self.data)
-            self.log.warning(f"Found {nRows} rows of data and no 'lastCheckpoint' column was in the data,"
-                             " so block data cannot be parsed.")
+            self.log.warning(
+                f"Found {nRows} rows of data and no 'lastCheckpoint' column was in the data,"
+                " so block data cannot be parsed."
+            )
 
         for index, row in data.iterrows():
-            rowStr = row['lastCheckpoint']
+            rowStr = row["lastCheckpoint"]
 
             blockMatch = re.search(blockPattern, rowStr)
             blockNumber = int(blockMatch.group(1)) if blockMatch else None
-            data.loc[index, 'blockNum'] = blockNumber
+            data.loc[index, "blockNum"] = blockNumber
 
             blockIdMatch = re.search(blockIdPattern, rowStr)
             blockId = blockIdMatch.group(0) if blockIdMatch else None
-            data.loc[index, 'blockId'] = blockId
+            data.loc[index, "blockId"] = blockId
             if blockId is not None:
-                blockDayObs = int(blockId.split('_')[2])
-                blockSeqNum = int(blockId.split('_')[3])
-                data.loc[index, 'blockDayObs'] = blockDayObs
-                data.loc[index, 'blockSeqNum'] = blockSeqNum
+                blockDayObs = int(blockId.split("_")[2])
+                blockSeqNum = int(blockId.split("_")[3])
+                data.loc[index, "blockDayObs"] = blockDayObs
+                data.loc[index, "blockSeqNum"] = blockSeqNum
 
     def augmentData(self):
         """Parse the dataframe using vectorized methods, pulling the
@@ -250,33 +242,35 @@ class BlockParser:
         but is also much harder to maintain/debug, as the vectorized regexes
         are hard to work with, and to know which row is causing problems.
         """
-        if 'lastCheckpoint' not in self.data.columns:
+        if "lastCheckpoint" not in self.data.columns:
             nRows = len(self.data)
-            self.log.warning(f"Found {nRows} rows of data and no 'lastCheckpoint' column was in the data,"
-                             " so block data cannot be parsed.")
+            self.log.warning(
+                f"Found {nRows} rows of data and no 'lastCheckpoint' column was in the data,"
+                " so block data cannot be parsed."
+            )
             # add the columns that would have been added for consistency
-            self.data['blockNum'] = pd.Series()
-            self.data['blockId'] = pd.Series()
-            self.data['blockDayObs'] = pd.Series()
-            self.data['blockSeqNum'] = pd.Series()
+            self.data["blockNum"] = pd.Series()
+            self.data["blockId"] = pd.Series()
+            self.data["blockDayObs"] = pd.Series()
+            self.data["blockSeqNum"] = pd.Series()
             return
 
         data = self.data
         blockPattern = r"BLOCK-(\d+)"
         blockIdPattern = r"(BL\d+(?:_\w+)+)"
 
-        col = data['lastCheckpoint']
-        data['blockNum'] = col.str.extract(blockPattern, expand=False).astype(float).astype(pd.Int64Dtype())
-        data['blockId'] = col.str.extract(blockIdPattern, expand=False)
+        col = data["lastCheckpoint"]
+        data["blockNum"] = col.str.extract(blockPattern, expand=False).astype(float).astype(pd.Int64Dtype())
+        data["blockId"] = col.str.extract(blockIdPattern, expand=False)
 
-        blockIdSplit = data['blockId'].str.split('_', expand=True)
+        blockIdSplit = data["blockId"].str.split("_", expand=True)
         if blockIdSplit.columns.max() > 1:  # parsing the blockId succeeded
-            data['blockDayObs'] = blockIdSplit[2].astype(float).astype(pd.Int64Dtype())
-            data['blockSeqNum'] = blockIdSplit[3].astype(float).astype(pd.Int64Dtype())
+            data["blockDayObs"] = blockIdSplit[2].astype(float).astype(pd.Int64Dtype())
+            data["blockSeqNum"] = blockIdSplit[3].astype(float).astype(pd.Int64Dtype())
         else:  # make nan filled columns for these
             nanSeries = pd.Series([np.nan] * len(data))
-            data['blockDayObs'] = nanSeries
-            data['blockSeqNum'] = nanSeries
+            data["blockDayObs"] = nanSeries
+            data["blockSeqNum"] = nanSeries
 
     def _listColumnValues(self, column, removeNone=True):
         """Get all the different values for the specified column, as a list.
@@ -306,7 +300,7 @@ class BlockParser:
         blockNums : `list` of `int`
             The blocks which were run on the specified dayObs.
         """
-        return self._listColumnValues('blockNum')
+        return self._listColumnValues("blockNum")
 
     def getSeqNums(self, block):
         """Get the seqNums for the specified block.
@@ -321,7 +315,7 @@ class BlockParser:
         seqNums : `list` of `int`
             The sequence numbers for the specified block.
         """
-        seqNums = self.data[self.data['blockNum'] == block]['blockSeqNum']
+        seqNums = self.data[self.data["blockNum"] == block]["blockSeqNum"]
         # block header rows have no blockId or seqNum, but do have a blockNum
         # so appear here, so drop the nans as they don't relate to an actual
         # run of a block
@@ -354,13 +348,14 @@ class BlockParser:
         # same as self.dayObs around the beginning or end of the day, so filter
         # with an extra `& (self.data['blockDayObs'] == self.dayObs` when
         # getting the relevant rows.
-        rowsForBlock = self.data[np.logical_and(self.data['blockNum'] == block,
-                                                self.data['blockDayObs'] == self.dayObs)]
+        rowsForBlock = self.data[
+            np.logical_and(self.data["blockNum"] == block, self.data["blockDayObs"] == self.dayObs)
+        ]
         if rowsForBlock.empty:
             self.log.warning(f"No rows found for {block=} on dayObs={self.dayObs}")
         if seqNum is None:
             return rowsForBlock
-        return rowsForBlock[rowsForBlock['blockSeqNum'] == seqNum]
+        return rowsForBlock[rowsForBlock["blockSeqNum"] == seqNum]
 
     def printBlockEvolution(self, block, seqNum=None):
         """Display the evolution of the specified block.
@@ -381,10 +376,10 @@ class BlockParser:
             seqNums = self.getSeqNums(block)
         else:
             seqNums = [seqNum]
-        print(f'Evolution of BLOCK {block} for dayObs={self.dayObs} {seqNum=}:')
+        print(f"Evolution of BLOCK {block} for dayObs={self.dayObs} {seqNum=}:")
         for seqNum in seqNums:
             blockInfo = self.getBlockInfo(block, seqNum)
-            print(blockInfo, '\n')
+            print(blockInfo, "\n")
 
     def getBlockInfo(self, block, seqNum):
         """Get the block info for the specified block.
@@ -406,7 +401,7 @@ class BlockParser:
         """
         rows = self.getRows(block, seqNum=seqNum)
         if rows.empty:
-            print(f'No {seqNum=} on dayObs={self.dayObs} for {block=}')
+            print(f"No {seqNum=} on dayObs={self.dayObs} for {block=}")
             return
 
         blockIds = set()
@@ -416,16 +411,16 @@ class BlockParser:
         sitcomPattern = r"SITCOM-(\d+)"
 
         for index, row in rows.iterrows():
-            salIndices.add(row['salIndex'])
-            blockIds.add(row['blockId'])
+            salIndices.add(row["salIndex"])
+            blockIds.add(row["blockId"])
 
-            lastCheckpoint = row['lastCheckpoint']
+            lastCheckpoint = row["lastCheckpoint"]
             sitcomMatches = re.findall(sitcomPattern, lastCheckpoint)
             tickets.update(sitcomMatches)
 
-            time = efdTimestampToAstropy(row['private_efdStamp'])
-            state = ScriptState(row['state'])
-            reason = row['reason']
+            time = efdTimestampToAstropy(row["private_efdStamp"])
+            state = ScriptState(row["state"])
+            reason = row["reason"]
             statePoint = ScriptStatePoint(time=time, state=state, reason=reason)
             statePoints.append(statePoint)
 
@@ -439,10 +434,10 @@ class BlockParser:
             blockId=blockId,
             dayObs=self.dayObs,
             seqNum=seqNum,
-            begin=efdTimestampToAstropy(rows.iloc[0]['private_efdStamp']),
-            end=efdTimestampToAstropy(rows.iloc[-1]['private_efdStamp']),
+            begin=efdTimestampToAstropy(rows.iloc[0]["private_efdStamp"]),
+            end=efdTimestampToAstropy(rows.iloc[-1]["private_efdStamp"]),
             salIndices=sorted(salIndices),
-            tickets=[f'SITCOM-{ticket}' for ticket in sorted(tickets)],
+            tickets=[f"SITCOM-{ticket}" for ticket in sorted(tickets)],
             states=statePoints,
         )
 

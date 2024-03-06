@@ -19,15 +19,15 @@
 # You should have received a copy of the GNU General Public License
 # along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
-import os
 import logging
-from lsst.utils import getPackageDir
-from lsst.ip.isr import IsrTask
+import os
+
 import lsst.daf.butler as dafButler
 from lsst.daf.butler.registry import ConflictingDefinitionError
-
-from lsst.summit.utils.quickLook import QuickLookIsrTask
+from lsst.ip.isr import IsrTask
 from lsst.summit.utils.butlerUtils import getLatissDefaultCollections
+from lsst.summit.utils.quickLook import QuickLookIsrTask
+from lsst.utils import getPackageDir
 
 # TODO: add attempt for fringe once registry & templates are fixed
 
@@ -68,27 +68,34 @@ class BestEffortIsr:
         Raised when a butler cannot be automatically instantiated using
         the DAF_BUTLER_REPOSITORY_INDEX environment variable.
     """
-    _datasetName = 'quickLookExp'
 
-    def __init__(self, *,
-                 extraCollections=[],
-                 defaultExtraIsrOptions={},
-                 doRepairCosmics=True,
-                 doWrite=True,
-                 embargo=False,
-                 repoString=None):
+    _datasetName = "quickLookExp"
+
+    def __init__(
+        self,
+        *,
+        extraCollections=[],
+        defaultExtraIsrOptions={},
+        doRepairCosmics=True,
+        doWrite=True,
+        embargo=False,
+        repoString=None,
+    ):
         self.log = logging.getLogger(__name__)
 
         collections = getLatissDefaultCollections()
         self.collections = extraCollections + collections
-        self.log.info(f'Instantiating butler with collections={self.collections}')
+        self.log.info(f"Instantiating butler with collections={self.collections}")
 
         if repoString is None:
             repoString = "LATISS" if not embargo else "/repo/embargo"
         try:
-            self.butler = dafButler.Butler(repoString, collections=self.collections,
-                                           instrument='LATISS',
-                                           run=CURRENT_RUN if doWrite else None)
+            self.butler = dafButler.Butler(
+                repoString,
+                collections=self.collections,
+                instrument="LATISS",
+                run=CURRENT_RUN if doWrite else None,
+            )
         except (FileNotFoundError, RuntimeError):
             # Depending on the value of DAF_BUTLER_REPOSITORY_INDEX and whether
             # it is present and blank, or just not set, both these exception
@@ -170,8 +177,7 @@ class BestEffortIsr:
         """
         self._cache = {}
 
-    def getExposure(self, expIdOrDataId, extraIsrOptions={}, skipCosmics=False, forceRemake=False,
-                    **kwargs):
+    def getExposure(self, expIdOrDataId, extraIsrOptions={}, skipCosmics=False, forceRemake=False, **kwargs):
         """Get the postIsr and cosmic-repaired image for this dataId.
 
         Note that when using the forceRemake option the image will not be
@@ -200,9 +206,11 @@ class BestEffortIsr:
             The postIsr exposure
         """
         dataId = self.updateDataId(expIdOrDataId, **kwargs)
-        if 'detector' not in dataId:
-            raise ValueError('dataId must contain a detector. Either specify a detector as a kwarg,'
-                             ' or use a fully-qualified dataId')
+        if "detector" not in dataId:
+            raise ValueError(
+                "dataId must contain a detector. Either specify a detector as a kwarg,"
+                " or use a fully-qualified dataId"
+            )
 
         if not forceRemake:
             try:
@@ -213,7 +221,7 @@ class BestEffortIsr:
                 pass
 
         try:
-            raw = self.butler.get('raw', dataId)
+            raw = self.butler.get("raw", dataId)
         except LookupError:
             raise RuntimeError(f"Failed to retrieve raw for exp {dataId}") from None
 
@@ -227,12 +235,22 @@ class BestEffortIsr:
         # apply per-image overrides
         self._applyConfigOverrides(isrConfig, extraIsrOptions)
 
-        isrParts = ['camera', 'bias', 'dark', 'flat', 'defects', 'linearizer', 'crosstalk', 'bfKernel',
-                    'bfGains', 'ptc']
+        isrParts = [
+            "camera",
+            "bias",
+            "dark",
+            "flat",
+            "defects",
+            "linearizer",
+            "crosstalk",
+            "bfKernel",
+            "bfGains",
+            "ptc",
+        ]
 
-        if self._cacheIsForDetector != dataId['detector']:
+        if self._cacheIsForDetector != dataId["detector"]:
             self.clearCache()
-            self._cacheIsForDetector = dataId['detector']
+            self._cacheIsForDetector = dataId["detector"]
 
         isrDict = {}
         # we build a cache of all the isr components which will be used to save
@@ -241,7 +259,7 @@ class BestEffortIsr:
         # use case, and if they do, all they would need to do would be call
         # .clearCache() and this will rebuild with the new products.
         for component in isrParts:
-            if component in self._cache and component != 'flat':
+            if component in self._cache and component != "flat":
                 self.log.info(f"Using {component} from cache...")
                 isrDict[component] = self._cache[component]
                 continue
@@ -256,21 +274,21 @@ class BestEffortIsr:
                     # the product *should* exist but the get() failed, so log
                     # a very loud warning inc. the traceback as this is a sign
                     # of butler/database failures or something like that.
-                    self.log.critical(f'Failed to find expected data product {component}!')
-                    self.log.exception(f'Finding failure for {component}:')
+                    self.log.critical(f"Failed to find expected data product {component}!")
+                    self.log.exception(f"Finding failure for {component}:")
             else:
-                self.log.debug('No %s found for %s', component, dataId)
+                self.log.debug("No %s found for %s", component, dataId)
 
         quickLookExp = self.quickLookIsrTask.run(raw, **isrDict, isrBaseConfig=isrConfig).outputExposure
 
         if self.doWrite and not forceRemake:
             try:
                 self.butler.put(quickLookExp, self._datasetName, dataId)
-                self.log.info(f'Put {self._datasetName} for {dataId}')
+                self.log.info(f"Put {self._datasetName} for {dataId}")
             except ConflictingDefinitionError:
                 # TODO: DM-34302 fix this message so that it's less scary for
                 # users. Do this by having daemons know they're daemons.
-                self.log.warning('Skipped putting existing exp into collection! (ignore if there was a race)')
+                self.log.warning("Skipped putting existing exp into collection! (ignore if there was a race)")
                 pass
 
         return quickLookExp

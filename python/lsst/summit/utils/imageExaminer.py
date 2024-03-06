@@ -19,31 +19,28 @@
 # You should have received a copy of the GNU General Public License
 # along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
-__all__ = ['ImageExaminer']
+__all__ = ["ImageExaminer"]
 
+import matplotlib.patches as patches
 import matplotlib.pyplot as plt
 import numpy as np
-from numpy.linalg import norm
-
 import scipy.ndimage as ndImage
-
 from matplotlib import cm
-from matplotlib.ticker import LinearLocator
 from matplotlib.colors import LogNorm
 from matplotlib.offsetbox import AnchoredText
-import matplotlib.patches as patches
+from matplotlib.ticker import LinearLocator
+from numpy.linalg import norm
+from scipy.optimize import curve_fit
 
 import lsst.geom as geom
-from scipy.optimize import curve_fit
 from lsst.pipe.tasks.quickFrameMeasurement import QuickFrameMeasurementTask, QuickFrameMeasurementTaskConfig
-from lsst.summit.utils.utils import getImageStats, argMax2d, countPixels, quickSmooth
+from lsst.summit.utils.utils import argMax2d, countPixels, getImageStats, quickSmooth
 
-
-SIGMATOFWHM = 2.0*np.sqrt(2.0*np.log(2.0))
+SIGMATOFWHM = 2.0 * np.sqrt(2.0 * np.log(2.0))
 
 
 def gauss(x, a, x0, sigma):
-    return a*np.exp(-(x-x0)**2/(2*sigma**2))
+    return a * np.exp(-((x - x0) ** 2) / (2 * sigma**2))
 
 
 class ImageExaminer:
@@ -80,39 +77,46 @@ class ImageExaminer:
         to use for the radial plots.
 
     """
-    astroMappings = {"object": "Object name",
-                     "mjd": "MJD",
-                     "expTime": "Exp Time",
-                     "filter": "Filter",
-                     "grating": "grating",
-                     "airmass": "Airmass",
-                     "rotangle": "Rotation Angle",
-                     "az": "Azimuth (deg)",
-                     "el": "Elevation (deg)",
-                     "focus": "Focus Z (mm)"}
 
-    imageMappings = {"centroid": "Centroid",
-                     "maxValue": "Max pixel value",
-                     "maxPixelLocation": "Max pixel location",
-                     "multipleMaxPixels": "Multiple max pixels?",
-                     "nBadPixels": "Num bad pixels",
-                     "nSatPixels": "Num saturated pixels",
-                     "percentile99": "99th percentile",
-                     "percentile9999": "99.99th percentile",
-                     "clippedMean": "Clipped mean",
-                     "clippedStddev": "Clipped stddev"}
+    astroMappings = {
+        "object": "Object name",
+        "mjd": "MJD",
+        "expTime": "Exp Time",
+        "filter": "Filter",
+        "grating": "grating",
+        "airmass": "Airmass",
+        "rotangle": "Rotation Angle",
+        "az": "Azimuth (deg)",
+        "el": "Elevation (deg)",
+        "focus": "Focus Z (mm)",
+    }
 
-    cutoutMappings = {"nStatPixInBox": "nSat in cutout",
-                      "fitAmp": "Radial fitted amp",
-                      "fitGausMean": "Radial fitted position",
-                      "fitFwhm": "Radial fitted FWHM",
-                      "eeRadius50": "50% flux radius",
-                      "eeRadius80": "80% flux radius",
-                      "eeRadius90": "90% flux radius"}
+    imageMappings = {
+        "centroid": "Centroid",
+        "maxValue": "Max pixel value",
+        "maxPixelLocation": "Max pixel location",
+        "multipleMaxPixels": "Multiple max pixels?",
+        "nBadPixels": "Num bad pixels",
+        "nSatPixels": "Num saturated pixels",
+        "percentile99": "99th percentile",
+        "percentile9999": "99.99th percentile",
+        "clippedMean": "Clipped mean",
+        "clippedStddev": "Clipped stddev",
+    }
 
-    def __init__(self, exp, *, doTweakCentroid=True, doForceCoM=False, savePlots=None,
-                 centroid=None, boxHalfSize=50):
+    cutoutMappings = {
+        "nStatPixInBox": "nSat in cutout",
+        "fitAmp": "Radial fitted amp",
+        "fitGausMean": "Radial fitted position",
+        "fitFwhm": "Radial fitted FWHM",
+        "eeRadius50": "50% flux radius",
+        "eeRadius80": "80% flux radius",
+        "eeRadius90": "90% flux radius",
+    }
 
+    def __init__(
+        self, exp, *, doTweakCentroid=True, doForceCoM=False, savePlots=None, centroid=None, boxHalfSize=50
+    ):
         self.exp = exp
         self.savePlots = savePlots
         self.doTweakCentroid = doTweakCentroid
@@ -124,8 +128,10 @@ class ImageExaminer:
             qfmTask = QuickFrameMeasurementTask(config=qfmTaskConfig)
             result = qfmTask.run(exp)
             if not result.success:
-                msg = ("Failed to automatically find source in image. "
-                       "Either provide a centroid manually or use a new image")
+                msg = (
+                    "Failed to automatically find source in image. "
+                    "Either provide a centroid manually or use a new image"
+                )
                 raise RuntimeError(msg)
             self.centroid = result.brightestObjCentroid
         else:
@@ -251,7 +257,7 @@ class ImageExaminer:
         u = chipBbox.getEndY()
 
         x, y = np.array(centroid, dtype=int)
-        maxSize = np.min([(x-ll), (r-x-1), (u-y-1), (y-d)])  # extra -1 in x because [)
+        maxSize = np.min([(x - ll), (r - x - 1), (u - y - 1), (y - d)])  # extra -1 in x because [)
         assert maxSize >= 0, "Box calculation went wrong"
         return maxSize
 
@@ -278,10 +284,12 @@ class ImageExaminer:
             # but it's nontrivial due to all the plotting options
 
             maxsize = self._calcMaxBoxHalfSize(centroid, self.exp.getBBox())
-            msg = (f"With centroid at {centroid} and boxHalfSize {self.boxHalfSize} "
-                   "the selection runs off the edge of the chip. Boxsize has been "
-                   f"automatically shrunk to {maxsize} (only square selections are "
-                   "currently supported)")
+            msg = (
+                f"With centroid at {centroid} and boxHalfSize {self.boxHalfSize} "
+                "the selection runs off the edge of the chip. Boxsize has been "
+                f"automatically shrunk to {maxsize} (only square selections are "
+                "currently supported)"
+            )
             print(msg)
             self.boxHalfSize = maxsize
             return self._calcBbox(centroid)
@@ -302,7 +310,7 @@ class ImageExaminer:
         """
         bbox = self._calcBbox(self.centroid)
         self.starBbox = bbox  # needed elsewhere, so always set when calculated
-        self.nSatPixInBox = countPixels(self.exp.maskedImage[self.starBbox], 'SAT')
+        self.nSatPixInBox = countPixels(self.exp.maskedImage[self.starBbox], "SAT")
         return self.exp.image[bbox].array
 
     def getMeshGrid(self, data):
@@ -319,8 +327,8 @@ class ImageExaminer:
             The xx, yy as calculated by np.meshgrid
         """
         xlen, ylen = data.shape
-        xx = np.arange(-1*xlen/2, xlen/2, 1)
-        yy = np.arange(-1*ylen/2, ylen/2, 1)
+        xx = np.arange(-1 * xlen / 2, xlen / 2, 1)
+        yy = np.arange(-1 * ylen / 2, ylen / 2, 1)
         xx, yy = np.meshgrid(xx, yy)
         return xx, yy
 
@@ -337,7 +345,7 @@ class ImageExaminer:
         Nothing is returned, but sets many value in the class.
         """
         xlen, ylen = self.data.shape
-        center = np.array([xlen/2, ylen/2])
+        center = np.array([xlen / 2, ylen / 2])
         # TODO: add option to move centroid to max pixel for radial (argmax 2d)
 
         distances = []
@@ -348,7 +356,7 @@ class ImageExaminer:
             for j in range(ylen):
                 value = self.data[i, j]
                 dist = norm((i, j) - center)
-                if dist > xlen//2:
+                if dist > xlen // 2:
                     continue  # clip to box size, we don't need a factor of sqrt(2) extra
                 values.append(value)
                 distances.append(dist)
@@ -383,7 +391,7 @@ class ImageExaminer:
         self.radii = d[:, 0]
         values = d[:, 1]
         self.cumFluxes = np.cumsum(values)
-        self.cumFluxesNorm = self.cumFluxes/np.max(self.cumFluxes)
+        self.cumFluxesNorm = self.cumFluxes / np.max(self.cumFluxes)
 
         self.imStats.eeRadius50 = self.getEncircledEnergyRadius(50)
         self.imStats.eeRadius80 = self.getEncircledEnergyRadius(80)
@@ -406,7 +414,7 @@ class ImageExaminer:
         radius : `float`
             The radius at which the ``percentage`` threshold is crossed.
         """
-        return self.radii[np.argmin(np.abs((percentage/100)-self.cumFluxesNorm))]
+        return self.radii[np.argmin(np.abs((percentage / 100) - self.cumFluxesNorm))]
 
     def plotRadialAverage(self, ax=None):
         """Make the radial average plot.
@@ -424,20 +432,18 @@ class ImageExaminer:
 
         distances = self.radialDistances
         values = self.radialValues
-        pars = (self.imStats.fitAmp,
-                self.imStats.fitGausMean,
-                self.imStats.fitFwhm / SIGMATOFWHM)
+        pars = (self.imStats.fitAmp, self.imStats.fitGausMean, self.imStats.fitFwhm / SIGMATOFWHM)
 
         fitFailed = np.isnan(pars).any()
 
-        ax.plot(distances, values, 'x', label='Radial average')
+        ax.plot(distances, values, "x", label="Radial average")
         if not fitFailed:
             fitline = gauss(distances, *pars)
             ax.plot(distances, fitline, label="Gaussian fit")
 
-        ax.set_ylabel('Flux (ADU)')
-        ax.set_xlabel('Radius (pix)')
-        ax.set_aspect(1.0/ax.get_data_ratio(), adjustable='box')  # equal aspect for non-images
+        ax.set_ylabel("Flux (ADU)")
+        ax.set_xlabel("Radius (pix)")
+        ax.set_aspect(1.0 / ax.get_data_ratio(), adjustable="box")  # equal aspect for non-images
         ax.legend()
 
         if plotDirect:
@@ -463,7 +469,7 @@ class ImageExaminer:
         vmin = np.percentile(self.data, 0.1)
         vmax = np.percentile(self.data, 99.9)
         lvls = np.linspace(vmin, vmax, nContours)
-        intervalSize = (lvls[1]-lvls[0])
+        intervalSize = lvls[1] - lvls[0]
         contourPlot = ax.contour(self.xx, self.yy, self.data, levels=lvls)  # noqa F841
         print(f"Contoured from {vmin:,.0f} to {vmax:,.0f} using {nContours} contours of {intervalSize:.1f}")
 
@@ -490,14 +496,29 @@ class ImageExaminer:
             plotDirect = True
 
         if useColor:
-            surf = ax.plot_surface(self.xx, self.yy, self.data, cmap=cm.plasma,
-                                   linewidth=1, antialiased=True, color='k', alpha=0.9)
+            surf = ax.plot_surface(
+                self.xx,
+                self.yy,
+                self.data,
+                cmap=cm.plasma,
+                linewidth=1,
+                antialiased=True,
+                color="k",
+                alpha=0.9,
+            )
         else:
-            surf = ax.plot_wireframe(self.xx, self.yy, self.data, cmap=cm.gray,  # noqa F841
-                                     linewidth=1, antialiased=True, color='k')
+            surf = ax.plot_wireframe(
+                self.xx,
+                self.yy,
+                self.data,
+                cmap=cm.gray,  # noqa F841
+                linewidth=1,
+                antialiased=True,
+                color="k",
+            )
 
         ax.zaxis.set_major_locator(LinearLocator(10))
-        ax.zaxis.set_major_formatter('{x:,.0f}')
+        ax.zaxis.set_major_formatter("{x:,.0f}")
 
         if plotDirect:
             plt.show()
@@ -519,17 +540,17 @@ class ImageExaminer:
             ax = plt.subplot(111)
             plotDirect = True
 
-        interp = 'none'
+        interp = "none"
         if logScale:
-            ax.imshow(self.data, norm=LogNorm(), origin='lower', interpolation=interp)
+            ax.imshow(self.data, norm=LogNorm(), origin="lower", interpolation=interp)
         else:
-            ax.imshow(self.data, origin='lower', interpolation=interp)
+            ax.imshow(self.data, origin="lower", interpolation=interp)
         ax.tick_params(which="major", direction="in", top=True, right=True, labelsize=8)
 
         xlen, ylen = self.data.shape
-        center = np.array([xlen/2, ylen/2])
-        ax.plot(*center, 'r+', markersize=10)
-        ax.plot(*center, 'rx', markersize=10)
+        center = np.array([xlen / 2, ylen / 2])
+        ax.plot(*center, "r+", markersize=10)
+        ax.plot(*center, "rx", markersize=10)
 
         if plotDirect:
             plt.show()
@@ -552,13 +573,14 @@ class ImageExaminer:
         imData = quickSmooth(self.exp.image.array, 2.5)
         vmin = np.percentile(imData, 10)
         vmax = np.percentile(imData, 99.9)
-        ax.imshow(imData, norm=LogNorm(vmin=vmin, vmax=vmax),
-                  origin='lower', cmap='gray_r', interpolation='bicubic')
+        ax.imshow(
+            imData, norm=LogNorm(vmin=vmin, vmax=vmax), origin="lower", cmap="gray_r", interpolation="bicubic"
+        )
         ax.tick_params(which="major", direction="in", top=True, right=True, labelsize=8)
 
         xy0 = self.starBbox.getCorners()[0].x, self.starBbox.getCorners()[0].y
         width, height = self.starBbox.getWidth(), self.starBbox.getHeight()
-        rect = patches.Rectangle(xy0, width, height, linewidth=1, edgecolor='r', facecolor='none')
+        rect = patches.Rectangle(xy0, width, height, linewidth=1, edgecolor="r", facecolor="none")
         ax.add_patch(rect)
 
         if plotDirect:
@@ -587,16 +609,16 @@ class ImageExaminer:
             ax = plt.subplot(111)
             plotDirect = True
 
-        xs = range(-1*self.boxHalfSize, self.boxHalfSize+1)
-        ax.plot(xs, rowSlice, label='Row plot')
-        ax.plot(xs, colSlice, label='Column plot')
+        xs = range(-1 * self.boxHalfSize, self.boxHalfSize + 1)
+        ax.plot(xs, rowSlice, label="Row plot")
+        ax.plot(xs, colSlice, label="Column plot")
         if logScale:
             pass
             # TODO: set yscale as log here also protect against negatives
 
-        ax.set_ylabel('Flux (ADU)')
-        ax.set_xlabel('Radius (pix)')
-        ax.set_aspect(1.0/ax.get_data_ratio(), adjustable='box')  # equal aspect for non-images
+        ax.set_ylabel("Flux (ADU)")
+        ax.set_xlabel("Radius (pix)")
+        ax.set_aspect(1.0 / ax.get_data_ratio(), adjustable="box")  # equal aspect for non-images
 
         ax.legend()
         if plotDirect:
@@ -614,11 +636,14 @@ class ImageExaminer:
         """
         text = "\n".join([line for line in lines])
 
-        stats_text = AnchoredText(text, loc="center", pad=0.5,
-                                  prop=dict(size=14, ma="left", backgroundcolor="white",
-                                            color="black", family='monospace'))
+        stats_text = AnchoredText(
+            text,
+            loc="center",
+            pad=0.5,
+            prop=dict(size=14, ma="left", backgroundcolor="white", color="black", family="monospace"),
+        )
         ax.add_artist(stats_text)
-        ax.axis('off')
+        ax.axis("off")
 
     def plotCurveOfGrowth(self, ax=None):
         """Make the encircled energy plot.
@@ -635,10 +660,10 @@ class ImageExaminer:
             plotDirect = True
 
         ax.plot(self.radii, self.cumFluxesNorm, markersize=10)
-        ax.set_ylabel('Encircled flux (%)')
-        ax.set_xlabel('Radius (pix)')
+        ax.set_ylabel("Encircled flux (%)")
+        ax.set_xlabel("Radius (pix)")
 
-        ax.set_aspect(1.0/ax.get_data_ratio(), adjustable='box')  # equal aspect for non-images
+        ax.set_aspect(1.0 / ax.get_data_ratio(), adjustable="box")  # equal aspect for non-images
 
         if plotDirect:
             plt.show()
@@ -649,12 +674,12 @@ class ImageExaminer:
         Image is saved if ``savefig`` was set.
         """
         figsize = 6
-        fig = plt.figure(figsize=(figsize*3, figsize*2))
+        fig = plt.figure(figsize=(figsize * 3, figsize * 2))
 
         ax1 = fig.add_subplot(331)
         ax2 = fig.add_subplot(332)
         ax3 = fig.add_subplot(333)
-        ax4 = fig.add_subplot(334, projection='3d')
+        ax4 = fig.add_subplot(334, projection="3d")
         ax5 = fig.add_subplot(335)
         ax6 = fig.add_subplot(336)
         ax7 = fig.add_subplot(337)
@@ -694,10 +719,10 @@ class ImageExaminer:
 
         plt.tight_layout()
         if self.savePlots:
-            print(f'Plot saved to {self.savePlots}')
+            print(f"Plot saved to {self.savePlots}")
             fig.savefig(self.savePlots)
         plt.show()
-        plt.close('all')
+        plt.close("all")
 
     @staticmethod
     def translateStats(imStats, mappingDict):
@@ -726,7 +751,7 @@ class ImageExaminer:
 
             if type(value) == float or isinstance(value, np.floating):
                 value = f"{value:,.3f}"
-            if k == 'centroid':  # special case the only tuple
+            if k == "centroid":  # special case the only tuple
                 value = f"{value[0]:.1f}, {value[1]:.1f}"
             lines.append(f"{v} = {value}")
         return lines

@@ -21,17 +21,17 @@
 
 import dataclasses
 import os
-from lsst.ip.isr import IsrTask
-from lsst.ip.isr.isrTask import IsrTaskConnections
-import lsst.pipe.base.connectionTypes as cT
-from lsst.utils import getPackageDir
 
 import lsst.pex.config as pexConfig
 import lsst.pipe.base as pipeBase
-from lsst.pipe.tasks.characterizeImage import CharacterizeImageTask
+import lsst.pipe.base.connectionTypes as cT
+from lsst.ip.isr import IsrTask
+from lsst.ip.isr.isrTask import IsrTaskConnections
 from lsst.meas.algorithms.installGaussianPsf import InstallGaussianPsfTask
+from lsst.pipe.tasks.characterizeImage import CharacterizeImageTask
+from lsst.utils import getPackageDir
 
-__all__ = ['QuickLookIsrTask', 'QuickLookIsrTaskConfig']
+__all__ = ["QuickLookIsrTask", "QuickLookIsrTaskConfig"]
 
 
 class QuickLookIsrTaskConnections(IsrTaskConnections):
@@ -41,12 +41,13 @@ class QuickLookIsrTaskConnections(IsrTaskConnections):
     required as non-zero, but changing all the other PrerequisiteInputs'
     minimum values to zero.
     """
+
     def __init__(self, *, config=None):
         # programatically clone all of the connections from isrTask
         # setting minimum values to zero for everything except the ccdExposure
         super().__init__(config=IsrTask.ConfigClass())  # need a dummy config, isn't used other than for ctor
         for name, connection in self.allConnections.items():
-            if hasattr(connection, 'minimum'):
+            if hasattr(connection, "minimum"):
                 setattr(
                     self,
                     name,
@@ -65,8 +66,7 @@ class QuickLookIsrTaskConnections(IsrTaskConnections):
         self.outputExposure = exposure
 
 
-class QuickLookIsrTaskConfig(pipeBase.PipelineTaskConfig,
-                             pipelineConnections=QuickLookIsrTaskConnections):
+class QuickLookIsrTaskConfig(pipeBase.PipelineTaskConfig, pipelineConnections=QuickLookIsrTaskConnections):
     """Configuration parameters for QuickLookIsrTask."""
 
     doRepairCosmics = pexConfig.Field(
@@ -97,28 +97,31 @@ class QuickLookIsrTask(pipeBase.PipelineTask):
         # with the dynamically generated config.
         self.isrTask = IsrTask
 
-    def run(self, ccdExposure, *,
-            camera=None,
-            bias=None,
-            dark=None,
-            flat=None,
-            fringes=None,
-            defects=None,
-            linearizer=None,
-            crosstalk=None,
-            bfKernel=None,
-            newBFKernel=None,
-            ptc=None,
-            crosstalkSources=None,
-            isrBaseConfig=None,
-            filterTransmission=None,
-            opticsTransmission=None,
-            strayLightData=None,
-            sensorTransmission=None,
-            atmosphereTransmission=None,
-            deferredChargeCalib=None,
-            illumMaskedImage=None,
-            ):
+    def run(
+        self,
+        ccdExposure,
+        *,
+        camera=None,
+        bias=None,
+        dark=None,
+        flat=None,
+        fringes=None,
+        defects=None,
+        linearizer=None,
+        crosstalk=None,
+        bfKernel=None,
+        newBFKernel=None,
+        ptc=None,
+        crosstalkSources=None,
+        isrBaseConfig=None,
+        filterTransmission=None,
+        opticsTransmission=None,
+        strayLightData=None,
+        sensorTransmission=None,
+        atmosphereTransmission=None,
+        deferredChargeCalib=None,
+        illumMaskedImage=None,
+    ):
         """Run isr and cosmic ray repair using, doing as much isr as possible.
 
         Retrieves as many calibration products as are available, and runs isr
@@ -259,32 +262,34 @@ class QuickLookIsrTask(pipeBase.PipelineTask):
 
         if fringes:
             # Must be run after isrTask is instantiated.
-            isrTask.fringe.loadFringes(fringes,
-                                       expId=ccdExposure.info.id,
-                                       assembler=isrTask.assembleCcd
-                                       if isrConfig.doAssembleIsrExposures else None)
+            isrTask.fringe.loadFringes(
+                fringes,
+                expId=ccdExposure.info.id,
+                assembler=isrTask.assembleCcd if isrConfig.doAssembleIsrExposures else None,
+            )
 
-        result = isrTask.run(ccdExposure,
-                             camera=camera,
-                             bias=bias,
-                             dark=dark,
-                             flat=flat,
-                             fringes=fringes,
-                             defects=defects,
-                             linearizer=linearizer,
-                             crosstalk=crosstalk,
-                             bfKernel=bfKernel,
-                             bfGains=bfGains,
-                             ptc=ptc,
-                             crosstalkSources=crosstalkSources,
-                             filterTransmission=filterTransmission,
-                             opticsTransmission=opticsTransmission,
-                             sensorTransmission=sensorTransmission,
-                             atmosphereTransmission=atmosphereTransmission,
-                             strayLightData=strayLightData,
-                             deferredChargeCalib=deferredChargeCalib,
-                             illumMaskedImage=illumMaskedImage,
-                             )
+        result = isrTask.run(
+            ccdExposure,
+            camera=camera,
+            bias=bias,
+            dark=dark,
+            flat=flat,
+            fringes=fringes,
+            defects=defects,
+            linearizer=linearizer,
+            crosstalk=crosstalk,
+            bfKernel=bfKernel,
+            bfGains=bfGains,
+            ptc=ptc,
+            crosstalkSources=crosstalkSources,
+            filterTransmission=filterTransmission,
+            opticsTransmission=opticsTransmission,
+            sensorTransmission=sensorTransmission,
+            atmosphereTransmission=atmosphereTransmission,
+            strayLightData=strayLightData,
+            deferredChargeCalib=deferredChargeCalib,
+            illumMaskedImage=illumMaskedImage,
+        )
 
         postIsr = result.exposure
 
@@ -311,5 +316,4 @@ class QuickLookIsrTask(pipeBase.PipelineTask):
                 self.log.warning(f"During CR repair caught: {e}")
 
         # exposure is returned for convenience to mimic isrTask's API.
-        return pipeBase.Struct(exposure=postIsr,
-                               outputExposure=postIsr)
+        return pipeBase.Struct(exposure=postIsr, outputExposure=postIsr)

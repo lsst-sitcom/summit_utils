@@ -20,11 +20,10 @@
 # along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
 import os
+
 import vcr
 
-__all__ = (
-    "getVcr",
-)
+__all__ = ("getVcr",)
 
 
 def getVcr():
@@ -44,6 +43,6 @@ def getVcr():
         record_mode="none",
         cassette_library_dir=cassette_library_dir,
         path_transformer=vcr.VCR.ensure_suffix(".yaml"),
-        match_on=['method', 'scheme', 'host', 'port', 'path', 'query', 'body']
+        match_on=["method", "scheme", "host", "port", "path", "query", "body"],
     )
     return safe_vcr

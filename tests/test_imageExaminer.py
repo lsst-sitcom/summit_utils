@@ -19,19 +19,17 @@
 # You should have received a copy of the GNU General Public License
 # along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
-import unittest
-import tempfile
 import os
+import tempfile
+import unittest
 
 import lsst.utils.tests
-
-from lsst.summit.utils.butlerUtils import makeDefaultLatissButler
 from lsst.summit.utils import ImageExaminer
 from lsst.summit.utils.bestEffort import BestEffortIsr
+from lsst.summit.utils.butlerUtils import makeDefaultLatissButler
 
 
 class ImageExaminerTestCase(lsst.utils.tests.TestCase):
-
     @classmethod
     def setUpClass(cls):
         try:
@@ -40,21 +38,19 @@ class ImageExaminerTestCase(lsst.utils.tests.TestCase):
             raise unittest.SkipTest("Skipping tests that require the LATISS butler repo.")
 
         # Chosen to work on the TTS, summit and NCSA
-        cls.dataId = {'day_obs': 20200315, 'seq_num': 120, 'detector': 0}
+        cls.dataId = {"day_obs": 20200315, "seq_num": 120, "detector": 0}
         cls.bestEffort = BestEffortIsr()  # should always succeed if makeDefaultLatissButler works
         cls.outputDir = tempfile.mkdtemp()
-        cls.outputFilename = os.path.join(cls.outputDir, 'testImageExaminer.jpg')
+        cls.outputFilename = os.path.join(cls.outputDir, "testImageExaminer.jpg")
 
     def test_imageExaminer(self):
         """Test that the animator produces a large file without worrying about
         the contents?
         """
         exp = self.bestEffort.getExposure(self.dataId)
-        imExam = ImageExaminer(exp,
-                               doTweakCentroid=True,
-                               boxHalfSize=105,
-                               doForceCoM=False,
-                               savePlots=self.outputFilename)
+        imExam = ImageExaminer(
+            exp, doTweakCentroid=True, boxHalfSize=105, doForceCoM=False, savePlots=self.outputFilename
+        )
         imExam.plot()
 
         self.assertTrue(os.path.isfile(self.outputFilename))

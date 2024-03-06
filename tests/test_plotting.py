@@ -19,26 +19,27 @@
 # You should have received a copy of the GNU General Public License
 # along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
-import unittest
-import tempfile
 import os
+import tempfile
+import unittest
+
 import numpy as np
 
-import lsst.utils.tests
+import lsst.afw.image as afwImage
 import lsst.utils
+import lsst.utils.tests
+from lsst.afw.detection import Footprint
+from lsst.afw.geom import SpanSet
 from lsst.summit.utils.plotting import plot
 from lsst.summit.utils.utils import detectObjectsInExp
-import lsst.afw.image as afwImage
-from lsst.afw.geom import SpanSet
-from lsst.afw.detection import Footprint
 
 
 class PlottingTestCase(lsst.utils.tests.TestCase):
     try:
-        afwDataDir = lsst.utils.getPackageDir('afwdata')
+        afwDataDir = lsst.utils.getPackageDir("afwdata")
     except Exception:
         afwDataDir = None
-    filename = 'postISRCCD_2020021800224-EMPTY~EMPTY-det000.fits.fz'
+    filename = "postISRCCD_2020021800224-EMPTY~EMPTY-det000.fits.fz"
 
     @classmethod
     def setUpClass(cls):
@@ -46,8 +47,7 @@ class PlottingTestCase(lsst.utils.tests.TestCase):
 
     @unittest.skipUnless(afwDataDir, "afwdata not available")
     def test_plot(self):
-        """Test that the the plot is made and saved
-        """
+        """Test that the the plot is made and saved"""
         fullName = os.path.join(self.afwDataDir, "LATISS/postISRCCD", self.filename)
         exp = afwImage.ExposureF(fullName)
         centroids = [(567, 746), (576, 599), (678, 989)]
@@ -57,47 +57,36 @@ class PlottingTestCase(lsst.utils.tests.TestCase):
         fpset = detectObjectsInExp(exp)
 
         # Input is an exposure
-        outputFilename = os.path.join(self.outputDir, 'testPlotting_exp.jpg')
-        plot(exp,
-             centroids=centroids,
-             footprints=fpset,
-             addLegend=True,
-             savePlotAs=outputFilename)
+        outputFilename = os.path.join(self.outputDir, "testPlotting_exp.jpg")
+        plot(exp, centroids=centroids, footprints=fpset, addLegend=True, savePlotAs=outputFilename)
         self.assertTrue(os.path.isfile(outputFilename))
         self.assertTrue(os.path.getsize(outputFilename) > 10000)
 
         # Input is an image
-        outputFilename = os.path.join(self.outputDir, 'testPlotting_image.jpg')
+        outputFilename = os.path.join(self.outputDir, "testPlotting_image.jpg")
         im = exp.image
-        plot(im,
-             footprints=[foot1, foot2],
-             savePlotAs=outputFilename)
+        plot(im, footprints=[foot1, foot2], savePlotAs=outputFilename)
         self.assertTrue(os.path.isfile(outputFilename))
         self.assertTrue(os.path.getsize(outputFilename) > 10000)
 
         # Input is a masked image
-        outputFilename = os.path.join(self.outputDir, 'testPloting_mask.jpg')
+        outputFilename = os.path.join(self.outputDir, "testPloting_mask.jpg")
         masked = exp.maskedImage
-        plot(masked,
-             savePlotAs=outputFilename)
+        plot(masked, savePlotAs=outputFilename)
         self.assertTrue(os.path.isfile(outputFilename))
         self.assertTrue(os.path.getsize(outputFilename) > 10000)
 
         # Input is a numpy array
-        outputFilename = os.path.join(self.outputDir, 'testPlotting_nparr.jpg')
+        outputFilename = os.path.join(self.outputDir, "testPlotting_nparr.jpg")
         nparr = exp.image.array
-        plot(nparr,
-             footprints=foot1,
-             savePlotAs=outputFilename)
+        plot(nparr, footprints=foot1, savePlotAs=outputFilename)
         self.assertTrue(os.path.isfile(outputFilename))
         self.assertTrue(os.path.getsize(outputFilename) > 10000)
 
         # Nans in the image
         nparr[1200:1250, 1300:1345] = np.nan
-        for stretch in ['ccs', 'asinh', 'power', 'log', 'linear', 'sqrt']:
-            plot(nparr,
-                 showCompass=False,
-                 stretch=stretch)
+        for stretch in ["ccs", "asinh", "power", "log", "linear", "sqrt"]:
+            plot(nparr, showCompass=False, stretch=stretch)
 
         # Image consists of nans
         nparr[:, :] = np.nan

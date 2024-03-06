@@ -22,9 +22,9 @@
 import enum
 
 __all__ = [
-    'ScriptState',
-    'AxisMotionState',
-    'PowerState',
+    "ScriptState",
+    "AxisMotionState",
+    "PowerState",
 ]
 
 # TODO: Remove this file once RFC-942 passes and we can import from the source.

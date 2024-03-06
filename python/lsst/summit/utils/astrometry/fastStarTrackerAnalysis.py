@@ -19,37 +19,36 @@
 # You should have received a copy of the GNU General Public License
 # along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
-import galsim
 import typing
-
-import numpy as np
 from dataclasses import dataclass
+
+import galsim
 import matplotlib.pyplot as plt
+import numpy as np
+from matplotlib.collections import PatchCollection
+from matplotlib.patches import Rectangle
+from mpl_toolkits.axes_grid1 import make_axes_locatable
 from PIL import Image
 
-from matplotlib.patches import Rectangle
-from matplotlib.collections import PatchCollection
-from mpl_toolkits.axes_grid1 import make_axes_locatable
-
-import lsst.afw.math as afwMath
 import lsst.afw.image as afwImage
+import lsst.afw.math as afwMath
 import lsst.geom as geom
+from lsst.summit.utils.utils import detectObjectsInExp
 from lsst.utils.iteration import ensure_iterable
 
-from lsst.summit.utils.utils import detectObjectsInExp
-
-__all__ = ('tifToExp',
-           'getBboxAround',
-           'getFlux',
-           'getBackgroundLevel',
-           'countOverThresholdPixels',
-           'sortSourcesByFlux',
-           'findFastStarTrackerImageSources',
-           'checkResultConsistency',
-           'plotSourceMovement',
-           'plotSource',
-           'plotSourcesOnImage'
-           )
+__all__ = (
+    "tifToExp",
+    "getBboxAround",
+    "getFlux",
+    "getBackgroundLevel",
+    "countOverThresholdPixels",
+    "sortSourcesByFlux",
+    "findFastStarTrackerImageSources",
+    "checkResultConsistency",
+    "plotSourceMovement",
+    "plotSource",
+    "plotSourcesOnImage",
+)
 
 
 def tifToExp(filename):
@@ -130,7 +129,7 @@ def getFlux(cutout, backgroundLevel=0):
     if not backgroundLevel:
         return rawFlux
 
-    return rawFlux - (cutout.size*backgroundLevel)
+    return rawFlux - (cutout.size * backgroundLevel)
 
 
 def getBackgroundLevel(exp, nSigma=3):
@@ -188,7 +187,7 @@ def countOverThresholdPixels(cutout, bgMean, bgStd, nSigma=15):
     nPix : `int`
         The number of pixels above threshold.
     """
-    inds = np.where(cutout > (bgMean + 0*bgStd))
+    inds = np.where(cutout > (bgMean + 0 * bgStd))
     return len(inds[0])
 
 
@@ -217,8 +216,8 @@ def sortSourcesByFlux(sources, reverse=False):
 
 @dataclass(slots=True)
 class Source:
-    """A dataclass for FastStarTracker analysis results.
-    """
+    """A dataclass for FastStarTracker analysis results."""
+
     # raw numbers
     centroidX: float = np.nan  # in image coordinates
     centroidY: float = np.nan  # in image coordinates
@@ -242,24 +241,23 @@ class Source:
     parentImageHeight: int | float = np.nan
 
     def __repr__(self):
-        """Print everything except the full details of the moments.
-        """
-        retStr = ''
+        """Print everything except the full details of the moments."""
+        retStr = ""
         for itemName in self.__slots__:
             v = getattr(self, itemName)
             if isinstance(v, int):  # print ints as ints
-                retStr += f'{itemName} = {v}\n'
+                retStr += f"{itemName} = {v}\n"
             elif isinstance(v, float):  # but round floats at 3dp
-                retStr += f'{itemName} = {v:.3f}\n'
-            elif itemName == 'moments':  # and don't spam the full moments
-                retStr += f'moments = {type(v)}\n'
-            elif itemName == 'bbox':  # and don't spam the full moments
-                retStr += f'bbox = lsst.geom.{repr(v)}\n'
-            elif itemName == 'cutout':  # and don't spam the full moments
+                retStr += f"{itemName} = {v:.3f}\n"
+            elif itemName == "moments":  # and don't spam the full moments
+                retStr += f"moments = {type(v)}\n"
+            elif itemName == "bbox":  # and don't spam the full moments
+                retStr += f"bbox = lsst.geom.{repr(v)}\n"
+            elif itemName == "cutout":  # and don't spam the full moments
                 if v is None:
-                    retStr += 'cutout = None\n'
+                    retStr += "cutout = None\n"
                 else:
-                    retStr += f'cutout = {type(v)}\n'
+                    retStr += f"cutout = {type(v)}\n"
         return retStr
 
 
@@ -354,43 +352,47 @@ def checkResultConsistency(results, maxAllowableShift=5, silent=False):
     sourceCounts = set([len(sourceSet) for sourceSet in results])
     if sourceCounts == {0}:  # none of the images contain any detections
         if not silent:
-            print('No images contain any sources. Results are technically consistent, but also useless.')
+            print("No images contain any sources. Results are technically consistent, but also useless.")
         # this is technically consistent, so return True, but any downstream
         # code which tries to make plots with these will fail, of course.
         return True
 
     if 0 in ([len(sourceSet) for sourceSet in results]):
         if not silent:
-            print('Some results contain no sources. Results are therefore fundamentally inconsistent'
-                  ' and other checks cannot be run')
+            print(
+                "Some results contain no sources. Results are therefore fundamentally inconsistent"
+                " and other checks cannot be run"
+            )
         return False
 
     consistent = True
     toPrint = []
     nSources = set([sourceSet[0].nSourcesInImage for sourceSet in results])
     if len(nSources) != 1:
-        toPrint.append(f'❌ Images contain a variable number of sources: {nSources}')
+        toPrint.append(f"❌ Images contain a variable number of sources: {nSources}")
         consistent = False
     else:
         n = nSources.pop()
-        toPrint.append(f'✅ All images contain the same nominal number of sources at detection stage: {n}')
+        toPrint.append(f"✅ All images contain the same nominal number of sources at detection stage: {n}")
 
     nSourcesCounted = set([len(sourceSet) for sourceSet in results])
     if len(nSourcesCounted) != 1:
-        toPrint.append(f'❌ Number of actual sources in each sourceSet varies, got: {nSourcesCounted}.'
-                       ' If some were manually removed you can ignore this')
+        toPrint.append(
+            f"❌ Number of actual sources in each sourceSet varies, got: {nSourcesCounted}."
+            " If some were manually removed you can ignore this"
+        )
         consistent = False
     else:
         n = nSourcesCounted.pop()
-        toPrint.append(f'✅ All results contain the same number of actual sources per image: {n}')
+        toPrint.append(f"✅ All results contain the same number of actual sources per image: {n}")
 
     widths = set([sourceSet[0].parentImageWidth for sourceSet in results])
     heights = set([sourceSet[0].parentImageHeight for sourceSet in results])
     if len(widths) != 1 or len(heights) != 1:
-        toPrint.append(f'❌ Input images were of variable dimenions! {widths=}, {heights=}')
+        toPrint.append(f"❌ Input images were of variable dimenions! {widths=}, {heights=}")
         consistent = False
     else:
-        toPrint.append('✅ All input images were of the same dimensions')
+        toPrint.append("✅ All input images were of the same dimensions")
 
     if len(results) > 1:  # can't np.diff an array of length 1 so these are not useful/defined
         # now the basic checks have passed, do some sanity checks on the
@@ -400,17 +402,19 @@ def checkResultConsistency(results, maxAllowableShift=5, silent=False):
         dy = np.diff([s.centroidY for s in sources])
         maxMovementX = np.max(dx)
         maxMovementY = np.max(dy)
-        happyOrSad = '✅'
+        happyOrSad = "✅"
         if max(maxMovementX, maxMovementY) > maxAllowableShift:
             consistent = False
-            happyOrSad = '❌'
+            happyOrSad = "❌"
 
-        toPrint.append(f'{happyOrSad} Maximum centroid movement of brightest object between images in (x, y)'
-                       f' = ({maxMovementX:.2f}, {maxMovementY:.2f}) pix')
+        toPrint.append(
+            f"{happyOrSad} Maximum centroid movement of brightest object between images in (x, y)"
+            f" = ({maxMovementX:.2f}, {maxMovementY:.2f}) pix"
+        )
 
         fluxStd = np.nanstd([s.rawFlux for s in sources])
         fluxMean = np.nanmean([s.rawFlux for s in sources])
-        toPrint.append(f'Mean and stddev of flux from brightest object = {fluxMean:.1f} ± {fluxStd:.1f} ADU')
+        toPrint.append(f"Mean and stddev of flux from brightest object = {fluxMean:.1f} ± {fluxStd:.1f} ADU")
 
     if not silent:
         for line in toPrint:
@@ -450,7 +454,7 @@ def plotSourceMovement(results, sourceIndex=0, allowInconsistent=False):
     consistent = checkResultConsistency(results.values(), silent=True)
     if not consistent and not allowInconsistent:
         checkResultConsistency(results.values(), silent=False)  # print the problem if we're raising
-        raise ValueError('The sources were found to be inconsistent and allowInconsistent=False')
+        raise ValueError("The sources were found to be inconsistent and allowInconsistent=False")
 
     sourceDict = {k: v[sourceIndex] for k, v in results.items()}
     seqNums = list(sourceDict.keys())
@@ -463,20 +467,20 @@ def plotSourceMovement(results, sourceIndex=0, allowInconsistent=False):
     ax1, ax2, ax3 = fig.subplots(3, sharex=True)
     fig.subplots_adjust(hspace=0)
 
-    ax1.plot(seqNums, [s.rawFlux for s in sources], label='Raw Flux')
-    ax1.plot(seqNums, [s.hsmFittedFlux for s in sources], label='Fitted Flux')
-    ax1.set_ylabel('Flux (ADU)', size=axisLabelSize)
+    ax1.plot(seqNums, [s.rawFlux for s in sources], label="Raw Flux")
+    ax1.plot(seqNums, [s.hsmFittedFlux for s in sources], label="Fitted Flux")
+    ax1.set_ylabel("Flux (ADU)", size=axisLabelSize)
     ax1.legend()
 
-    ax2.plot(seqNums, [s.centroidX for s in sources], label='Raw centroid x')
-    ax2.plot(seqNums, [s.hsmCentroidX for s in sources], label='Fitted centroid x')
-    ax2.set_ylabel('x-centroid (pixels)', size=axisLabelSize)
+    ax2.plot(seqNums, [s.centroidX for s in sources], label="Raw centroid x")
+    ax2.plot(seqNums, [s.hsmCentroidX for s in sources], label="Fitted centroid x")
+    ax2.set_ylabel("x-centroid (pixels)", size=axisLabelSize)
     ax2.legend()
 
-    ax3.plot(seqNums, [s.centroidY for s in sources], label='Raw centroid y')
-    ax3.plot(seqNums, [s.hsmCentroidY for s in sources], label='Fitted centroid y')
-    ax3.set_ylabel('y-centroid (pixels)', size=axisLabelSize)
-    ax3.set_xlabel('SeqNum', size=axisLabelSize)
+    ax3.plot(seqNums, [s.centroidY for s in sources], label="Raw centroid y")
+    ax3.plot(seqNums, [s.hsmCentroidY for s in sources], label="Fitted centroid y")
+    ax3.set_ylabel("y-centroid (pixels)", size=axisLabelSize)
+    ax3.set_xlabel("SeqNum", size=axisLabelSize)
     ax3.legend()
 
     figs.append(fig)
@@ -487,19 +491,21 @@ def plotSourceMovement(results, sourceIndex=0, allowInconsistent=False):
     colors = np.arange(len(sources))
     # gnuplot2 has a nice balance of nothing white, and having an intuitive
     # progression of colours so the eye can pick out trends on the point cloud.
-    axRef = ax4.scatter([s.centroidX for s in sources], [s.centroidY for s in sources],
-                        c=colors, cmap='gnuplot2')
-    ax4.set_xlabel('x-centroid (pixels)', size=axisLabelSize)
-    ax4.set_ylabel('y-centroid (pixels)', size=axisLabelSize)
-    ax4.set_aspect('equal', 'box')
+    axRef = ax4.scatter(
+        [s.centroidX for s in sources], [s.centroidY for s in sources], c=colors, cmap="gnuplot2"
+    )
+    ax4.set_xlabel("x-centroid (pixels)", size=axisLabelSize)
+    ax4.set_ylabel("y-centroid (pixels)", size=axisLabelSize)
+    ax4.set_aspect("equal", "box")
     # move the colorbar
     divider = make_axes_locatable(ax4)
     cax = divider.append_axes("right", size="5%", pad=0.05)
     cbar = plt.colorbar(axRef, cax=cax)
-    cbar.set_label('Image number in series', size=axisLabelSize*.75)
+    cbar.set_label("Image number in series", size=axisLabelSize * 0.75)
     figs.append(fig)
 
     return figs
+
 
 # -------------- plotting tools
 
@@ -540,12 +546,12 @@ def plotSourcesOnImage(parentFilename, sources):
     fig = plt.figure(figsize=(16, 8))
     ax = fig.subplots(1)
 
-    plt.imshow(data, interpolation='None', origin='lower')
+    plt.imshow(data, interpolation="None", origin="lower")
 
     sources = ensure_iterable(sources)
     patches = []
     for source in sources:
-        ax.scatter(source.centroidX, source.centroidY, color='red', marker='x')  # mark the centroid
+        ax.scatter(source.centroidX, source.centroidY, color="red", marker="x")  # mark the centroid
         patch = bboxToMatplotlibRectanle(source.bbox)
         patches.append(patch)
 
@@ -555,7 +561,7 @@ def plotSourcesOnImage(parentFilename, sources):
     plt.colorbar(cax=cax)
 
     # plot the bboxes on top
-    pc = PatchCollection(patches, edgecolor='r', facecolor='none')
+    pc = PatchCollection(patches, edgecolor="r", facecolor="none")
     ax.add_collection(pc)
 
     plt.tight_layout()
@@ -570,14 +576,16 @@ def plotSource(source):
         The source to plot.
     """
     if source.cutout is None:
-        raise RuntimeError('Can only plot sources with attached cutouts. Either set attachCutouts=True '
-                           'in findFastStarTrackerImageSources() or try using plotSourcesOnImage() instead')
+        raise RuntimeError(
+            "Can only plot sources with attached cutouts. Either set attachCutouts=True "
+            "in findFastStarTrackerImageSources() or try using plotSourcesOnImage() instead"
+        )
 
     fig = plt.figure(figsize=(16, 8))
     ax = fig.subplots(1)
 
-    plt.imshow(source.cutout, interpolation='None', origin='lower')  # plot the image
-    ax.scatter(source.localCentroidX, source.localCentroidY, color='red', marker='x', s=200)  # mark centroid
+    plt.imshow(source.cutout, interpolation="None", origin="lower")  # plot the image
+    ax.scatter(source.localCentroidX, source.localCentroidY, color="red", marker="x", s=200)  # mark centroid
 
     # move the colorbar
     divider = make_axes_locatable(ax)

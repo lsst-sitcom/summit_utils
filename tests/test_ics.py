@@ -19,31 +19,29 @@
 # You should have received a copy of the GNU General Public License
 # along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
-import unittest
-import lsst.utils.tests
+import asyncio
 import os
 import tempfile
+import unittest
 
-import asyncio
 import matplotlib.pyplot as plt
+from utils import getVcr
 
+import lsst.utils.tests
 from lsst.summit.utils.efdUtils import makeEfdClient
-from lsst.summit.utils.tmaUtils import TMAEventMaker
 from lsst.summit.utils.m1m3.inertia_compensation_system import evaluate_m1m3_ics_single_slew
 from lsst.summit.utils.m1m3.plots.inertia_compensation_system import (
-    plot_hp_measured_data,
-    FIGURE_WIDTH,
     FIGURE_HEIGHT,
+    FIGURE_WIDTH,
+    plot_hp_measured_data,
 )
-
-from utils import getVcr
+from lsst.summit.utils.tmaUtils import TMAEventMaker
 
 vcr = getVcr()
 
 
 @vcr.use_cassette()
 class M1M3ICSTestCase(lsst.utils.tests.TestCase):
-
     @classmethod
     @vcr.use_cassette()
     def setUp(cls):
@@ -67,9 +65,9 @@ class M1M3ICSTestCase(lsst.utils.tests.TestCase):
 
     @vcr.use_cassette()
     def test_analysis(self):
-        plotFilename = os.path.join(self.outputDir, 'testPlotting_exp.jpg')
-        statFilename = os.path.join(self.outputDir, 'm1m3_ics_stats.csv')
-        dataFilename = os.path.join(self.outputDir, 'm1m3_ics_df.csv')
+        plotFilename = os.path.join(self.outputDir, "testPlotting_exp.jpg")
+        statFilename = os.path.join(self.outputDir, "m1m3_ics_stats.csv")
+        dataFilename = os.path.join(self.outputDir, "m1m3_ics_df.csv")
 
         event = self.events[self.seqNumToPlot]
 

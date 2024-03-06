@@ -27,19 +27,18 @@ import numpy as np
 
 import lsst.afw.cameraGeom.testUtils as afwTestUtils
 import lsst.afw.image as afwImage
-from lsst.afw.image import TransmissionCurve
 import lsst.daf.butler.tests as butlerTests
-import lsst.ip.isr.isrMock as isrMock
 import lsst.ip.isr as ipIsr
+import lsst.ip.isr.isrMock as isrMock
 import lsst.pex.exceptions
 import lsst.pipe.base as pipeBase
 import lsst.pipe.base.testUtils
+from lsst.afw.image import TransmissionCurve
 from lsst.summit.utils.quickLook import QuickLookIsrTask, QuickLookIsrTaskConfig
 
 
 class QuickLookIsrTaskTestCase(unittest.TestCase):
-    """Tests of the run method with fake data.
-    """
+    """Tests of the run method with fake data."""
 
     def setUp(self):
         self.mockConfig = isrMock.IsrMockConfig()
@@ -60,28 +59,32 @@ class QuickLookIsrTaskTestCase(unittest.TestCase):
         self.bfKernel = self.dataContainer.get("bfKernel")
         self.newBFKernel = pipeBase.Struct(gain={})
         for amp_i, amp in enumerate(ampNames):
-            self.newBFKernel.gain[amp] = 0.9 + 0.1*amp_i
+            self.newBFKernel.gain[amp] = 0.9 + 0.1 * amp_i
         self.task = QuickLookIsrTask(config=QuickLookIsrTaskConfig())
 
     def test_runQuickLook(self):
         # Execute the run method with the mock data
-        result = self.task.run(self.ccdExposure,
-                               camera=self.camera,
-                               bias=self.bias,
-                               dark=self.dark,
-                               flat=self.flat,
-                               defects=self.defects,
-                               linearizer=None,
-                               crosstalk=None,
-                               bfKernel=self.bfKernel,
-                               newBFKernel=self.newBFKernel,
-                               ptc=self.ptc,
-                               crosstalkSources=None
-                               )
+        result = self.task.run(
+            self.ccdExposure,
+            camera=self.camera,
+            bias=self.bias,
+            dark=self.dark,
+            flat=self.flat,
+            defects=self.defects,
+            linearizer=None,
+            crosstalk=None,
+            bfKernel=self.bfKernel,
+            newBFKernel=self.newBFKernel,
+            ptc=self.ptc,
+            crosstalkSources=None,
+        )
         self.assertIsNotNone(result, "Result of run method should not be None")
         self.assertIsInstance(result, pipeBase.Struct, "Result should be of type lsst.pipe.base.Struct")
-        self.assertIsInstance(result.exposure, afwImage.Exposure,
-                              "Resulting exposure should be an instance of lsst.afw.image.Exposure")
+        self.assertIsInstance(
+            result.exposure,
+            afwImage.Exposure,
+            "Resulting exposure should be an instance of lsst.afw.image.Exposure",
+        )
 
     def test_runQuickLookMissingData(self):
         # Test without any inputs other than the exposure
@@ -93,8 +96,14 @@ class QuickLookIsrTaskTestCase(unittest.TestCase):
         bbox = self.ccdExposure.getBBox()
         bbox.grow(-20)
         with self.assertRaises(lsst.pex.exceptions.wrappers.LengthError):
-            self.task.run(self.ccdExposure, camera=self.camera, bias=self.bias,
-                          dark=self.dark[bbox], flat=self.flat, defects=self.defects)
+            self.task.run(
+                self.ccdExposure,
+                camera=self.camera,
+                bias=self.bias,
+                dark=self.dark[bbox],
+                flat=self.flat,
+                defects=self.defects,
+            )
 
 
 class QuickLookIsrTaskRunQuantumTests(lsst.utils.tests.TestCase):
@@ -103,6 +112,7 @@ class QuickLookIsrTaskRunQuantumTests(lsst.utils.tests.TestCase):
 
     Adapted from the unit tests of ``CalibrateImageTask.runQuantum``
     """
+
     def setUp(self):
         instrument = "testCam"
         exposureId = 100
@@ -152,68 +162,67 @@ class QuickLookIsrTaskRunQuantumTests(lsst.utils.tests.TestCase):
         butlerTests.addDataIdValue(self.repo, "visit", visit)
 
         # inputs
-        butlerTests.addDatasetType(self.repo, ccdExposure,
-                                   {"instrument", "exposure", "detector"}, "Exposure")
-        butlerTests.addDatasetType(self.repo, camera,
-                                   {"instrument"}, "Camera")
-        butlerTests.addDatasetType(self.repo, bias,
-                                   {"instrument", "detector"}, "Exposure")
-        butlerTests.addDatasetType(self.repo, dark,
-                                   {"instrument", "detector"}, "Exposure")
-        butlerTests.addDatasetType(self.repo, flat,
-                                   {"instrument", "physical_filter", "detector"}, "Exposure")
-        butlerTests.addDatasetType(self.repo, defects,
-                                   {"instrument", "detector"}, "Defects")
-        butlerTests.addDatasetType(self.repo, linearizer,
-                                   {"instrument", "detector"}, "Linearizer")
-        butlerTests.addDatasetType(self.repo, crosstalk,
-                                   {"instrument", "detector"}, "CrosstalkCalib")
-        butlerTests.addDatasetType(self.repo, bfKernel,
-                                   {"instrument"}, "NumpyArray")
-        butlerTests.addDatasetType(self.repo, newBFKernel,
-                                   {"instrument", "detector"}, "BrighterFatterKernel")
-        butlerTests.addDatasetType(self.repo, ptc,
-                                   {"instrument", "detector"}, "PhotonTransferCurveDataset")
-        butlerTests.addDatasetType(self.repo, filterTransmission,
-                                   {"instrument", "physical_filter"}, "TransmissionCurve")
-        butlerTests.addDatasetType(self.repo, opticsTransmission,
-                                   {"instrument"}, "TransmissionCurve")
-        butlerTests.addDatasetType(self.repo, deferredChargeCalib,
-                                   {"instrument", "detector"}, "IsrCalib")
-        butlerTests.addDatasetType(self.repo, strayLightData,
-                                   {"instrument", "physical_filter", "detector"}, "Exposure")
-        butlerTests.addDatasetType(self.repo, atmosphereTransmission,
-                                   {"instrument"}, "TransmissionCurve")
-        butlerTests.addDatasetType(self.repo, illumMaskedImage,
-                                   {"instrument", "physical_filter", "detector"}, "MaskedImage")
-        butlerTests.addDatasetType(self.repo, fringes,
-                                   {"instrument", "physical_filter", "detector"}, "Exposure")
-        butlerTests.addDatasetType(self.repo, sensorTransmission,
-                                   {"instrument", "detector"}, "TransmissionCurve")
-        butlerTests.addDatasetType(self.repo, crosstalkSources,
-                                   {"instrument", "exposure", "detector"}, "Exposure")
+        butlerTests.addDatasetType(self.repo, ccdExposure, {"instrument", "exposure", "detector"}, "Exposure")
+        butlerTests.addDatasetType(self.repo, camera, {"instrument"}, "Camera")
+        butlerTests.addDatasetType(self.repo, bias, {"instrument", "detector"}, "Exposure")
+        butlerTests.addDatasetType(self.repo, dark, {"instrument", "detector"}, "Exposure")
+        butlerTests.addDatasetType(self.repo, flat, {"instrument", "physical_filter", "detector"}, "Exposure")
+        butlerTests.addDatasetType(self.repo, defects, {"instrument", "detector"}, "Defects")
+        butlerTests.addDatasetType(self.repo, linearizer, {"instrument", "detector"}, "Linearizer")
+        butlerTests.addDatasetType(self.repo, crosstalk, {"instrument", "detector"}, "CrosstalkCalib")
+        butlerTests.addDatasetType(self.repo, bfKernel, {"instrument"}, "NumpyArray")
+        butlerTests.addDatasetType(self.repo, newBFKernel, {"instrument", "detector"}, "BrighterFatterKernel")
+        butlerTests.addDatasetType(self.repo, ptc, {"instrument", "detector"}, "PhotonTransferCurveDataset")
+        butlerTests.addDatasetType(
+            self.repo, filterTransmission, {"instrument", "physical_filter"}, "TransmissionCurve"
+        )
+        butlerTests.addDatasetType(self.repo, opticsTransmission, {"instrument"}, "TransmissionCurve")
+        butlerTests.addDatasetType(self.repo, deferredChargeCalib, {"instrument", "detector"}, "IsrCalib")
+        butlerTests.addDatasetType(
+            self.repo, strayLightData, {"instrument", "physical_filter", "detector"}, "Exposure"
+        )
+        butlerTests.addDatasetType(self.repo, atmosphereTransmission, {"instrument"}, "TransmissionCurve")
+        butlerTests.addDatasetType(
+            self.repo, illumMaskedImage, {"instrument", "physical_filter", "detector"}, "MaskedImage"
+        )
+        butlerTests.addDatasetType(
+            self.repo, fringes, {"instrument", "physical_filter", "detector"}, "Exposure"
+        )
+        butlerTests.addDatasetType(
+            self.repo, sensorTransmission, {"instrument", "detector"}, "TransmissionCurve"
+        )
+        butlerTests.addDatasetType(
+            self.repo, crosstalkSources, {"instrument", "exposure", "detector"}, "Exposure"
+        )
 
         # outputs
-        butlerTests.addDatasetType(self.repo, outputExposure,
-                                   {"instrument", "exposure", "detector"}, "Exposure")
-        butlerTests.addDatasetType(self.repo, exposure,
-                                   {"instrument", "exposure", "detector"}, "Exposure")
+        butlerTests.addDatasetType(
+            self.repo, outputExposure, {"instrument", "exposure", "detector"}, "Exposure"
+        )
+        butlerTests.addDatasetType(self.repo, exposure, {"instrument", "exposure", "detector"}, "Exposure")
 
         # dataIds
         self.exposure_id = self.repo.registry.expandDataId(
-            {"instrument": instrument, "exposure": exposureId, "detector": detector,
-             "physical_filter": physical_filter})
-        self.instrument_id = self.repo.registry.expandDataId(
-            {"instrument": instrument})
+            {
+                "instrument": instrument,
+                "exposure": exposureId,
+                "detector": detector,
+                "physical_filter": physical_filter,
+            }
+        )
+        self.instrument_id = self.repo.registry.expandDataId({"instrument": instrument})
         self.flat_id = self.repo.registry.expandDataId(
-            {"instrument": instrument, "physical_filter": physical_filter, "detector": detector})
-        self.detector_id = self.repo.registry.expandDataId(
-            {"instrument": instrument, "detector": detector})
+            {"instrument": instrument, "physical_filter": physical_filter, "detector": detector}
+        )
+        self.detector_id = self.repo.registry.expandDataId({"instrument": instrument, "detector": detector})
         self.filter_id = self.repo.registry.expandDataId(
-            {"instrument": instrument, "physical_filter": physical_filter})
+            {"instrument": instrument, "physical_filter": physical_filter}
+        )
 
         # put empty data
-        transmissionCurve = TransmissionCurve.makeSpatiallyConstant(np.ones(2), np.linspace(0, 1, 2), 0., 0.)
+        transmissionCurve = TransmissionCurve.makeSpatiallyConstant(
+            np.ones(2), np.linspace(0, 1, 2), 0.0, 0.0
+        )
         self.butler = butlerTests.makeTestCollection(self.repo)
         self.butler.put(afwImage.ExposureF(), ccdExposure, self.exposure_id)
         self.butler.put(afwTestUtils.CameraWrapper().camera, camera, self.instrument_id)
@@ -222,8 +231,9 @@ class QuickLookIsrTaskRunQuantumTests(lsst.utils.tests.TestCase):
         self.butler.put(afwImage.ExposureF(), flat, self.flat_id)
         self.butler.put(lsst.ip.isr.Defects(), defects, self.detector_id)
         self.butler.put(np.zeros(2), bfKernel, self.instrument_id)
-        self.butler.put(lsst.ip.isr.brighterFatterKernel.BrighterFatterKernel(),
-                        newBFKernel, self.detector_id)
+        self.butler.put(
+            lsst.ip.isr.brighterFatterKernel.BrighterFatterKernel(), newBFKernel, self.detector_id
+        )
         self.butler.put(ipIsr.PhotonTransferCurveDataset(), ptc, self.detector_id)
         self.butler.put(transmissionCurve, filterTransmission, self.filter_id)
         self.butler.put(lsst.ip.isr.calibType.IsrCalib(), deferredChargeCalib, self.detector_id)
@@ -267,45 +277,47 @@ class QuickLookIsrTaskRunQuantumTests(lsst.utils.tests.TestCase):
 
         # Use the names of the connections here, not the Butler dataset name
         quantum = lsst.pipe.base.testUtils.makeQuantum(
-            task, self.butler, self.exposure_id,
-            {"ccdExposure": self.exposure_id,
-             "camera": self.instrument_id,
-             "bias": self.detector_id,
-             "dark": self.detector_id,
-             "flat": self.flat_id,
-             "defects": self.detector_id,
-             "bfKernel": self.instrument_id,
-             "newBFKernel": self.detector_id,
-             "ptc": self.detector_id,
-             "filterTransmission": self.filter_id,
-             "deferredChargeCalib": self.detector_id,
-             "opticsTransmission": self.instrument_id,
-             "strayLightData": self.flat_id,
-             "atmosphereTransmission": self.instrument_id,
-             "crosstalk": self.detector_id,
-             "illumMaskedImage": self.flat_id,
-             "linearizer": self.detector_id,
-             "fringes": self.flat_id,
-             "sensorTransmission": self.detector_id,
-             "crosstalkSources": [self.exposure_id, self.exposure_id],
-             # outputs
-             "outputExposure": self.exposure_id,
-             "exposure": self.exposure_id,
-             })
+            task,
+            self.butler,
+            self.exposure_id,
+            {
+                "ccdExposure": self.exposure_id,
+                "camera": self.instrument_id,
+                "bias": self.detector_id,
+                "dark": self.detector_id,
+                "flat": self.flat_id,
+                "defects": self.detector_id,
+                "bfKernel": self.instrument_id,
+                "newBFKernel": self.detector_id,
+                "ptc": self.detector_id,
+                "filterTransmission": self.filter_id,
+                "deferredChargeCalib": self.detector_id,
+                "opticsTransmission": self.instrument_id,
+                "strayLightData": self.flat_id,
+                "atmosphereTransmission": self.instrument_id,
+                "crosstalk": self.detector_id,
+                "illumMaskedImage": self.flat_id,
+                "linearizer": self.detector_id,
+                "fringes": self.flat_id,
+                "sensorTransmission": self.detector_id,
+                "crosstalkSources": [self.exposure_id, self.exposure_id],
+                # outputs
+                "outputExposure": self.exposure_id,
+                "exposure": self.exposure_id,
+            },
+        )
         # Check that the proper kwargs are passed to run().
         with contextlib.suppress(ExitMockError):
             lsst.pipe.base.testUtils.runTestQuantum(task, self.butler, quantum, mockRun=False)
 
 
 def raiseExitMockError(*args):
-    """Raise a custom exception.
-    """
+    """Raise a custom exception."""
     raise ExitMockError
 
 
 class ExitMockError(Exception):
 
-    """A custom exception to catch during a unit test.
-    """
+    """A custom exception to catch during a unit test."""
 
     pass

@@ -21,26 +21,27 @@
 
 
 import atexit
-from collections import namedtuple
 import logging
 import multiprocessing
+import os
 import shutil
 import time
-import os
 import warnings
+from collections import namedtuple
 from pathlib import Path
 
-import lsst.afw.display as afwDisplay
 import matplotlib.pyplot as plt
 import numpy as np
 from astropy.table import Table
 from astropy.utils.exceptions import AstropyUserWarning
+from tabulate import tabulate
+from tqdm import tqdm
+
+import lsst.afw.display as afwDisplay
 from lsst.afw.geom import ellipses
 from lsst.daf.butler.datastore.cache_manager import DatastoreCacheManager
 from lsst.summit.utils.bestEffort import BestEffortIsr
 from lsst.summit.utils.peekExposure import PeekExposureTask
-from tabulate import tabulate
-from tqdm import tqdm
 
 # Set logger level to higher than CRITICAL to suppress all output
 silentLogger = logging.getLogger("silentLogger")
@@ -135,9 +136,7 @@ def doWork(idx, row, doPlot):
         mode = "photo"
 
     t0 = time.time()
-    result = pet.run(
-        exp, mode=mode, doDisplay=doPlot, binSize=binSize, donutDiameter=donutDiameter
-    )
+    result = pet.run(exp, mode=mode, doDisplay=doPlot, binSize=binSize, donutDiameter=donutDiameter)
     t1 = time.time()
     runtime = t1 - t0
 
@@ -185,9 +184,7 @@ def doWork(idx, row, doPlot):
         else:
             fwhm = np.nan
         display.show_colorbar(False)
-        ax.set_title(
-            f"{exposureId=}  {inTag=}  {outTag=}  {fwhm=:.2f} arcsec", color="w"
-        )
+        ax.set_title(f"{exposureId=}  {inTag=}  {outTag=}  {fwhm=:.2f} arcsec", color="w")
         path = Path(args.plotdir)
         path.mkdir(parents=True, exist_ok=True)
         fn = f"test_pet_{idx:04d}_{exposureId:d}_{inTag}_{outTag}.png"
@@ -208,7 +205,7 @@ def main(args):
         warnings.simplefilter("ignore", category=AstropyUserWarning)
         table = Table.read(path)
     table["exposureId"] = table["day_obs"] * 100_000 + table["sequence_number"]
-    table = table[args.start:args.end]
+    table = table[args.start : args.end]
 
     intags = np.unique(table["finalTag"])
 

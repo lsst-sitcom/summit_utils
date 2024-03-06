@@ -21,24 +21,20 @@
 
 """Test cases for utils."""
 
-import os
-import unittest
-import pandas as pd
-import numpy as np
 import asyncio
 import json
+import os
+import unittest
 
-import lsst.utils.tests
-from lsst.summit.utils.efdUtils import makeEfdClient
-from lsst.summit.utils.blockUtils import (
-    BlockParser,
-)
-
+import numpy as np
+import pandas as pd
 from utils import getVcr
 
-__all__ = (
-    "writeNewBlockInfoTestTruthValues",
-)
+import lsst.utils.tests
+from lsst.summit.utils.blockUtils import BlockParser
+from lsst.summit.utils.efdUtils import makeEfdClient
+
+__all__ = ("writeNewBlockInfoTestTruthValues",)
 
 HAS_EFD_CLIENT = True
 try:
@@ -69,13 +65,13 @@ def getBlockInfoTestTruthValues(dataFilename=None):
     if dataFilename is None:
         dataFilename = os.path.join(TESTDIR, "data", "blockInfoData.json")
 
-    with open(dataFilename, 'r') as f:
+    with open(dataFilename, "r") as f:
         loaded = json.loads(f.read())
 
     data = {}
     for dayObsSeqNumStr, line in loaded.items():
-        dayObs = int(dayObsSeqNumStr.split(f'{DELIMITER}')[0])
-        seqNum = int(dayObsSeqNumStr.split(f'{DELIMITER}')[1])
+        dayObs = int(dayObsSeqNumStr.split(f"{DELIMITER}")[0])
+        seqNum = int(dayObsSeqNumStr.split(f"{DELIMITER}")[1])
         data[dayObs, seqNum] = line
     return data
 
@@ -104,10 +100,10 @@ def writeNewBlockInfoTestTruthValues():
                 f"{len(blockInfo.states)}"
             )
             # must store as string not tuple for json serialization
-            data[f'{block}{DELIMITER}{seqNum}'] = line
+            data[f"{block}{DELIMITER}{seqNum}"] = line
 
     dataFilename = os.path.join(TESTDIR, "data", "blockInfoData.json")
-    with open(dataFilename, 'w') as f:
+    with open(dataFilename, "w") as f:
         json.dump(data, f)
 
 
@@ -197,7 +193,7 @@ class BlockParserTestCase(lsst.utils.tests.TestCase):
             for seqNum in seqNums:
                 blockInfo = blockParser.getBlockInfo(block, seqNum)
                 line = data[blockInfo.blockNumber, blockInfo.seqNum]
-                items = line.split(f'{DELIMITER}')
+                items = line.split(f"{DELIMITER}")
                 self.assertEqual(items[0], blockInfo.blockId)
                 self.assertEqual(items[1], str(blockInfo.begin.value))
                 self.assertEqual(items[2], str(blockInfo.end.value))

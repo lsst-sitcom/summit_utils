@@ -19,20 +19,21 @@
 # You should have received a copy of the GNU General Public License
 # along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
-import numpy as np
-import matplotlib.pyplot as plt
-import matplotlib.colors as colors
-from mpl_toolkits.axes_grid1.axes_divider import make_axes_locatable
-import astropy.visualization as vis
 import logging
 
-from lsst.afw.detection import FootprintSet, Footprint
-import lsst.geom as geom
-from lsst.summit.utils import getQuantiles
+import astropy.visualization as vis
+import matplotlib.colors as colors
+import matplotlib.pyplot as plt
+import numpy as np
+from mpl_toolkits.axes_grid1.axes_divider import make_axes_locatable
+
 import lsst.afw.image as afwImage
+import lsst.geom as geom
+from lsst.afw.detection import Footprint, FootprintSet
+from lsst.summit.utils import getQuantiles
 
 
-def drawCompass(ax, wcs, compassLocation=300, arrowLength=300.):
+def drawCompass(ax, wcs, compassLocation=300, arrowLength=300.0):
     """
     Draw the compass.
     The arrowLength is the length of compass arrows (arrows should have
@@ -67,10 +68,10 @@ def drawCompass(ax, wcs, compassLocation=300, arrowLength=300.):
 
     anchorRa, anchorDec = wcs.pixelToSky(compassLocation, compassLocation)
     east = wcs.skyToPixel(geom.SpherePoint(anchorRa + 30.0 * geom.arcseconds, anchorDec))
-    north = wcs.skyToPixel(geom.SpherePoint(anchorRa, anchorDec + 30. * geom.arcseconds))
-    labelPosition = arrowLength + 50.
+    north = wcs.skyToPixel(geom.SpherePoint(anchorRa, anchorDec + 30.0 * geom.arcseconds))
+    labelPosition = arrowLength + 50.0
 
-    for xy, label in [(north, 'N'), (east, 'E')]:
+    for xy, label in [(north, "N"), (east, "E")]:
         if compassLocation == xy[0]:
             xTip = compassLocation
             xTipLabel = compassLocation
@@ -82,8 +83,8 @@ def drawCompass(ax, wcs, compassLocation=300, arrowLength=300.):
                 yTipLabel = compassLocation - labelPosition
         else:
             slope = (xy[1] - compassLocation) / (xy[0] - compassLocation)
-            xTipProjection = arrowLength / np.sqrt(1. + slope**2)
-            xTipLabelProjection = labelPosition / np.sqrt(1. + slope**2)
+            xTipProjection = arrowLength / np.sqrt(1.0 + slope**2)
+            xTipLabelProjection = labelPosition / np.sqrt(1.0 + slope**2)
 
             if xy[0] > compassLocation:
                 xTip = compassLocation + xTipProjection
@@ -94,29 +95,36 @@ def drawCompass(ax, wcs, compassLocation=300, arrowLength=300.):
             yTip = slope * (xTip - compassLocation) + compassLocation
             yTipLabel = slope * (xTipLabel - compassLocation) + compassLocation
 
-        color = 'r'
-        ax.arrow(compassLocation, compassLocation,
-                 xTip-compassLocation, yTip-compassLocation,
-                 head_width=30., length_includes_head=True, color=color)
-        ax.text(xTipLabel, yTipLabel, label, ha='center', va='center', color=color)
+        color = "r"
+        ax.arrow(
+            compassLocation,
+            compassLocation,
+            xTip - compassLocation,
+            yTip - compassLocation,
+            head_width=30.0,
+            length_includes_head=True,
+            color=color,
+        )
+        ax.text(xTipLabel, yTipLabel, label, ha="center", va="center", color=color)
     return ax
 
 
-def plot(inputData,
-         figure=None,
-         centroids=None,
-         footprints=None,
-         sourceCat=None,
-         title=None,
-         showCompass=True,
-         stretch='linear',
-         percentile=99.,
-         cmap='gray',
-         compassLocation=300,
-         addLegend=False,
-         savePlotAs=None,
-         logger=None):
-
+def plot(
+    inputData,
+    figure=None,
+    centroids=None,
+    footprints=None,
+    sourceCat=None,
+    title=None,
+    showCompass=True,
+    stretch="linear",
+    percentile=99.0,
+    cmap="gray",
+    compassLocation=300,
+    addLegend=False,
+    savePlotAs=None,
+    logger=None,
+):
     """Plot an input image accommodating different data types and additional
     features, like: overplotting centroids, compass (if the input image
     has a WCS), stretching, plot title, and legend.
@@ -190,43 +198,37 @@ def plot(inputData,
         case afwImage.Exposure():
             imageData = inputData.image.array
         case _:
-            raise TypeError("This function accepts numpy array, lsst.afw.image.Exposure components."
-                  f" Got {type(inputData)}")
+            raise TypeError(
+                "This function accepts numpy array, lsst.afw.image.Exposure components."
+                f" Got {type(inputData)}"
+            )
 
     if np.isnan(imageData).all():
-        im = ax.imshow(imageData, origin='lower', aspect='equal')
+        im = ax.imshow(imageData, origin="lower", aspect="equal")
         logger.warning("The imageData contains only NaN values.")
     else:
         interval = vis.PercentileInterval(percentile)
         match stretch:
-            case 'ccs':
+            case "ccs":
                 quantiles = getQuantiles(imageData, 256)
                 norm = colors.BoundaryNorm(quantiles, 256)
-            case 'asinh':
-                norm = vis.ImageNormalize(imageData,
-                                          interval=interval,
-                                          stretch=vis.AsinhStretch(a=0.1))
-            case 'power':
-                norm = vis.ImageNormalize(imageData,
-                                          interval=interval,
-                                          stretch=vis.PowerStretch(a=2))
-            case 'log':
-                norm = vis.ImageNormalize(imageData,
-                                          interval=interval,
-                                          stretch=vis.LogStretch(a=1))
-            case 'linear':
-                norm = vis.ImageNormalize(imageData,
-                                          interval=interval,
-                                          stretch=vis.LinearStretch())
-            case 'sqrt':
-                norm = vis.ImageNormalize(imageData,
-                                          interval=interval,
-                                          stretch=vis.SqrtStretch())
+            case "asinh":
+                norm = vis.ImageNormalize(imageData, interval=interval, stretch=vis.AsinhStretch(a=0.1))
+            case "power":
+                norm = vis.ImageNormalize(imageData, interval=interval, stretch=vis.PowerStretch(a=2))
+            case "log":
+                norm = vis.ImageNormalize(imageData, interval=interval, stretch=vis.LogStretch(a=1))
+            case "linear":
+                norm = vis.ImageNormalize(imageData, interval=interval, stretch=vis.LinearStretch())
+            case "sqrt":
+                norm = vis.ImageNormalize(imageData, interval=interval, stretch=vis.SqrtStretch())
             case _:
-                raise ValueError(f"Invalid value for stretch : {stretch}. "
-                                 "Accepted options are: ccs, asinh, power, log, linear, sqrt.")
+                raise ValueError(
+                    f"Invalid value for stretch : {stretch}. "
+                    "Accepted options are: ccs, asinh, power, log, linear, sqrt."
+                )
 
-        im = ax.imshow(imageData, cmap=cmap, origin='lower', norm=norm, aspect='equal')
+        im = ax.imshow(imageData, cmap=cmap, origin="lower", norm=norm, aspect="equal")
         div = make_axes_locatable(ax)
         cax = div.append_axes("right", size="5%", pad=0.05)
         figure.colorbar(im, cax=cax)
@@ -243,20 +245,24 @@ def plot(inputData,
             ax = drawCompass(ax, wcs, compassLocation=compassLocation, arrowLength=arrowLength)
 
     if centroids:
-        ax.plot(*zip(*centroids),
-                marker='x',
-                markeredgecolor='r',
-                markerfacecolor='None',
-                linestyle='None',
-                label='List of centroids')
+        ax.plot(
+            *zip(*centroids),
+            marker="x",
+            markeredgecolor="r",
+            markerfacecolor="None",
+            linestyle="None",
+            label="List of centroids",
+        )
 
     if sourceCat:
-        ax.plot(list(zip(sourceCat.getX(), sourceCat.getY())),
-                marker='o',
-                markeredgecolor='c',
-                markerfacecolor='None',
-                linestyle='None',
-                label='Source catalog')
+        ax.plot(
+            list(zip(sourceCat.getX(), sourceCat.getY())),
+            marker="o",
+            markeredgecolor="c",
+            markerfacecolor="None",
+            linestyle="None",
+            label="Source catalog",
+        )
 
     if footprints:
         match footprints:
@@ -271,25 +277,31 @@ def plot(inputData,
                     try:
                         ft.getCentroid()
                     except AttributeError:
-                        raise TypeError("Cannot get centroids for one of the "
-                                        "elements from the footprints list. "
-                                        "Expected lsst.afw.detection.Footprint, "
-                                        f"got {type(ft)} for footprints[{i}]")
+                        raise TypeError(
+                            "Cannot get centroids for one of the "
+                            "elements from the footprints list. "
+                            "Expected lsst.afw.detection.Footprint, "
+                            f"got {type(ft)} for footprints[{i}]"
+                        )
                     xy.append(ft.getCentroid())
             case _:
-                raise TypeError("This function works with FootprintSets, "
-                                "single Footprints, and iterables of Footprints. "
-                                f"Got {type(footprints)}")
+                raise TypeError(
+                    "This function works with FootprintSets, "
+                    "single Footprints, and iterables of Footprints. "
+                    f"Got {type(footprints)}"
+                )
 
-        ax.plot(*zip(*xy),
-                marker='x',
-                markeredgecolor='b',
-                markerfacecolor='None',
-                linestyle='None',
-                label='Footprints centroids')
+        ax.plot(
+            *zip(*xy),
+            marker="x",
+            markeredgecolor="b",
+            markerfacecolor="None",
+            linestyle="None",
+            label="Footprints centroids",
+        )
 
     if addLegend:
-        ax.legend(loc='upper center', bbox_to_anchor=(0.5, -0.05), ncol=5)
+        ax.legend(loc="upper center", bbox_to_anchor=(0.5, -0.05), ncol=5)
 
     if title:
         ax.set_title(title)

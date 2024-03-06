@@ -20,12 +20,13 @@
 # along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
 import asyncio
-from astropy.time import Time, TimeDelta
-from astropy import units as u
 import datetime
 import logging
-import pandas as pd
 import re
+
+import pandas as pd
+from astropy import units as u
+from astropy.time import Time, TimeDelta
 from deprecated.sphinx import deprecated
 
 from lsst.utils.iteration import ensure_iterable
@@ -39,29 +40,29 @@ except ImportError:
     HAS_EFD_CLIENT = False
 
 __all__ = [
-    'getEfdData',
-    'getMostRecentRowWithDataBefore',
-    'makeEfdClient',
-    'expRecordToTimespan',
-    'efdTimestampToAstropy',
-    'astropyToEfdTimestamp',
-    'clipDataToEvent',
-    'calcNextDay',
-    'getDayObsStartTime',
-    'getDayObsEndTime',
-    'getDayObsForTime',
-    'getSubTopics',  # deprecated, being removed in w_2023_50
-    'getTopics',
-    'getCommands',
+    "getEfdData",
+    "getMostRecentRowWithDataBefore",
+    "makeEfdClient",
+    "expRecordToTimespan",
+    "efdTimestampToAstropy",
+    "astropyToEfdTimestamp",
+    "clipDataToEvent",
+    "calcNextDay",
+    "getDayObsStartTime",
+    "getDayObsEndTime",
+    "getDayObsForTime",
+    "getSubTopics",  # deprecated, being removed in w_2023_50
+    "getTopics",
+    "getCommands",
 ]
 
 
 COMMAND_ALIASES = {
-    'raDecTarget': 'lsst.sal.MTPtg.command_raDecTarget',
-    'moveToTarget': 'lsst.sal.MTMount.command_moveToTarget',
-    'startTracking': 'lsst.sal.MTMount.command_startTracking',
-    'stopTracking': 'lsst.sal.MTMount.command_stopTracking',
-    'trackTarget': 'lsst.sal.MTMount.command_trackTarget',  # issued at 20Hz - don't plot
+    "raDecTarget": "lsst.sal.MTPtg.command_raDecTarget",
+    "moveToTarget": "lsst.sal.MTMount.command_moveToTarget",
+    "startTracking": "lsst.sal.MTMount.command_startTracking",
+    "stopTracking": "lsst.sal.MTMount.command_stopTracking",
+    "trackTarget": "lsst.sal.MTMount.command_trackTarget",  # issued at 20Hz - don't plot
 }
 
 # When looking backwards in time to find the most recent state event, look back
@@ -149,18 +150,21 @@ def _getBeginEnd(dayObs=None, begin=None, end=None, timespan=None, event=None, e
     return begin, end
 
 
-def getEfdData(client, topic, *,
-               columns=None,
-               prePadding=0,
-               postPadding=0,
-               dayObs=None,
-               begin=None,
-               end=None,
-               timespan=None,
-               event=None,
-               expRecord=None,
-               warn=True,
-               ):
+def getEfdData(
+    client,
+    topic,
+    *,
+    columns=None,
+    prePadding=0,
+    postPadding=0,
+    dayObs=None,
+    begin=None,
+    end=None,
+    timespan=None,
+    event=None,
+    expRecord=None,
+    warn=True,
+):
     """Get one or more EFD topics over a time range, synchronously.
 
     The time range can be specified as either:
@@ -237,20 +241,20 @@ def getEfdData(client, topic, *,
     import nest_asyncio
 
     begin, end = _getBeginEnd(dayObs, begin, end, timespan, event, expRecord)
-    begin -= TimeDelta(prePadding, format='sec')
-    end += TimeDelta(postPadding, format='sec')
+    begin -= TimeDelta(prePadding, format="sec")
+    end += TimeDelta(postPadding, format="sec")
 
     nest_asyncio.apply()
     loop = asyncio.get_event_loop()
-    ret = loop.run_until_complete(_getEfdData(client=client,
-                                              topic=topic,
-                                              begin=begin,
-                                              end=end,
-                                              columns=columns))
+    ret = loop.run_until_complete(
+        _getEfdData(client=client, topic=topic, begin=begin, end=end, columns=columns)
+    )
     if ret.empty and warn:
         log = logging.getLogger(__name__)
-        log.warning(f"Topic {topic} is in the schema, but no data was returned by the query for the specified"
-                    " time range")
+        log.warning(
+            f"Topic {topic} is in the schema, but no data was returned by the query for the specified"
+            " time range"
+        )
     return ret
 
 
@@ -276,7 +280,7 @@ async def _getEfdData(client, topic, begin, end, columns=None):
         The data from the query.
     """
     if columns is None:
-        columns = ['*']
+        columns = ["*"]
     columns = list(ensure_iterable(columns))
 
     availableTopics = await client.get_topics()
@@ -289,7 +293,7 @@ async def _getEfdData(client, topic, begin, end, columns=None):
     return data
 
 
-def getMostRecentRowWithDataBefore(client, topic, timeToLookBefore, warnStaleAfterNMinutes=60*12):
+def getMostRecentRowWithDataBefore(client, topic, timeToLookBefore, warnStaleAfterNMinutes=60 * 12):
     """Get the most recent row of data for a topic before a given time.
 
     Parameters
@@ -329,17 +333,20 @@ def getMostRecentRowWithDataBefore(client, topic, timeToLookBefore, warnStaleAft
         beginTime -= TIME_CHUNKING
 
     if beginTime < firstDayPossible and df.empty:  # we ran all the way back to the beginning of time
-        raise ValueError(f"The entire EFD was searched backwards from {timeToLookBefore} and no data was "
-                         f"found in {topic=}")
+        raise ValueError(
+            f"The entire EFD was searched backwards from {timeToLookBefore} and no data was "
+            f"found in {topic=}"
+        )
 
     lastRow = df.iloc[-1]
-    commandTime = efdTimestampToAstropy(lastRow['private_efdStamp'])
+    commandTime = efdTimestampToAstropy(lastRow["private_efdStamp"])
 
     commandAge = timeToLookBefore - commandTime
     if commandAge > staleAge:
         log = logging.getLogger(__name__)
-        log.warning(f"Component {topic} was last set {commandAge.sec/60:.1} minutes"
-                    " before the requested time")
+        log.warning(
+            f"Component {topic} was last set {commandAge.sec/60:.1} minutes" " before the requested time"
+        )
 
     return lastRow
 
@@ -366,23 +373,23 @@ def makeEfdClient(testing=False):
         raise RuntimeError("Could not create EFD client because importing lsst_efd_client failed.")
 
     if testing:
-        return EfdClient('usdf_efd')
+        return EfdClient("usdf_efd")
 
     try:
         site = getSite()
     except ValueError as e:
         raise RuntimeError("Could not create EFD client as the site could not be determined") from e
 
-    if site == 'summit':
-        return EfdClient('summit_efd')
-    if site == 'tucson':
-        return EfdClient('tucson_teststand_efd')
-    if site == 'base':
-        return EfdClient('base_efd')
-    if site in ['staff-rsp', 'rubin-devl', 'usdf-k8s']:
-        return EfdClient('usdf_efd')
-    if site == 'jenkins':
-        return EfdClient('usdf_efd')
+    if site == "summit":
+        return EfdClient("summit_efd")
+    if site == "tucson":
+        return EfdClient("tucson_teststand_efd")
+    if site == "base":
+        return EfdClient("base_efd")
+    if site in ["staff-rsp", "rubin-devl", "usdf-k8s"]:
+        return EfdClient("usdf_efd")
+    if site == "jenkins":
+        return EfdClient("usdf_efd")
 
     raise RuntimeError(f"Could not create EFD client as the {site=} is not recognized")
 
@@ -404,9 +411,10 @@ def expRecordToTimespan(expRecord):
         The timespan in a format that can be used to directly unpack into a
         efdClient.select_time_series() call.
     """
-    return {'begin': expRecord.timespan.begin.utc,
-            'end': expRecord.timespan.end.utc,
-            }
+    return {
+        "begin": expRecord.timespan.begin.utc,
+        "end": expRecord.timespan.end.utc,
+    }
 
 
 def efdTimestampToAstropy(timestamp):
@@ -422,7 +430,7 @@ def efdTimestampToAstropy(timestamp):
     time : `astropy.time.Time`
         The timestamp as an astropy.time.Time object.
     """
-    return Time(timestamp, format='unix')
+    return Time(timestamp, format="unix")
 
 
 def astropyToEfdTimestamp(time):
@@ -471,12 +479,12 @@ def clipDataToEvent(df, event, prePadding=0, postPadding=0, logger=None):
     if logger is None:
         logger = logging.getLogger(__name__)
 
-    if begin < df['private_efdStamp'].min():
+    if begin < df["private_efdStamp"].min():
         logger.warning(f"Requested begin time {begin} is before the start of the data")
-    if end > df['private_efdStamp'].max():
+    if end > df["private_efdStamp"].max():
         logger.warning(f"Requested end time {end} is after the end of the data")
 
-    mask = (df['private_efdStamp'] >= begin) & (df['private_efdStamp'] <= end)
+    mask = (df["private_efdStamp"] >= begin) & (df["private_efdStamp"] <= end)
     clipped_df = df.loc[mask].copy()
     return clipped_df
 
@@ -496,9 +504,9 @@ def offsetDayObs(dayObs, nDays):
     newDayObs : `int`
         The new dayObs, as an integer, e.g. 20231225
     """
-    d1 = datetime.datetime.strptime(str(dayObs), '%Y%m%d')
+    d1 = datetime.datetime.strptime(str(dayObs), "%Y%m%d")
     oneDay = datetime.timedelta(days=nDays)
-    return int((d1 + oneDay).strftime('%Y%m%d'))
+    return int((d1 + oneDay).strftime("%Y%m%d"))
 
 
 def calcNextDay(dayObs):
@@ -590,13 +598,13 @@ def getDayObsForTime(time):
         The dayObs, as an integer, e.g. 20231225
     """
     twelveHours = datetime.timedelta(hours=-12)
-    offset = TimeDelta(twelveHours, format='datetime')
-    return int((time + offset).utc.isot[:10].replace('-', ''))
+    offset = TimeDelta(twelveHours, format="datetime")
+    return int((time + offset).utc.isot[:10].replace("-", ""))
 
 
 @deprecated(
     reason="getSubTopics() has been replaced by getTopics() and using wildcards. "
-           "Will be removed after w_2023_50.",
+    "Will be removed after w_2023_50.",
     version="w_2023_40",
     category=FutureWarning,
 )
@@ -653,7 +661,7 @@ def getTopics(client, toFind, caseSensitive=False):
     topics = loop.run_until_complete(client.get_topics())
 
     # Replace wildcard with regex equivalent
-    pattern = toFind.replace('*', '.*')
+    pattern = toFind.replace("*", ".*")
     flags = re.IGNORECASE if not caseSensitive else 0
 
     matches = []
@@ -664,7 +672,7 @@ def getTopics(client, toFind, caseSensitive=False):
     return matches
 
 
-def getCommands(client, commands, begin, end, prePadding, postPadding, timeFormat='python'):
+def getCommands(client, commands, begin, end, prePadding, postPadding, timeFormat="python"):
     """Retrieve the commands issued within a specified time range.
 
     Parameters
@@ -699,7 +707,7 @@ def getCommands(client, commands, begin, end, prePadding, postPadding, timeForma
         Raise if there is already a command at a timestamp in the dictionary,
         i.e. there is a collision.
     """
-    if timeFormat not in ['pandas', 'astropy', 'python']:
+    if timeFormat not in ["pandas", "astropy", "python"]:
         raise ValueError(f"format must be one of 'pandas', 'astropy' or 'python', not {timeFormat=}")
 
     commands = list(ensure_iterable(commands))
@@ -713,7 +721,7 @@ def getCommands(client, commands, begin, end, prePadding, postPadding, timeForma
             end=end,
             prePadding=prePadding,
             postPadding=postPadding,
-            warn=False  # most commands will not be issue so we expect many empty queries
+            warn=False,  # most commands will not be issue so we expect many empty queries
         )
         for time, _ in data.iterrows():
             # this is much the most simple data structure, and the chance
@@ -723,15 +731,16 @@ def getCommands(client, commands, begin, end, prePadding, postPadding, timeForma
 
             timeKey = None
             match timeFormat:
-                case 'pandas':
+                case "pandas":
                     timeKey = time
-                case 'astropy':
+                case "astropy":
                     timeKey = Time(time)
-                case 'python':
+                case "python":
                     timeKey = time.to_pydatetime()
 
             if timeKey in commandTimes:
-                raise ValueError(f"There is already a command at {timeKey=} -"
-                                 " make a better data structure!")
+                raise ValueError(
+                    f"There is already a command at {timeKey=} -" " make a better data structure!"
+                )
             commandTimes[timeKey] = command
     return commandTimes

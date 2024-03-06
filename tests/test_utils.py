@@ -22,37 +22,37 @@
 """Test cases for utils."""
 
 import copy
+import datetime
 import itertools
-from typing import Iterable
 import unittest
+from typing import Iterable
 
 import astropy.time
 import astropy.units as u
+import numpy as np
+from astro_metadata_translator import makeObservationInfo
+
 import lsst.afw.detection as afwDetect
-import lsst.afw.image as afwImage
 import lsst.afw.geom as afwGeom
+import lsst.afw.image as afwImage
 import lsst.geom as geom
 import lsst.utils.tests
-import numpy as np
-import datetime
-from astro_metadata_translator import makeObservationInfo
 from lsst.obs.base import createInitialSkyWcsFromBoresight
 from lsst.obs.base.makeRawVisitInfoViaObsInfo import MakeRawVisitInfoViaObsInfo
 from lsst.obs.lsst import Latiss
-
-from lsst.summit.utils.utils import (getExpPositionOffset,
-                                     getFieldNameAndTileNumber,
-                                     getAirmassSeeingCorrection,
-                                     getFilterSeeingCorrection,
-                                     quickSmooth,
-                                     getQuantiles,
-                                     fluxesFromFootprints,
-                                     getCurrentDayObs_datetime,
-                                     getCurrentDayObs_int,
-                                     getCurrentDayObs_humanStr,
-                                     )
-
 from lsst.obs.lsst.translators.latiss import AUXTEL_LOCATION
+from lsst.summit.utils.utils import (
+    fluxesFromFootprints,
+    getAirmassSeeingCorrection,
+    getCurrentDayObs_datetime,
+    getCurrentDayObs_humanStr,
+    getCurrentDayObs_int,
+    getExpPositionOffset,
+    getFieldNameAndTileNumber,
+    getFilterSeeingCorrection,
+    getQuantiles,
+    quickSmooth,
+)
 
 
 class ExpSkyPositionOffsetTestCase(lsst.utils.tests.TestCase):
@@ -65,13 +65,14 @@ class ExpSkyPositionOffsetTestCase(lsst.utils.tests.TestCase):
 
         self.viMaker = MakeRawVisitInfoViaObsInfo()
         self.mi = afwImage.MaskedImageF(0, 0)
-        self.baseHeader = dict(boresight_airmass=1.5,
-                               temperature=15*u.deg_C,
-                               observation_type="science",
-                               exposure_time=5*u.ks,
-                               detector_num=32,
-                               location=AUXTEL_LOCATION,
-                               )
+        self.baseHeader = dict(
+            boresight_airmass=1.5,
+            temperature=15 * u.deg_C,
+            observation_type="science",
+            exposure_time=5 * u.ks,
+            detector_num=32,
+            location=AUXTEL_LOCATION,
+        )
 
     def test_getExpPositionOffset(self):
         epsilon = 0.0001
@@ -91,15 +92,15 @@ class ExpSkyPositionOffsetTestCase(lsst.utils.tests.TestCase):
 
         t1 = astropy.time.Time("2021-09-15T12:00:00", format="isot", scale="utc")
         t2 = astropy.time.Time("2021-09-15T12:01:00", format="isot", scale="utc")
-        expTime = astropy.time.TimeDelta(20, format='sec')
+        expTime = astropy.time.TimeDelta(20, format="sec")
 
         header1 = copy.copy(self.baseHeader)
         header2 = copy.copy(self.baseHeader)
-        header1['datetime_begin'] = astropy.time.Time(t1, format="isot", scale="utc")
-        header2['datetime_begin'] = astropy.time.Time(t2, format="isot", scale="utc")
+        header1["datetime_begin"] = astropy.time.Time(t1, format="isot", scale="utc")
+        header2["datetime_begin"] = astropy.time.Time(t2, format="isot", scale="utc")
 
-        header1['datetime_end'] = astropy.time.Time(t1+expTime, format="isot", scale="utc")
-        header2['datetime_end'] = astropy.time.Time(t2+expTime, format="isot", scale="utc")
+        header1["datetime_end"] = astropy.time.Time(t1 + expTime, format="isot", scale="utc")
+        header2["datetime_end"] = astropy.time.Time(t2 + expTime, format="isot", scale="utc")
 
         obsInfo1 = makeObservationInfo(**header1)
         obsInfo2 = makeObservationInfo(**header2)
@@ -134,41 +135,40 @@ class ExpSkyPositionOffsetTestCase(lsst.utils.tests.TestCase):
 
 
 class MiscUtilsTestCase(lsst.utils.tests.TestCase):
-
     def setUp(self) -> None:
         return super().setUp()
 
     def test_getFieldNameAndTileNumber(self):
-        field, num = getFieldNameAndTileNumber('simple')
-        self.assertEqual(field, 'simple')
+        field, num = getFieldNameAndTileNumber("simple")
+        self.assertEqual(field, "simple")
         self.assertIsNone(num)
 
-        field, num = getFieldNameAndTileNumber('_simple')
-        self.assertEqual(field, '_simple')
+        field, num = getFieldNameAndTileNumber("_simple")
+        self.assertEqual(field, "_simple")
         self.assertIsNone(num)
 
-        field, num = getFieldNameAndTileNumber('simple_321')
-        self.assertEqual(field, 'simple')
+        field, num = getFieldNameAndTileNumber("simple_321")
+        self.assertEqual(field, "simple")
         self.assertEqual(num, 321)
 
-        field, num = getFieldNameAndTileNumber('_simple_321')
-        self.assertEqual(field, '_simple')
+        field, num = getFieldNameAndTileNumber("_simple_321")
+        self.assertEqual(field, "_simple")
         self.assertEqual(num, 321)
 
-        field, num = getFieldNameAndTileNumber('test_321a_123')
-        self.assertEqual(field, 'test_321a')
+        field, num = getFieldNameAndTileNumber("test_321a_123")
+        self.assertEqual(field, "test_321a")
         self.assertEqual(num, 123)
 
-        field, num = getFieldNameAndTileNumber('test_321a_123_')
-        self.assertEqual(field, 'test_321a_123_')
+        field, num = getFieldNameAndTileNumber("test_321a_123_")
+        self.assertEqual(field, "test_321a_123_")
         self.assertIsNone(num)
 
-        field, num = getFieldNameAndTileNumber('test_321a_123a')
-        self.assertEqual(field, 'test_321a_123a')
+        field, num = getFieldNameAndTileNumber("test_321a_123a")
+        self.assertEqual(field, "test_321a_123a")
         self.assertIsNone(num)
 
-        field, num = getFieldNameAndTileNumber('test_321a:asd_asd-dsa_321')
-        self.assertEqual(field, 'test_321a:asd_asd-dsa')
+        field, num = getFieldNameAndTileNumber("test_321a:asd_asd-dsa_321")
+        self.assertEqual(field, "test_321a:asd_asd-dsa")
         self.assertEqual(num, 321)
 
     def test_getAirmassSeeingCorrection(self):
@@ -184,7 +184,7 @@ class MiscUtilsTestCase(lsst.utils.tests.TestCase):
             getAirmassSeeingCorrection(0.5)
 
     def test_getFilterSeeingCorrection(self):
-        for filterName in ('SDSSg_65mm', 'SDSSr_65mm', 'SDSSi_65mm'):
+        for filterName in ("SDSSg_65mm", "SDSSr_65mm", "SDSSi_65mm"):
             correction = getFilterSeeingCorrection(filterName)
             self.assertGreater(correction, 0.5)
             self.assertLess(correction, 1.5)
@@ -209,20 +209,18 @@ class MiscUtilsTestCase(lsst.utils.tests.TestCase):
         self.assertGreater(dt, datetime.date.today() - datetime.timedelta(days=3))
 
     def test_getCurrentDayObs_int(self):
-        """Just a type check and a basic sanity check on the range.
-        """
+        """Just a type check and a basic sanity check on the range."""
         dayObs = getCurrentDayObs_int()
         self.assertIsInstance(dayObs, int)
         self.assertLess(dayObs, 21000101)
         self.assertGreater(dayObs, 19700101)
 
     def test_getCurrentDayObs_humanStr(self):
-        """Just a basic formatting check.
-        """
+        """Just a basic formatting check."""
         dateStr = getCurrentDayObs_humanStr()
         self.assertIsInstance(dateStr, str)
         self.assertEqual(len(dateStr), 10)
-        self.assertRegex(dateStr, r'\d{4}-\d{2}-\d{2}')
+        self.assertRegex(dateStr, r"\d{4}-\d{2}-\d{2}")
 
 
 class QuantileTestCase(lsst.utils.tests.TestCase):
@@ -252,9 +250,7 @@ class QuantileTestCase(lsst.utils.tests.TestCase):
 class ImageBasedTestCase(lsst.utils.tests.TestCase):
     def test_fluxFromFootprint(self):
         image = afwImage.Image(
-            np.arange(8100, dtype=np.int32).reshape(90, 90),
-            xy0=lsst.geom.Point2I(10, 12),
-            dtype="I"
+            np.arange(8100, dtype=np.int32).reshape(90, 90), xy0=lsst.geom.Point2I(10, 12), dtype="I"
         )
 
         radius = 3
