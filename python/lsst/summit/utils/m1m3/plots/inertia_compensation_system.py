@@ -27,13 +27,13 @@ __all__ = [
 ]
 
 # Approximate value for breakaway
-HP_BREAKAWAY_LIMIT : float = 3000  # [N]
+HP_BREAKAWAY_LIMIT: float = 3000  # [N]
 
 # limit that can still damage the mirror with fatigue
-HP_FATIGUE_LIMIT : float = 900  # [N]
+HP_FATIGUE_LIMIT: float = 900  # [N]
 
 # desired operational limit
-HP_OPERATIONAL_LIMIT : float = 450  # [N]
+HP_OPERATIONAL_LIMIT: float = 450  # [N]
 
 FIGURE_WIDTH = 10
 FIGURE_HEIGHT = 7
@@ -60,8 +60,8 @@ def plot_hp_data(ax: plt.Axes, data: pd.Series | list, label: str) -> plt.Line2D
         The plotted data as a Line2D object.
     """
     line = ax.plot(data, "-", label=label, lw=0.5)
-    #  Make this function consistent with others by returning single Line2D 
-    return line[0]  
+    #  Make this function consistent with others by returning single Line2D
+    return line[0]
 
 
 def mark_slew_begin_end(ax: plt.Axes, slew_begin: Time, slew_end: Time) -> plt.Line2D:
