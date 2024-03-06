@@ -321,7 +321,12 @@ class BlockParser:
         seqNums : `list` of `int`
             The sequence numbers for the specified block.
         """
-        return sorted(set(self.data[self.data['blockNum'] == block]['blockSeqNum']))
+        seqNums = self.data[self.data['blockNum'] == block]['blockSeqNum']
+        # block header rows have no blockId or seqNum, but do have a blockNum
+        # so appear here, so drop the nans as they don't relate to an actual
+        # run of a block
+        seqNums = seqNums.dropna()
+        return sorted(set(seqNums))
 
     def getRows(self, block, seqNum=None):
         """Get all rows of data which relate to the specified block.
