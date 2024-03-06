@@ -317,7 +317,6 @@ def raiseExitMockError(*args):
 
 
 class ExitMockError(Exception):
-
     """A custom exception to catch during a unit test."""
 
     pass

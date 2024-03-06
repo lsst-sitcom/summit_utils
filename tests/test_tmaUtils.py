@@ -152,7 +152,9 @@ class TmaUtilsTestCase(lsst.utils.tests.TestCase):
         self.assertTrue(tma._isValid)
 
     def test_tmaReferences(self):
-        """Check the linkage between the component lists and the _parts dict."""
+        """Check the linkage between the component lists and the _parts
+        dict.
+        """
         tma = TMAStateMachine()
 
         # setting one axis should not make things valid

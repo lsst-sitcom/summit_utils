@@ -417,7 +417,9 @@ class NightReport:
         return result
 
     def printShutterTimes(self):
-        """Print out the shutter efficiency stats in a human-readable format."""
+        """Print out the shutter efficiency stats in a human-readable
+        format.
+        """
         if not HAVE_HUMANIZE:
             self.log.warning("Please install humanize to make this print as intended.")
         timings = self.calcShutterTimes()

@@ -31,7 +31,7 @@ from astropy.time import Time
 from utils import getVcr
 
 import lsst.utils.tests
-from lsst.summit.utils.efdUtils import (  # calcNextDay,  # this is indirectly tested by test_getDayObsAsTimes()
+from lsst.summit.utils.efdUtils import (
     astropyToEfdTimestamp,
     clipDataToEvent,
     efdTimestampToAstropy,

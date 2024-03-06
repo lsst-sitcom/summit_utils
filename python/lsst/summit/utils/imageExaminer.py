@@ -496,7 +496,7 @@ class ImageExaminer:
             plotDirect = True
 
         if useColor:
-            surf = ax.plot_surface(
+            surf = ax.plot_surface(  # noqa: F841
                 self.xx,
                 self.yy,
                 self.data,
@@ -507,7 +507,7 @@ class ImageExaminer:
                 alpha=0.9,
             )
         else:
-            surf = ax.plot_wireframe(
+            surf = ax.plot_wireframe(  # noqa: F841
                 self.xx,
                 self.yy,
                 self.data,
@@ -749,7 +749,8 @@ class ImageExaminer:
                 lines.append("")
                 continue
 
-            if type(value) == float or isinstance(value, np.floating):
+            # native floats are not np.floating so must check both
+            if isinstance(value, float) or isinstance(value, np.floating):
                 value = f"{value:,.3f}"
             if k == "centroid":  # special case the only tuple
                 value = f"{value[0]:.1f}, {value[1]:.1f}"

@@ -101,7 +101,9 @@ class NightReportTestCase(lsst.utils.tests.TestCase):
         return
 
     def test_getObsInfoAndMetadataForSeqNum(self):
-        """Test that getObsInfoAndMetadataForSeqNum returns the correct types."""
+        """Test that getObsInfoAndMetadataForSeqNum returns the correct
+        types.
+        """
         seqNum = self.seqNums[0]
         obsInfo, md = self.report.getObsInfoAndMetadataForSeqNum(seqNum)
         self.assertIsInstance(obsInfo, ObservationInfo)
@@ -147,7 +149,9 @@ class NightReportTestCase(lsst.utils.tests.TestCase):
         return
 
     def test_makeStarColorAndMarkerMap(self):
-        """Test the color map maker returns a dict of ColorAndMarker objects."""
+        """Test the color map maker returns a dict of ColorAndMarker
+        objects.
+        """
         cMap = self.report.makeStarColorAndMarkerMap(self.report.stars)
         self.assertEqual(len(cMap), len(self.report.stars))
         self.assertIsInstance(cMap, dict)
@@ -210,7 +214,9 @@ class NightReportTestCase(lsst.utils.tests.TestCase):
         self.assertTrue(all(isinstance(seqNum, datetime.datetime) for seqNum in dateTimeDict.values()))
 
     def test_doesNotRaise(self):
-        """Tests for things which are hard to test, so just make sure they run."""
+        """Tests for things which are hard to test, so just make sure they
+        run.
+        """
         self.report.printShutterTimes()
         for sample, includeRaw in itertools.product((True, False), (True, False)):
             self.report.printAvailableKeys(sample=sample, includeRaw=includeRaw)

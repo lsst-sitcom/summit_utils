@@ -487,7 +487,8 @@ def plotEvent(
     # Add title with the event name, type etc
     dayObsStr = dayObsIntToString(event.dayObs)
     title = (
-        f"{dayObsStr} - seqNum {event.seqNum} (version {event.version})"  # top line, rest below
+        # top line is the event title, the details go on the line below
+        f"{dayObsStr} - seqNum {event.seqNum} (version {event.version})"
         f"\nDuration = {event.duration:.2f}s"
         f" Event type: {event.type.name}"
         f" End reason: {event.endReason.name}"
