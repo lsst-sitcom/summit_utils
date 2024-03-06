@@ -59,7 +59,7 @@ from lsst.summit.utils.butlerUtils import (makeDefaultLatissButler,
                                            )
 from lsst.summit.utils.butlerUtils import removeDataProduct  # noqa: F401
 import lsst.daf.butler as dafButler
-from lsst.daf.butler import DatasetRef, NamedKeyMapping
+from lsst.daf.butler import DatasetRef
 from lsst.resources import ResourcePath
 
 
@@ -106,10 +106,7 @@ class ButlerUtilsTestCase(lsst.utils.tests.TestCase):
             rawDataIdNoDayObSeqNum.pop(seqNumKey)
         self.rawDataIdNoDayObSeqNum = rawDataIdNoDayObSeqNum
         self.dataCoordMinimal = self.butler.registry.expandDataId(self.rawDataIdNoDayObSeqNum, detector=0)
-        self.dataCoordFullView = self.butler.registry.expandDataId(self.rawDataIdNoDayObSeqNum,
-                                                                   detector=0).full
         self.assertIsInstance(self.dataCoordMinimal, dafButler.dimensions.DataCoordinate)
-        self.assertIsInstance(self.dataCoordFullView, NamedKeyMapping)
 
     def test_getLatissDefaultCollections(self):
         defaultCollections = getLatissDefaultCollections()
@@ -181,8 +178,6 @@ class ButlerUtilsTestCase(lsst.utils.tests.TestCase):
         dRef = getDatasetRefForDataId(self.butler, 'raw', self.rawDataIdNoDayObSeqNum)
         self.assertIsInstance(dRef, DatasetRef)
         dRef = getDatasetRefForDataId(self.butler, 'raw', self.dataCoordMinimal)
-        self.assertIsInstance(dRef, DatasetRef)
-        dRef = getDatasetRefForDataId(self.butler, 'raw', self.dataCoordFullView)
         self.assertIsInstance(dRef, DatasetRef)
 
     def test__dayobs_present(self):
@@ -277,7 +272,7 @@ class ButlerUtilsTestCase(lsst.utils.tests.TestCase):
     def test_updateDataIdOrDataCord(self):
         updateVals = {'testKey': 'testValue'}
 
-        ids = [self.rawDataId, self.expRecordNoDetector, self.dataCoordMinimal, self.dataCoordFullView]
+        ids = [self.rawDataId, self.expRecordNoDetector, self.dataCoordMinimal]
         for originalId in ids:
             testId = updateDataIdOrDataCord(originalId, **updateVals)
             for k, v in updateVals.items():
@@ -292,7 +287,7 @@ class ButlerUtilsTestCase(lsst.utils.tests.TestCase):
         self.assertTrue(_dayobs_present(fullId))
         self.assertTrue(_seqnum_present(fullId))
 
-        ids = [self.rawDataId, self.expRecordNoDetector, self.dataCoordMinimal, self.dataCoordFullView]
+        ids = [self.rawDataId, self.expRecordNoDetector, self.dataCoordMinimal]
         for dataId in ids:
             fullId = fillDataId(self.butler, dataId)
             self.assertTrue(_dayobs_present(fullId))
@@ -341,7 +336,7 @@ class ButlerUtilsTestCase(lsst.utils.tests.TestCase):
 
     def test__assureDict(self):
         for item in [self.rawDataId, self.fullId, self.expIdOnly,
-                     self.expRecordNoDetector, self.dataCoordFullView,
+                     self.expRecordNoDetector,
                      self.dataCoordMinimal, self.rawDataIdNoDayObSeqNum]:
             testId = _assureDict(item)
             self.assertIsInstance(testId, dict)
