@@ -196,7 +196,16 @@ class BlockParser:
     def getDataForDayObs(self):
         """Retrieve the data for the specified dayObs from the EFD.
         """
-        data = getEfdData(self.client, 'lsst.sal.Script.logevent_state', dayObs=self.dayObs)
+        # Tiago thinks no individual block seqNums should take more than an
+        # hour to run, so pad the dayObs by 1.5 hours to make sure we catch
+        # any blocks which might span the end of the day.
+        padding = 1.5*60*60
+        data = getEfdData(
+            self.client,
+            'lsst.sal.Script.logevent_state',
+            dayObs=self.dayObs,
+            postPadding=padding
+        )
         self.data = data
 
     def augmentDataSlow(self):
