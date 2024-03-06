@@ -19,38 +19,39 @@
 # You should have received a copy of the GNU General Public License
 # along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
-import lsst.daf.butler as dafButler
-import itertools
 import copy
+import itertools
+
 from deprecated.sphinx import deprecated
 
+import lsst.daf.butler as dafButler
 from lsst.summit.utils.utils import getSite
 
+__all__ = [
+    "makeDefaultLatissButler",
+    "updateDataId",
+    "sanitizeDayObs",
+    "getMostRecentDayObs",
+    "getSeqNumsForDayObs",
+    "getMostRecentDataId",
+    "getDatasetRefForDataId",
+    "getDayObs",
+    "getSeqNum",
+    "getExpId",
+    "datasetExists",
+    "sortRecordsByDayObsThenSeqNum",
+    "getDaysWithData",
+    "getExpIdFromDayObsSeqNum",
+    "updateDataIdOrDataCord",
+    "fillDataId",
+    "getExpRecordFromDataId",
+    "getDayObsSeqNumFromExposureId",
+    "removeDataProduct",
+    "getLatissOnSkyDataIds",
+    "getExpRecord",
+]
 
-__all__ = ["makeDefaultLatissButler",
-           "updateDataId",
-           "sanitizeDayObs",
-           "getMostRecentDayObs",
-           "getSeqNumsForDayObs",
-           "getMostRecentDataId",
-           "getDatasetRefForDataId",
-           "getDayObs",
-           "getSeqNum",
-           "getExpId",
-           "datasetExists",
-           "sortRecordsByDayObsThenSeqNum",
-           "getDaysWithData",
-           "getExpIdFromDayObsSeqNum",
-           "updateDataIdOrDataCord",
-           "fillDataId",
-           "getExpRecordFromDataId",
-           "getDayObsSeqNumFromExposureId",
-           "removeDataProduct",
-           "getLatissOnSkyDataIds",
-           "getExpRecord",
-           ]
-
-_LATISS_DEFAULT_COLLECTIONS = ['LATISS/raw/all', 'LATISS/calib', "LATISS/runs/quickLook"]
+_LATISS_DEFAULT_COLLECTIONS = ["LATISS/raw/all", "LATISS/calib", "LATISS/runs/quickLook"]
 
 # RECENT_DAY must be in the past *and have data* (otherwise some tests are
 # no-ops), to speed up queries by restricting them significantly,
@@ -69,7 +70,7 @@ def _configureForSite():
         print("WARNING: failed to automatically determine site")
         site = None
 
-    if site == 'tucson':
+    if site == "tucson":
         global RECENT_DAY
         RECENT_DAY = 20211104  # TTS has limited data, so use this day
 
@@ -90,12 +91,12 @@ def getLatissDefaultCollections():
     try:
         site = getSite()
     except ValueError:
-        site = ''
+        site = ""
 
-    if site == 'tucson':
+    if site == "tucson":
         collections.append("LATISS-test-data")
         return collections
-    if site == 'summit':
+    if site == "summit":
         collections.append("LATISS-test-data")
         return collections
     return collections
@@ -104,7 +105,7 @@ def getLatissDefaultCollections():
 def _update_RECENT_DAY(day):
     """Update the value for RECENT_DAY once we have a value for free."""
     global RECENT_DAY
-    RECENT_DAY = max(day-1, RECENT_DAY)
+    RECENT_DAY = max(day - 1, RECENT_DAY)
 
 
 def makeDefaultLatissButler(*, extraCollections=None, writeable=False, embargo=False):
@@ -131,10 +132,9 @@ def makeDefaultLatissButler(*, extraCollections=None, writeable=False, embargo=F
         collections.extend(extraCollections)
     try:
         repoString = "LATISS" if not embargo else "/repo/embargo"
-        butler = dafButler.Butler(repoString,
-                                  collections=collections,
-                                  writeable=writeable,
-                                  instrument='LATISS')
+        butler = dafButler.Butler(
+            repoString, collections=collections, writeable=writeable, instrument="LATISS"
+        )
     except (FileNotFoundError, RuntimeError):
         # Depending on the value of DAF_BUTLER_REPOSITORY_INDEX and whether
         # it is present and blank, or just not set, both these exception
@@ -219,11 +219,11 @@ def sanitizeDayObs(day_obs):
         return day_obs
     elif isinstance(day_obs, str):
         try:
-            return int(day_obs.replace('-', ''))
+            return int(day_obs.replace("-", ""))
         except Exception:
-            ValueError(f'Failed to sanitize {day_obs!r} to a day_obs')
+            ValueError(f"Failed to sanitize {day_obs!r} to a day_obs")
     else:
-        raise ValueError(f'Cannot sanitize {day_obs!r} to a day_obs')
+        raise ValueError(f"Cannot sanitize {day_obs!r} to a day_obs")
 
 
 def getMostRecentDayObs(butler):
@@ -240,14 +240,15 @@ def getMostRecentDayObs(butler):
         The day_obs.
     """
     where = "exposure.day_obs>=RECENT_DAY"
-    records = butler.registry.queryDimensionRecords('exposure', where=where, datasets='raw',
-                                                    bind={'RECENT_DAY': RECENT_DAY})
+    records = butler.registry.queryDimensionRecords(
+        "exposure", where=where, datasets="raw", bind={"RECENT_DAY": RECENT_DAY}
+    )
     recentDay = max(r.day_obs for r in records)
     _update_RECENT_DAY(recentDay)
     return recentDay
 
 
-def getSeqNumsForDayObs(butler, day_obs, extraWhere=''):
+def getSeqNumsForDayObs(butler, day_obs, extraWhere=""):
     """Get a list of all seq_nums taken on a given day_obs.
 
     Parameters
@@ -268,12 +269,11 @@ def getSeqNumsForDayObs(butler, day_obs, extraWhere=''):
     day_obs = sanitizeDayObs(day_obs)
     where = "exposure.day_obs=dayObs"
     if extraWhere:
-        extraWhere = extraWhere.replace('"', '\'')
+        extraWhere = extraWhere.replace('"', "'")
         where += f" and {extraWhere}"
-    records = butler.registry.queryDimensionRecords("exposure",
-                                                    where=where,
-                                                    bind={'dayObs': day_obs},
-                                                    datasets='raw')
+    records = butler.registry.queryDimensionRecords(
+        "exposure", where=where, bind={"dayObs": day_obs}, datasets="raw"
+    )
     return sorted([r.seq_num for r in records])
 
 
@@ -304,14 +304,15 @@ def sortRecordsByDayObsThenSeqNum(records):
 
     daySeqTuples = [(r.day_obs, r.seq_num) for r in records]
     if len(daySeqTuples) != len(set(daySeqTuples)):
-        raise ValueError("Record set contains dayObs/seqNum collisions, and therefore cannot be sorted "
-                         "unambiguously")
+        raise ValueError(
+            "Record set contains dayObs/seqNum collisions, and therefore cannot be sorted " "unambiguously"
+        )
 
     records.sort(key=lambda r: (r.day_obs, r.seq_num))
     return records
 
 
-def getDaysWithData(butler, datasetType='raw'):
+def getDaysWithData(butler, datasetType="raw"):
     """Get all the days for which LATISS has taken data on the mountain.
 
     Parameters
@@ -353,7 +354,7 @@ def getMostRecentDataId(butler):
     """
     lastDay = getMostRecentDayObs(butler)
     seqNum = getSeqNumsForDayObs(butler, lastDay)[-1]
-    dataId = {'day_obs': lastDay, 'seq_num': seqNum, 'detector': 0}
+    dataId = {"day_obs": lastDay, "seq_num": seqNum, "detector": 0}
     dataId.update(getExpIdFromDayObsSeqNum(butler, dataId))
     return dataId
 
@@ -374,7 +375,7 @@ def getExpIdFromDayObsSeqNum(butler, dataId):
         The dataId of the most recent exposure.
     """
     expRecord = getExpRecordFromDataId(butler, dataId)
-    return {'exposure': expRecord.id}
+    return {"exposure": expRecord.id}
 
 
 def updateDataIdOrDataCord(dataId, **updateKwargs):
@@ -432,7 +433,7 @@ def fillDataId(butler, dataId):
     # using _rewrite_data_id is perhaps ever so slightly slower than popping
     # the bad keys, or making a minimal dataId by hand, but is more
     # reliable/general, so we choose that over the other approach here
-    dataId, _ = butler._rewrite_data_id(dataId, butler.get_dataset_type('raw'))
+    dataId, _ = butler._rewrite_data_id(dataId, butler.get_dataset_type("raw"))
 
     # now expand and turn back to a dict
     dataId = butler.registry.expandDataId(dataId, detector=0).full  # this call is VERY slow
@@ -469,12 +470,12 @@ def _assureDict(dataId):
     """
     if isinstance(dataId, dict):
         return dataId
-    elif hasattr(dataId, 'items'):  # dafButler.dimensions.DataCoordinate
+    elif hasattr(dataId, "items"):  # dafButler.dimensions.DataCoordinate
         return {str(k): v for k, v in dataId.items()}  # str() required due to full names
-    elif hasattr(dataId, 'dataId'):  # dafButler.dimensions.DimensionRecord
+    elif hasattr(dataId, "dataId"):  # dafButler.dimensions.DimensionRecord
         return {str(k): v for k, v in dataId.dataId.items()}
     else:
-        raise RuntimeError(f'Failed to coerce {type(dataId)} to dict')
+        raise RuntimeError(f"Failed to coerce {type(dataId)} to dict")
 
 
 def getExpRecordFromDataId(butler, dataId):
@@ -493,30 +494,28 @@ def getExpRecordFromDataId(butler, dataId):
         The exposure record.
     """
     dataId = _assureDict(dataId)
-    assert isinstance(dataId, dict), f'dataId must be a dict or DimensionRecord, got {type(dataId)}'
+    assert isinstance(dataId, dict), f"dataId must be a dict or DimensionRecord, got {type(dataId)}"
 
     if expId := getExpId(dataId):
         where = "exposure.id=expId"
-        expRecords = butler.registry.queryDimensionRecords("exposure",
-                                                           where=where,
-                                                           bind={'expId': expId},
-                                                           datasets='raw')
+        expRecords = butler.registry.queryDimensionRecords(
+            "exposure", where=where, bind={"expId": expId}, datasets="raw"
+        )
 
     else:
         dayObs = getDayObs(dataId)
         seqNum = getSeqNum(dataId)
         if not (dayObs and seqNum):
-            raise RuntimeError(f'Failed to find either expId or day_obs and seq_num in dataId {dataId}')
+            raise RuntimeError(f"Failed to find either expId or day_obs and seq_num in dataId {dataId}")
         where = "exposure.day_obs=dayObs AND exposure.seq_num=seq_num"
-        expRecords = butler.registry.queryDimensionRecords("exposure",
-                                                           where=where,
-                                                           bind={'dayObs': dayObs, 'seq_num': seqNum},
-                                                           datasets='raw')
+        expRecords = butler.registry.queryDimensionRecords(
+            "exposure", where=where, bind={"dayObs": dayObs, "seq_num": seqNum}, datasets="raw"
+        )
 
     expRecords = set(expRecords)
     if not expRecords:
         raise LookupError(f"No exposure records found for {dataId}")
-    assert len(expRecords) == 1, f'Found {len(expRecords)} exposure records for {dataId}'
+    assert len(expRecords) == 1, f"Found {len(expRecords)} exposure records for {dataId}"
     return expRecords.pop()
 
 
@@ -536,28 +535,27 @@ def getDayObsSeqNumFromExposureId(butler, dataId):
         A dict containing only the day_obs and seq_num.
     """
     if (dayObs := getDayObs(dataId)) and (seqNum := getSeqNum(dataId)):
-        return {'day_obs': dayObs, 'seq_num': seqNum}
+        return {"day_obs": dayObs, "seq_num": seqNum}
 
     if isinstance(dataId, int):
-        dataId = {'exposure': dataId}
+        dataId = {"exposure": dataId}
     else:
         dataId = _assureDict(dataId)
     assert isinstance(dataId, dict)
 
     if not (expId := getExpId(dataId)):
-        raise RuntimeError(f'Failed to find exposure id in {dataId}')
+        raise RuntimeError(f"Failed to find exposure id in {dataId}")
 
     where = "exposure.id=expId"
-    expRecords = butler.registry.queryDimensionRecords("exposure",
-                                                       where=where,
-                                                       bind={'expId': expId},
-                                                       datasets='raw')
+    expRecords = butler.registry.queryDimensionRecords(
+        "exposure", where=where, bind={"expId": expId}, datasets="raw"
+    )
     expRecords = set(expRecords)
     if not expRecords:
         raise LookupError(f"No exposure records found for {dataId}")
-    assert len(expRecords) == 1, f'Found {len(expRecords)} exposure records for {dataId}'
+    assert len(expRecords) == 1, f"Found {len(expRecords)} exposure records for {dataId}"
     record = expRecords.pop()
-    return {'day_obs': record.day_obs, 'seq_num': record.seq_num}
+    return {"day_obs": record.day_obs, "seq_num": record.seq_num}
 
 
 def getDatasetRefForDataId(butler, datasetType, dataId):
@@ -598,7 +596,7 @@ def removeDataProduct(butler, datasetType, dataId):
         The dataId.
 
     """
-    if datasetType == 'raw':
+    if datasetType == "raw":
         raise RuntimeError("I'm sorry, Dave, I'm afraid I can't do that.")
     dRef = getDatasetRefForDataId(butler, datasetType, dataId)
     butler.pruneDatasets([dRef], disassociate=True, unstore=True, purge=True)
@@ -618,30 +616,27 @@ def _expid_present(dataId):
 
 
 def _get_dayobs_key(dataId):
-    """Return the key for day_obs if present, else None
-    """
-    keys = [k for k in dataId.keys() if k.find('day_obs') != -1]
+    """Return the key for day_obs if present, else None"""
+    keys = [k for k in dataId.keys() if k.find("day_obs") != -1]
     if not keys:
         return None
     return keys[0]
 
 
 def _get_seqnum_key(dataId):
-    """Return the key for seq_num if present, else None
-    """
-    keys = [k for k in dataId.keys() if k.find('seq_num') != -1]
+    """Return the key for seq_num if present, else None"""
+    keys = [k for k in dataId.keys() if k.find("seq_num") != -1]
     if not keys:
         return None
     return keys[0]
 
 
 def _get_expid_key(dataId):
-    """Return the key for expId if present, else None
-    """
-    if 'exposure.id' in dataId:
-        return 'exposure.id'
-    elif 'exposure' in dataId:
-        return 'exposure'
+    """Return the key for expId if present, else None"""
+    if "exposure.id" in dataId:
+        return "exposure.id"
+    elif "exposure" in dataId:
+        return "exposure"
     return None
 
 
@@ -658,11 +653,11 @@ def getDayObs(dataId):
     day_obs : `int` or `None`
         The day_obs value if present, else None.
     """
-    if hasattr(dataId, 'day_obs'):
-        return getattr(dataId, 'day_obs')
+    if hasattr(dataId, "day_obs"):
+        return getattr(dataId, "day_obs")
     if not _dayobs_present(dataId):
         return None
-    return dataId['day_obs'] if 'day_obs' in dataId else dataId['exposure.day_obs']
+    return dataId["day_obs"] if "day_obs" in dataId else dataId["exposure.day_obs"]
 
 
 def getSeqNum(dataId):
@@ -678,11 +673,11 @@ def getSeqNum(dataId):
     seq_num : `int` or `None`
         The seq_num value if present, else None.
     """
-    if hasattr(dataId, 'seq_num'):
-        return getattr(dataId, 'seq_num')
+    if hasattr(dataId, "seq_num"):
+        return getattr(dataId, "seq_num")
     if not _seqnum_present(dataId):
         return None
-    return dataId['seq_num'] if 'seq_num' in dataId else dataId['exposure.seq_num']
+    return dataId["seq_num"] if "seq_num" in dataId else dataId["exposure.seq_num"]
 
 
 def getExpId(dataId):
@@ -698,15 +693,16 @@ def getExpId(dataId):
     expId : `int` or `None`
         The expId value if present, else None.
     """
-    if hasattr(dataId, 'id'):
-        return getattr(dataId, 'id')
+    if hasattr(dataId, "id"):
+        return getattr(dataId, "id")
     if not _expid_present(dataId):
         return None
-    return dataId['exposure'] if 'exposure' in dataId else dataId['exposure.id']
+    return dataId["exposure"] if "exposure" in dataId else dataId["exposure.id"]
 
 
-def getLatissOnSkyDataIds(butler, skipTypes=('bias', 'dark', 'flat'), checkObject=True, full=True,
-                          startDate=None, endDate=None):
+def getLatissOnSkyDataIds(
+    butler, skipTypes=("bias", "dark", "flat"), checkObject=True, full=True, startDate=None, endDate=None
+):
     """Get a list of all on-sky dataIds taken.
 
     Parameters
@@ -731,10 +727,11 @@ def getLatissOnSkyDataIds(butler, skipTypes=('bias', 'dark', 'flat'), checkObjec
     dataIds : `list` or `dataIds`
         The dataIds.
     """
+
     def isOnSky(expRecord):
         imageType = expRecord.observation_type
         obj = expRecord.target_name
-        if checkObject and obj == 'NOTSET':
+        if checkObject and obj == "NOTSET":
             return False
         if imageType not in skipTypes:
             return True
@@ -752,16 +749,17 @@ def getLatissOnSkyDataIds(butler, skipTypes=('bias', 'dark', 'flat'), checkObjec
     for day in days:
         # queryDataIds would be better here, but it's then hard/impossible
         # to do the filtering for which is on sky, so just take the dataIds
-        records = butler.registry.queryDimensionRecords("exposure",
-                                                        where=where,
-                                                        bind={'dayObs': day},
-                                                        datasets='raw')
+        records = butler.registry.queryDimensionRecords(
+            "exposure", where=where, bind={"dayObs": day}, datasets="raw"
+        )
         recordSets.append(sortRecordsByDayObsThenSeqNum(records))
 
     dataIds = [r.dataId for r in filter(isOnSky, itertools.chain(*recordSets))]
     if full:
-        expandedIds = [updateDataIdOrDataCord(butler.registry.expandDataId(dataId, detector=0).full)
-                       for dataId in dataIds]
+        expandedIds = [
+            updateDataIdOrDataCord(butler.registry.expandDataId(dataId, detector=0).full)
+            for dataId in dataIds
+        ]
         filledIds = [fillDataId(butler, dataId) for dataId in expandedIds]
         return filledIds
     else:
@@ -786,23 +784,22 @@ def getExpRecord(butler, instrument, expId=None, dayObs=None, seqNum=None):
         The exposure record.
     """
     if expId is None and (dayObs is None or seqNum is None):
-        raise ValueError('Must supply either expId or (dayObs AND seqNum)')
+        raise ValueError("Must supply either expId or (dayObs AND seqNum)")
 
     where = "instrument=inst"  # Note you can't use =instrument as bind-strings can't clash with dimensions
-    bind = {'inst': instrument}
+    bind = {"inst": instrument}
     if expId:
-        where += ' AND exposure.id=expId'
-        bind.update({'expId': expId})
+        where += " AND exposure.id=expId"
+        bind.update({"expId": expId})
     if dayObs and seqNum:
-        where += ' AND exposure.day_obs=dayObs AND exposure.seq_num=seqNum'
-        bind.update({'dayObs': dayObs, 'seqNum': seqNum})
+        where += " AND exposure.day_obs=dayObs AND exposure.seq_num=seqNum"
+        bind.update({"dayObs": dayObs, "seqNum": seqNum})
 
-    expRecords = butler.registry.queryDimensionRecords("exposure",
-                                                       where=where,
-                                                       bind=bind,
-                                                       datasets='raw')
+    expRecords = butler.registry.queryDimensionRecords("exposure", where=where, bind=bind, datasets="raw")
     expRecords = list(set(expRecords))  # must call set as this may contain many duplicates
     if len(expRecords) != 1:
-        raise RuntimeError(f'Failed to find unique exposure record for {instrument=} with'
-                           f' {expId=}, {dayObs=}, {seqNum=}, got {len(expRecords)} records')
+        raise RuntimeError(
+            f"Failed to find unique exposure record for {instrument=} with"
+            f" {expId=}, {dayObs=}, {seqNum=}, got {len(expRecords)} records"
+        )
     return expRecords[0]

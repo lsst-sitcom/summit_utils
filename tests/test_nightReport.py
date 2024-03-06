@@ -19,26 +19,26 @@
 # You should have received a copy of the GNU General Public License
 # along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
-import unittest
-import tempfile
+import datetime
 import itertools
 import os
-import datetime
+import tempfile
+import unittest
 from unittest import mock
-from numpy.random import shuffle
+
+import matplotlib as mpl
 from astro_metadata_translator import ObservationInfo
+from numpy.random import shuffle
 
 import lsst.utils.tests
 
-import matplotlib as mpl
-mpl.use('Agg')
+mpl.use("Agg")
 
-from lsst.summit.utils.nightReport import NightReport, ColorAndMarker  # noqa: E402
 import lsst.summit.utils.butlerUtils as butlerUtils  # noqa: E402
+from lsst.summit.utils.nightReport import ColorAndMarker, NightReport  # noqa: E402
 
 
 class NightReportTestCase(lsst.utils.tests.TestCase):
-
     @classmethod
     def setUpClass(cls):
         try:
@@ -59,10 +59,9 @@ class NightReportTestCase(lsst.utils.tests.TestCase):
         cls.seqNums = list(cls.report.data.keys())
 
     def test_saveAndLoad(self):
-        """Test that a NightReport can save itself, and be loaded back.
-        """
+        """Test that a NightReport can save itself, and be loaded back."""
         writeDir = tempfile.mkdtemp()
-        saveFile = os.path.join(writeDir, f'testNightReport_{self.dayObs}.pickle')
+        saveFile = os.path.join(writeDir, f"testNightReport_{self.dayObs}.pickle")
         self.report.save(saveFile)
         self.assertTrue(os.path.exists(saveFile))
 
@@ -74,8 +73,7 @@ class NightReportTestCase(lsst.utils.tests.TestCase):
         # TODO: add a self.assertRaises on a mismatched dayObs
 
     def test_getSortedData(self):
-        """Test the _getSortedData returns the seqNums in order.
-        """
+        """Test the _getSortedData returns the seqNums in order."""
         shuffledKeys = list(self.report.data.keys())
         shuffle(shuffledKeys)
         shuffledData = {k: self.report.data[k] for k in shuffledKeys}
@@ -103,7 +101,8 @@ class NightReportTestCase(lsst.utils.tests.TestCase):
         return
 
     def test_getObsInfoAndMetadataForSeqNum(self):
-        """Test that getObsInfoAndMetadataForSeqNum returns the correct types.
+        """Test that getObsInfoAndMetadataForSeqNum returns the correct
+        types.
         """
         seqNum = self.seqNums[0]
         obsInfo, md = self.report.getObsInfoAndMetadataForSeqNum(seqNum)
@@ -123,12 +122,11 @@ class NightReportTestCase(lsst.utils.tests.TestCase):
         return
 
     def test_getExposureMidpoint(self):
-        """Test the exposure midpoint calculation
-        """
+        """Test the exposure midpoint calculation"""
         # we would like a non-zero exptime exposure really
         seqNumToUse = 0
         for seqNum in self.report.data.keys():
-            expTime = self.report.data[seqNum]['exposure_time']
+            expTime = self.report.data[seqNum]["exposure_time"]
             if expTime > 0:
                 seqNumToUse = seqNum
                 break
@@ -137,22 +135,22 @@ class NightReportTestCase(lsst.utils.tests.TestCase):
         record = self.report.data[seqNumToUse]
 
         if expTime == 0:
-            self.assertGreaterEqual(midPoint, record['datetime_begin'].to_datetime())
-            self.assertLessEqual(midPoint, record['datetime_end'].to_datetime())
+            self.assertGreaterEqual(midPoint, record["datetime_begin"].to_datetime())
+            self.assertLessEqual(midPoint, record["datetime_end"].to_datetime())
         else:
-            self.assertGreater(midPoint, record['datetime_begin'].to_datetime())
-            self.assertLess(midPoint, record['datetime_end'].to_datetime())
+            self.assertGreater(midPoint, record["datetime_begin"].to_datetime())
+            self.assertLess(midPoint, record["datetime_end"].to_datetime())
         return
 
     def test_getTimeDeltas(self):
-        """Test the time delta calculation returns a dict.
-        """
+        """Test the time delta calculation returns a dict."""
         dts = self.report.getTimeDeltas()
         self.assertIsInstance(dts, dict)
         return
 
     def test_makeStarColorAndMarkerMap(self):
-        """Test the color map maker returns a dict of ColorAndMarker objects.
+        """Test the color map maker returns a dict of ColorAndMarker
+        objects.
         """
         cMap = self.report.makeStarColorAndMarkerMap(self.report.stars)
         self.assertEqual(len(cMap), len(self.report.stars))
@@ -165,15 +163,14 @@ class NightReportTestCase(lsst.utils.tests.TestCase):
         """Test that a the printObsTable() method prints out the correct
         number of lines.
         """
-        with mock.patch('sys.stdout') as fake_stdout:
+        with mock.patch("sys.stdout") as fake_stdout:
             self.report.printObsTable()
 
         # newline for each row plus header line, plus the line with dashes
-        self.assertEqual(len(fake_stdout.mock_calls), 2*(self.nImages + 2))
+        self.assertEqual(len(fake_stdout.mock_calls), 2 * (self.nImages + 2))
 
     def test_plotPerObjectAirMass(self):
-        """Test that a the per-object airmass plots runs.
-        """
+        """Test that a the per-object airmass plots runs."""
         # We assume matplotlib is making plots, so just check that these
         # don't crash.
 
@@ -189,8 +186,7 @@ class NightReportTestCase(lsst.utils.tests.TestCase):
         self.report.plotPerObjectAirMass(objects=self.report.stars[0], airmassOneAtTop=True)  # both
 
     def test_makeAltAzCoveragePlot(self):
-        """Test that a the polar coverage plotting code runs.
-        """
+        """Test that a the polar coverage plotting code runs."""
         # We assume matplotlib is making plots, so just check that these
         # don't crash.
 
@@ -207,7 +203,7 @@ class NightReportTestCase(lsst.utils.tests.TestCase):
         timings = self.report.calcShutterTimes()
         if not timings:
             return  # if the day has no on-sky observations, this returns None
-        efficiency = 100*(timings['scienceTimeTotal']/timings['nightLength'])
+        efficiency = 100 * (timings["scienceTimeTotal"] / timings["nightLength"])
         self.assertGreater(efficiency, 0)
         self.assertLessEqual(efficiency, 100)
 
@@ -218,7 +214,8 @@ class NightReportTestCase(lsst.utils.tests.TestCase):
         self.assertTrue(all(isinstance(seqNum, datetime.datetime) for seqNum in dateTimeDict.values()))
 
     def test_doesNotRaise(self):
-        """Tests for things which are hard to test, so just make sure they run.
+        """Tests for things which are hard to test, so just make sure they
+        run.
         """
         self.report.printShutterTimes()
         for sample, includeRaw in itertools.product((True, False), (True, False)):

@@ -19,71 +19,75 @@
 # You should have received a copy of the GNU General Public License
 # along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
+import datetime
+import logging
 import os
 from typing import Iterable
+
+import astropy.units as u
 import numpy as np
-import logging
+from astro_metadata_translator import ObservationInfo
+from astropy.coordinates import AltAz, SkyCoord
+from astropy.coordinates.earth import EarthLocation
+from astropy.time import Time
+from dateutil.tz import gettz
 from scipy.ndimage import gaussian_filter
-import lsst.afw.image as afwImage
+
 import lsst.afw.detection as afwDetect
-from lsst.afw.detection import Footprint, FootprintSet
+import lsst.afw.image as afwImage
 import lsst.afw.math as afwMath
 import lsst.daf.base as dafBase
 import lsst.geom as geom
 import lsst.pipe.base as pipeBase
 import lsst.utils.packages as packageUtils
+from lsst.afw.detection import Footprint, FootprintSet
 from lsst.daf.butler.cli.cliLog import CliLog
-import datetime
-from dateutil.tz import gettz
-
-from lsst.obs.lsst.translators.lsst import FILTER_DELIMITER
 from lsst.obs.lsst.translators.latiss import AUXTEL_LOCATION
-
-from astro_metadata_translator import ObservationInfo
-from astropy.coordinates import SkyCoord, AltAz
-from astropy.coordinates.earth import EarthLocation
-import astropy.units as u
-from astropy.time import Time
+from lsst.obs.lsst.translators.lsst import FILTER_DELIMITER
 
 from .astrometry.utils import genericCameraHeaderToWcs
 
-__all__ = ["SIGMATOFWHM",
-           "FWHMTOSIGMA",
-           "EFD_CLIENT_MISSING_MSG",
-           "GOOGLE_CLOUD_MISSING_MSG",
-           "AUXTEL_LOCATION",
-           "countPixels",
-           "quickSmooth",
-           "argMax2d",
-           "getImageStats",
-           "detectObjectsInExp",
-           "humanNameForCelestialObject",
-           "getFocusFromHeader",
-           "dayObsIntToString",
-           "dayObsSeqNumToVisitId",
-           "setupLogging",
-           "getCurrentDayObs_datetime",
-           "getCurrentDayObs_int",
-           "getCurrentDayObs_humanStr",
-           "getSite",
-           "getExpPositionOffset",
-           "starTrackerFileToExposure",
-           "getAirmassSeeingCorrection",
-           "getFilterSeeingCorrection",
-           "getCdf",
-           "getQuantiles",
-           "digitizeData",
-           ]
+__all__ = [
+    "SIGMATOFWHM",
+    "FWHMTOSIGMA",
+    "EFD_CLIENT_MISSING_MSG",
+    "GOOGLE_CLOUD_MISSING_MSG",
+    "AUXTEL_LOCATION",
+    "countPixels",
+    "quickSmooth",
+    "argMax2d",
+    "getImageStats",
+    "detectObjectsInExp",
+    "humanNameForCelestialObject",
+    "getFocusFromHeader",
+    "dayObsIntToString",
+    "dayObsSeqNumToVisitId",
+    "setupLogging",
+    "getCurrentDayObs_datetime",
+    "getCurrentDayObs_int",
+    "getCurrentDayObs_humanStr",
+    "getSite",
+    "getExpPositionOffset",
+    "starTrackerFileToExposure",
+    "getAirmassSeeingCorrection",
+    "getFilterSeeingCorrection",
+    "getCdf",
+    "getQuantiles",
+    "digitizeData",
+]
 
 
-SIGMATOFWHM = 2.0*np.sqrt(2.0*np.log(2.0))
-FWHMTOSIGMA = 1/SIGMATOFWHM
+SIGMATOFWHM = 2.0 * np.sqrt(2.0 * np.log(2.0))
+FWHMTOSIGMA = 1 / SIGMATOFWHM
 
-EFD_CLIENT_MISSING_MSG = ('ImportError: lsst_efd_client not found. Please install with:\n'
-                          '    pip install lsst-efd-client')
+EFD_CLIENT_MISSING_MSG = (
+    "ImportError: lsst_efd_client not found. Please install with:\n" "    pip install lsst-efd-client"
+)
 
-GOOGLE_CLOUD_MISSING_MSG = ('ImportError: Google cloud storage not found. Please install with:\n'
-                            '    pip install google-cloud-storage')
+GOOGLE_CLOUD_MISSING_MSG = (
+    "ImportError: Google cloud storage not found. Please install with:\n"
+    "    pip install google-cloud-storage"
+)
 
 
 def countPixels(maskedImage, maskPlane):
@@ -124,7 +128,7 @@ def quickSmooth(data, sigma=2):
         The smoothed data
     """
     kernel = [sigma, sigma]
-    smoothData = gaussian_filter(data, kernel, mode='constant')
+    smoothData = gaussian_filter(data, kernel, mode="constant")
     return smoothData
 
 
@@ -177,7 +181,7 @@ def dayObsIntToString(dayObs):
     assert isinstance(dayObs, int)
     dStr = str(dayObs)
     assert len(dStr) == 8
-    return '-'.join([dStr[0:4], dStr[4:6], dStr[6:8]])
+    return "-".join([dStr[0:4], dStr[4:6], dStr[6:8]])
 
 
 def dayObsSeqNumToVisitId(dayObs, seqNum):
@@ -201,7 +205,7 @@ def dayObsSeqNumToVisitId(dayObs, seqNum):
     programatically/via the butler.
     """
     if dayObs < 19700101 or dayObs > 35000101:
-        raise ValueError(f'dayObs value {dayObs} outside plausible range')
+        raise ValueError(f"dayObs value {dayObs} outside plausible range")
     return int(f"{dayObs}{seqNum:05}")
 
 
@@ -248,7 +252,7 @@ def getImageStats(exp):
     result.rotangle = rotangle
     result.az = az
     result.el = el
-    result.focus = md.get('FOCUSZ')
+    result.focus = md.get("FOCUSZ")
 
     data = exp.image.array
     result.maxValue = np.max(data)
@@ -257,8 +261,8 @@ def getImageStats(exp):
     result.maxPixelLocation = peak
     result.multipleMaxPixels = uniquePeak
 
-    result.nBadPixels = countPixels(exp.maskedImage, 'BAD')
-    result.nSatPixels = countPixels(exp.maskedImage, 'SAT')
+    result.nBadPixels = countPixels(exp.maskedImage, "BAD")
+    result.nSatPixels = countPixels(exp.maskedImage, "SAT")
     result.percentile99 = np.percentile(data, 99)
     result.percentile9999 = np.percentile(data, 99.99)
 
@@ -342,8 +346,10 @@ def fluxesFromFootprints(footprints, parentImage, subtractImageMedian=False):
         median = np.nanmedian(parentImage.array)
 
     # poor person's single dispatch
-    badTypeMsg = ("This function works with FootprintSets, single Footprints, and iterables of Footprints. "
-                  f"Got {type(footprints)}: {footprints}")
+    badTypeMsg = (
+        "This function works with FootprintSets, single Footprints, and iterables of Footprints. "
+        f"Got {type(footprints)}: {footprints}"
+    )
     if isinstance(footprints, FootprintSet):
         footprints = footprints.getFootprints()
     elif isinstance(footprints, Iterable):
@@ -398,12 +404,13 @@ def humanNameForCelestialObject(objName):
         The names found for the object
     """
     from astroquery.simbad import Simbad
+
     results = []
     try:
         simbadResult = Simbad.query_objectids(objName)
         for row in simbadResult:
-            if row['ID'].startswith('NAME'):
-                results.append(row['ID'].replace('NAME ', ''))
+            if row["ID"].startswith("NAME"):
+                results.append(row["ID"].replace("NAME ", ""))
         return results
     except Exception:
         return []  # same behavior as for found but un-named objects
@@ -432,12 +439,12 @@ def _getAltAzZenithsFromSeqNum(butler, dayObs, seqNumList):
     """
     azimuths, elevations, zeniths = [], [], []
     for seqNum in seqNumList:
-        md = butler.get('raw.metadata', day_obs=dayObs, seq_num=seqNum, detector=0)
+        md = butler.get("raw.metadata", day_obs=dayObs, seq_num=seqNum, detector=0)
         obsInfo = ObservationInfo(md)
         alt = obsInfo.altaz_begin.alt.value
         az = obsInfo.altaz_begin.az.value
         elevations.append(alt)
-        zeniths.append(90-alt)
+        zeniths.append(90 - alt)
         azimuths.append(az)
     return azimuths, elevations, zeniths
 
@@ -456,8 +463,8 @@ def getFocusFromHeader(exp):
         The focus value if found, else ``None``.
     """
     md = exp.getMetadata()
-    if 'FOCUSZ' in md:
-        return md['FOCUSZ']
+    if "FOCUSZ" in md:
+        return md["FOCUSZ"]
     return None
 
 
@@ -475,21 +482,21 @@ def checkStackSetup():
     """
     packages = packageUtils.getEnvironmentPackages(include_all=True)
 
-    lsstDistribHashAndTags = packages['lsst_distrib']  # looks something like 'g4eae7cb9+1418867f (w_2022_13)'
+    lsstDistribHashAndTags = packages["lsst_distrib"]  # looks something like 'g4eae7cb9+1418867f (w_2022_13)'
     lsstDistribTags = lsstDistribHashAndTags.split()[1]
     if len(lsstDistribTags.split()) == 1:
-        tag = lsstDistribTags.replace('(', '')
-        tag = tag.replace(')', '')
+        tag = lsstDistribTags.replace("(", "")
+        tag = tag.replace(")", "")
         print(f"You are running {tag} of lsst_distrib")
     else:  # multiple weekly tags found for lsst_distrib!
-        print(f'The version of lsst_distrib you have is compatible with: {lsstDistribTags}')
+        print(f"The version of lsst_distrib you have is compatible with: {lsstDistribTags}")
 
     localPackages = []
     localPaths = []
     for package, tags in packages.items():
-        if tags.startswith('LOCAL:'):
-            path = tags.split('LOCAL:')[1]
-            path = path.split('@')[0]  # don't need the git SHA etc
+        if tags.startswith("LOCAL:"):
+            path = tags.split("LOCAL:")[1]
+            path = path.split("@")[0]  # don't need the git SHA etc
             localPaths.append(path)
             localPackages.append(package)
 
@@ -528,14 +535,12 @@ def getCurrentDayObs_datetime():
 
 
 def getCurrentDayObs_int():
-    """Return the current dayObs as an int in the form 20220428
-    """
+    """Return the current dayObs as an int in the form 20220428"""
     return int(getCurrentDayObs_datetime().strftime("%Y%m%d"))
 
 
 def getCurrentDayObs_humanStr():
-    """Return the current dayObs as a string in the form '2022-04-28'
-    """
+    """Return the current dayObs as a string in the form '2022-04-28'"""
     return dayObsIntToString(getCurrentDayObs_int())
 
 
@@ -572,47 +577,50 @@ def getSite():
     """
     # All nublado instances guarantee that EXTERNAL_URL is set and uniquely
     # identifies it.
-    location = os.getenv('EXTERNAL_INSTANCE_URL', "")
+    location = os.getenv("EXTERNAL_INSTANCE_URL", "")
     if location == "https://tucson-teststand.lsst.codes":
-        return 'tucson'
+        return "tucson"
     elif location == "https://summit-lsp.lsst.codes":
-        return 'summit'
+        return "summit"
     elif location == "https://base-lsp.lsst.codes":
-        return 'base'
+        return "base"
     elif location == "https://usdf-rsp.slac.stanford.edu":
-        return 'staff-rsp'
+        return "staff-rsp"
 
     # if no EXTERNAL_URL, try HOSTNAME to see if we're on the dev nodes
     # it is expected that this will be extensible to SLAC
-    hostname = os.getenv('HOSTNAME', "")
-    if hostname.startswith('sdfrome'):
-        return 'rubin-devl'
+    hostname = os.getenv("HOSTNAME", "")
+    if hostname.startswith("sdfrome"):
+        return "rubin-devl"
 
-    jenkinsHome = os.getenv('JENKINS_HOME', "")
+    jenkinsHome = os.getenv("JENKINS_HOME", "")
     if jenkinsHome != "":
-        return 'jenkins'
+        return "jenkins"
 
     # we're probably inside a k8s pod doing rapid analysis work at this point
-    location = os.getenv('RAPID_ANALYSIS_LOCATION', "")
+    location = os.getenv("RAPID_ANALYSIS_LOCATION", "")
     if location == "TTS":
-        return 'tucson'
+        return "tucson"
     if location == "BTS":
-        return 'base'
+        return "base"
     if location == "SUMMIT":
-        return 'summit'
+        return "summit"
     if location == "USDF":
-        return 'usdf-k8s'
+        return "usdf-k8s"
 
     # we have failed
-    raise ValueError('Location could not be determined')
+    raise ValueError("Location could not be determined")
 
 
-def getAltAzFromSkyPosition(skyPos, visitInfo, doCorrectRefraction=False,
-                            wavelength=500.0,
-                            pressureOverride=None,
-                            temperatureOverride=None,
-                            relativeHumidityOverride=None,
-                            ):
+def getAltAzFromSkyPosition(
+    skyPos,
+    visitInfo,
+    doCorrectRefraction=False,
+    wavelength=500.0,
+    pressureOverride=None,
+    temperatureOverride=None,
+    relativeHumidityOverride=None,
+):
     """Get the alt/az from the position on the sky and the time and location
     of the observation.
 
@@ -666,13 +674,13 @@ def getAltAzFromSkyPosition(skyPos, visitInfo, doCorrectRefraction=False,
             # ObservationInfos (which are the "source of truth" use pascals) so
             # convert from pascals to bars
             pressure /= 100000.0
-        pressure = pressure*u.bar
+        pressure = pressure * u.bar
 
         if temperatureOverride:
             temperature = temperatureOverride
         else:
             temperature = visitInfo.weather.getAirTemperature()
-        temperature = temperature*u.deg_C
+        temperature = temperature * u.deg_C
 
         if relativeHumidityOverride:
             relativeHumidity = relativeHumidityOverride
@@ -680,17 +688,14 @@ def getAltAzFromSkyPosition(skyPos, visitInfo, doCorrectRefraction=False,
             relativeHumidity = visitInfo.weather.getHumidity() / 100.0  # this is in percent
         relativeHumidity = relativeHumidity
 
-        refractionKwargs = dict(pressure=pressure,
-                                temperature=temperature,
-                                relative_humidity=relativeHumidity,
-                                obswl=wavelength)
+        refractionKwargs = dict(
+            pressure=pressure, temperature=temperature, relative_humidity=relativeHumidity, obswl=wavelength
+        )
 
     # must go via astropy.Time because dafBase.dateTime.DateTime contains
     # the timezone, but going straight to visitInfo.date.toPython() loses this.
-    obsTime = Time(visitInfo.date.toPython(), scale='tai')
-    altAz = AltAz(obstime=obsTime,
-                  location=earthLocation,
-                  **refractionKwargs)
+    obsTime = Time(visitInfo.date.toPython(), scale="tai")
+    altAz = AltAz(obstime=obsTime, location=earthLocation, **refractionKwargs)
 
     obsAltAz = skyLocation.transform_to(altAz)
     alt = geom.Angle(obsAltAz.alt.degree, geom.degrees)
@@ -746,8 +751,9 @@ def getExpPositionOffset(exp1, exp2, useWcs=True, allowDifferentPlateScales=Fals
     wcs2 = exp2.getWcs()
     pixScaleArcSec = wcs1.getPixelScale().asArcseconds()
     if not allowDifferentPlateScales:
-        assert np.isclose(pixScaleArcSec, wcs2.getPixelScale().asArcseconds()), \
-            "Pixel scales in the exposures differ."
+        assert np.isclose(
+            pixScaleArcSec, wcs2.getPixelScale().asArcseconds()
+        ), "Pixel scales in the exposures differ."
 
     if useWcs:
         p1 = wcs1.getSkyOrigin()
@@ -775,12 +781,13 @@ def getExpPositionOffset(exp1, exp2, useWcs=True, allowDifferentPlateScales=Fals
     angular_offset = p1.separation(p2).asArcseconds()
     deltaPixels = angular_offset / pixScaleArcSec
 
-    ret = pipeBase.Struct(deltaRa=(ra1-ra2).wrapNear(geom.Angle(0.0)),
-                          deltaDec=dec1-dec2,
-                          deltaAlt=alt1-alt2,
-                          deltaAz=(az1-az2).wrapNear(geom.Angle(0.0)),
-                          deltaPixels=deltaPixels
-                          )
+    ret = pipeBase.Struct(
+        deltaRa=(ra1 - ra2).wrapNear(geom.Angle(0.0)),
+        deltaDec=dec1 - dec2,
+        deltaAlt=alt1 - alt2,
+        deltaAz=(az1 - az2).wrapNear(geom.Angle(0.0)),
+        deltaPixels=deltaPixels,
+    )
 
     return ret
 
@@ -815,10 +822,10 @@ def starTrackerFileToExposure(filename, logger=None):
     # of the exposure), so set it manually from the midpoint here
     try:
         md = exp.getMetadata()
-        begin = datetime.datetime.fromisoformat(md['DATE-BEG'])
-        end = datetime.datetime.fromisoformat(md['DATE-END'])
+        begin = datetime.datetime.fromisoformat(md["DATE-BEG"])
+        end = datetime.datetime.fromisoformat(md["DATE-END"])
         duration = end - begin
-        mid = begin + duration/2
+        mid = begin + duration / 2
         newTime = dafBase.DateTime(mid.isoformat(), dafBase.DateTime.Timescale.TAI)
         newVi = exp.visitInfo.copyWith(date=newTime)
         exp.info.setVisitInfo(newVi)
@@ -864,12 +871,13 @@ def getFieldNameAndTileNumber(field, warn=True, logger=None):
         The number of the tile, as an integer, or ``None`` if not found.
     """
     if warn and not logger:
-        logger = logging.getLogger('lsst.summit.utils.utils.getFieldNameAndTileNumber')
+        logger = logging.getLogger("lsst.summit.utils.utils.getFieldNameAndTileNumber")
 
-    if '_' not in field:
+    if "_" not in field:
         if warn:
-            logger.warning(f"Field {field} does not contain an underscore,"
-                           " so cannot determine the tile number.")
+            logger.warning(
+                f"Field {field} does not contain an underscore," " so cannot determine the tile number."
+            )
         return field, None
 
     try:
@@ -877,8 +885,10 @@ def getFieldNameAndTileNumber(field, warn=True, logger=None):
         fieldNum = int(fieldParts[-1])
     except ValueError:
         if warn:
-            logger.warning(f"Field {field} does not contain only an integer after the final underscore"
-                           " so cannot determine the tile number.")
+            logger.warning(
+                f"Field {field} does not contain only an integer after the final underscore"
+                " so cannot determine the tile number."
+            )
         return field, None
 
     return "_".join(fieldParts[:-1]), fieldNum
@@ -903,7 +913,7 @@ def getAirmassSeeingCorrection(airmass):
     """
     if airmass < 1:
         raise ValueError(f"Invalid airmass: {airmass}")
-    return airmass**(-0.6)
+    return airmass ** (-0.6)
 
 
 def getFilterSeeingCorrection(filterName):
@@ -924,12 +934,12 @@ def getFilterSeeingCorrection(filterName):
         ValueError raised for unknown filters.
     """
     match filterName:
-        case 'SDSSg_65mm':
-            return (477./500.)**0.2
-        case 'SDSSr_65mm':
-            return (623./500.)**0.2
-        case 'SDSSi_65mm':
-            return (762./500.)**0.2
+        case "SDSSg_65mm":
+            return (477.0 / 500.0) ** 0.2
+        case "SDSSr_65mm":
+            return (623.0 / 500.0) ** 0.2
+        case "SDSSi_65mm":
+            return (762.0 / 500.0) ** 0.2
         case _:
             raise ValueError(f"Unknown filter name: {filterName}")
 
@@ -975,11 +985,9 @@ def getCdf(data, scale, nBinsMax=300_000):
 
     nBins = np.clip(int(maxVal) - int(minVal), 1, nBinsMax)
 
-    hist, binEdges = np.histogram(
-        flatData, bins=nBins, range=(int(minVal), int(maxVal))
-    )
+    hist, binEdges = np.histogram(flatData, bins=nBins, range=(int(minVal), int(maxVal)))
 
-    cdf = (scale*np.cumsum(hist)/size).astype(np.int64)
+    cdf = (scale * np.cumsum(hist) / size).astype(np.int64)
     return cdf, minVal, maxVal
 
 
@@ -1020,11 +1028,9 @@ def getQuantiles(data, nColors):
         if np.isnan(minVal):  # cdf calculation has failed because all data is nan
             return np.asarray([np.nan for _ in range(nColors)])
 
-        scale = (maxVal - minVal)/len(cdf)
+        scale = (maxVal - minVal) / len(cdf)
 
-        boundaries = np.asarray(
-            [np.argmax(cdf >= i)*scale + minVal for i in range(nColors)] + [maxVal]
-        )
+        boundaries = np.asarray([np.argmax(cdf >= i) * scale + minVal for i in range(nColors)] + [maxVal])
 
     return boundaries
 
@@ -1046,6 +1052,6 @@ def digitizeData(data, nColors=256):
         Scaled data in the [0, nColors - 1] range.
     """
     cdf, minVal, maxVal = getCdf(data, nColors - 1)
-    scale = (maxVal - minVal)/len(cdf)
-    bins = np.floor((data*scale - minVal)).astype(np.int64)
+    scale = (maxVal - minVal) / len(cdf)
+    bins = np.floor((data * scale - minVal)).astype(np.int64)
     return cdf[bins]

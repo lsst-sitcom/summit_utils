@@ -21,30 +21,29 @@
 
 """Test cases for utils."""
 
+import asyncio
+import datetime
 import unittest
-import lsst.utils.tests
+
 import astropy
 import pandas as pd
-import datetime
-import asyncio
 from astropy.time import Time
+from utils import getVcr
 
-from lsst.summit.utils.tmaUtils import TMAEvent, TMAState
+import lsst.utils.tests
 from lsst.summit.utils.efdUtils import (
-    getEfdData,
-    getMostRecentRowWithDataBefore,
-    makeEfdClient,
-    efdTimestampToAstropy,
     astropyToEfdTimestamp,
     clipDataToEvent,
-    # calcNextDay,  # this is indirectly tested by test_getDayObsAsTimes()
-    getDayObsStartTime,
+    efdTimestampToAstropy,
     getDayObsEndTime,
     getDayObsForTime,
+    getDayObsStartTime,
+    getEfdData,
+    getMostRecentRowWithDataBefore,
     getTopics,
+    makeEfdClient,
 )
-
-from utils import getVcr
+from lsst.summit.utils.tmaUtils import TMAEvent, TMAState
 
 HAS_EFD_CLIENT = True
 try:
@@ -58,7 +57,6 @@ vcr = getVcr()
 @unittest.skipIf(not HAS_EFD_CLIENT, "No EFD client available")
 @vcr.use_cassette()
 class EfdUtilsTestCase(lsst.utils.tests.TestCase):
-
     @classmethod
     @vcr.use_cassette()
     def setUpClass(cls):
@@ -68,16 +66,16 @@ class EfdUtilsTestCase(lsst.utils.tests.TestCase):
             raise unittest.SkipTest("Could not instantiate an EFD client")
         cls.dayObs = 20230531
         # get a sample expRecord here to test expRecordToTimespan
-        cls.axisTopic = 'lsst.sal.MTMount.logevent_azimuthMotionState'
-        cls.timeSeriesTopic = 'lsst.sal.MTMount.azimuth'
+        cls.axisTopic = "lsst.sal.MTMount.logevent_azimuthMotionState"
+        cls.timeSeriesTopic = "lsst.sal.MTMount.azimuth"
         cls.event = TMAEvent(
             dayObs=20230531,
             seqNum=27,
             type=TMAState.TRACKING,
             endReason=TMAState.SLEWING,
             duration=0.47125244140625,
-            begin=Time(1685578353.2265284, scale='utc', format='unix'),
-            end=Time(1685578353.6977808, scale='utc', format='unix'),
+            begin=Time(1685578353.2265284, scale="utc", format="unix"),
+            end=Time(1685578353.6977808, scale="utc", format="unix"),
             blockInfos=None,
             version=0,
             _startRow=254,
@@ -119,21 +117,21 @@ class EfdUtilsTestCase(lsst.utils.tests.TestCase):
 
     @vcr.use_cassette()
     def test_getTopics(self):
-        topics = getTopics(self.client, 'lsst.sal.MTMount*')
+        topics = getTopics(self.client, "lsst.sal.MTMount*")
         self.assertIsInstance(topics, list)
         self.assertGreater(len(topics), 0)
 
-        topics = getTopics(self.client, '*fake.topics.does.not.exist*')
+        topics = getTopics(self.client, "*fake.topics.does.not.exist*")
         self.assertIsInstance(topics, list)
         self.assertEqual(len(topics), 0)
 
         # check we can find the mount with a preceding wildcard
-        topics = getTopics(self.client, '*mTmoUnt*')
+        topics = getTopics(self.client, "*mTmoUnt*")
         self.assertIsInstance(topics, list)
         self.assertGreater(len(topics), 0)
 
         # check it fails if we don't allow case insensitivity
-        topics = getTopics(self.client, '*mTmoUnt*', caseSensitive=True)
+        topics = getTopics(self.client, "*mTmoUnt*", caseSensitive=True)
         self.assertIsInstance(topics, list)
         self.assertEqual(len(topics), 0)
 
@@ -170,10 +168,12 @@ class EfdUtilsTestCase(lsst.utils.tests.TestCase):
         # test padding options
         padded = getEfdData(self.client, self.timeSeriesTopic, event=self.event, prePadding=1, postPadding=2)
         self.assertGreater(len(padded), len(eventData))
-        startTimeDiff = (efdTimestampToAstropy(eventData.iloc[0]['private_efdStamp']) -
-                         efdTimestampToAstropy(padded.iloc[0]['private_efdStamp']))
-        endTimeDiff = (efdTimestampToAstropy(padded.iloc[-1]['private_efdStamp']) -
-                       efdTimestampToAstropy(eventData.iloc[-1]['private_efdStamp']))
+        startTimeDiff = efdTimestampToAstropy(eventData.iloc[0]["private_efdStamp"]) - efdTimestampToAstropy(
+            padded.iloc[0]["private_efdStamp"]
+        )
+        endTimeDiff = efdTimestampToAstropy(padded.iloc[-1]["private_efdStamp"]) - efdTimestampToAstropy(
+            eventData.iloc[-1]["private_efdStamp"]
+        )
 
         self.assertGreater(startTimeDiff.sec, 0)
         self.assertLess(startTimeDiff.sec, 1.1)  # padding isn't super exact, so give a little wiggle room
@@ -192,17 +192,17 @@ class EfdUtilsTestCase(lsst.utils.tests.TestCase):
             # being alone is not allowed
             _ = getEfdData(self.client, self.axisTopic, begin=self.dayObs)
             # good query, except the topic doesn't exist
-            _ = getEfdData(self.client, 'badTopic', begin=dayStart, end=dayEnd)
+            _ = getEfdData(self.client, "badTopic", begin=dayStart, end=dayEnd)
 
     @vcr.use_cassette()
     def test_getMostRecentRowWithDataBefore(self):
-        time = Time(1687845854.736784, scale='utc', format='unix')
-        rowData = getMostRecentRowWithDataBefore(self.client,
-                                                 "lsst.sal.MTM1M3.logevent_forceActuatorState",
-                                                 time)
+        time = Time(1687845854.736784, scale="utc", format="unix")
+        rowData = getMostRecentRowWithDataBefore(
+            self.client, "lsst.sal.MTM1M3.logevent_forceActuatorState", time
+        )
         self.assertIsInstance(rowData, pd.Series)
 
-        stateTime = efdTimestampToAstropy(rowData['private_efdStamp'])
+        stateTime = efdTimestampToAstropy(rowData["private_efdStamp"])
         self.assertLess(stateTime, time)
 
     def test_efdTimestampToAstropy(self):
@@ -211,7 +211,7 @@ class EfdUtilsTestCase(lsst.utils.tests.TestCase):
         return
 
     def test_astropyToEfdTimestamp(self):
-        time = Time(1687845854.736784, scale='utc', format='unix')
+        time = Time(1687845854.736784, scale="utc", format="unix")
         efdTimestamp = astropyToEfdTimestamp(time)
         self.assertIsInstance(efdTimestamp, float)
         return
@@ -219,10 +219,10 @@ class EfdUtilsTestCase(lsst.utils.tests.TestCase):
     @vcr.use_cassette()
     def test_clipDataToEvent(self):
         # get 10 mins of data either side of the event we'll clip to
-        duration = datetime.timedelta(seconds=10*60)
+        duration = datetime.timedelta(seconds=10 * 60)
         queryBegin = self.event.begin - duration
         queryEnd = self.event.end + duration
-        dayObsData = getEfdData(self.client, 'lsst.sal.MTMount.azimuth', begin=queryBegin, end=queryEnd)
+        dayObsData = getEfdData(self.client, "lsst.sal.MTMount.azimuth", begin=queryBegin, end=queryEnd)
 
         # clip the data, and check it's shorter, non-zero, and falls in the
         # right time range
@@ -232,8 +232,8 @@ class EfdUtilsTestCase(lsst.utils.tests.TestCase):
         self.assertGreater(len(clippedData), 0)
         self.assertLess(len(clippedData), len(dayObsData))
 
-        dataStart = efdTimestampToAstropy(clippedData.iloc[0]['private_efdStamp'])
-        dataEnd = efdTimestampToAstropy(clippedData.iloc[-1]['private_efdStamp'])
+        dataStart = efdTimestampToAstropy(clippedData.iloc[0]["private_efdStamp"])
+        dataEnd = efdTimestampToAstropy(clippedData.iloc[-1]["private_efdStamp"])
 
         self.assertGreaterEqual(dataStart, self.event.begin)
         self.assertLessEqual(dataEnd, self.event.end)
@@ -245,18 +245,18 @@ class EfdUtilsTestCase(lsst.utils.tests.TestCase):
         self.assertLess(len(clippedPaddedData), len(dayObsData))
         self.assertGreater(len(clippedPaddedData), len(clippedData))
 
-        paddedDataStart = efdTimestampToAstropy(clippedPaddedData.iloc[0]['private_efdStamp'])
-        paddedDataEnd = efdTimestampToAstropy(clippedPaddedData.iloc[-1]['private_efdStamp'])
+        paddedDataStart = efdTimestampToAstropy(clippedPaddedData.iloc[0]["private_efdStamp"])
+        paddedDataEnd = efdTimestampToAstropy(clippedPaddedData.iloc[-1]["private_efdStamp"])
         self.assertLessEqual(paddedDataStart, dataStart)
         self.assertGreaterEqual(paddedDataEnd, dataEnd)
 
         # Get the minimum and maximum timestamps before padding
-        startTimeUnpadded = clippedData['private_efdStamp'].min()
-        endTimeUnpadded = clippedData['private_efdStamp'].max()
+        startTimeUnpadded = clippedData["private_efdStamp"].min()
+        endTimeUnpadded = clippedData["private_efdStamp"].max()
 
         # Get the minimum and maximum timestamps after padding
-        startTimePadded = clippedPaddedData['private_efdStamp'].min()
-        endTimePadded = clippedPaddedData['private_efdStamp'].max()
+        startTimePadded = clippedPaddedData["private_efdStamp"].min()
+        endTimePadded = clippedPaddedData["private_efdStamp"].max()
 
         # Check that the difference between the min times and max times is
         # approximately equal to the padding. Not exact as data sampling is

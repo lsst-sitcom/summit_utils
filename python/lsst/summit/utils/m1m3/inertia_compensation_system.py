@@ -79,9 +79,7 @@ class M1M3ICSAnalysis:
         log: logging.Logger | None = None,
     ):
         self.log = (
-            log.getChild(type(self).__name__)
-            if log is not None
-            else logging.getLogger(type(self).__name__)
+            log.getChild(type(self).__name__) if log is not None else logging.getLogger(type(self).__name__)
         )
 
         self.event = event
@@ -91,14 +89,12 @@ class M1M3ICSAnalysis:
         self.client = efd_client
 
         self.number_of_hardpoints = HP_COUNT
-        self.measured_forces_topics = [
-            f"measuredForce{i}" for i in range(self.number_of_hardpoints)
-        ]
+        self.measured_forces_topics = [f"measuredForce{i}" for i in range(self.number_of_hardpoints)]
 
         self.applied_forces_topics = (
-            [f"xForces{actuator}" for actuator in range(FATABLE_XFA)] +
-            [f"yForces{actuator}" for actuator in range(FATABLE_YFA)] +
-            [f"zForces{actuator}" for actuator in range(FATABLE_ZFA)]
+            [f"xForces{actuator}" for actuator in range(FATABLE_XFA)]
+            + [f"yForces{actuator}" for actuator in range(FATABLE_YFA)]
+            + [f"zForces{actuator}" for actuator in range(FATABLE_ZFA)]
         )
 
         self.log.info(f"Querying datasets for {event.dayObs=} {event.seqNum=}")
@@ -289,14 +285,10 @@ class M1M3ICSAnalysis:
                 self.log.error(err_msg)
                 raise ValueError(err_msg)
             else:
-                self.log.warning(
-                    f"Empty dataset for {topic}. Returning a zero-padded dataframe."
-                )
-                begin_timestamp = pd.Timestamp(self.event.begin.unix, unit='s')
-                end_timestamp = pd.Timestamp(self.event.end.unix, unit='s')
-                index = pd.DatetimeIndex(
-                    pd.date_range(begin_timestamp, end_timestamp, freq="1S")
-                )
+                self.log.warning(f"Empty dataset for {topic}. Returning a zero-padded dataframe.")
+                begin_timestamp = pd.Timestamp(self.event.begin.unix, unit="s")
+                end_timestamp = pd.Timestamp(self.event.end.unix, unit="s")
+                index = pd.DatetimeIndex(pd.date_range(begin_timestamp, end_timestamp, freq="1S"))
                 df = pd.DataFrame(
                     columns=columns,
                     index=index,
@@ -307,9 +299,7 @@ class M1M3ICSAnalysis:
             df = df.rename(columns=rename_columns)
 
         if reset_index:
-            df["timestamp"] = Time(
-                df["timestamp"], format="unix_tai", scale="utc"
-            ).datetime
+            df["timestamp"] = Time(df["timestamp"], format="unix_tai", scale="utc").datetime
             df.set_index("timestamp", inplace=True)
             df.index = df.index.tz_localize("UTC")
 
@@ -337,9 +327,7 @@ class M1M3ICSAnalysis:
         maximum, and peak-to-peak values for each column's data.
         """
         cols = self.measured_forces_topics
-        full_slew_stats = pd.DataFrame(
-            data=[self.get_slew_minmax(self.df[col]) for col in cols], index=cols
-        )
+        full_slew_stats = pd.DataFrame(data=[self.get_slew_minmax(self.df[col]) for col in cols], index=cols)
         self.log.info("Finding stable time window")
         begin, end = self.find_stable_region()
 
@@ -350,10 +338,7 @@ class M1M3ICSAnalysis:
         self.log.debug("Calculating statistics in stable time window from M1M3")
         stable_slew_stats = pd.DataFrame(
             data=[
-                self.get_stats_in_torqueless_interval(
-                    self.df[col].loc[begin.isot: end.isot]
-                )
-                for col in cols
+                self.get_stats_in_torqueless_interval(self.df[col].loc[begin.isot : end.isot]) for col in cols
             ],
             index=cols,
         )
@@ -485,7 +470,7 @@ class M1M3ICSAnalysis:
                 "el_end": self.get_nearest_value("el_actual_torque", self.event.end),
                 "el_extreme_vel": self.get_extreme_value("el_actual_velocity"),
                 "el_extreme_torque": self.get_extreme_value("el_actual_torque"),
-                "ics_enabled": self.get_ics_status()
+                "ics_enabled": self.get_ics_status(),
             }
         )
 
@@ -707,9 +692,7 @@ def evaluate_m1m3_ics_day_obs(
                 n_sigma=n_sigma,
                 log=log,
             )
-            log.info(
-                f"Complete inertia compensation system analysis on {event.seqNum}."
-            )
+            log.info(f"Complete inertia compensation system analysis on {event.seqNum}.")
         except ValueError:
             log.warning(f"Missing data for {event.seqNum} on {event.dayObs}")
             continue

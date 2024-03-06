@@ -1,28 +1,27 @@
 import logging
+
 import matplotlib.pyplot as plt
 import pandas as pd
-
 from astropy.time import Time
 
 from lsst.summit.utils.type_utils import M1M3ICSAnalysis
 
-
 __all__ = [
-    'plot_hp_data',
-    'mark_slew_begin_end',
-    'mark_padded_slew_begin_end',
-    'customize_fig',
-    'customize_hp_plot',
-    'add_hp_limits',
-    'plot_velocity_data',
-    'plot_torque_data',
-    'plot_stable_region',
-    'plot_hp_measured_data',
-    'HP_BREAKAWAY_LIMIT',
-    'HP_FATIGUE_LIMIT',
-    'HP_OPERATIONAL_LIMIT',
-    'FIGURE_WIDTH',
-    'FIGURE_HEIGHT',
+    "plot_hp_data",
+    "mark_slew_begin_end",
+    "mark_padded_slew_begin_end",
+    "customize_fig",
+    "customize_hp_plot",
+    "add_hp_limits",
+    "plot_velocity_data",
+    "plot_torque_data",
+    "plot_stable_region",
+    "plot_hp_measured_data",
+    "HP_BREAKAWAY_LIMIT",
+    "HP_FATIGUE_LIMIT",
+    "HP_OPERATIONAL_LIMIT",
+    "FIGURE_WIDTH",
+    "FIGURE_HEIGHT",
 ]
 
 # Approximate value for breakaway
@@ -83,9 +82,7 @@ def mark_slew_begin_end(ax: plt.Axes, slew_begin: Time, slew_end: Time) -> plt.L
         The Line2D object representing the line drawn at the slew end.
     """
     _ = ax.axvline(slew_begin.datetime, lw=0.5, ls="--", c="k", zorder=-1)
-    line = ax.axvline(
-        slew_end.datetime, lw=0.5, ls="--", c="k", zorder=-1, label="Slew Start/Stop"
-    )
+    line = ax.axvline(slew_end.datetime, lw=0.5, ls="--", c="k", zorder=-1, label="Slew Start/Stop")
     return line
 
 
@@ -185,21 +182,17 @@ def add_hp_limits(ax: plt.Axes):
         The axes on which the velocity data is plotted.
     """
     hp_limits = {
-        "HP Breakaway Limit": {
-            "pos_limit": HP_BREAKAWAY_LIMIT,
-            "neg_limit": -HP_BREAKAWAY_LIMIT,
-            "ls": "-"
-        },
+        "HP Breakaway Limit": {"pos_limit": HP_BREAKAWAY_LIMIT, "neg_limit": -HP_BREAKAWAY_LIMIT, "ls": "-"},
         "Repeated Load Limit (30% breakaway)": {
             "pos_limit": HP_FATIGUE_LIMIT,
             "neg_limit": -HP_FATIGUE_LIMIT,
-            "ls": "--"
+            "ls": "--",
         },
         "Normal Ops Limit (15% breakaway)": {
             "pos_limit": HP_OPERATIONAL_LIMIT,
             "neg_limit": -HP_OPERATIONAL_LIMIT,
-            "ls": ":"
-        }
+            "ls": ":",
+        },
     }
 
     kwargs = dict(alpha=0.5, lw=1.0, c="r", zorder=-1)
@@ -275,9 +268,7 @@ def plot_stable_region(
         The Polygon object representing the highlighted region.
     """
     for ax in fig.axes[1:]:
-        span = ax.axvspan(
-            begin.datetime, end.datetime, fc=color, alpha=0.1, zorder=-2, label=label
-        )
+        span = ax.axvspan(begin.datetime, end.datetime, fc=color, alpha=0.1, zorder=-2, label=label)
     return span
 
 
@@ -317,7 +308,7 @@ def plot_hp_measured_data(
     ax_vel = fig.add_subplot(gs[3], sharex=ax_hp)
 
     # Remove frame from axis dedicated to label
-    ax_label.axis('off')
+    ax_label.axis("off")
 
     # Plotting
     line_list: list[plt.Line2D] = []
@@ -334,35 +325,34 @@ def plot_hp_measured_data(
     line = mark_slew_begin_end(ax_tor, slew_begin, slew_end)
     line_list.append(line)
 
-    mark_padded_slew_begin_end(
-        ax_hp, slew_begin - dataset.outer_pad, slew_end + dataset.outer_pad
-    )
-    mark_padded_slew_begin_end(
-        ax_vel, slew_begin - dataset.outer_pad, slew_end + dataset.outer_pad
-    )
-    line = mark_padded_slew_begin_end(
-        ax_tor, slew_begin - dataset.outer_pad, slew_end + dataset.outer_pad
-    )
+    mark_padded_slew_begin_end(ax_hp, slew_begin - dataset.outer_pad, slew_end + dataset.outer_pad)
+    mark_padded_slew_begin_end(ax_vel, slew_begin - dataset.outer_pad, slew_end + dataset.outer_pad)
+    line = mark_padded_slew_begin_end(ax_tor, slew_begin - dataset.outer_pad, slew_end + dataset.outer_pad)
     line_list.append(line)
 
     plot_velocity_data(ax_vel, dataset)
     plot_torque_data(ax_tor, dataset)
 
-    lineColors = [p['color'] for p in plt.rcParams['axes.prop_cycle']]  # cycle through the colors
+    lineColors = [p["color"] for p in plt.rcParams["axes.prop_cycle"]]  # cycle through the colors
     colorCounter = 0
     if commands is not None:
         for commandTime, command in commands.items():
             command = command.replace("lsst.sal.", "")
             for ax in (ax_hp, ax_tor, ax_vel):  # so that the line spans all plots
-                line = ax.axvline(commandTime.utc.datetime, c=lineColors[colorCounter],
-                                  ls='--', alpha=0.75, label=f'{command}')
+                line = ax.axvline(
+                    commandTime.utc.datetime,
+                    c=lineColors[colorCounter],
+                    ls="--",
+                    alpha=0.75,
+                    label=f"{command}",
+                )
             line_list.append(line)  # put it in the legend
             colorCounter += 1  # increment color so each line is different
 
     customize_hp_plot(ax_hp, line_list)
 
     handles, labels = ax_hp.get_legend_handles_labels()
-    ax_label.legend(handles, labels, loc='center', frameon=False, ncol=4, fontsize="x-small")
+    ax_label.legend(handles, labels, loc="center", frameon=False, ncol=4, fontsize="x-small")
 
     customize_fig(fig, dataset)
 

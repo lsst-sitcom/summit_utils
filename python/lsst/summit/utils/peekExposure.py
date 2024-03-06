@@ -24,37 +24,22 @@ __all__ = [
     "PeekExposureTask",
 ]
 
-from lsst.afw.detection import Psf
+import numpy as np
+
 import lsst.afw.display as afwDisplay
 import lsst.afw.math as afwMath
 import lsst.daf.base as dafBase
 import lsst.pex.config as pexConfig
 import lsst.pipe.base as pipeBase
-import numpy as np
+from lsst.afw.detection import Psf
 from lsst.afw.geom.ellipses import Quadrupole
 from lsst.afw.image import ImageD
-from lsst.atmospec.utils import isDispersedExp
-from lsst.geom import (
-    Box2I,
-    Extent2I,
-    LinearTransform,
-    Point2D,
-    Point2I,
-    SpherePoint,
-    arcseconds,
-    degrees,
-)
-from lsst.meas.algorithms.installGaussianPsf import InstallGaussianPsfTask
-from lsst.meas.algorithms import (
-    SubtractBackgroundTask,
-    SourceDetectionTask,
-)
-from lsst.meas.base import (
-    SingleFrameMeasurementTask,
-    IdGenerator,
-)
 from lsst.afw.table import SourceTable
-
+from lsst.atmospec.utils import isDispersedExp
+from lsst.geom import Box2I, Extent2I, LinearTransform, Point2D, Point2I, SpherePoint, arcseconds, degrees
+from lsst.meas.algorithms import SourceDetectionTask, SubtractBackgroundTask
+from lsst.meas.algorithms.installGaussianPsf import InstallGaussianPsfTask
+from lsst.meas.base import IdGenerator, SingleFrameMeasurementTask
 
 IDX_SENTINEL = -99999
 
@@ -87,7 +72,7 @@ def _estimateMode(data, frac=0.5):
     interval = int(np.ceil(frac * len(data)))
     spans = data[interval:] - data[:-interval]
     start = np.argmin(spans)
-    return np.median(data[start:start + interval])
+    return np.median(data[start : start + interval])
 
 
 def _bearingToUnitVector(wcs, bearing, imagePoint, skyPoint=None):
@@ -138,20 +123,12 @@ def roseVectors(wcs, imagePoint, parAng=None):
     bearing = skyPoint.bearingTo(ncp)
 
     out = dict()
-    out["N"] = _bearingToUnitVector(
-        wcs, bearing, imagePoint, skyPoint=skyPoint
-    )
-    out["W"] = _bearingToUnitVector(
-        wcs, bearing + 90 * degrees, imagePoint, skyPoint=skyPoint
-    )
+    out["N"] = _bearingToUnitVector(wcs, bearing, imagePoint, skyPoint=skyPoint)
+    out["W"] = _bearingToUnitVector(wcs, bearing + 90 * degrees, imagePoint, skyPoint=skyPoint)
 
     if parAng is not None:
-        out["alt"] = _bearingToUnitVector(
-            wcs, bearing - parAng, imagePoint, skyPoint=skyPoint
-        )
-        out["az"] = _bearingToUnitVector(
-            wcs, bearing - parAng + 90 * degrees, imagePoint, skyPoint=skyPoint
-        )
+        out["alt"] = _bearingToUnitVector(wcs, bearing - parAng, imagePoint, skyPoint=skyPoint)
+        out["az"] = _bearingToUnitVector(wcs, bearing - parAng + 90 * degrees, imagePoint, skyPoint=skyPoint)
 
     return out
 
@@ -198,7 +175,7 @@ class DonutPsf(Psf):
     def _doComputeKernelImage(self, position=None, color=None):
         bbox = self.computeBBox(self.getAveragePosition())
         img = ImageD(bbox, 0.0)
-        x, y = np.ogrid[bbox.minY:bbox.maxY + 1, bbox.minX:bbox.maxX + 1]
+        x, y = np.ogrid[bbox.minY : bbox.maxY + 1, bbox.minX : bbox.maxX + 1]
         rsqr = x**2 + y**2
         w = (rsqr < self.outerRad**2) & (rsqr > self.innerRad**2)
         img.array[w] = 1.0
@@ -218,11 +195,7 @@ class DonutPsf(Psf):
 
     def __eq__(self, rhs):
         if isinstance(rhs, DonutPsf):
-            return (
-                self.size == rhs.size and
-                self.outerRad == rhs.outerRad and
-                self.innerRad == rhs.innerRad
-            )
+            return self.size == rhs.size and self.outerRad == rhs.outerRad and self.innerRad == rhs.innerRad
         return False
 
 
@@ -242,14 +215,8 @@ class PeekTaskConfig(pexConfig.Config):
         target=SubtractBackgroundTask,
         doc="Estimate background",
     )
-    detection = pexConfig.ConfigurableField(
-        target=SourceDetectionTask,
-        doc="Detect sources"
-    )
-    measurement = pexConfig.ConfigurableField(
-        target=SingleFrameMeasurementTask,
-        doc="Measure sources"
-    )
+    detection = pexConfig.ConfigurableField(target=SourceDetectionTask, doc="Detect sources")
+    measurement = pexConfig.ConfigurableField(target=SingleFrameMeasurementTask, doc="Measure sources")
     defaultBinSize = pexConfig.Field(
         dtype=int,
         default=1,
@@ -308,7 +275,7 @@ class PeekTask(pipeBase.Task):
         self.makeSubtask("background")
         self.makeSubtask("detection", schema=self.schema)
         self.algMetadata = dafBase.PropertyList()
-        self.makeSubtask('measurement', schema=self.schema, algMetadata=self.algMetadata)
+        self.makeSubtask("measurement", schema=self.schema, algMetadata=self.algMetadata)
 
     def run(self, exposure, binSize=None):
         """Peek at exposure.
@@ -435,9 +402,7 @@ class PeekDonutTask(pipeBase.Task):
             )
         binnedDonutDiameter = donutDiameter / binSize
         psf = DonutPsf(
-            binnedDonutDiameter*1.5,
-            binnedDonutDiameter*0.5,
-            binnedDonutDiameter*0.5*0.3525
+            binnedDonutDiameter * 1.5, binnedDonutDiameter * 0.5, binnedDonutDiameter * 0.5 * 0.3525
         )
 
         # Note that SourceDetectionTask will convolve with a _Gaussian
@@ -446,13 +411,13 @@ class PeekDonutTask(pipeBase.Task):
         # size of the image, however, can cause problems with the detection
         # convolution algorithm, so we limit the size.
         sigma = psf.computeShape(psf.getAveragePosition()).getDeterminantRadius()
-        factor = 8*sigma / (min(exposure.getDimensions())/binSize)
+        factor = 8 * sigma / (min(exposure.getDimensions()) / binSize)
 
         if factor > 1:
             psf = DonutPsf(
-                binnedDonutDiameter*1.5/factor,
-                binnedDonutDiameter*0.5/factor,
-                binnedDonutDiameter*0.5*0.3525/factor
+                binnedDonutDiameter * 1.5 / factor,
+                binnedDonutDiameter * 0.5 / factor,
+                binnedDonutDiameter * 0.5 * 0.3525 / factor,
             )
         exposure.setPsf(psf)
 
@@ -584,8 +549,7 @@ class PeekSpecTaskConfig(pexConfig.Config):
     maxFootprintAspectRatio = pexConfig.Field(
         dtype=float,
         default=10.0,
-        doc="Maximum detection footprint aspect ratio to consider as 0th order"
-            " (non-dispersed) light."
+        doc="Maximum detection footprint aspect ratio to consider as 0th order" " (non-dispersed) light.",
     )
 
     def setDefaults(self):
@@ -598,7 +562,7 @@ class PeekSpecTaskConfig(pexConfig.Config):
         self.peek.measurement.slots.apFlux = "base_CircularApertureFlux_70_0"
         # Also allow a larger distance to peak for centroiding in case there's
         # a relatively large saturated region.
-        self.peek.measurement.plugins['base_SdssCentroid'].maxDistToPeak = 15.0
+        self.peek.measurement.plugins["base_SdssCentroid"].maxDistToPeak = 15.0
 
 
 class PeekSpecTask(pipeBase.Task):
@@ -670,11 +634,7 @@ class PeekSpecTask(pipeBase.Task):
         fpShapes = [src.getFootprint().getShape() for src in binnedSourceCat]
         # Filter out likely spectrum detections
         goodSourceMask &= np.array(
-            [
-                sh.getIyy() < self.config.maxFootprintAspectRatio * sh.getIxx()
-                for sh in fpShapes
-            ],
-            dtype=bool
+            [sh.getIyy() < self.config.maxFootprintAspectRatio * sh.getIxx() for sh in fpShapes], dtype=bool
         )
         return goodSourceMask
 
@@ -707,7 +667,7 @@ class PeekExposureTaskConfig(pexConfig.Config):
 
 
 class PeekExposureTask(pipeBase.Task):
-    """ Peek at exposure to quickly detect and measure both the brightest
+    """Peek at exposure to quickly detect and measure both the brightest
     source in the image, and a set of sources representative of the
     exposure's overall image quality.
 
@@ -842,9 +802,7 @@ class PeekExposureTask(pipeBase.Task):
         # Make a copy so the original image is unmodified.
         exposure = exposure.clone()
         try:
-            result = self._run(
-                exposure, doDisplay, doDisplayIndices, mode, binSize, donutDiameter
-            )
+            result = self._run(exposure, doDisplay, doDisplayIndices, mode, binSize, donutDiameter)
         except Exception as e:
             self.log.warning(f"Peek failed: {e}")
             result = pipeBase.Struct(
@@ -866,8 +824,7 @@ class PeekExposureTask(pipeBase.Task):
         return result
 
     def _run(self, exposure, doDisplay, doDisplayIndices, mode, binSize, donutDiameter):
-        """ The actual run method, called by run().
-        """
+        """The actual run method, called by run()."""
         # If image is ~large, then use a subsampling of the image for
         # speedy median/mode estimates.
         arr = exposure.getMaskedImage().getImage().array
@@ -880,9 +837,7 @@ class PeekExposureTask(pipeBase.Task):
         if donutDiameter is None:
             donutDiameter = self.getDonutDiameter(exposure)
 
-        mode, binSize, binnedSourceCat = self.runPeek(
-            exposure, mode, donutDiameter, binSize
-        )
+        mode, binSize, binnedSourceCat = self.runPeek(exposure, mode, donutDiameter, binSize)
 
         table = self.transformTable(binSize, binnedSourceCat)
 
@@ -895,9 +850,7 @@ class PeekExposureTask(pipeBase.Task):
                 goodSourceMask = self.photo.getGoodSources(binnedSourceCat)
 
         # prepare output variables
-        maxFluxIdx, brightCentroid, brightShape = self.getBrightest(
-            binnedSourceCat, binSize, goodSourceMask
-        )
+        maxFluxIdx, brightCentroid, brightShape = self.getBrightest(binnedSourceCat, binSize, goodSourceMask)
         psfShape = self.getPsfShape(binnedSourceCat, binSize, goodSourceMask)
 
         equatorialShapes, altAzShapes = self.transformShapes(
@@ -907,9 +860,7 @@ class PeekExposureTask(pipeBase.Task):
         )
 
         if doDisplay:
-            self.updateDisplay(
-                exposure, binSize, binnedSourceCat, maxFluxIdx, doDisplayIndices
-            )
+            self.updateDisplay(exposure, binSize, binnedSourceCat, maxFluxIdx, doDisplayIndices)
 
         return pipeBase.Struct(
             mode=mode,
@@ -1015,12 +966,8 @@ class PeekExposureTask(pipeBase.Task):
         cols = [n for n in table.colnames if n.startswith("slot")]
         table = table[cols]
         if "slot_Centroid_x" in cols:
-            table["slot_Centroid_x"] = (
-                binSize * table["slot_Centroid_x"] + (binSize - 1) / 2
-            )
-            table["slot_Centroid_y"] = (
-                binSize * table["slot_Centroid_y"] + (binSize - 1) / 2
-            )
+            table["slot_Centroid_x"] = binSize * table["slot_Centroid_x"] + (binSize - 1) / 2
+            table["slot_Centroid_y"] = binSize * table["slot_Centroid_y"] + (binSize - 1) / 2
         if "slot_Shape_x" in cols:
             table["slot_Shape_x"] = binSize * table["slot_Shape_x"] + (binSize - 1) / 2
             table["slot_Shape_y"] = binSize * table["slot_Shape_y"] + (binSize - 1) / 2
@@ -1034,8 +981,8 @@ class PeekExposureTask(pipeBase.Task):
             del table["slot_PsfFlux_npixels"]
 
         table.rename_columns(
-            [n for n in table.colnames if n.startswith('slot_')],
-            [n[5:6].lower()+n[6:] for n in table.colnames if n.startswith('slot_')]
+            [n for n in table.colnames if n.startswith("slot_")],
+            [n[5:6].lower() + n[6:] for n in table.colnames if n.startswith("slot_")],
         )
 
         return table
@@ -1064,7 +1011,7 @@ class PeekExposureTask(pipeBase.Task):
         fluxes = np.array([source.getApInstFlux() for source in binnedSourceCat])
         idxs = np.arange(len(binnedSourceCat))
 
-        good = (goodSourceMask & np.isfinite(fluxes))
+        good = goodSourceMask & np.isfinite(fluxes)
 
         if np.sum(good) == 0:
             maxFluxIdx = IDX_SENTINEL
@@ -1110,7 +1057,7 @@ class PeekExposureTask(pipeBase.Task):
         fluxes = np.array([source.getApInstFlux() for source in binnedSourceCat])
         idxs = np.arange(len(binnedSourceCat))
 
-        good = (goodSourceMask & np.isfinite(fluxes))
+        good = goodSourceMask & np.isfinite(fluxes)
 
         if np.sum(good) == 0:
             return Quadrupole(np.nan, np.nan, np.nan)
@@ -1118,15 +1065,9 @@ class PeekExposureTask(pipeBase.Task):
         fluxes = fluxes[good]
         idxs = idxs[good]
 
-        psfIXX = _estimateMode(
-            np.array([source.getIxx() for source in binnedSourceCat])[goodSourceMask]
-        )
-        psfIYY = _estimateMode(
-            np.array([source.getIyy() for source in binnedSourceCat])[goodSourceMask]
-        )
-        psfIXY = _estimateMode(
-            np.array([source.getIxy() for source in binnedSourceCat])[goodSourceMask]
-        )
+        psfIXX = _estimateMode(np.array([source.getIxx() for source in binnedSourceCat])[goodSourceMask])
+        psfIYY = _estimateMode(np.array([source.getIyy() for source in binnedSourceCat])[goodSourceMask])
+        psfIXY = _estimateMode(np.array([source.getIxy() for source in binnedSourceCat])[goodSourceMask])
 
         return Quadrupole(
             psfIXX * binSize**2,
@@ -1172,9 +1113,7 @@ class PeekExposureTask(pipeBase.Task):
             # conform with weak-lensing conventions.  So we flip the [0]
             # component of the transformation.
             neTransform = wcs.linearizePixelToSky(pt, arcseconds).getLinear()
-            nwTransform = LinearTransform(
-                np.array([[-1, 0], [0, 1]]) @ neTransform.getMatrix()
-            )
+            nwTransform = LinearTransform(np.array([[-1, 0], [0, 1]]) @ neTransform.getMatrix())
             equatorialShapes.append(shape.transform(nwTransform))
 
             # To get from N/W to alt/az, we need to additionally rotate by the
@@ -1185,9 +1124,7 @@ class PeekExposureTask(pipeBase.Task):
 
         return equatorialShapes, altAzShapes
 
-    def updateDisplay(
-        self, exposure, binSize, binnedSourceCat, maxFluxIdx, doDisplayIndices
-    ):
+    def updateDisplay(self, exposure, binSize, binnedSourceCat, maxFluxIdx, doDisplayIndices):
         """Update the afwDisplay with the exposure and sources.
 
         Parameters

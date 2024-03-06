@@ -21,37 +21,37 @@
 
 """Test cases for utils."""
 
-import unittest
-import os
-import lsst.utils.tests
-
-import pandas as pd
-import numpy as np
 import asyncio
-import matplotlib.pyplot as plt
-from astropy.time import TimeDelta
+import os
+import unittest
 
+import matplotlib.pyplot as plt
+import numpy as np
+import pandas as pd
+from astropy.time import TimeDelta
+from utils import getVcr
+
+import lsst.utils.tests
+from lsst.summit.utils.efdUtils import calcNextDay, getDayObsStartTime, makeEfdClient
 from lsst.summit.utils.enums import PowerState
-from lsst.summit.utils.efdUtils import makeEfdClient, getDayObsStartTime, calcNextDay
 from lsst.summit.utils.tmaUtils import (
-    getSlewsFromEventList,
-    getTracksFromEventList,
-    getAzimuthElevationDataForEvent,
-    plotEvent,
-    getCommandsDuringEvent,
-    TMAStateMachine,
+    AxisMotionState,
     TMAEvent,
     TMAEventMaker,
     TMAState,
-    AxisMotionState,
-    getAxisAndType,
+    TMAStateMachine,
     _initializeTma,
     filterBadValues,
+    getAxisAndType,
+    getAzimuthElevationDataForEvent,
+    getCommandsDuringEvent,
+    getSlewsFromEventList,
+    getTracksFromEventList,
+    plotEvent,
 )
-from utils import getVcr
 
 __all__ = [
-    'writeNewTmaEventTestTruthValues',
+    "writeNewTmaEventTestTruthValues",
 ]
 
 TESTDIR = os.path.abspath(os.path.dirname(__file__))
@@ -78,13 +78,9 @@ def getTmaEventTestTruthValues():
     """
     dataFilename = os.path.join(TESTDIR, "data", "tmaEventData.txt")
 
-    seqNums, startRows, endRows, types, endReasons = np.genfromtxt(dataFilename,
-                                                                   delimiter=',',
-                                                                   dtype=None,
-                                                                   names=True,
-                                                                   encoding='utf-8',
-                                                                   unpack=True
-                                                                   )
+    seqNums, startRows, endRows, types, endReasons = np.genfromtxt(
+        dataFilename, delimiter=",", dtype=None, names=True, encoding="utf-8", unpack=True
+    )
     return seqNums, startRows, endRows, types, endReasons
 
 
@@ -106,17 +102,18 @@ def writeNewTmaEventTestTruthValues():
     dataFilename = os.path.join(TESTDIR, "data", "tmaEventData.txt")
 
     columnHeader = "seqNum,startRow,endRow,type,endReason"
-    with open(dataFilename, 'w') as f:
-        f.write(columnHeader + '\n')
+    with open(dataFilename, "w") as f:
+        f.write(columnHeader + "\n")
         for event in events:
-            line = (f"{event.seqNum},{event._startRow},{event._endRow},{event.type.name},"
-                    f"{event.endReason.name}")
-            f.write(line + '\n')
+            line = (
+                f"{event.seqNum},{event._startRow},{event._endRow},{event.type.name},"
+                f"{event.endReason.name}"
+            )
+            f.write(line + "\n")
 
 
 def makeValid(tma):
-    """Helper function to turn a TMA into a valid state.
-    """
+    """Helper function to turn a TMA into a valid state."""
     for name, value in tma._parts.items():
         if value == tma._UNINITIALIZED_VALUE:
             tma._parts[name] = 1
@@ -133,52 +130,52 @@ def _turnOn(tma):
     tma : `lsst.summit.utils.tmaUtils.TMAStateMachine`
         The TMA state machine model to initialize.
     """
-    tma._parts['azimuthSystemState'] = PowerState.ON
-    tma._parts['elevationSystemState'] = PowerState.ON
+    tma._parts["azimuthSystemState"] = PowerState.ON
+    tma._parts["elevationSystemState"] = PowerState.ON
 
 
 class TmaUtilsTestCase(lsst.utils.tests.TestCase):
-
     def test_tmaInit(self):
         tma = TMAStateMachine()
         self.assertFalse(tma._isValid)
 
         # setting one axis should not make things valid
-        tma._parts['azimuthMotionState'] = 1
+        tma._parts["azimuthMotionState"] = 1
         self.assertFalse(tma._isValid)
 
         # setting all the other components should make things valid
-        tma._parts['azimuthInPosition'] = 1
-        tma._parts['azimuthSystemState'] = 1
-        tma._parts['elevationInPosition'] = 1
-        tma._parts['elevationMotionState'] = 1
-        tma._parts['elevationSystemState'] = 1
+        tma._parts["azimuthInPosition"] = 1
+        tma._parts["azimuthSystemState"] = 1
+        tma._parts["elevationInPosition"] = 1
+        tma._parts["elevationMotionState"] = 1
+        tma._parts["elevationSystemState"] = 1
         self.assertTrue(tma._isValid)
 
     def test_tmaReferences(self):
-        """Check the linkage between the component lists and the _parts dict.
+        """Check the linkage between the component lists and the _parts
+        dict.
         """
         tma = TMAStateMachine()
 
         # setting one axis should not make things valid
-        self.assertEqual(tma._parts['azimuthMotionState'], tma._UNINITIALIZED_VALUE)
-        self.assertEqual(tma._parts['elevationMotionState'], tma._UNINITIALIZED_VALUE)
+        self.assertEqual(tma._parts["azimuthMotionState"], tma._UNINITIALIZED_VALUE)
+        self.assertEqual(tma._parts["elevationMotionState"], tma._UNINITIALIZED_VALUE)
         tma.motion[0] = AxisMotionState.TRACKING  # set azimuth to 0
         tma.motion[1] = AxisMotionState.TRACKING  # set azimuth to 0
-        self.assertEqual(tma._parts['azimuthMotionState'], AxisMotionState.TRACKING)
-        self.assertEqual(tma._parts['elevationMotionState'], AxisMotionState.TRACKING)
+        self.assertEqual(tma._parts["azimuthMotionState"], AxisMotionState.TRACKING)
+        self.assertEqual(tma._parts["elevationMotionState"], AxisMotionState.TRACKING)
 
     def test_getAxisAndType(self):
         # check both the long and short form names work
-        for s in ['azimuthMotionState', 'lsst.sal.MTMount.logevent_azimuthMotionState']:
-            self.assertEqual(getAxisAndType(s), ('azimuth', 'MotionState'))
+        for s in ["azimuthMotionState", "lsst.sal.MTMount.logevent_azimuthMotionState"]:
+            self.assertEqual(getAxisAndType(s), ("azimuth", "MotionState"))
 
         # check in position, and use elevation instead of azimuth to test that
-        for s in ['elevationInPosition', 'lsst.sal.MTMount.logevent_elevationInPosition']:
-            self.assertEqual(getAxisAndType(s), ('elevation', 'InPosition'))
+        for s in ["elevationInPosition", "lsst.sal.MTMount.logevent_elevationInPosition"]:
+            self.assertEqual(getAxisAndType(s), ("elevation", "InPosition"))
 
-        for s in ['azimuthSystemState', 'lsst.sal.MTMount.logevent_azimuthSystemState']:
-            self.assertEqual(getAxisAndType(s), ('azimuth', 'SystemState'))
+        for s in ["azimuthSystemState", "lsst.sal.MTMount.logevent_azimuthSystemState"]:
+            self.assertEqual(getAxisAndType(s), ("azimuth", "SystemState"))
 
     def test_initStateLogic(self):
         tma = TMAStateMachine()
@@ -219,7 +216,6 @@ class TmaUtilsTestCase(lsst.utils.tests.TestCase):
 
 @vcr.use_cassette()
 class TMAEventMakerTestCase(lsst.utils.tests.TestCase):
-
     @classmethod
     @vcr.use_cassette()
     def setUpClass(cls):
@@ -248,23 +244,25 @@ class TMAEventMakerTestCase(lsst.utils.tests.TestCase):
 
     @vcr.use_cassette()
     def test_rowDataForValues(self):
-        rowsFor = set(self.sampleData['rowFor'])
+        rowsFor = set(self.sampleData["rowFor"])
         self.assertEqual(len(rowsFor), 6)
 
         # hard coding these ensures that you can't extend the axes/model
         # without being explicit about it here.
-        correct = {'azimuthInPosition',
-                   'azimuthMotionState',
-                   'azimuthSystemState',
-                   'elevationInPosition',
-                   'elevationMotionState',
-                   'elevationSystemState'}
+        correct = {
+            "azimuthInPosition",
+            "azimuthMotionState",
+            "azimuthSystemState",
+            "elevationInPosition",
+            "elevationMotionState",
+            "elevationSystemState",
+        }
         self.assertSetEqual(rowsFor, correct)
 
     @vcr.use_cassette()
     def test_monotonicTimeInDataframe(self):
         # ensure that each row is later than the previous
-        times = self.sampleData['private_efdStamp']
+        times = self.sampleData["private_efdStamp"]
         self.assertTrue(np.all(np.diff(times) > 0))
 
     @vcr.use_cassette()
@@ -325,7 +323,7 @@ class TMAEventMakerTestCase(lsst.utils.tests.TestCase):
     def test_noDataBehaviour(self):
         eventMaker = self.tmaEventMaker
         noDataDayObs = 19500101  # do not use 19700101 - there is data for that day!
-        with self.assertLogs(level='WARNING') as cm:
+        with self.assertLogs(level="WARNING") as cm:
             correctMsg = f"No EFD data found for dayObs={noDataDayObs}"
             events = eventMaker.getEvents(noDataDayObs)
             self.assertIsInstance(events, list)
@@ -412,7 +410,7 @@ class TMAEventMakerTestCase(lsst.utils.tests.TestCase):
         # check with one good point after an overflowing run of bad to make
         # sure the correction is always applied with good values, not the naive
         # average of the last two even if they might be bad
-        values = np.array([1.0, 0.96, 1.0, 1.02, 2.95, 3.0, 4.05, 5.0, 1.05, 2.95, 1.])
+        values = np.array([1.0, 0.96, 1.0, 1.02, 2.95, 3.0, 4.05, 5.0, 1.05, 2.95, 1.0])
         expected = np.array([1.0, 0.96, 1.0, 1.02, 1.01, 1.01, 1.01, 5.0, 1.05, 1.035, 1.0])
         nReplaced = filterBadValues(values)
         residuals = np.abs(values - expected)
@@ -424,7 +422,20 @@ class TMAEventMakerTestCase(lsst.utils.tests.TestCase):
         nReplaced = filterBadValues(values, maxDelta=10)
         self.assertEqual(nReplaced, 0)
 
-        values = np.array([1.0, 1.0, 1.0, 1.1, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, ])
+        values = np.array(
+            [
+                1.0,
+                1.0,
+                1.0,
+                1.1,
+                1.0,
+                1.0,
+                1.0,
+                1.0,
+                1.0,
+                1.0,
+            ]
+        )
         nReplaced = filterBadValues(values, maxDelta=0.01)
         self.assertEqual(nReplaced, 1)
 
@@ -443,9 +454,9 @@ class TMAEventMakerTestCase(lsst.utils.tests.TestCase):
         self.assertIsInstance(event, TMAEvent)
         self.assertEqual(event, events[100])
 
-        with self.assertLogs(level='WARNING') as cm:
+        with self.assertLogs(level="WARNING") as cm:
             correctMsg = f"Event {nEvents+1} not found for {self.dayObs}"
-            event = eventMaker.getEvent(self.dayObs, nEvents+1)
+            event = eventMaker.getEvent(self.dayObs, nEvents + 1)
             msg = cm.output[0]
             self.assertIn(correctMsg, msg)
 
@@ -482,10 +493,9 @@ class TMAEventMakerTestCase(lsst.utils.tests.TestCase):
         self.assertIsInstance(azData, pd.DataFrame)
         self.assertIsInstance(elData, pd.DataFrame)
 
-        paddedAzData, paddedElData = getAzimuthElevationDataForEvent(self.client,
-                                                                     events[0],
-                                                                     prePadding=2,
-                                                                     postPadding=1)
+        paddedAzData, paddedElData = getAzimuthElevationDataForEvent(
+            self.client, events[0], prePadding=2, postPadding=1
+        )
         self.assertGreater(len(paddedAzData), len(azData))
         self.assertGreater(len(paddedElData), len(elData))
 
@@ -507,7 +517,7 @@ class TMAEventMakerTestCase(lsst.utils.tests.TestCase):
         plotEvent(self.client, event, fig=fig)
         plt.close(fig)
 
-        commandsToPlot = ['raDecTarget', 'moveToTarget', 'startTracking', 'stopTracking']
+        commandsToPlot = ["raDecTarget", "moveToTarget", "startTracking", "stopTracking"]
         commands = getCommandsDuringEvent(self.client, event, commandsToPlot, doLog=False)
         self.assertTrue(not all([time is None for time in commands.values()]))  # at least one command
 
@@ -525,7 +535,7 @@ class TMAEventMakerTestCase(lsst.utils.tests.TestCase):
         found = eventMaker.findEvent(time)
         self.assertEqual(found, event)
 
-        dt = TimeDelta(0.01, format='sec')
+        dt = TimeDelta(0.01, format="sec")
         # must be just inside to get the same event back, because if a moment
         # is shared it gives the one which starts with the moment (whilst
         # logging info messages about it)
@@ -541,7 +551,7 @@ class TMAEventMakerTestCase(lsst.utils.tests.TestCase):
         # Now check the cases which don't find an event at all. It would be
         # nice to check the log messages here, but it seems too fragile to be
         # worth it
-        dt = TimeDelta(1, format='sec')
+        dt = TimeDelta(1, format="sec")
         tooEarlyOnDay = getDayObsStartTime(self.dayObs) + dt  # 1 second after start of day
         found = eventMaker.findEvent(tooEarlyOnDay)
         self.assertIsNone(found)
@@ -580,8 +590,8 @@ class TMAEventMakerTestCase(lsst.utils.tests.TestCase):
 
         event = eventsWithBlockInfo[0]
         self.assertIsInstance(event, TMAEvent)
-        self.assertTrue(event.associatedWith(ticket='SITCOM-906'))
-        self.assertFalse(event.associatedWith(ticket='SITCOM-905'))
+        self.assertTrue(event.associatedWith(ticket="SITCOM-906"))
+        self.assertFalse(event.associatedWith(ticket="SITCOM-905"))
 
         self.assertTrue(event.associatedWith(salIndex=100017))
         self.assertFalse(event.associatedWith(salIndex=100018))
@@ -591,21 +601,21 @@ class TMAEventMakerTestCase(lsst.utils.tests.TestCase):
 
         # check it works with any and all of the arguments
         self.assertTrue(event.associatedWith(block=6, salIndex=100017))
-        self.assertTrue(event.associatedWith(block=6, salIndex=100017, ticket='SITCOM-906'))
+        self.assertTrue(event.associatedWith(block=6, salIndex=100017, ticket="SITCOM-906"))
 
         # check it's false if any are false
-        self.assertFalse(event.associatedWith(block=7, salIndex=100017, ticket='SITCOM-906'))  # 1 wrong
-        self.assertFalse(event.associatedWith(block=6, salIndex=100018, ticket='SITCOM-906'))  # 1 wrong
-        self.assertFalse(event.associatedWith(block=6, salIndex=100017, ticket='SITCOM-907'))  # 1 wrong
-        self.assertFalse(event.associatedWith(block=1, salIndex=1, ticket='SITCOM-1'))  # all wrong
+        self.assertFalse(event.associatedWith(block=7, salIndex=100017, ticket="SITCOM-906"))  # 1 wrong
+        self.assertFalse(event.associatedWith(block=6, salIndex=100018, ticket="SITCOM-906"))  # 1 wrong
+        self.assertFalse(event.associatedWith(block=6, salIndex=100017, ticket="SITCOM-907"))  # 1 wrong
+        self.assertFalse(event.associatedWith(block=1, salIndex=1, ticket="SITCOM-1"))  # all wrong
 
         # check with the blockSeqNum, with and without the other items
         self.assertTrue(event.associatedWith(block=6, blockSeqNum=1))
         self.assertFalse(event.associatedWith(block=6, blockSeqNum=2))
         self.assertTrue(event.associatedWith(block=6, blockSeqNum=1, salIndex=100017))
         self.assertFalse(event.associatedWith(block=6, blockSeqNum=2, salIndex=100017))
-        self.assertTrue(event.associatedWith(block=6, blockSeqNum=1, salIndex=100017, ticket='SITCOM-906'))
-        self.assertFalse(event.associatedWith(block=6, blockSeqNum=2, salIndex=100017, ticket='SITCOM-906'))
+        self.assertTrue(event.associatedWith(block=6, blockSeqNum=1, salIndex=100017, ticket="SITCOM-906"))
+        self.assertFalse(event.associatedWith(block=6, blockSeqNum=2, salIndex=100017, ticket="SITCOM-906"))
 
         with self.assertRaises(ValueError):
             event.associatedWith()

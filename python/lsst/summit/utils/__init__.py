@@ -20,10 +20,10 @@
 # along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
 from .bestEffort import *
-from .spectrumExaminer import *
-from .nightReport import *
-from .imageExaminer import *
-from .quickLook import *
 from .butlerUtils import *
-from .utils import *
+from .imageExaminer import *
+from .nightReport import *
 from .peekExposure import *
+from .quickLook import *
+from .spectrumExaminer import *
+from .utils import *

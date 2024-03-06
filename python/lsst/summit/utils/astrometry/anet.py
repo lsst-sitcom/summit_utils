@@ -23,20 +23,20 @@ import os
 import shutil
 import subprocess
 import tempfile
-import numpy as np
-from astropy.io import fits
 import time
 import uuid
 import warnings
-
 from dataclasses import dataclass
 from functools import cached_property
+
+import numpy as np
+from astropy.io import fits
 
 import lsst.geom as geom
 
 from .utils import headerToWcs
 
-__all__ = ['AstrometryNetResult', 'CommandLineSolver', 'OnlineSolver']
+__all__ = ["AstrometryNetResult", "CommandLineSolver", "OnlineSolver"]
 
 
 @dataclass(frozen=True)
@@ -55,6 +55,7 @@ class AstrometryNetResult:
     corrFile : `str`, optional
         The path to the .corr file from the fit.
     """
+
     wcsFile: str
     corrFile: str | None = None
 
@@ -88,13 +89,13 @@ class AstrometryNetResult:
             for i in range(data.shape[0]):
                 row = data[i]
                 count += 1
-                error = (row[0] - row[4])**2 + (row[1] - row[5])**2  # square error in pixels
+                error = (row[0] - row[4]) ** 2 + (row[1] - row[5]) ** 2  # square error in pixels
                 error *= row[10]  # multiply by weight
                 meanSqErr += error
             meanSqErr /= count  # divide by number of stars
             return meanSqErr
         except Exception as e:
-            print(f'Failed for calculate astrometric scatter: {repr(e)}')
+            print(f"Failed for calculate astrometric scatter: {repr(e)}")
 
     @cached_property
     def rmsErrorPixels(self):
@@ -122,21 +123,25 @@ class CommandLineSolver:
         The path to the solve-field binary. Default is 'solve-field', i.e. it
         is assumed to be on the path.
     """
-    def __init__(self,
-                 indexFilePath=None,
-                 checkInParallel=True,
-                 timeout=300,
-                 binary='solve-field',
-                 fluxSlot='base_CircularApertureFlux_3_0_instFlux',
-                 ):
+
+    def __init__(
+        self,
+        indexFilePath=None,
+        checkInParallel=True,
+        timeout=300,
+        binary="solve-field",
+        fluxSlot="base_CircularApertureFlux_3_0_instFlux",
+    ):
         self.indexFilePath = indexFilePath
         self.checkInParallel = checkInParallel
         self.timeout = timeout
         self.binary = binary
         self.fluxSlot = fluxSlot
         if not shutil.which(binary):
-            raise RuntimeError(f"Could not find {binary} in path, please install 'solve-field' and either"
-                               " put it on your PATH or specify the full path to it in the 'binary' argument")
+            raise RuntimeError(
+                f"Could not find {binary} in path, please install 'solve-field' and either"
+                " put it on your PATH or specify the full path to it in the 'binary' argument"
+            )
 
     def _writeConfigFile(self, wide, useGaia):
         """Write a temporary config file for astrometry.net.
@@ -154,23 +159,25 @@ class CommandLineSolver:
         filename : `str`
             The filename to which the config file was written.
         """
-        fileSet = '4100' if wide else '4200'
-        fileSet = '5200/LITE' if useGaia else fileSet
+        fileSet = "4100" if wide else "4200"
+        fileSet = "5200/LITE" if useGaia else fileSet
         indexFileDir = os.path.join(self.indexFilePath, fileSet)
         if not os.path.isdir(indexFileDir):
-            raise RuntimeError(f"No index files found at {self.indexFilePath}, in {indexFileDir} (you need a"
-                               " 4100 dir for wide field and 4200 dir for narrow field images).")
+            raise RuntimeError(
+                f"No index files found at {self.indexFilePath}, in {indexFileDir} (you need a"
+                " 4100 dir for wide field and 4200 dir for narrow field images)."
+            )
 
         lines = []
         if self.checkInParallel:
-            lines.append('inparallel')
+            lines.append("inparallel")
 
         lines.append(f"cpulimit {self.timeout}")
         lines.append(f"add_path {indexFileDir}")
         lines.append("autoindex")
-        filename = tempfile.mktemp(suffix='.cfg')
-        with open(filename, 'w') as f:
-            f.writelines(line + '\n' for line in lines)
+        filename = tempfile.mktemp(suffix=".cfg")
+        with open(filename, "w") as f:
+            f.writelines(line + "\n" for line in lines)
         return filename
 
     def _writeFitsTable(self, sourceCat):
@@ -195,23 +202,21 @@ class CommandLineSolver:
         fluxArray = fluxArray[indices][::-1]  # brightest finite flux
         xArray = x[indices][::-1]
         yArray = y[indices][::-1]
-        x = fits.Column(name='X', format='D', array=xArray)
-        y = fits.Column(name='Y', format='D', array=yArray)
-        flux = fits.Column(name='FLUX', format='D', array=fluxArray)
-        print(f' of which {len(fluxArray)} made it into the fit')
+        x = fits.Column(name="X", format="D", array=xArray)
+        y = fits.Column(name="Y", format="D", array=yArray)
+        flux = fits.Column(name="FLUX", format="D", array=fluxArray)
+        print(f" of which {len(fluxArray)} made it into the fit")
         hdu = fits.BinTableHDU.from_columns([flux, x, y])
 
-        filename = tempfile.mktemp(suffix='.fits')
+        filename = tempfile.mktemp(suffix=".fits")
         hdu.writeto(filename)
         return filename
 
     # try to keep this call sig and the defaults as similar as possible
     # to the run method on the OnlineSolver
-    def run(self, exp, sourceCat, isWideField, *,
-            useGaia=False,
-            percentageScaleError=10,
-            radius=None,
-            silent=True):
+    def run(
+        self, exp, sourceCat, isWideField, *, useGaia=False, percentageScaleError=10, radius=None, silent=True
+    ):
         """Get the astrometric solution for an image using astrometry.net using
         the binary ``solve-field`` and a set of index files.
 
@@ -248,41 +253,42 @@ class CommandLineSolver:
             raise ValueError("No WCS in exposure")
 
         configFile = self._writeConfigFile(wide=isWideField, useGaia=useGaia)
-        print(f'Fitting image with {len(sourceCat)} sources', end='')
+        print(f"Fitting image with {len(sourceCat)} sources", end="")
         fitsFile = self._writeFitsTable(sourceCat)
 
         plateScale = wcs.getPixelScale().asArcseconds()
-        scaleMin = plateScale*(1 - percentageScaleError/100)
-        scaleMax = plateScale*(1 + percentageScaleError/100)
+        scaleMin = plateScale * (1 - percentageScaleError / 100)
+        scaleMax = plateScale * (1 + percentageScaleError / 100)
 
         ra, dec = wcs.getSkyOrigin()
 
         # do not use tempfile.TemporaryDirectory() because it must not exist,
         # it is made by the solve-field binary and barfs if it exists already!
         mainTempDir = tempfile.gettempdir()
-        tempDirSuffix = str(uuid.uuid1()).split('-')[0]
+        tempDirSuffix = str(uuid.uuid1()).split("-")[0]
         tempDir = os.path.join(mainTempDir, tempDirSuffix)
 
-        cmd = (f"{self.binary} {fitsFile} "  # the data
-               f"--width {exp.getWidth()} "  # image dimensions
-               f"--height {exp.getHeight()} "  # image dimensions
-               f"-3 {ra.asDegrees()} "
-               f"-4 {dec.asDegrees()} "
-               f"-5 {radius if radius else 180} "
-               "-X X -Y Y -v -z 2 -t 2 "  # the parts of the bintable to use
-               f"--scale-low {scaleMin:.3f} "  # the scale range
-               f"--scale-high {scaleMax:.3f} "  # the scale range
-               f"--scale-units arcsecperpix "
-               f"--crpix-x {wcs.getPixelOrigin()[0]} "  # set the pixel origin
-               f"--crpix-y {wcs.getPixelOrigin()[1]} "  # set the pixel origin
-               f"--config {configFile} "
-               f"-D {tempDir} "
-               "--no-plots "  # don't make plots
-               "--overwrite "  # shouldn't matter as we're using temp files
-               )
+        cmd = (
+            f"{self.binary} {fitsFile} "  # the data
+            f"--width {exp.getWidth()} "  # image dimensions
+            f"--height {exp.getHeight()} "  # image dimensions
+            f"-3 {ra.asDegrees()} "
+            f"-4 {dec.asDegrees()} "
+            f"-5 {radius if radius else 180} "
+            "-X X -Y Y -v -z 2 -t 2 "  # the parts of the bintable to use
+            f"--scale-low {scaleMin:.3f} "  # the scale range
+            f"--scale-high {scaleMax:.3f} "  # the scale range
+            f"--scale-units arcsecperpix "
+            f"--crpix-x {wcs.getPixelOrigin()[0]} "  # set the pixel origin
+            f"--crpix-y {wcs.getPixelOrigin()[1]} "  # set the pixel origin
+            f"--config {configFile} "
+            f"-D {tempDir} "
+            "--no-plots "  # don't make plots
+            "--overwrite "  # shouldn't matter as we're using temp files
+        )
 
         t0 = time.time()
-        with open(os.devnull, 'w') as devnull:
+        with open(os.devnull, "w") as devnull:
             result = subprocess.run(cmd, shell=True, check=True, stdout=devnull if silent else None)
         t1 = time.time()
 
@@ -290,10 +296,10 @@ class CommandLineSolver:
             print(f"Fitting code ran in {(t1-t0):.2f} seconds")
             # output template is /tmpdirname/fitstempname + various suffixes
             # for each obj
-            basename = os.path.basename(fitsFile).removesuffix('.fits')
+            basename = os.path.basename(fitsFile).removesuffix(".fits")
             outputTemplate = os.path.join(tempDir, basename)
-            wcsFile = outputTemplate + '.wcs'
-            corrFile = outputTemplate + '.corr'
+            wcsFile = outputTemplate + ".wcs"
+            corrFile = outputTemplate + ".corr"
 
             if not os.path.exists(wcsFile):
                 print("but failed to find a solution.")
@@ -307,8 +313,7 @@ class CommandLineSolver:
 
 
 class OnlineSolver:
-    """A class to solve an image using the Astrometry.net online service.
-    """
+    """A class to solve an image using the Astrometry.net online service."""
 
     def __init__(self):
         # import seems to spew warnings even if the required key is present
@@ -338,7 +343,7 @@ class OnlineSolver:
             Raised if the ASTROMETRY_NET_API_KEY is not set.
         """
         try:
-            return os.environ['ASTROMETRY_NET_API_KEY']
+            return os.environ["ASTROMETRY_NET_API_KEY"]
         except KeyError as e:
             msg = "No AstrometryNet API key found. Sign up and get one, set it to $ASTROMETRY_NET_API_KEY"
             raise RuntimeError(msg) from e
@@ -393,64 +398,68 @@ class OnlineSolver:
             ra, dec = nominalWcs.getSkyOrigin()
             scaleEstimate = nominalWcs.getPixelScale().asArcseconds()
         else:
-            print('Trying to process image with None wcs - good luck!')
+            print("Trying to process image with None wcs - good luck!")
             vi = exp.getInfo().getVisitInfo()
             ra, dec = vi.boresightRaDec
             if np.isnan(ra.asDegrees()) or np.isnan(dec.asDegrees()):
-                raise RuntimeError('Exposure has no wcs and did not find nominal ra/dec in visitInfo')
+                raise RuntimeError("Exposure has no wcs and did not find nominal ra/dec in visitInfo")
 
         if not scaleEstimate:  # must either have a wcs or provide via kwarg
-            raise RuntimeError('Got no kwarg for scaleEstimate and failed to find one in the nominal wcs.')
+            raise RuntimeError("Got no kwarg for scaleEstimate and failed to find one in the nominal wcs.")
 
         image_height, image_width = exp.image.array.shape
-        scale_units = 'arcsecperpix'
-        scale_type = 'ev'  # ev means submit estimate and % error
+        scale_units = "arcsecperpix"
+        scale_type = "ev"  # ev means submit estimate and % error
         scale_err = percentageScaleError  # error as percentage
         center_ra = ra.asDegrees()
         center_dec = dec.asDegrees()
         radius = radius if radius else 180  # degrees
         try:
-            wcs_header = self.adn.solve_from_source_list(sourceCat['base_SdssCentroid_x'],
-                                                         sourceCat['base_SdssCentroid_y'],
-                                                         image_width, image_height,
-                                                         scale_units=scale_units,
-                                                         scale_type=scale_type,
-                                                         scale_est=scaleEstimate,
-                                                         scale_err=scale_err,
-                                                         center_ra=center_ra,
-                                                         center_dec=center_dec,
-                                                         radius=radius,
-                                                         crpix_center=True,  # the CRPIX is always the center
-                                                         solve_timeout=240)
+            wcs_header = self.adn.solve_from_source_list(
+                sourceCat["base_SdssCentroid_x"],
+                sourceCat["base_SdssCentroid_y"],
+                image_width,
+                image_height,
+                scale_units=scale_units,
+                scale_type=scale_type,
+                scale_est=scaleEstimate,
+                scale_err=scale_err,
+                center_ra=center_ra,
+                center_dec=center_dec,
+                radius=radius,
+                crpix_center=True,  # the CRPIX is always the center
+                solve_timeout=240,
+            )
         except RuntimeError:
-            print('Failed to find a solution')
+            print("Failed to find a solution")
             return None
 
-        print('Finished solving!')
+        print("Finished solving!")
 
         nominalRa, nominalDec = exp.getInfo().getVisitInfo().getBoresightRaDec()
 
-        if 'CRVAL1' not in wcs_header:
+        if "CRVAL1" not in wcs_header:
             raise RuntimeError("Astrometric fit failed.")
-        calculatedRa = geom.Angle(wcs_header['CRVAL1'], geom.degrees)
-        calculatedDec = geom.Angle(wcs_header['CRVAL2'], geom.degrees)
+        calculatedRa = geom.Angle(wcs_header["CRVAL1"], geom.degrees)
+        calculatedDec = geom.Angle(wcs_header["CRVAL2"], geom.degrees)
 
-        deltaRa = geom.Angle(wcs_header['CRVAL1'] - nominalRa.asDegrees(), geom.degrees)
-        deltaDec = geom.Angle(wcs_header['CRVAL2'] - nominalDec.asDegrees(), geom.degrees)
+        deltaRa = geom.Angle(wcs_header["CRVAL1"] - nominalRa.asDegrees(), geom.degrees)
+        deltaDec = geom.Angle(wcs_header["CRVAL2"] - nominalDec.asDegrees(), geom.degrees)
 
         # TODO: DM-37213 change this to return an AstrometryNetResult class
         # like the CommandLineSolver does.
 
-        result = {'nominalRa': nominalRa,
-                  'nominalDec': nominalDec,
-                  'calculatedRa': calculatedRa,
-                  'calculatedDec': calculatedDec,
-                  'deltaRa': deltaRa,
-                  'deltaDec': deltaDec,
-                  'deltaRaArcsec': deltaRa.asArcseconds(),
-                  'deltaDecArcsec': deltaDec.asArcseconds(),
-                  'astrometry_net_wcs_header': wcs_header,
-                  'nSources': len(sourceCat),
-                  }
+        result = {
+            "nominalRa": nominalRa,
+            "nominalDec": nominalDec,
+            "calculatedRa": calculatedRa,
+            "calculatedDec": calculatedDec,
+            "deltaRa": deltaRa,
+            "deltaDec": deltaDec,
+            "deltaRaArcsec": deltaRa.asArcseconds(),
+            "deltaDecArcsec": deltaDec.asArcseconds(),
+            "astrometry_net_wcs_header": wcs_header,
+            "nSources": len(sourceCat),
+        }
 
         return result

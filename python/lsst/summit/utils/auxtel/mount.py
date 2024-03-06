@@ -53,9 +53,7 @@ def hasTimebaseErrors(expRecord, client, maxDiff=1.05):
         `True` if the exposure has timebase errors, `False` otherwise.
     """
     log = logging.getLogger(__name__)
-    mountPosition = getEfdData(
-        client, "lsst.sal.ATMCS.mount_AzEl_Encoders", expRecord=expRecord, warn=False
-    )
+    mountPosition = getEfdData(client, "lsst.sal.ATMCS.mount_AzEl_Encoders", expRecord=expRecord, warn=False)
 
     if mountPosition.empty:
         log.warning(
@@ -67,8 +65,7 @@ def hasTimebaseErrors(expRecord, client, maxDiff=1.05):
     cRIOtimestamps = mountPosition["cRIO_timestamp"]
     if len(cRIOtimestamps) == 1:
         log.warning(
-            f"cRIO_timestamp data had length 1 for {expRecord.obs_id}, so timebase errors are"
-            " impossible"
+            f"cRIO_timestamp data had length 1 for {expRecord.obs_id}, so timebase errors are" " impossible"
         )
         return False
 

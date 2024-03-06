@@ -19,21 +19,21 @@
 # You should have received a copy of the GNU General Public License
 # along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
-__all__ = ['SpectrumExaminer']
+__all__ = ["SpectrumExaminer"]
 
-import numpy as np
+import warnings
+from itertools import groupby
+
 import matplotlib.pyplot as plt
+import numpy as np
+from astropy.stats import sigma_clip
 from matplotlib.offsetbox import AnchoredText
 from mpl_toolkits.axes_grid1.axes_divider import make_axes_locatable
 from scipy.optimize import curve_fit
-from itertools import groupby
-from astropy.stats import sigma_clip
-import warnings
 
 from lsst.atmospec.processStar import ProcessStarTask
-from lsst.pipe.tasks.quickFrameMeasurement import QuickFrameMeasurementTask, QuickFrameMeasurementTaskConfig
-
 from lsst.obs.lsst.translators.lsst import FILTER_DELIMITER
+from lsst.pipe.tasks.quickFrameMeasurement import QuickFrameMeasurementTask, QuickFrameMeasurementTaskConfig
 from lsst.summit.utils.utils import getImageStats
 
 
@@ -85,14 +85,14 @@ class SpectrumExaminer:
         if self.display:
             lines = self.bboxToAwfDisplayLines(self.spectrumbbox)
             for line in lines:
-                self.display.line(line, ctype='red')
+                self.display.line(line, ctype="red")
         else:
             print("No display set")
 
     def displayStarLocation(self):
         if self.display:
-            self.display.dot('x', *self.qfmResult.brightestObjCentroid, size=50)
-            self.display.dot('o', *self.qfmResult.brightestObjCentroid, size=50)
+            self.display.dot("x", *self.qfmResult.brightestObjCentroid, size=50)
+            self.display.dot("o", *self.qfmResult.brightestObjCentroid, size=50)
         else:
             print("No display set")
 
@@ -100,8 +100,8 @@ class SpectrumExaminer:
         length = len(self.ridgeLineLocations)
         chunks = length // windowSize
         stddevs = []
-        for i in range(chunks+1):
-            stddevs.append(np.std(self.ridgeLineLocations[i*windowSize:(i+1)*windowSize]))
+        for i in range(chunks + 1):
+            stddevs.append(np.std(self.ridgeLineLocations[i * windowSize : (i + 1) * windowSize]))
 
         goodPoints = np.where(np.asarray(stddevs) < threshold)[0]
         minPoint = (goodPoints[2] - 2) * windowSize
@@ -109,17 +109,17 @@ class SpectrumExaminer:
         minPoint = max(minPoint, 0)
         maxPoint = min(maxPoint, length)
         if self.debug:
-            plt.plot(range(0, length+1, windowSize), stddevs)
-            plt.hlines(threshold, 0, length, colors='r', ls='dashed')
-            plt.vlines(minPoint, 0, max(stddevs)+10, colors='k', ls='dashed')
-            plt.vlines(maxPoint, 0, max(stddevs)+10, colors='k', ls='dashed')
-            plt.title(f'Ridgeline scatter, windowSize={windowSize}')
+            plt.plot(range(0, length + 1, windowSize), stddevs)
+            plt.hlines(threshold, 0, length, colors="r", ls="dashed")
+            plt.vlines(minPoint, 0, max(stddevs) + 10, colors="k", ls="dashed")
+            plt.vlines(maxPoint, 0, max(stddevs) + 10, colors="k", ls="dashed")
+            plt.title(f"Ridgeline scatter, windowSize={windowSize}")
 
         return (minPoint, maxPoint)
 
     def fit(self):
         def gauss(x, a, x0, sigma):
-            return a*np.exp(-(x-x0)**2/(2*sigma**2))
+            return a * np.exp(-((x - x0) ** 2) / (2 * sigma**2))
 
         data = self.spectrumData[self.goodSlice]
         nRows, nCols = data.shape
@@ -151,11 +151,11 @@ class SpectrumExaminer:
 
         # spectrum
         ax0 = plt.subplot2grid((4, 4), (0, 0), colspan=3)
-        ax0.tick_params(axis='x', top=True, bottom=False, labeltop=True, labelbottom=False)
+        ax0.tick_params(axis="x", top=True, bottom=False, labeltop=True, labelbottom=False)
         d = self.spectrumData[self.goodSlice].T
         vmin = np.percentile(d, 1)
         vmax = np.percentile(d, 99)
-        pos = ax0.imshow(self.spectrumData[self.goodSlice].T, vmin=vmin, vmax=vmax, origin='lower')
+        pos = ax0.imshow(self.spectrumData[self.goodSlice].T, vmin=vmin, vmax=vmax, origin="lower")
         div = make_axes_locatable(ax0)
         cax = div.append_axes("bottom", size="7%", pad="8%")
         fig.colorbar(pos, cax=cax, orientation="horizontal", label="Counts")
@@ -168,8 +168,8 @@ class SpectrumExaminer:
         axHist.hist(data[(data >= histMin) & (data <= histMax)].flatten(), bins=100)
         underflow = len(data[data < histMin])
         overflow = len(data[data > histMax])
-        axHist.set_yscale('log', nonpositive='clip')
-        axHist.set_title('Spectrum pixel histogram')
+        axHist.set_yscale("log", nonpositive="clip")
+        axHist.set_title("Spectrum pixel histogram")
         text = f"Underflow = {underflow}"
         text += f"\nOverflow = {overflow}"
         anchored_text = AnchoredText(text, loc=1, pad=0.5)
@@ -177,71 +177,79 @@ class SpectrumExaminer:
 
         # peak fluxes
         ax1 = plt.subplot2grid((4, 4), (1, 0), colspan=3)
-        ax1.plot(self.ridgeLineValues[self.goodSlice], label='Raw peak value')
-        ax1.plot(self.parameters[:, 0], label='Fitted amplitude')
-        ax1.axhline(self.continuumFlux98, ls='dashed', color='g')
-        ax1.set_ylabel('Peak amplitude (ADU)')
-        ax1.set_xlabel('Spectrum position (pixels)')
-        ax1.legend(title=f"Continuum flux = {self.continuumFlux98:.0f} ADU",
-                   loc="center right", framealpha=0.2, facecolor="black")
-        ax1.set_title('Ridgeline plot')
+        ax1.plot(self.ridgeLineValues[self.goodSlice], label="Raw peak value")
+        ax1.plot(self.parameters[:, 0], label="Fitted amplitude")
+        ax1.axhline(self.continuumFlux98, ls="dashed", color="g")
+        ax1.set_ylabel("Peak amplitude (ADU)")
+        ax1.set_xlabel("Spectrum position (pixels)")
+        ax1.legend(
+            title=f"Continuum flux = {self.continuumFlux98:.0f} ADU",
+            loc="center right",
+            framealpha=0.2,
+            facecolor="black",
+        )
+        ax1.set_title("Ridgeline plot")
 
         # FWHM
         ax2 = plt.subplot2grid((4, 4), (2, 0), colspan=3)
-        ax2.plot(self.parameters[:, 2]*2.355, label="FWHM (pix)")
-        fwhmValues = self.parameters[:, 2]*2.355
+        ax2.plot(self.parameters[:, 2] * 2.355, label="FWHM (pix)")
+        fwhmValues = self.parameters[:, 2] * 2.355
         amplitudes = self.parameters[:, 0]
         minVal, maxVal = self.getStableFwhmRegion(fwhmValues, amplitudes)
         medianFwhm, bestFwhm = self.getMedianAndBestFwhm(fwhmValues, minVal, maxVal)
 
-        ax2.axhline(medianFwhm, ls='dashed', color='k',
-                    label=f"Median FWHM = {medianFwhm:.1f} pix")
-        ax2.axhline(bestFwhm, ls='dashed', color='r',
-                    label=f"Best FWHM = {bestFwhm:.1f} pix")
-        ax2.axvline(minVal, ls='dashed', color='k', alpha=0.2)
-        ax2.axvline(maxVal, ls='dashed', color='k', alpha=0.2)
-        ymin = max(np.nanmin(fwhmValues)-5, 0)
+        ax2.axhline(medianFwhm, ls="dashed", color="k", label=f"Median FWHM = {medianFwhm:.1f} pix")
+        ax2.axhline(bestFwhm, ls="dashed", color="r", label=f"Best FWHM = {bestFwhm:.1f} pix")
+        ax2.axvline(minVal, ls="dashed", color="k", alpha=0.2)
+        ax2.axvline(maxVal, ls="dashed", color="k", alpha=0.2)
+        ymin = max(np.nanmin(fwhmValues) - 5, 0)
         if not np.isnan(medianFwhm):
-            ymax = medianFwhm*2
+            ymax = medianFwhm * 2
         else:
-            ymax = 5*ymin
+            ymax = 5 * ymin
         ax2.set_ylim(ymin, ymax)
-        ax2.set_ylabel('FWHM (pixels)')
-        ax2.set_xlabel('Spectrum position (pixels)')
+        ax2.set_ylabel("FWHM (pixels)")
+        ax2.set_xlabel("Spectrum position (pixels)")
         ax2.legend(loc="upper right", framealpha=0.2, facecolor="black")
-        ax2.set_title('Spectrum FWHM')
+        ax2.set_title("Spectrum FWHM")
 
         # row fluxes
         ax3 = plt.subplot2grid((4, 4), (3, 0), colspan=3)
         ax3.plot(self.rowSums[self.goodSlice], label="Sum across row")
-        ax3.set_ylabel('Total row flux (ADU)')
-        ax3.set_xlabel('Spectrum position (pixels)')
+        ax3.set_ylabel("Total row flux (ADU)")
+        ax3.set_xlabel("Spectrum position (pixels)")
         ax3.legend(framealpha=0.2, facecolor="black")
-        ax3.set_title('Row sums')
+        ax3.set_title("Row sums")
 
         # textbox top
-#         ax4 = plt.subplot2grid((4, 4), (1, 3))
+        #         ax4 = plt.subplot2grid((4, 4), (1, 3))
         ax4 = plt.subplot2grid((4, 4), (1, 3), rowspan=2)
         text = "short text"
         text = self.generateStatsTextboxContent(0)
         text += self.generateStatsTextboxContent(1)
         text += self.generateStatsTextboxContent(2)
         text += self.generateStatsTextboxContent(3)
-        stats_text = AnchoredText(text, loc="center", pad=0.5,
-                                  prop=dict(size=10.5, ma="left", backgroundcolor="white",
-                                            color="black", family='monospace'))
+        stats_text = AnchoredText(
+            text,
+            loc="center",
+            pad=0.5,
+            prop=dict(size=10.5, ma="left", backgroundcolor="white", color="black", family="monospace"),
+        )
         ax4.add_artist(stats_text)
-        ax4.axis('off')
+        ax4.axis("off")
 
         # textbox middle
         if self.debug:
             ax5 = plt.subplot2grid((4, 4), (2, 3))
             text = self.generateStatsTextboxContent(-1)
-            stats_text = AnchoredText(text, loc="center", pad=0.5,
-                                      prop=dict(size=10.5, ma="left", backgroundcolor="white",
-                                                color="black", family='monospace'))
+            stats_text = AnchoredText(
+                text,
+                loc="center",
+                pad=0.5,
+                prop=dict(size=10.5, ma="left", backgroundcolor="white", color="black", family="monospace"),
+            )
             ax5.add_artist(stats_text)
-            ax5.axis('off')
+            ax5.axis("off")
 
         plt.tight_layout()
         plt.show()
@@ -279,7 +287,7 @@ class SpectrumExaminer:
             lines.append(f"Star max pixel = {self.starPeakFlux:,.0f} ADU")
             lines.append(f"Star Ap25 flux = {self.qfmResult.brightestObjApFlux25:,.0f} ADU")
             lines.extend(["", ""])  # section break
-            return '\n'.join([line for line in lines])
+            return "\n".join([line for line in lines])
 
         if section == 1:
             lines.append("------ Image stats ---------")
@@ -287,14 +295,14 @@ class SpectrumExaminer:
             lines.append(f"Image median   = {imageMedian:.2f} ADU")
             lines.append(f"Exposure time  = {exptime:.2f} s")
             lines.extend(["", ""])  # section break
-            return '\n'.join([line for line in lines])
+            return "\n".join([line for line in lines])
 
         if section == 2:
             lines.append("------- Rate stats ---------")
             lines.append(f"Star max pixel    = {self.starPeakFlux/exptime:,.0f} ADU/s")
             lines.append(f"Spectrum contiuum = {self.continuumFlux98/exptime:,.1f} ADU/s")
             lines.extend(["", ""])  # section break
-            return '\n'.join([line for line in lines])
+            return "\n".join([line for line in lines])
 
         if section == 3:
             lines.append("----- Observation info -----")
@@ -306,13 +314,13 @@ class SpectrumExaminer:
             lines.append(f"az      = {az:.1f}")
             lines.append(f"el      = {el:.1f}")
             lines.append(f"airmass = {airmass:.3f}")
-            return '\n'.join([line for line in lines])
+            return "\n".join([line for line in lines])
 
         if section == -1:  # special -1 for debug
             lines.append("---------- Debug -----------")
             lines.append(f"spectrum bbox: {self.spectrumbbox}")
             lines.append(f"Good range = {self.goodSpectrumMinY},{self.goodSpectrumMaxY}")
-            return '\n'.join([line for line in lines])
+            return "\n".join([line for line in lines])
 
         return
 
@@ -322,14 +330,15 @@ class SpectrumExaminer:
         self.intCentroidY = int(np.round(self.qfmResult.brightestObjCentroid)[1])
         self.starPeakFlux = self.exp.image.array[self.intCentroidY, self.intCentroidX]
 
-        self.spectrumbbox = self.processStarTask.calcSpectrumBBox(self.exp,
-                                                                  self.qfmResult.brightestObjCentroid,
-                                                                  200)
+        self.spectrumbbox = self.processStarTask.calcSpectrumBBox(
+            self.exp, self.qfmResult.brightestObjCentroid, 200
+        )
         self.spectrumData = self.exp.image[self.spectrumbbox].array
 
         self.ridgeLineLocations = np.argmax(self.spectrumData, axis=1)
-        self.ridgeLineValues = self.spectrumData[range(self.spectrumbbox.getHeight()),
-                                                 self.ridgeLineLocations]
+        self.ridgeLineValues = self.spectrumData[
+            range(self.spectrumbbox.getHeight()), self.ridgeLineLocations
+        ]
         self.rowSums = np.sum(self.spectrumData, axis=1)
 
         coords = self.calcGoodSpectrumSection()
@@ -365,10 +374,10 @@ class SpectrumExaminer:
         # if not, pick next longest run, etc
         # walk out from ends of that list over bumps smaller than maxDiff
 
-        smoothFwhm = np.convolve(fwhmValues, np.ones(smoothing)/smoothing, mode='same')
+        smoothFwhm = np.convolve(fwhmValues, np.ones(smoothing) / smoothing, mode="same")
         diff = np.diff(smoothFwhm, append=smoothFwhm[-1])
 
-        indices = np.where(1-np.abs(diff) < 1)[0]
+        indices = np.where(1 - np.abs(diff) < 1)[0]
         diffIndices = np.diff(indices)
 
         # [list(g) for k, g in groupby('AAAABBBCCD')] -->[['A', 'A', 'A', 'A'],
@@ -383,7 +392,7 @@ class SpectrumExaminer:
             longestListLength = listLength
             longestListIndex = listLengths.index(longestListLength)
             longestListStartTruePosition = int(np.sum(listLengths[0:longestListIndex]))
-            longestListStartTruePosition += int(longestListLength/2)  # we want the mid-run value
+            longestListStartTruePosition += int(longestListLength / 2)  # we want the mid-run value
             if amplitudes[longestListStartTruePosition] > amplitudeThreshold:
                 break
 
@@ -391,14 +400,14 @@ class SpectrumExaminer:
         endOfLongList = startOfLongList + longestListLength
 
         endValue = endOfLongList
-        for lst in indexLists[longestListIndex+1:]:
+        for lst in indexLists[longestListIndex + 1 :]:
             value = lst[0]
             if value > maxDifferential:
                 break
             endValue += len(lst)
 
         startValue = startOfLongList
-        for lst in indexLists[longestListIndex-1::-1]:
+        for lst in indexLists[longestListIndex - 1 :: -1]:
             value = lst[0]
             if value > maxDifferential:
                 break
@@ -415,13 +424,13 @@ class SpectrumExaminer:
 
         plt.figure(figsize=(10, 6))
         plt.plot(fwhmValues)
-        plt.vlines(startValue, 0, 50, 'r')
-        plt.vlines(endValue, 0, 50, 'r')
+        plt.vlines(startValue, 0, 50, "r")
+        plt.vlines(endValue, 0, 50, "r")
         plt.hlines(medianFwhm, xlim[0], xlim[1])
-        plt.hlines(bestFocusFwhm, xlim[0], xlim[1], 'r', ls='--')
+        plt.hlines(bestFocusFwhm, xlim[0], xlim[1], "r", ls="--")
 
-        plt.vlines(startOfLongList, 0, 50, 'g')
-        plt.vlines(endOfLongList, 0, 50, 'g')
+        plt.vlines(startOfLongList, 0, 50, "g")
+        plt.vlines(endOfLongList, 0, 50, "g")
 
         plt.ylim(0, 200)
         plt.xlim(xlim)
@@ -429,11 +438,11 @@ class SpectrumExaminer:
 
         plt.figure(figsize=(10, 6))
         plt.plot(diffIndices)
-        plt.vlines(startValue, 0, 50, 'r')
-        plt.vlines(endValue, 0, 50, 'r')
+        plt.vlines(startValue, 0, 50, "r")
+        plt.vlines(endValue, 0, 50, "r")
 
-        plt.vlines(startOfLongList, 0, 50, 'g')
-        plt.vlines(endOfLongList, 0, 50, 'g')
+        plt.vlines(startOfLongList, 0, 50, "g")
+        plt.vlines(endOfLongList, 0, 50, "g")
         plt.ylim(0, 30)
         plt.xlim(xlim)
         plt.show()

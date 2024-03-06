@@ -21,16 +21,14 @@
 
 import unittest
 
+import lsst.afw.image as afwImage
+import lsst.summit.utils.butlerUtils as butlerUtils
 import lsst.utils.tests
-
 from lsst.summit.utils.bestEffort import BestEffortIsr
 from lsst.summit.utils.quickLook import QuickLookIsrTask
-import lsst.summit.utils.butlerUtils as butlerUtils
-import lsst.afw.image as afwImage
 
 
 class BestEffortIsrTestCase(lsst.utils.tests.TestCase):
-
     @classmethod
     def setUpClass(cls):
         try:
@@ -42,7 +40,7 @@ class BestEffortIsrTestCase(lsst.utils.tests.TestCase):
         # NCSA - LATISS/raw/all
         # TTS - LATISS-test-data-tts
         # summit - LATISS_test_data
-        cls.dataId = {'day_obs': 20210121, 'seq_num': 743, 'detector': 0}
+        cls.dataId = {"day_obs": 20210121, "seq_num": 743, "detector": 0}
 
     def test_getExposure(self):
         # in most locations this will load a pre-made image
@@ -72,10 +70,9 @@ class BestEffortIsrTestCase(lsst.utils.tests.TestCase):
         self.assertIsInstance(exp, afwImage.Exposure)
 
     def test_raises(self):
-        """Ensure function cannot be called without specifying a detector.
-        """
+        """Ensure function cannot be called without specifying a detector."""
         dataId = self.dataId
-        dataId.pop('detector')
+        dataId.pop("detector")
         with self.assertRaises(ValueError):
             self.bestEffortIsr.getExposure(dataId)
 
