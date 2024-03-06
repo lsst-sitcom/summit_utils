@@ -56,7 +56,7 @@ class AstrometryNetResult:
         The path to the .corr file from the fit.
     """
     wcsFile: str
-    corrFile: str = None
+    corrFile: str | None = None
 
     def __post_init__(self):
         # touch these properties to ensure the files needed to calculate them
