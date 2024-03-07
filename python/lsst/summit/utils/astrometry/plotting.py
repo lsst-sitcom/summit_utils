@@ -20,10 +20,8 @@
 # along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
 import copy
-import logging
 from typing import TYPE_CHECKING
 import logging
-from typing import TYPE_CHECKING
 
 import astropy.units as u
 import matplotlib.pyplot as plt
@@ -44,18 +42,14 @@ if TYPE_CHECKING:
 
 
 def plot(
-    exp: afwImage,
+    exp: afwImage.Exposure,
     icSrc: afwTable.SourceCatalog = None,
     filteredSources: afwTable.SourceCatalog = None,
     saveAs: str = None,
     clipMin: float = 1,
     clipMax: float = 1000000,
     doSmooth: bool = True,
-<<<<<<< HEAD
     fig: matplotlib.Figure.figure | None = None,
-=======
-    fig: matplotlib.figure.Figure | None = None,
->>>>>>> 775bbea (add method and function typing)
 ) -> None:
     """Plot an exposure, overlaying the selected sources and compass arrows.
 
