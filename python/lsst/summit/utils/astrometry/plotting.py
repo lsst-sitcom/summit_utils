@@ -20,6 +20,7 @@
 # along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
 import copy
+import logging
 
 import astropy.units as u
 import matplotlib.pyplot as plt
@@ -33,7 +34,9 @@ from .. import quickSmooth
 # TODO: Add some of Craig's nice overlay stuff here
 
 
-def plot(exp, icSrc=None, filteredSources=None, saveAs=None, clipMin=1, clipMax=1000000, doSmooth=True):
+def plot(
+    exp, icSrc=None, filteredSources=None, saveAs=None, clipMin=1, clipMax=1000000, doSmooth=True, fig=None
+):
     """Plot an exposure, overlaying the selected sources and compass arrows.
 
     Plots the exposure on a logNorm scale, with the brightest sources, as
@@ -58,8 +61,20 @@ def plot(exp, icSrc=None, filteredSources=None, saveAs=None, clipMin=1, clipMax=
         Clip values in the image above this value to ``clipMax``.
     doSmooth : `bool`, optional
         Smooth the image slightly to improve the visability of low SNR sources?
+    fig : `matplotlib.figure.Figure`, optional
+        The figure to plot on. If not supplied, a new figure is created.
     """
-    fig = plt.figure(figsize=(16, 16))
+    if fig is None:
+        log = logging.getLogger(__name__)
+        log.warning(
+            "No figure supplied, creating a new one -"
+            " if you see this in a loop you're going to have a bad time"
+        )
+        fig = plt.figure(figsize=(16, 16))
+    fig.clear()
+    ax = fig.gca()
+    ax.clear()
+
     data = copy.deepcopy(exp.image.array)
     data = np.clip(data, clipMin, clipMax)
     if doSmooth:
