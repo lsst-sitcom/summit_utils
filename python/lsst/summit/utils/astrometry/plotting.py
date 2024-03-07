@@ -22,6 +22,7 @@
 import copy
 import logging
 from typing import TYPE_CHECKING
+import logging
 
 import astropy.units as u
 import matplotlib.pyplot as plt
