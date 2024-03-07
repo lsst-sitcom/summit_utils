@@ -40,6 +40,7 @@ import lsst.daf.base as dafBase
 import lsst.geom as geom
 import lsst.pipe.base as pipeBase
 import lsst.utils.packages as packageUtils
+from lsst.afw.coord import Weather
 from lsst.afw.detection import Footprint, FootprintSet
 from lsst.daf.butler.cli.cliLog import CliLog
 from lsst.obs.lsst.translators.latiss import AUXTEL_LOCATION
@@ -821,14 +822,31 @@ def starTrackerFileToExposure(filename, logger=None):
     # stripped out and somehow not set (plus it doesn't give the midpoint
     # of the exposure), so set it manually from the midpoint here
     try:
+        newArgs = {}  # dict to unpack into visitInfo.copyWith - fill it with whatever needs to be replaced
         md = exp.getMetadata()
+
         begin = datetime.datetime.fromisoformat(md["DATE-BEG"])
         end = datetime.datetime.fromisoformat(md["DATE-END"])
         duration = end - begin
         mid = begin + duration / 2
         newTime = dafBase.DateTime(mid.isoformat(), dafBase.DateTime.Timescale.TAI)
-        newVi = exp.visitInfo.copyWith(date=newTime)
-        exp.info.setVisitInfo(newVi)
+        newArgs["date"] = newTime
+
+        # AIRPRESS is being set as PRESSURE so afw doesn't pick it up
+        # once we're using the butler for data we will just set it to take
+        # PRESSURE in the translator instead of this
+        weather = exp.visitInfo.getWeather()
+        oldPressure = weather.getAirPressure()
+        if not np.isfinite(oldPressure):
+            pressure = md.get("PRESSURE")
+            if pressure is not None:
+                logger.info("Patching the weather info using the PRESSURE header keyword")
+                newWeather = Weather(weather.getAirTemperature(), pressure, weather.getHumidity())
+                newArgs["weather"] = newWeather
+
+        if newArgs:
+            newVi = exp.visitInfo.copyWith(**newArgs)
+            exp.info.setVisitInfo(newVi)
     except Exception as e:
         logger.warning(f"Failed to set date from header: {e}")
 
