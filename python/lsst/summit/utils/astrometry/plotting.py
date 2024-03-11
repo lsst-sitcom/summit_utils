@@ -34,7 +34,6 @@ from .. import quickSmooth
 if TYPE_CHECKING:
     import lsst.afw.image as afwImage
     import lsst.afw.table as afwTable
-
     import matplotlib
 
 # TODO: Add some of Craig's nice overlay stuff here
@@ -48,7 +47,7 @@ def plot(
     clipMin: float = 1,
     clipMax: float = 1000000,
     doSmooth: bool = True,
-    fig: matplotlib.figure.Figure | None = None,
+    fig: matplotlib.figure.Figure = None,
 ) -> None:
     """Plot an exposure, overlaying the selected sources and compass arrows.
 
