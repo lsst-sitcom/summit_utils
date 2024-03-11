@@ -80,6 +80,44 @@ def tifToExp(filename):
     return exp
 
 
+def fitsToExp(filename):
+    """Open a fits file as an exposure.
+
+    Parameters
+    ----------
+    filename : `str`
+        The full path to the file to load.
+
+    Returns
+    -------
+    exp : `lsst.afw.image.Exposure`
+        The exposure.
+    """
+    exp = afwImage.ExposureF(filename)
+    return exp
+
+
+def openFile(filename):
+    """Open a file as an exposure.
+
+    Parameters
+    ----------
+    filename : `str`
+        The full path to the file to load.
+
+    Returns
+    -------
+    exp : `lsst.afw.image.Exposure`
+        The exposure.
+    """
+    if filename.endswith(".tif"):
+        return tifToExp(filename)
+    elif filename.endswith(".fits"):
+        return fitsToExp(filename)
+    else:
+        raise ValueError("File type not recognized")
+
+
 def getBboxAround(centroid, boxSize, exp):
     """Get a bbox centered on a point, clipped to the exposure.
 
@@ -280,7 +318,7 @@ def findFastStarTrackerImageSources(filename, boxSize, attachCutouts=True):
               `lsst.summit.utils.astrometry.fastStarTrackerAnalysis.Source`
         The sources in the image, sorted by rawFlux.
     """
-    exp = tifToExp(filename)
+    exp = openFile(filename)
     footprintSet = detectObjectsInExp(exp)
     footprints = footprintSet.getFootprints()
     bgMean, bgStd = getBackgroundLevel(exp)
@@ -540,7 +578,7 @@ def plotSourcesOnImage(parentFilename, sources):
               `lsst.summit.utils.astrometry.fastStarTrackerAnalysis.Source`
         The sources found in the image.
     """
-    exp = tifToExp(parentFilename)
+    exp = openFile(parentFilename)
     data = exp.image.array
 
     fig = plt.figure(figsize=(16, 8))
