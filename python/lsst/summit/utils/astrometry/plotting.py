@@ -49,7 +49,7 @@ def plot(
     clipMin: float = 1,
     clipMax: float = 1000000,
     doSmooth: bool = True,
-    fig: matplotlib.Figure.figure | None = None,
+    fig: matplotlib.figure.Figure | None = None,
 ) -> None:
     """Plot an exposure, overlaying the selected sources and compass arrows.
 
