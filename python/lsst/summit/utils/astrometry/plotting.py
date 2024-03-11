@@ -22,6 +22,7 @@
 import copy
 from typing import TYPE_CHECKING
 import logging
+from typing import TYPE_CHECKING
 
 import astropy.units as u
 import matplotlib.pyplot as plt
@@ -48,7 +49,11 @@ def plot(
     clipMin: float = 1,
     clipMax: float = 1000000,
     doSmooth: bool = True,
+<<<<<<< HEAD
     fig: matplotlib.figure.Figure = None,
+=======
+    fig: matplotlib.figure.Figure | None = None,
+>>>>>>> 775bbea (add method and function typing)
 ) -> None:
     """Plot an exposure, overlaying the selected sources and compass arrows.
 
