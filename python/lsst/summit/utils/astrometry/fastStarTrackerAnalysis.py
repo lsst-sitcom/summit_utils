@@ -299,6 +299,11 @@ class Source:
         return retStr
 
 
+class NanSource:
+    def __getattribute__(self):
+        return np.nan
+
+
 def findFastStarTrackerImageSources(filename, boxSize, attachCutouts=True):
     """Analyze a single FastStarTracker image.
 
@@ -489,12 +494,18 @@ def plotSourceMovement(results, sourceIndex=0, allowInconsistent=False):
         image sequence, and the second is a scatter plot of the x and y, with
         the color showing the position in the sequence.
     """
+    opts = {
+        "marker": "o",
+        "markersize": 6,
+        "linestyle": "-",
+    }
+
     consistent = checkResultConsistency(results.values(), silent=True)
     if not consistent and not allowInconsistent:
         checkResultConsistency(results.values(), silent=False)  # print the problem if we're raising
         raise ValueError("The sources were found to be inconsistent and allowInconsistent=False")
 
-    sourceDict = {k: v[sourceIndex] for k, v in results.items()}
+    sourceDict = {k: v[sourceIndex] if len(v) > sourceIndex else NanSource() for k, v in results.items()}
     seqNums = list(sourceDict.keys())
     sources = list(sourceDict.values())
 
@@ -505,18 +516,28 @@ def plotSourceMovement(results, sourceIndex=0, allowInconsistent=False):
     ax1, ax2, ax3 = fig.subplots(3, sharex=True)
     fig.subplots_adjust(hspace=0)
 
-    ax1.plot(seqNums, [s.rawFlux for s in sources], label="Raw Flux")
-    ax1.plot(seqNums, [s.hsmFittedFlux for s in sources], label="Fitted Flux")
+    ax1.plot(seqNums, [s.rawFlux for s in sources], label="Raw Flux", **opts)
+    ax1.plot(seqNums, [s.hsmFittedFlux for s in sources], label="Fitted Flux", **opts)
     ax1.set_ylabel("Flux (ADU)", size=axisLabelSize)
     ax1.legend()
 
-    ax2.plot(seqNums, [s.centroidX for s in sources], label="Raw centroid x")
-    ax2.plot(seqNums, [s.hsmCentroidX for s in sources], label="Fitted centroid x")
+    ax2.plot(seqNums, [s.centroidX for s in sources], label="Raw centroid x", **opts)
+    ax2.plot(
+        seqNums,
+        [s.hsmCentroidX for s in sources],
+        label="Fitted centroid x",
+        **opts,
+    )
     ax2.set_ylabel("x-centroid (pixels)", size=axisLabelSize)
     ax2.legend()
 
-    ax3.plot(seqNums, [s.centroidY for s in sources], label="Raw centroid y")
-    ax3.plot(seqNums, [s.hsmCentroidY for s in sources], label="Fitted centroid y")
+    ax3.plot(seqNums, [s.centroidY for s in sources], label="Raw centroid y", **opts)
+    ax3.plot(
+        seqNums,
+        [s.hsmCentroidY for s in sources],
+        label="Fitted centroid y",
+        **opts,
+    )
     ax3.set_ylabel("y-centroid (pixels)", size=axisLabelSize)
     ax3.set_xlabel("SeqNum", size=axisLabelSize)
     ax3.legend()
@@ -530,7 +551,10 @@ def plotSourceMovement(results, sourceIndex=0, allowInconsistent=False):
     # gnuplot2 has a nice balance of nothing white, and having an intuitive
     # progression of colours so the eye can pick out trends on the point cloud.
     axRef = ax4.scatter(
-        [s.centroidX for s in sources], [s.centroidY for s in sources], c=colors, cmap="gnuplot2"
+        [s.centroidX for s in sources],
+        [s.centroidY for s in sources],
+        c=colors,
+        cmap="gnuplot2",
     )
     ax4.set_xlabel("x-centroid (pixels)", size=axisLabelSize)
     ax4.set_ylabel("y-centroid (pixels)", size=axisLabelSize)
