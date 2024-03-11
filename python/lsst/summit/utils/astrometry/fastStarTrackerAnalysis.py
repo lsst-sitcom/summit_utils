@@ -39,6 +39,7 @@ from lsst.summit.utils.utils import dayObsIntToString, detectObjectsInExp
 from lsst.utils.iteration import ensure_iterable
 
 __all__ = (
+    "StarTrackerCamera",
     "tifToExp",
     "getBboxAround",
     "getFlux",
@@ -51,6 +52,29 @@ __all__ = (
     "plotSource",
     "plotSourcesOnImage",
 )
+
+KNOWN_CAMERAS = ("regular", "wide", "fast")
+
+
+@dataclass(frozen=True)
+class StarTrackerCamera:
+    """A frozen dataclass for StarTracker camera configs"""
+
+    cameraType: str
+    suffix: str
+    suffixWithSpace: str
+    doAstrometry: bool
+    cameraNumber: int
+    snr: float
+    minPix: int
+    brightSourceFraction: float
+    scaleError: float
+    doSmoothPlot: bool
+
+
+narrowCam = StarTrackerCamera("regular", "", "", True, 102, 5, 25, 0.95, 5, True)
+wideCam = StarTrackerCamera("wide", "_wide", " wide", True, 101, 5, 25, 0.8, 5, True)
+fastCam = StarTrackerCamera("fast", "_fast", " fast", True, 103, 2.5, 10, 0.95, 60, False)
 
 
 def tifToExp(filename):
@@ -219,6 +243,26 @@ def dayObsSeqNumFrameNumFromFilename(filename):
     subSeqNum = subSeqNumAndSuffix.removesuffix(".fits")
 
     return int(dayObs), int(seqNum), int(subSeqNum)
+
+
+def getRawDataDirForDayObs(rootDataPath, camera, dayObs):
+    """Get the raw data dir for a given dayObs.
+
+    Parameters
+    ----------
+    rootDataPath : `str`
+        The root data path.
+    camera : `lsst.rubintv.production.starTracker.StarTrackerCamera`
+        The camera to get the raw data for.
+    dayObs : `int`
+        The dayObs.
+    """
+    camNum = camera.cameraNumber
+    dayObsDateTime = datetime.datetime.strptime(str(dayObs), "%Y%m%d")
+    dirSuffix = (
+        f"GenericCamera/{camNum}/{dayObsDateTime.year}/" f"{dayObsDateTime.month:02}/{dayObsDateTime.day:02}/"
+    )
+    return os.path.join(rootDataPath, dirSuffix)
 
 
 def getBboxAround(centroid, boxSize, exp):
