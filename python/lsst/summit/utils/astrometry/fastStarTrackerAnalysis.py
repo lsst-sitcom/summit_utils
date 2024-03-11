@@ -20,6 +20,7 @@
 # along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
 import datetime
+import glob
 import os
 import typing
 from dataclasses import dataclass
@@ -35,7 +36,7 @@ from PIL import Image
 import lsst.afw.image as afwImage
 import lsst.afw.math as afwMath
 import lsst.geom as geom
-from lsst.summit.utils.utils import dayObsIntToString, detectObjectsInExp
+from lsst.summit.utils.utils import dayObsIntToString, detectObjectsInExp, getSite
 from lsst.utils.iteration import ensure_iterable
 
 __all__ = (
@@ -263,6 +264,55 @@ def getRawDataDirForDayObs(rootDataPath, camera, dayObs):
         f"GenericCamera/{camNum}/{dayObsDateTime.year}/" f"{dayObsDateTime.month:02}/{dayObsDateTime.day:02}/"
     )
     return os.path.join(rootDataPath, dirSuffix)
+
+
+def getStreamingSequences(dayObs):
+    """Get the streaming sequences for a dayObs.
+
+    Note that this will need rewriting very soon once the way the data is
+    organised on disk is changed.
+
+    TODO: Will be moved to summit_extras on DM-43269
+
+    Parameters
+    ----------
+    dayObs : `int`
+        The dayObs.
+
+    Returns
+    -------
+    sequences : `dict` [`int`, `list`]
+        The streaming sequences in a dict, keyed by sequence number, with each
+        value being a list of the files in that sequence.
+    """
+    site = getSite()
+    if site in ["rubin-devl", "staff-rsp"]:
+        rootDataPath = "/sdf/data/rubin/offline/s3-backup/lfa/"
+    elif site == "summit":
+        rootDataPath = "/project"
+    else:
+        raise ValueError(f"StarTracker data isn't available at {site}")
+
+    dataDir = getRawDataDirForDayObs(rootDataPath, fastCam, dayObs)
+    files = glob.glob(os.path.join(dataDir, "*.fits"))
+    regularFiles = [f for f in files if not isStreamingModeFile(f)]
+    streamingFiles = [f for f in files if isStreamingModeFile(f)]
+    print(f"Found {len(regularFiles)} regular files on dayObs {dayObs}")
+
+    data = {}
+    for filename in sorted(streamingFiles):
+        basename = os.path.basename(filename)
+        seqNum = int(basename.split("_")[3])
+        if seqNum not in data:
+            data[seqNum] = [filename]
+        else:
+            data[seqNum].append(filename)
+
+    print(f"Found {len(data)} streaming sequences on dayObs {dayObs}:")
+    for seqNum, files in data.items():
+        print(f"seqNum {seqNum} with {len(files)} frames")
+
+    return data
 
 
 def getBboxAround(centroid, boxSize, exp):
