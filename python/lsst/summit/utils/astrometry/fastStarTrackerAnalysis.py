@@ -713,8 +713,22 @@ def plotSourceMovement(results, sourceIndex=0, allowInconsistent=False):
         raise ValueError("The sources were found to be inconsistent and allowInconsistent=False")
 
     sourceDict = {k: v[sourceIndex] for k, v in results.items()}
-    seqNums = list(sourceDict.keys())
+    frameNums = [s.frameNum for s in sourceDict.values()]
     sources = list(sourceDict.values())
+
+    allDayObs = set([s.dayObs for s in sources])
+    allSeqNums = set([s.seqNum for s in sources])
+    if len(allDayObs) > 1 or len(allSeqNums) > 1:
+        raise ValueError(
+            "The sources are from multiple days or sequences, found"
+            f" {allDayObs} dayObs and {allSeqNums} seqNum values."
+        )
+    dayObs = allDayObs.pop()
+    seqNum = allSeqNums.pop()
+    startFrame = min(frameNums)
+    endFrame = max(frameNums)
+
+    title = f"dayObs {dayObs}, seqNum {seqNum}, frames {startFrame}-{endFrame}"
 
     axisLabelSize = 18
 
@@ -723,14 +737,15 @@ def plotSourceMovement(results, sourceIndex=0, allowInconsistent=False):
     ax1, ax2, ax3 = fig.subplots(3, sharex=True)
     fig.subplots_adjust(hspace=0)
 
-    ax1.plot(seqNums, [s.rawFlux for s in sources], label="Raw Flux", **opts)
-    ax1.plot(seqNums, [s.hsmFittedFlux for s in sources], label="Fitted Flux", **opts)
+    ax1.plot(frameNums, [s.rawFlux for s in sources], label="Raw Flux", **opts)
+    ax1.plot(frameNums, [s.hsmFittedFlux for s in sources], label="Fitted Flux", **opts)
     ax1.set_ylabel("Flux (ADU)", size=axisLabelSize)
+    ax1.set_title(title)
     ax1.legend()
 
-    ax2.plot(seqNums, [s.centroidX for s in sources], label="Raw centroid x", **opts)
+    ax2.plot(frameNums, [s.centroidX for s in sources], label="Raw centroid x", **opts)
     ax2.plot(
-        seqNums,
+        frameNums,
         [s.hsmCentroidX for s in sources],
         label="Fitted centroid x",
         **opts,
@@ -738,15 +753,15 @@ def plotSourceMovement(results, sourceIndex=0, allowInconsistent=False):
     ax2.set_ylabel("x-centroid (pixels)", size=axisLabelSize)
     ax2.legend()
 
-    ax3.plot(seqNums, [s.centroidY for s in sources], label="Raw centroid y", **opts)
+    ax3.plot(frameNums, [s.centroidY for s in sources], label="Raw centroid y", **opts)
     ax3.plot(
-        seqNums,
+        frameNums,
         [s.hsmCentroidY for s in sources],
         label="Fitted centroid y",
         **opts,
     )
     ax3.set_ylabel("y-centroid (pixels)", size=axisLabelSize)
-    ax3.set_xlabel("SeqNum", size=axisLabelSize)
+    ax3.set_xlabel("Frame number", size=axisLabelSize)
     ax3.legend()
 
     figs.append(fig)
@@ -770,7 +785,8 @@ def plotSourceMovement(results, sourceIndex=0, allowInconsistent=False):
     divider = make_axes_locatable(ax4)
     cax = divider.append_axes("right", size="5%", pad=0.05)
     cbar = plt.colorbar(axRef, cax=cax)
-    cbar.set_label("Image number in series", size=axisLabelSize * 0.75)
+    ax4.set_title(title)
+    cbar.set_label("Frame number in series", size=axisLabelSize * 0.75)
     figs.append(fig)
 
     return figs
