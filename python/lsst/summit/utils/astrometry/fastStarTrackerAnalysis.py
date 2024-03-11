@@ -618,7 +618,7 @@ def plotSourceMovement(results, sourceIndex=0, allowInconsistent=False):
         checkResultConsistency(results.values(), silent=False)  # print the problem if we're raising
         raise ValueError("The sources were found to be inconsistent and allowInconsistent=False")
 
-    sourceDict = {k: v[sourceIndex] if len(v) > sourceIndex else NanSource() for k, v in results.items()}
+    sourceDict = {k: v[sourceIndex] for k, v in results.items()}
     seqNums = list(sourceDict.keys())
     sources = list(sourceDict.values())
 
