@@ -21,6 +21,7 @@
 
 import logging
 import os
+from typing import TYPE_CHECKING
 
 import lsst.daf.butler as dafButler
 from lsst.daf.butler.registry import ConflictingDefinitionError
@@ -28,6 +29,11 @@ from lsst.ip.isr import IsrTask
 from lsst.summit.utils.butlerUtils import getLatissDefaultCollections
 from lsst.summit.utils.quickLook import QuickLookIsrTask
 from lsst.utils import getPackageDir
+
+if TYPE_CHECKING:
+    from typint import Any, Dict, List
+
+    from lsst.pex.config import Config as pexConfig
 
 # TODO: add attempt for fringe once registry & templates are fixed
 
@@ -74,12 +80,12 @@ class BestEffortIsr:
     def __init__(
         self,
         *,
-        extraCollections=[],
-        defaultExtraIsrOptions={},
-        doRepairCosmics=True,
-        doWrite=True,
-        embargo=False,
-        repoString=None,
+        extraCollections: List[str] = [],
+        defaultExtraIsrOptions: dict = {},
+        doRepairCosmics: bool = True,
+        doWrite: bool = True,
+        embargo: bool = False,
+        repoString: str | None = None,
     ):
         self.log = logging.getLogger(__name__)
 
@@ -114,7 +120,7 @@ class BestEffortIsr:
         self._cache = {}
         self._cacheIsForDetector = None
 
-    def _applyConfigOverrides(self, config, overrides):
+    def _applyConfigOverrides(self, config: pexConfig, overrides: dict) -> None:
         """Update a config class with a dict of options.
 
         Parameters
@@ -137,7 +143,10 @@ class BestEffortIsr:
                 raise ValueError(f"Override option {option} not found in isrConfig")
 
     @staticmethod
-    def updateDataId(expIdOrDataId, **kwargs):
+    def updateDataId(
+        expIdOrDataId: int | dict | dafButler.DataCoordinate | dafButler.DimensionRecord,
+        **kwargs: Dict[str, Any],
+    ) -> dict | dafButler.DataCoordinate | dafButler.DimensionRecord:
         """Sanitize the expIdOrDataId to allow support both expIds and dataIds
 
         Supports expId as an integer, or a complete or partial dict. The dict
@@ -169,7 +178,7 @@ class BestEffortIsr:
                 return dataId
         raise RuntimeError(f"Invalid expId or dataId type {expIdOrDataId}: {type(expIdOrDataId)}")
 
-    def clearCache(self):
+    def clearCache(self) -> None:
         """Clear the internal cache of loaded calibration products.
 
         Only necessary if you want to use an existing bestEffortIsr object
@@ -177,7 +186,14 @@ class BestEffortIsr:
         """
         self._cache = {}
 
-    def getExposure(self, expIdOrDataId, extraIsrOptions={}, skipCosmics=False, forceRemake=False, **kwargs):
+    def getExposure(
+        self,
+        expIdOrDataId: dict,
+        extraIsrOptions: dict = {},
+        skipCosmics: bool = False,
+        forceRemake: bool = False,
+        **kwargs: Dict[str, Any],
+    ):
         """Get the postIsr and cosmic-repaired image for this dataId.
 
         Note that when using the forceRemake option the image will not be

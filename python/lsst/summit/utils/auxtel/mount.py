@@ -20,13 +20,21 @@
 # along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
 import logging
+from typing import TYPE_CHECKING
 
 import numpy as np
 
 from ..efdUtils import getEfdData
 
+if TYPE_CHECKING:
+    from lsst_efd_client.efd_helper import EfdClient
 
-def hasTimebaseErrors(expRecord, client, maxDiff=1.05):
+    import lsst.daf.butler as dafButler
+
+
+def hasTimebaseErrors(
+    expRecord: dafButler.dimensions.DimensionRecord, client: EfdClient, maxDiff: float = 1.05
+) -> bool:
     """Check if an exposure has cRIO timebase errors.
 
     Data in the lsst.sal.ATMCS.mount_AzEl_Encoders topic is a packed

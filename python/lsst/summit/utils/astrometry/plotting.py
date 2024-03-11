@@ -21,6 +21,7 @@
 
 import copy
 import logging
+from typing import TYPE_CHECKING
 
 import astropy.units as u
 import matplotlib.pyplot as plt
@@ -31,12 +32,25 @@ from lsst.obs.lsst.translators.latiss import AUXTEL_LOCATION
 
 from .. import quickSmooth
 
+if TYPE_CHECKING:
+    import lsst.afw.image as afwImage
+    import lsst.afw.table as afwTable
+
+    import matplotlib
+
 # TODO: Add some of Craig's nice overlay stuff here
 
 
 def plot(
-    exp, icSrc=None, filteredSources=None, saveAs=None, clipMin=1, clipMax=1000000, doSmooth=True, fig=None
-):
+    exp: afwImage,
+    icSrc: afwTable.SourceCatalog = None,
+    filteredSources: afwTable.SourceCatalog = None,
+    saveAs: str = None,
+    clipMin: float = 1,
+    clipMax: float = 1000000,
+    doSmooth: bool = True,
+    fig: matplotlib.Figure.figure | None = None,
+) -> None:
     """Plot an exposure, overlaying the selected sources and compass arrows.
 
     Plots the exposure on a logNorm scale, with the brightest sources, as

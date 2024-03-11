@@ -23,7 +23,7 @@ import logging
 import pickle
 from collections.abc import Callable
 from dataclasses import dataclass
-from typing import Any
+from typing import TYPE_CHECKING
 
 import matplotlib
 import matplotlib.pyplot as plt
@@ -34,6 +34,12 @@ from matplotlib.pyplot import cm
 from lsst.utils.iteration import ensure_iterable
 
 from .utils import getFieldNameAndTileNumber, obsInfoToDict
+
+if TYPE_CHECKING:
+    from typing import Any, Dict, List, Tuple
+
+    import lsst.daf.butler as dafButler
+
 
 try:  # TODO: Remove post RFC-896: add humanize to rubin-env
     precisedelta: Callable[[Any], str]
@@ -104,7 +110,7 @@ class ColorAndMarker:
 class NightReport:
     _version = 1
 
-    def __init__(self, butler, dayObs, loadFromFile=None):
+    def __init__(self, butler: dafButler.Butler, dayObs: int, loadFromFile: str = None):
         self._supressAstroMetadataTranslatorWarnings()  # call early
         self.log = logging.getLogger("lsst.summit.utils.NightReport")
         self.butler = butler
@@ -118,7 +124,7 @@ class NightReport:
             self._load(loadFromFile)
         self.rebuild()  # sets stars and cMap
 
-    def _supressAstroMetadataTranslatorWarnings(self):
+    def _supressAstroMetadataTranslatorWarnings(self) -> None:
         """NB: must be called early"""
         logging.basicConfig()
         logger = logging.getLogger("lsst.obs.lsst.translators.latiss")
@@ -126,7 +132,7 @@ class NightReport:
         logger = logging.getLogger("astro_metadata_translator.observationInfo")
         logger.setLevel(logging.ERROR)
 
-    def save(self, filename):
+    def save(self, filename: str) -> None:
         """Save the internal data to a file.
 
         Parameters
@@ -144,7 +150,7 @@ class NightReport:
         with open(filename, "wb") as f:
             pickle.dump(toSave, f, pickle.HIGHEST_PROTOCOL)
 
-    def _load(self, filename):
+    def _load(self, filename: str) -> None:
         """Load the report data from a file.
 
         Called on init if loadFromFile is not None. Should not be used directly
@@ -178,14 +184,14 @@ class NightReport:
         self.log.info(f"Loaded {len(self.data)} records from {filename}")
 
     @staticmethod
-    def _getSortedData(data):
+    def _getSortedData(data: dict) -> dict:
         """Get a sorted copy of the internal data."""
         if list(data.keys()) == sorted(data.keys()):
             return data
         else:
             return {k: data[k] for k in sorted(data.keys())}
 
-    def getExpRecordDictForDayObs(self, dayObs):
+    def getExpRecordDictForDayObs(self, dayObs: int) -> dict:
         """Get all the exposureRecords as dicts for the current dayObs.
 
         Notes
@@ -206,7 +212,7 @@ class NightReport:
             record["target_name_short"] = shortTarget
         return self._getSortedData(records)
 
-    def getObsInfoAndMetadataForSeqNum(self, seqNum):
+    def getObsInfoAndMetadataForSeqNum(self, seqNum: int) -> Tuple[ObservationInfo, dict]:
         """Get the obsInfo and metadata for a given seqNum.
 
         TODO: Once we have a summit repo containing all this info, remove this
@@ -235,7 +241,7 @@ class NightReport:
         md = self.butler.get("raw.metadata", dataId)
         return ObservationInfo(md), md.toDict()
 
-    def rebuild(self, full=False):
+    def rebuild(self, full: bool = False) -> None:
         """Scrape new data if there is any, otherwise is a no-op.
 
         If full is True, then all data is reloaded.
@@ -282,7 +288,7 @@ class NightReport:
         self.stars = self.getObservedObjects()
         self.cMap = self.makeStarColorAndMarkerMap(self.stars)
 
-    def getDatesForSeqNums(self):
+    def getDatesForSeqNums(self) -> dict:
         """Get a dict of {seqNum: date} for the report.
 
         Returns
@@ -294,7 +300,7 @@ class NightReport:
             seqNum: self.data[seqNum]["timespan"].begin.to_datetime() for seqNum in sorted(self.data.keys())
         }
 
-    def getObservedObjects(self, ignoreTileNum=True):
+    def getObservedObjects(self, ignoreTileNum: bool = True) -> dict:
         """Get a list of the observed objects for the night.
 
         Repeated observations of individual imaging fields have _NNN appended
@@ -310,7 +316,9 @@ class NightReport:
         allTargets = sorted({record[key] if record[key] is not None else "" for record in self.data.values()})
         return allTargets
 
-    def getSeqNumsMatching(self, invert=False, subset=None, **kwargs):
+    def getSeqNumsMatching(
+        self, invert: bool = False, subset: List[int] = None, **kwargs: Dict[str, Any]
+    ) -> List[int]:
         """Get seqNums which match/don't match all kwargs provided, e.g.
 
         report.getSeqNumsMatching(exposure_time=30,
@@ -339,7 +347,7 @@ class NightReport:
 
         return sorted(local.keys())
 
-    def printAvailableKeys(self, sample=False, includeRaw=False):
+    def printAvailableKeys(self, sample: bool = False, includeRaw: bool = False) -> None:
         """Print all the keys available to query on, optionally including the
         full set of header keys.
 
@@ -363,7 +371,7 @@ class NightReport:
             break
 
     @staticmethod
-    def makeStarColorAndMarkerMap(stars):
+    def makeStarColorAndMarkerMap(stars: list) -> dict:
         """Create a color/marker map for a list of observed objects."""
         markerMap = {}
         colors = cm.rainbow(np.linspace(0, 1, N_STARS_PER_SYMBOL))
@@ -373,7 +381,7 @@ class NightReport:
             markerMap[star] = ColorAndMarker(colors[colorIndex], MARKER_SEQUENCE[markerIndex])
         return markerMap
 
-    def calcShutterTimes(self):
+    def calcShutterTimes(self) -> dict:
         """Calculate the total time spent on science, engineering and readout.
 
         Science and engineering time both include the time spent on readout,
@@ -416,7 +424,7 @@ class NightReport:
 
         return result
 
-    def printShutterTimes(self):
+    def printShutterTimes(self) -> None:
         """Print out the shutter efficiency stats in a human-readable
         format.
         """
@@ -446,7 +454,7 @@ class NightReport:
         sciEff = 100 * (timings["scienceTimeTotal"] / timings["nightLength"])
         print(f"Science shutter efficiency = {sciEff:.1f}%")
 
-    def getTimeDeltas(self):
+    def getTimeDeltas(self) -> Dict[int, float]:
         """Returns a dict, keyed by seqNum, of the time since the end of the
         last integration. The time since does include the readout, so is always
         greater than or equal to the readout time.
@@ -464,7 +472,7 @@ class NightReport:
 
         return {s: dt for s, dt in zip(seqNums, dts)}
 
-    def printObsGaps(self, threshold=100, includeCalibs=False):
+    def printObsGaps(self, threshold: int = 100, includeCalibs: bool = False) -> None:
         """Print out the gaps between observations in a human-readable format.
 
         Prints the most recent gaps first.
@@ -504,7 +512,7 @@ class NightReport:
             for line in messages:
                 print(line)
 
-    def getObservingStartSeqNum(self, method="safe"):
+    def getObservingStartSeqNum(self, method: str = "safe") -> int:
         """Get the seqNum at which on-sky observations started.
 
         If no on-sky observations were taken ``None`` is returned.
@@ -552,7 +560,7 @@ class NightReport:
                 return None
             return min(seqNums)
 
-    def printObsTable(self, **kwargs):
+    def printObsTable(self, **kwargs: Dict[str, Any]) -> None:
         """Print a table of the days observations.
 
         Parameters
@@ -602,7 +610,9 @@ class NightReport:
         expTime = self.data[seqNum]["exposure_time"]
         return ((timespan.begin) + expTime / 2).to_datetime()
 
-    def plotPerObjectAirMass(self, objects=None, airmassOneAtTop=True, saveFig=""):
+    def plotPerObjectAirMass(
+        self, objects: List[str] = None, airmassOneAtTop: bool = True, saveFig: str = ""
+    ) -> None:
         """Plot the airmass for objects observed over the course of the night.
 
         Parameters
@@ -651,8 +661,15 @@ class NightReport:
         plt.close()
 
     def _makePolarPlot(
-        self, azimuthsInDegrees, zenithAngles, marker="*-", title=None, makeFig=True, color=None, objName=None
-    ):
+        self,
+        azimuthsInDegrees: List[float],
+        zenithAngles: List[float],
+        marker: str = "*-",
+        title: str | None = None,
+        makeFig: bool = True,
+        color: str | None = None,
+        objName: str | None = None,
+    ) -> matplotlib.axes:
         """Private method to actually do the polar plotting.
 
         azimuthsInDegrees : `list` [`float`]
@@ -687,7 +704,9 @@ class NightReport:
         ax.set_rlim(0, 90)
         return ax
 
-    def makeAltAzCoveragePlot(self, objects=None, withLines=False, saveFig=""):
+    def makeAltAzCoveragePlot(
+        self, objects: List[str] | None = None, withLines: bool = False, saveFig: str = ""
+    ) -> None:
         """Make a polar plot of the azimuth and zenith angle for each object.
 
         Plots the azimuth on the theta axis, and zenith angle (not altitude!)
