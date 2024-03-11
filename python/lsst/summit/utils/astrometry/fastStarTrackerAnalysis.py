@@ -19,6 +19,8 @@
 # You should have received a copy of the GNU General Public License
 # along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
+import datetime
+import os
 import typing
 from dataclasses import dataclass
 
@@ -33,7 +35,7 @@ from PIL import Image
 import lsst.afw.image as afwImage
 import lsst.afw.math as afwMath
 import lsst.geom as geom
-from lsst.summit.utils.utils import detectObjectsInExp
+from lsst.summit.utils.utils import dayObsIntToString, detectObjectsInExp
 from lsst.utils.iteration import ensure_iterable
 
 __all__ = (
@@ -116,6 +118,107 @@ def openFile(filename):
         return fitsToExp(filename)
     else:
         raise ValueError("File type not recognized")
+
+
+def dayObsToDateTime(dayObs):
+    """Convert a dayObs to a datetime.
+
+    Parameters
+    ----------
+    dayObs : `int`
+        The dayObs.
+
+    Returns
+    -------
+    datetime : `datetime`
+        The datetime.
+    """
+    return datetime.datetime.strptime(dayObsIntToString(dayObs), "%Y-%m-%d")
+
+
+def isStreamingModeFile(filename):
+    """Check if a filename is a streaming mode file.
+
+    Parameters
+    ----------
+    filename : `str`
+        The filename.
+
+    Returns
+    -------
+    isStreaming : `bool`
+        Whether the file is a streaming mode file.
+    """
+    # non-streaming filenames are like GC103_O_20240304_000009.fits
+    # streaming filenames are like GC103_O_20240304_000007_0001316.fits
+    # which is <camNum>_O_<dayObs>_<seqNum>_<streamSeqNum>.fits
+    # so 5 sections means streaming, 4 means normal
+    return len(os.path.basename(filename).split("_")) == 5
+
+
+def dayObsSeqNumFromFilename(filename):
+    """Get the dayObs and seqNum from a filename.
+
+    If the file is a streaming mode file (`None`, `None`) is returned.
+
+    Parameters
+    ----------
+    filename : `str`
+        The filename.
+
+    Returns
+    -------
+    dayObs : `int` or `None`
+        The dayObs.
+    seqNum : `int` or `None`
+        The seqNum.
+    """
+    # filenames are like GC101_O_20221114_000005.fits
+    filename = os.path.basename(filename)  # in case we're passed a full path
+
+    # these must not be processed like normal files as they're a part of a long
+    # series, so return None, None even if that potentially causes problems
+    # elsewhere, that code needs to deal with that.
+    if isStreamingModeFile(filename):
+        return None, None
+
+    # this is a regular file
+    parts = filename.split("_")
+    _, _, dayObs, seqNumAndSuffix = parts
+    seqNum = seqNumAndSuffix.removesuffix(".fits")
+
+    return int(dayObs), int(seqNum)
+
+
+def dayObsSeqNumFrameNumFromFilename(filename):
+    """Get the dayObs and seqNum from a filename.
+
+    If the file is a streaming mode file (`None`, `None`) is returned.
+
+    Parameters
+    ----------
+    filename : `str`
+        The filename.
+
+    Returns
+    -------
+    dayObs : `int` or `None`
+        The dayObs.
+    seqNum : `int` or `None`
+        The seqNum.
+    """
+    # filenames are like GC101_O_20221114_000005.fits
+    filename = os.path.basename(filename)  # in case we're passed a full path
+
+    if not isStreamingModeFile(filename):
+        raise ValueError(f"{filename} is not a streaming mode file")
+
+    # this is a regular file
+    parts = filename.split("_")
+    _, _, dayObs, seqNum, subSeqNumAndSuffix = parts
+    subSeqNum = subSeqNumAndSuffix.removesuffix(".fits")
+
+    return int(dayObs), int(seqNum), int(subSeqNum)
 
 
 def getBboxAround(centroid, boxSize, exp):
@@ -256,6 +359,10 @@ def sortSourcesByFlux(sources, reverse=False):
 class Source:
     """A dataclass for FastStarTracker analysis results."""
 
+    dayObs: int  # mandatory attribute - the dayObs
+    seqNum: int  # mandatory attribute - the seqNum
+    frameNum: int  # mandatory attribute - the sub-sequence number, the position in the sequence
+
     # raw numbers
     centroidX: float = np.nan  # in image coordinates
     centroidY: float = np.nan  # in image coordinates
@@ -328,9 +435,15 @@ def findFastStarTrackerImageSources(filename, boxSize, attachCutouts=True):
     footprints = footprintSet.getFootprints()
     bgMean, bgStd = getBackgroundLevel(exp)
 
+    dayObs, seqNum, frameNum = dayObsSeqNumFrameNumFromFilename(filename)
+
     sources = []
+    if len(footprints) == 0:
+        sources = [NanSource()]
+        return sources
+
     for footprint in footprints:
-        source = Source()
+        source = Source(dayObs=dayObs, seqNum=seqNum, frameNum=frameNum)
         source.nSourcesInImage = len(footprints)
         source.parentImageWidth, source.parentImageHeight = exp.getDimensions()
 
