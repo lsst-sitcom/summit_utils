@@ -21,6 +21,7 @@
 
 import dataclasses
 import os
+from typing import TYPE_CHECKING
 
 import lsst.pex.config as pexConfig
 import lsst.pipe.base as pipeBase
@@ -30,6 +31,15 @@ from lsst.ip.isr.isrTask import IsrTaskConnections
 from lsst.meas.algorithms.installGaussianPsf import InstallGaussianPsfTask
 from lsst.pipe.tasks.characterizeImage import CharacterizeImageTask
 from lsst.utils import getPackageDir
+
+if TYPE_CHECKING:
+    from typing import Any, Dict
+
+    import numpy as np
+
+    import lsst.afw.cameraGeom as afwCameraGeom
+    import lsst.afw.image as afwImage
+    import lsst.ip.isr as ipIsr
 
 __all__ = ["QuickLookIsrTask", "QuickLookIsrTaskConfig"]
 
@@ -42,7 +52,7 @@ class QuickLookIsrTaskConnections(IsrTaskConnections):
     minimum values to zero.
     """
 
-    def __init__(self, *, config=None):
+    def __init__(self, *, config: Any = None):
         # programatically clone all of the connections from isrTask
         # setting minimum values to zero for everything except the ccdExposure
         super().__init__(config=IsrTask.ConfigClass())  # need a dummy config, isn't used other than for ctor
@@ -89,7 +99,7 @@ class QuickLookIsrTask(pipeBase.PipelineTask):
     ConfigClass = QuickLookIsrTaskConfig
     _DefaultName = "quickLook"
 
-    def __init__(self, isrTask=IsrTask, **kwargs):
+    def __init__(self, isrTask: IsrTask = IsrTask, **kwargs: Dict[str, Any]):
         super().__init__(**kwargs)
         # Pass in IsrTask so that we can modify it slightly for unit tests.
         # Note that this is not an instance of the IsrTask class, but the class
@@ -99,29 +109,29 @@ class QuickLookIsrTask(pipeBase.PipelineTask):
 
     def run(
         self,
-        ccdExposure,
+        ccdExposure: afwImage.Exposure,
         *,
-        camera=None,
-        bias=None,
-        dark=None,
-        flat=None,
-        fringes=None,
-        defects=None,
-        linearizer=None,
-        crosstalk=None,
-        bfKernel=None,
-        newBFKernel=None,
-        ptc=None,
-        crosstalkSources=None,
-        isrBaseConfig=None,
-        filterTransmission=None,
-        opticsTransmission=None,
-        strayLightData=None,
-        sensorTransmission=None,
-        atmosphereTransmission=None,
-        deferredChargeCalib=None,
-        illumMaskedImage=None,
-    ):
+        camera: afwCameraGeom.Camera | None = None,
+        bias: afwImage.Exposure | None = None,
+        dark: afwImage.Exposure | None = None,
+        flat: afwImage.Exposure | None = None,
+        fringes: afwImage.Exposure | None = None,
+        defects: ipIsr.Defects | None = None,
+        linearizer: ipIsr.linearize.LinearizeBase | None = None,
+        crosstalk: ipIsr.crosstalk.CrosstalkCalib | None = None,
+        bfKernel: np.ndarray = None,
+        newBFKernel: np.ndarray | None = None,
+        ptc: ipIsr.PhotonTransferCurveDataset | None = None,
+        crosstalkSources: list | None = None,
+        isrBaseConfig: ipIsr.IsrTaskConfig | None = None,
+        filterTransmission: afwImage.TransmissionCurve | None = None,
+        opticsTransmission: afwImage.TransmissionCurve | None = None,
+        strayLightData: Any | None = None,
+        sensorTransmission: afwImage.TransmissionCurve | None = None,
+        atmosphereTransmission: afwImage.TransmissionCurve | None = None,
+        deferredChargeCalib: Any | None = None,
+        illumMaskedImage: afwImage.MaskedImage | None = None,
+    ) -> pipeBase.Struct:
         """Run isr and cosmic ray repair using, doing as much isr as possible.
 
         Retrieves as many calibration products as are available, and runs isr
@@ -139,38 +149,41 @@ class QuickLookIsrTask(pipeBase.PipelineTask):
             ``flat`` does not have an associated detector.
         bias : `lsst.afw.image.Exposure`, optional
             Bias calibration frame.
-        linearizer : `lsst.ip.isr.linearize.LinearizeBase`, optional
-            Functor for linearization.
-        crosstalk : `lsst.ip.isr.crosstalk.CrosstalkCalib`, optional
-            Calibration for crosstalk.
-        crosstalkSources : `list`, optional
-            List of possible crosstalk sources.
         dark : `lsst.afw.image.Exposure`, optional
             Dark calibration frame.
         flat : `lsst.afw.image.Exposure`, optional
             Flat calibration frame.
-        ptc : `lsst.ip.isr.PhotonTransferCurveDataset`, optional
-            Photon transfer curve dataset, with, e.g., gains
-            and read noise.
-        bfKernel : `numpy.ndarray`, optional
-            Brighter-fatter kernel.
-        bfGains : `dict` of `float`, optional
-            Gains used to override the detector's nominal gains for the
-            brighter-fatter correction. A dict keyed by amplifier name for
-            the detector in question.
-        defects : `lsst.ip.isr.Defects`, optional
-            List of defects.
-        fringes : `afw.image.Exposure`, optional
+        fringes : `lsst.afw.image.Exposure`, optional
             The fringe correction data.
             This input is slightly different than the `fringes` keyword to
             `lsst.ip.isr.IsrTask`, since the processing done in that task's
             `runQuantum` method is instead done here.
-        opticsTransmission: `lsst.afw.image.TransmissionCurve`, optional
-            A ``TransmissionCurve`` that represents the throughput of the,
-            optics, to be evaluated in focal-plane coordinates.
+        defects : `lsst.ip.isr.Defects`, optional
+            List of defects.
+        linearizer : `lsst.ip.isr.linearize.LinearizeBase`, optional
+            Functor for linearization.
+        crosstalk : `lsst.ip.isr.crosstalk.CrosstalkCalib`, optional
+            Calibration for crosstalk.
+        bfKernel : `numpy.ndarray`, optional
+            Brighter-fatter kernel.
+        ptc : `lsst.ip.isr.PhotonTransferCurveDataset`, optional
+            Photon transfer curve dataset, with, e.g., gains
+            and read noise.
+        crosstalkSources : `list`, optional
+            List of possible crosstalk sources.
+        isrBaseConfig : `lsst.ip.isr.IsrTaskConfig`, optional
+            An isrTask config to act as the base configuration. Options which
+            involve applying a calibration product are ignored, but this allows
+            for the configuration of e.g. the number of overscan columns.
         filterTransmission : `lsst.afw.image.TransmissionCurve`
             A ``TransmissionCurve`` that represents the throughput of the
             filter itself, to be evaluated in focal-plane coordinates.
+        opticsTransmission: `lsst.afw.image.TransmissionCurve`, optional
+            A ``TransmissionCurve`` that represents the throughput of the,
+            optics, to be evaluated in focal-plane coordinates.
+        strayLightData : `object`, optional
+            Opaque object containing calibration information for stray-light
+            correction.  If `None`, no correction will be performed.
         sensorTransmission : `lsst.afw.image.TransmissionCurve`
             A ``TransmissionCurve`` that represents the throughput of the
             sensor itself, to be evaluated in post-assembly trimmed detector
@@ -178,17 +191,14 @@ class QuickLookIsrTask(pipeBase.PipelineTask):
         atmosphereTransmission : `lsst.afw.image.TransmissionCurve`
             A ``TransmissionCurve`` that represents the throughput of the
             atmosphere, assumed to be spatially constant.
-        detectorNum : `int`, optional
-            The integer number for the detector to process.
-        strayLightData : `object`, optional
-            Opaque object containing calibration information for stray-light
-            correction.  If `None`, no correction will be performed.
         illumMaskedImage : `lsst.afw.image.MaskedImage`, optional
             Illumination correction image.
-        isrBaseConfig : `lsst.ip.isr.IsrTaskConfig`, optional
-            An isrTask config to act as the base configuration. Options which
-            involve applying a calibration product are ignored, but this allows
-            for the configuration of e.g. the number of overscan columns.
+        detectorNum : `int`, optional
+            The integer number for the detector to process.
+        bfGains : `dict` of `float`, optional
+            Gains used to override the detector's nominal gains for the
+            brighter-fatter correction. A dict keyed by amplifier name for
+            the detector in question.
 
         Returns
         -------

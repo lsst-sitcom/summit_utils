@@ -29,6 +29,7 @@ import time
 import warnings
 from collections import namedtuple
 from pathlib import Path
+from typing import TYPE_CHECKING
 
 import matplotlib.pyplot as plt
 import numpy as np
@@ -42,6 +43,12 @@ from lsst.afw.geom import ellipses
 from lsst.daf.butler.datastore.cache_manager import DatastoreCacheManager
 from lsst.summit.utils.bestEffort import BestEffortIsr
 from lsst.summit.utils.peekExposure import PeekExposureTask
+
+if TYPE_CHECKING:
+    import argparse
+
+    import astropy
+    from typint import Tuple
 
 # Set logger level to higher than CRITICAL to suppress all output
 silentLogger = logging.getLogger("silentLogger")
@@ -79,7 +86,7 @@ def initializePoolProcess():
 
 
 # retrieve best-effort-isr and run PET on it
-def doWork(idx, row, doPlot):
+def doWork(idx: int, row: astropy.table.Row, doPlot: bool) -> Tuple(str, str, float, int):
     """Run PeekExposureTask on a single exposure.
 
     Parameters
@@ -193,7 +200,7 @@ def doWork(idx, row, doPlot):
     return inTag, outTag, runtime, exposureId
 
 
-def main(args):
+def main(args: argparse.Namespace) -> None:
     # Set up cache directory and register cleanup
     defined, cacheDir = DatastoreCacheManager.set_fallback_cache_directory_if_unset()
     if defined:

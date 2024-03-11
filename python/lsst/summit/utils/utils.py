@@ -22,7 +22,7 @@
 import datetime
 import logging
 import os
-from typing import Iterable
+from typing import TYPE_CHECKING
 
 import astropy.units as u
 import numpy as np
@@ -48,6 +48,14 @@ from lsst.obs.lsst.translators.latiss import AUXTEL_LOCATION
 from lsst.obs.lsst.translators.lsst import FILTER_DELIMITER
 
 from .astrometry.utils import genericCameraHeaderToWcs
+
+if TYPE_CHECKING:
+    from typing import Iterable, List, Tuple
+
+    import astro_metadata_translator
+
+    import lsst.afw.detection as afwDetection
+    import lsst.daf.butler as dafButler
 
 __all__ = [
     "SIGMATOFWHM",
@@ -101,7 +109,7 @@ GOOGLE_CLOUD_MISSING_MSG = (
 )
 
 
-def countPixels(maskedImage, maskPlane):
+def countPixels(maskedImage: afwImage.MaskedImage, maskPlane: str) -> int:
     """Count the number of pixels in an image with a given mask bit set.
 
     Parameters
@@ -120,7 +128,7 @@ def countPixels(maskedImage, maskPlane):
     return len(np.where(np.bitwise_and(maskedImage.mask.array, bit))[0])
 
 
-def quickSmooth(data, sigma=2):
+def quickSmooth(data: np.array, sigma: int = 2) -> np.array:
     """Perform a quick smoothing of the image.
 
     Not to be used for scientific purposes, but improves the stretch and
@@ -143,7 +151,7 @@ def quickSmooth(data, sigma=2):
     return smoothData
 
 
-def argMax2d(array):
+def argMax2d(array: np.array) -> Tuple[Tuple[int, int], bool, List[Tuple[int, int]]]:
     """Get the index of the max value of an array and whether it's unique.
 
     If its not unique, returns a list of the other locations containing the
@@ -174,7 +182,7 @@ def argMax2d(array):
     return maxCoords[0], uniqueMaximum, maxCoords[1:]
 
 
-def dayObsIntToString(dayObs):
+def dayObsIntToString(dayObs: int) -> str:
     """Convert an integer dayObs to a dash-delimited string.
 
     e.g. convert the hard to read 20210101 to 2021-01-01
@@ -195,7 +203,7 @@ def dayObsIntToString(dayObs):
     return "-".join([dStr[0:4], dStr[4:6], dStr[6:8]])
 
 
-def dayObsSeqNumToVisitId(dayObs, seqNum):
+def dayObsSeqNumToVisitId(dayObs: int, seqNum: int) -> int:
     """Get the visit id for a given dayObs/seqNum.
 
     Parameters
@@ -220,7 +228,7 @@ def dayObsSeqNumToVisitId(dayObs, seqNum):
     return int(f"{dayObs}{seqNum:05}")
 
 
-def getImageStats(exp):
+def getImageStats(exp: afwImage.Exposure) -> pipeBase.Struct:
     """Calculate a grab-bag of stats for an image. Must remain fast.
 
     Parameters
@@ -291,7 +299,9 @@ def getImageStats(exp):
     return result
 
 
-def detectObjectsInExp(exp, nSigma=10, nPixMin=10, grow=0):
+def detectObjectsInExp(
+    exp: afwImage.Exposure, nSigma: int = 10, nPixMin: int = 10, grow: int = 0
+) -> FootprintSet:
     """Quick and dirty object detection for an exposure.
 
     Return the footPrintSet for the objects in a preferably-postISR exposure.
@@ -325,7 +335,11 @@ def detectObjectsInExp(exp, nSigma=10, nPixMin=10, grow=0):
     return footPrintSet
 
 
-def fluxesFromFootprints(footprints, parentImage, subtractImageMedian=False):
+def fluxesFromFootprints(
+    footprints: (FootprintSet | Footprint | Iterable[Footprint]),
+    parentImage: afwImage.Image,
+    subtractImageMedian=False,
+) -> List[float]:
     """Calculate the flux from a set of footprints, given the parent image,
     optionally subtracting the whole-image median from each pixel as a very
     rough background subtraction.
@@ -374,7 +388,9 @@ def fluxesFromFootprints(footprints, parentImage, subtractImageMedian=False):
     return np.array([fluxFromFootprint(fp, parentImage, backgroundValue=median) for fp in footprints])
 
 
-def fluxFromFootprint(footprint, parentImage, backgroundValue=0):
+def fluxFromFootprint(
+    footprint: afwDetection.Footprint, parentImage: afwImage.Image, backgroundValue: float = 0
+) -> float:
     """Calculate the flux from a footprint, given the parent image, optionally
     subtracting a single value from each pixel as a very rough background
     subtraction, e.g. the image median.
@@ -401,7 +417,7 @@ def fluxFromFootprint(footprint, parentImage, backgroundValue=0):
     return footprint.computeFluxFromImage(parentImage)
 
 
-def humanNameForCelestialObject(objName):
+def humanNameForCelestialObject(objName: str) -> List[str]:
     """Returns a list of all human names for obj, or [] if none are found.
 
     Parameters
@@ -427,7 +443,9 @@ def humanNameForCelestialObject(objName):
         return []  # same behavior as for found but un-named objects
 
 
-def _getAltAzZenithsFromSeqNum(butler, dayObs, seqNumList):
+def _getAltAzZenithsFromSeqNum(
+    butler: dafButler.Butler, dayObs: int, seqNumList: List[int]
+) -> Tuple[List[float], List[float], List[float]]:
     """Get the alt, az and zenith angle for the seqNums of a given dayObs.
 
     Parameters
@@ -460,7 +478,7 @@ def _getAltAzZenithsFromSeqNum(butler, dayObs, seqNumList):
     return azimuths, elevations, zeniths
 
 
-def getFocusFromHeader(exp):
+def getFocusFromHeader(exp: afwImage.Exposure) -> float | None:
     """Get the raw focus value from the header.
 
     Parameters
@@ -479,7 +497,7 @@ def getFocusFromHeader(exp):
     return None
 
 
-def checkStackSetup():
+def checkStackSetup() -> None:
     """Check which weekly tag is being used and which local packages are setup.
 
     Designed primarily for use in notbooks/observing, this prints the weekly
@@ -521,7 +539,7 @@ def checkStackSetup():
         print("\nNo locally setup packages (using a vanilla stack)")
 
 
-def setupLogging(longlog=False):
+def setupLogging(longlog: bool = False) -> None:
     """Setup logging in the same way as one would get from pipetask run.
 
     Code that isn't run through the butler CLI defaults to WARNING level
@@ -533,7 +551,7 @@ def setupLogging(longlog=False):
     CliLog.initLog(longlog=longlog)
 
 
-def getCurrentDayObs_datetime():
+def getCurrentDayObs_datetime() -> int:
     """Get the current day_obs - the observatory rolls the date over at UTC-12
 
     Returned as datetime.date(2022, 4, 28)
@@ -545,17 +563,17 @@ def getCurrentDayObs_datetime():
     return dayObs
 
 
-def getCurrentDayObs_int():
+def getCurrentDayObs_int() -> int:
     """Return the current dayObs as an int in the form 20220428"""
     return int(getCurrentDayObs_datetime().strftime("%Y%m%d"))
 
 
-def getCurrentDayObs_humanStr():
+def getCurrentDayObs_humanStr() -> str:
     """Return the current dayObs as a string in the form '2022-04-28'"""
     return dayObsIntToString(getCurrentDayObs_int())
 
 
-def getExpRecordAge(expRecord):
+def getExpRecordAge(expRecord: dafButler.butler.DimensionRecord) -> float:
     """Get the time, in seconds, since the end of exposure.
 
     Parameters
@@ -571,7 +589,7 @@ def getExpRecordAge(expRecord):
     return -1 * (expRecord.timespan.end - Time.now()).sec
 
 
-def getSite():
+def getSite() -> str:
     """Returns where the code is running.
 
     Returns
@@ -624,13 +642,13 @@ def getSite():
 
 
 def getAltAzFromSkyPosition(
-    skyPos,
-    visitInfo,
-    doCorrectRefraction=False,
-    wavelength=500.0,
-    pressureOverride=None,
-    temperatureOverride=None,
-    relativeHumidityOverride=None,
+    skyPos: geom.SpherePoint,
+    visitInfo: afwImage.VisitInfo,
+    doCorrectRefraction: bool = False,
+    wavelength: float = 500.0,
+    pressureOverride: float | None = None,
+    temperatureOverride: float | None = None,
+    relativeHumidityOverride: float | None = None,
 ):
     """Get the alt/az from the position on the sky and the time and location
     of the observation.
@@ -715,7 +733,12 @@ def getAltAzFromSkyPosition(
     return alt, az
 
 
-def getExpPositionOffset(exp1, exp2, useWcs=True, allowDifferentPlateScales=False):
+def getExpPositionOffset(
+    exp1: afwImage.Exposure,
+    exp2: afwImage.Exposure,
+    useWcs: bool = True,
+    allowDifferentPlateScales: bool = False,
+) -> pipeBase.Struct:
     """Get the change in sky position between two exposures.
 
     Given two exposures, calculate the offset on the sky between the images.
@@ -803,7 +826,7 @@ def getExpPositionOffset(exp1, exp2, useWcs=True, allowDifferentPlateScales=Fals
     return ret
 
 
-def starTrackerFileToExposure(filename, logger=None):
+def starTrackerFileToExposure(filename: str, logger: logging.Logger = None):
     """Read the exposure from the file and set the wcs from the header.
 
     Parameters
@@ -863,7 +886,7 @@ def starTrackerFileToExposure(filename, logger=None):
     return exp
 
 
-def obsInfoToDict(obsInfo):
+def obsInfoToDict(obsInfo: astro_metadata_translator.ObservationInfo) -> dict:
     """Convert an ObservationInfo to a dict.
 
     Parameters
@@ -879,7 +902,9 @@ def obsInfoToDict(obsInfo):
     return {prop: getattr(obsInfo, prop) for prop in obsInfo.all_properties.keys()}
 
 
-def getFieldNameAndTileNumber(field, warn=True, logger=None):
+def getFieldNameAndTileNumber(
+    field: str, warn: bool = True, logger: logging.Logger = None
+) -> Tuple[str, int]:
     """Get the tile name and number of an observed field.
 
     It is assumed to always be appended, with an underscore, to the rest of the
@@ -922,7 +947,7 @@ def getFieldNameAndTileNumber(field, warn=True, logger=None):
     return "_".join(fieldParts[:-1]), fieldNum
 
 
-def getAirmassSeeingCorrection(airmass):
+def getAirmassSeeingCorrection(airmass: float) -> float:
     """Get the correction factor for seeing due to airmass.
 
     Parameters
@@ -944,7 +969,7 @@ def getAirmassSeeingCorrection(airmass):
     return airmass ** (-0.6)
 
 
-def getFilterSeeingCorrection(filterName):
+def getFilterSeeingCorrection(filterName: str) -> float:
     """Get the correction factor for seeing due to a filter.
 
     Parameters
@@ -976,7 +1001,7 @@ def getFilterSeeingCorrection(filterName):
             raise ValueError(f"Unknown filter name: {filterName}")
 
 
-def getCdf(data, scale, nBinsMax=300_000):
+def getCdf(data: np.ndarray, scale: int, nBinsMax: int = 300_000) -> np.ndarray[int]:
     """Return an approximate cumulative distribution function scaled to
     the [0, scale] range.
 
@@ -1023,7 +1048,7 @@ def getCdf(data, scale, nBinsMax=300_000):
     return cdf, minVal, maxVal
 
 
-def getQuantiles(data, nColors):
+def getQuantiles(data: np.ndarray, nColors: int) -> List[float]:
     """Get a set of boundaries that equally distribute data into
     nColors intervals. The output can be used to make a colormap of nColors
     colors.
@@ -1067,7 +1092,7 @@ def getQuantiles(data, nColors):
     return boundaries
 
 
-def digitizeData(data, nColors=256):
+def digitizeData(data: np.ndarray, nColors: int = 256) -> np.ndarray[int]:
     """
     Scale data into nColors using its cumulative distribution function.
 
