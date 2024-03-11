@@ -573,7 +573,7 @@ def getCurrentDayObs_humanStr() -> str:
     return dayObsIntToString(getCurrentDayObs_int())
 
 
-def getExpRecordAge(expRecord: dafButler.butler.DimensionRecord) -> float:
+def getExpRecordAge(expRecord: dafButler.DimensionRecord) -> float:
     """Get the time, in seconds, since the end of exposure.
 
     Parameters
