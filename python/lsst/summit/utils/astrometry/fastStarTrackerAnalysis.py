@@ -19,6 +19,9 @@
 # You should have received a copy of the GNU General Public License
 # along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
+import datetime
+import glob
+import os
 import typing
 from dataclasses import dataclass
 
@@ -33,10 +36,11 @@ from PIL import Image
 import lsst.afw.image as afwImage
 import lsst.afw.math as afwMath
 import lsst.geom as geom
-from lsst.summit.utils.utils import detectObjectsInExp
+from lsst.summit.utils.utils import dayObsIntToString, detectObjectsInExp, getSite
 from lsst.utils.iteration import ensure_iterable
 
 __all__ = (
+    "StarTrackerCamera",
     "tifToExp",
     "getBboxAround",
     "getFlux",
@@ -48,6 +52,62 @@ __all__ = (
     "plotSourceMovement",
     "plotSource",
     "plotSourcesOnImage",
+)
+
+KNOWN_CAMERAS = ("narrow", "wide", "fast")
+
+
+@dataclass(frozen=True, kw_only=True, slots=True)
+class StarTrackerCamera:
+    """A frozen dataclass for StarTracker camera configs"""
+
+    cameraType: str
+    suffix: str
+    suffixWithSpace: str
+    doAstrometry: bool
+    cameraNumber: int
+    snr: float
+    minPix: int
+    brightSourceFraction: float
+    scaleError: float
+    doSmoothPlot: bool
+
+
+narrowCam = StarTrackerCamera(
+    cameraType="narrow",
+    suffix="",
+    suffixWithSpace="",
+    doAstrometry=True,
+    cameraNumber=102,
+    snr=5,
+    minPix=25,
+    brightSourceFraction=0.95,
+    scaleError=5,
+    doSmoothPlot=True,
+)
+wideCam = StarTrackerCamera(
+    cameraType="wide",
+    suffix="_wide",
+    suffixWithSpace=" wide",
+    doAstrometry=True,
+    cameraNumber=101,
+    snr=5,
+    minPix=25,
+    brightSourceFraction=0.8,
+    scaleError=5,
+    doSmoothPlot=True,
+)
+fastCam = StarTrackerCamera(
+    cameraType="fast",
+    suffix="_fast",
+    suffixWithSpace=" fast",
+    doAstrometry=True,
+    cameraNumber=103,
+    snr=2.5,
+    minPix=10,
+    brightSourceFraction=0.95,
+    scaleError=60,
+    doSmoothPlot=False,
 )
 
 
@@ -78,6 +138,214 @@ def tifToExp(filename):
     maskedIm = afwImage.MaskedImageF(img)
     exp = afwImage.ExposureF(maskedIm)
     return exp
+
+
+def fitsToExp(filename):
+    """Open a fits file as an exposure.
+
+    Parameters
+    ----------
+    filename : `str`
+        The full path to the file to load.
+
+    Returns
+    -------
+    exp : `lsst.afw.image.Exposure`
+        The exposure.
+    """
+    exp = afwImage.ExposureF(filename)
+    return exp
+
+
+def openFile(filename):
+    """Open a file as an exposure.
+
+    Parameters
+    ----------
+    filename : `str`
+        The full path to the file to load.
+
+    Returns
+    -------
+    exp : `lsst.afw.image.Exposure`
+        The exposure.
+    """
+    if filename.endswith(".tif"):
+        return tifToExp(filename)
+    elif filename.endswith(".fits"):
+        return fitsToExp(filename)
+    else:
+        raise ValueError("File type not recognized")
+
+
+def dayObsToDateTime(dayObs):
+    """Convert a dayObs to a datetime.
+
+    Parameters
+    ----------
+    dayObs : `int`
+        The dayObs.
+
+    Returns
+    -------
+    datetime : `datetime`
+        The datetime.
+    """
+    return datetime.datetime.strptime(dayObsIntToString(dayObs), "%Y-%m-%d")
+
+
+def isStreamingModeFile(filename):
+    """Check if a filename is a streaming mode file.
+
+    Parameters
+    ----------
+    filename : `str`
+        The filename.
+
+    Returns
+    -------
+    isStreaming : `bool`
+        Whether the file is a streaming mode file.
+    """
+    # non-streaming filenames are like GC103_O_20240304_000009.fits
+    # streaming filenames are like GC103_O_20240304_000007_0001316.fits
+    # which is <camNum>_O_<dayObs>_<seqNum>_<streamSeqNum>.fits
+    # so 5 sections means streaming, 4 means normal
+    return os.path.basename(filename).count("_") == 4
+
+
+def dayObsSeqNumFromFilename(filename):
+    """Get the dayObs and seqNum from a filename.
+
+    If the file is a streaming mode file (`None`, `None`) is returned.
+
+    Parameters
+    ----------
+    filename : `str`
+        The filename.
+
+    Returns
+    -------
+    dayObs : `int` or `None`
+        The dayObs.
+    seqNum : `int` or `None`
+        The seqNum.
+    """
+    # filenames are like GC101_O_20221114_000005.fits
+    filename = os.path.basename(filename)  # in case we're passed a full path
+
+    # these must not be processed like normal files as they're a part of a long
+    # series, so return None, None even if that potentially causes problems
+    # elsewhere, that code needs to deal with that.
+    if isStreamingModeFile(filename):
+        return None, None
+
+    # this is a regular file
+    parts = filename.split("_")
+    _, _, dayObs, seqNumAndSuffix = parts
+    seqNum = seqNumAndSuffix.removesuffix(".fits")
+
+    return int(dayObs), int(seqNum)
+
+
+def dayObsSeqNumFrameNumFromFilename(filename):
+    """Get the dayObs and seqNum from a filename.
+
+    If the file is a streaming mode file (`None`, `None`) is returned.
+
+    Parameters
+    ----------
+    filename : `str`
+        The filename.
+
+    Returns
+    -------
+    dayObs : `int` or `None`
+        The dayObs.
+    seqNum : `int` or `None`
+        The seqNum.
+    """
+    # filenames are like GC101_O_20221114_000005.fits
+    filename = os.path.basename(filename)  # in case we're passed a full path
+
+    if not isStreamingModeFile(filename):
+        raise ValueError(f"{filename} is not a streaming mode file")
+
+    # this is a regular file
+    parts = filename.split("_")
+    _, _, dayObs, seqNum, subSeqNumAndSuffix = parts
+    subSeqNum = subSeqNumAndSuffix.removesuffix(".fits")
+
+    return int(dayObs), int(seqNum), int(subSeqNum)
+
+
+def getRawDataDirForDayObs(rootDataPath, camera, dayObs):
+    """Get the raw data dir for a given dayObs.
+
+    Parameters
+    ----------
+    rootDataPath : `str`
+        The root data path.
+    camera : `lsst.rubintv.production.starTracker.StarTrackerCamera`
+        The camera to get the raw data for.
+    dayObs : `int`
+        The dayObs.
+    """
+    camNum = camera.cameraNumber
+    dayObsDateTime = datetime.datetime.strptime(str(dayObs), "%Y%m%d")
+    dirSuffix = (
+        f"GenericCamera/{camNum}/{dayObsDateTime.year}/" f"{dayObsDateTime.month:02}/{dayObsDateTime.day:02}/"
+    )
+    return os.path.join(rootDataPath, dirSuffix)
+
+
+def getStreamingSequences(dayObs):
+    """Get the streaming sequences for a dayObs.
+
+    Note that this will need rewriting very soon once the way the data is
+    organised on disk is changed.
+
+    TODO: Will be moved to summit_extras on DM-43269
+
+    Parameters
+    ----------
+    dayObs : `int`
+        The dayObs.
+
+    Returns
+    -------
+    sequences : `dict` [`int`, `list`]
+        The streaming sequences in a dict, keyed by sequence number, with each
+        value being a list of the files in that sequence.
+    """
+    site = getSite()
+    if site in ["rubin-devl", "staff-rsp"]:
+        rootDataPath = "/sdf/data/rubin/offline/s3-backup/lfa/"
+    elif site == "summit":
+        rootDataPath = "/project"
+    else:
+        raise ValueError(f"StarTracker data isn't available at {site}")
+
+    dataDir = getRawDataDirForDayObs(rootDataPath, fastCam, dayObs)
+    files = glob.glob(os.path.join(dataDir, "*.fits"))
+    regularFiles = [f for f in files if not isStreamingModeFile(f)]
+    streamingFiles = [f for f in files if isStreamingModeFile(f)]
+    print(f"Found {len(regularFiles)} regular files on dayObs {dayObs}")
+
+    data = {}
+    for filename in sorted(streamingFiles):
+        basename = os.path.basename(filename)
+        seqNum = int(basename.split("_")[3])
+        if seqNum not in data:
+            data[seqNum] = [filename]
+        else:
+            data[seqNum].append(filename)
+
+    print(f"Found {len(data)} streaming sequences on dayObs {dayObs}:")
+    for seqNum, files in data.items():
+        print(f"seqNum {seqNum} with {len(files)} frames")
+
+    return data
 
 
 def getBboxAround(centroid, boxSize, exp):
@@ -218,6 +486,10 @@ def sortSourcesByFlux(sources, reverse=False):
 class Source:
     """A dataclass for FastStarTracker analysis results."""
 
+    dayObs: int  # mandatory attribute - the dayObs
+    seqNum: int  # mandatory attribute - the seqNum
+    frameNum: int  # mandatory attribute - the sub-sequence number, the position in the sequence
+
     # raw numbers
     centroidX: float = np.nan  # in image coordinates
     centroidY: float = np.nan  # in image coordinates
@@ -261,6 +533,11 @@ class Source:
         return retStr
 
 
+class NanSource:
+    def __getattribute__(self):
+        return np.nan
+
+
 def findFastStarTrackerImageSources(filename, boxSize, attachCutouts=True):
     """Analyze a single FastStarTracker image.
 
@@ -280,14 +557,20 @@ def findFastStarTrackerImageSources(filename, boxSize, attachCutouts=True):
               `lsst.summit.utils.astrometry.fastStarTrackerAnalysis.Source`
         The sources in the image, sorted by rawFlux.
     """
-    exp = tifToExp(filename)
+    exp = openFile(filename)
     footprintSet = detectObjectsInExp(exp)
     footprints = footprintSet.getFootprints()
     bgMean, bgStd = getBackgroundLevel(exp)
 
+    dayObs, seqNum, frameNum = dayObsSeqNumFrameNumFromFilename(filename)
+
     sources = []
+    if len(footprints) == 0:
+        sources = [NanSource()]
+        return sources
+
     for footprint in footprints:
-        source = Source()
+        source = Source(dayObs=dayObs, seqNum=seqNum, frameNum=frameNum)
         source.nSourcesInImage = len(footprints)
         source.parentImageWidth, source.parentImageHeight = exp.getDimensions()
 
@@ -451,14 +734,34 @@ def plotSourceMovement(results, sourceIndex=0, allowInconsistent=False):
         image sequence, and the second is a scatter plot of the x and y, with
         the color showing the position in the sequence.
     """
+    opts = {
+        "marker": "o",
+        "markersize": 6,
+        "linestyle": "-",
+    }
+
     consistent = checkResultConsistency(results.values(), silent=True)
     if not consistent and not allowInconsistent:
         checkResultConsistency(results.values(), silent=False)  # print the problem if we're raising
         raise ValueError("The sources were found to be inconsistent and allowInconsistent=False")
 
     sourceDict = {k: v[sourceIndex] for k, v in results.items()}
-    seqNums = list(sourceDict.keys())
+    frameNums = [s.frameNum for s in sourceDict.values()]
     sources = list(sourceDict.values())
+
+    allDayObs = set(s.dayObs for s in sources)
+    allSeqNums = set(s.seqNum for s in sources)
+    if len(allDayObs) > 1 or len(allSeqNums) > 1:
+        raise ValueError(
+            "The sources are from multiple days or sequences, found"
+            f" {allDayObs} dayObs and {allSeqNums} seqNum values."
+        )
+    dayObs = allDayObs.pop()
+    seqNum = allSeqNums.pop()
+    startFrame = min(frameNums)
+    endFrame = max(frameNums)
+
+    title = f"dayObs {dayObs}, seqNum {seqNum}, frames {startFrame}-{endFrame}"
 
     axisLabelSize = 18
 
@@ -467,20 +770,31 @@ def plotSourceMovement(results, sourceIndex=0, allowInconsistent=False):
     ax1, ax2, ax3 = fig.subplots(3, sharex=True)
     fig.subplots_adjust(hspace=0)
 
-    ax1.plot(seqNums, [s.rawFlux for s in sources], label="Raw Flux")
-    ax1.plot(seqNums, [s.hsmFittedFlux for s in sources], label="Fitted Flux")
+    ax1.plot(frameNums, [s.rawFlux for s in sources], label="Raw Flux", **opts)
+    ax1.plot(frameNums, [s.hsmFittedFlux for s in sources], label="Fitted Flux", **opts)
     ax1.set_ylabel("Flux (ADU)", size=axisLabelSize)
+    ax1.set_title(title)
     ax1.legend()
 
-    ax2.plot(seqNums, [s.centroidX for s in sources], label="Raw centroid x")
-    ax2.plot(seqNums, [s.hsmCentroidX for s in sources], label="Fitted centroid x")
+    ax2.plot(frameNums, [s.centroidX for s in sources], label="Raw centroid x", **opts)
+    ax2.plot(
+        frameNums,
+        [s.hsmCentroidX for s in sources],
+        label="Fitted centroid x",
+        **opts,
+    )
     ax2.set_ylabel("x-centroid (pixels)", size=axisLabelSize)
     ax2.legend()
 
-    ax3.plot(seqNums, [s.centroidY for s in sources], label="Raw centroid y")
-    ax3.plot(seqNums, [s.hsmCentroidY for s in sources], label="Fitted centroid y")
+    ax3.plot(frameNums, [s.centroidY for s in sources], label="Raw centroid y", **opts)
+    ax3.plot(
+        frameNums,
+        [s.hsmCentroidY for s in sources],
+        label="Fitted centroid y",
+        **opts,
+    )
     ax3.set_ylabel("y-centroid (pixels)", size=axisLabelSize)
-    ax3.set_xlabel("SeqNum", size=axisLabelSize)
+    ax3.set_xlabel("Frame number", size=axisLabelSize)
     ax3.legend()
 
     figs.append(fig)
@@ -492,7 +806,10 @@ def plotSourceMovement(results, sourceIndex=0, allowInconsistent=False):
     # gnuplot2 has a nice balance of nothing white, and having an intuitive
     # progression of colours so the eye can pick out trends on the point cloud.
     axRef = ax4.scatter(
-        [s.centroidX for s in sources], [s.centroidY for s in sources], c=colors, cmap="gnuplot2"
+        [s.centroidX for s in sources],
+        [s.centroidY for s in sources],
+        c=colors,
+        cmap="gnuplot2",
     )
     ax4.set_xlabel("x-centroid (pixels)", size=axisLabelSize)
     ax4.set_ylabel("y-centroid (pixels)", size=axisLabelSize)
@@ -501,7 +818,8 @@ def plotSourceMovement(results, sourceIndex=0, allowInconsistent=False):
     divider = make_axes_locatable(ax4)
     cax = divider.append_axes("right", size="5%", pad=0.05)
     cbar = plt.colorbar(axRef, cax=cax)
-    cbar.set_label("Image number in series", size=axisLabelSize * 0.75)
+    ax4.set_title(title)
+    cbar.set_label("Frame number in series", size=axisLabelSize * 0.75)
     figs.append(fig)
 
     return figs
@@ -540,7 +858,7 @@ def plotSourcesOnImage(parentFilename, sources):
               `lsst.summit.utils.astrometry.fastStarTrackerAnalysis.Source`
         The sources found in the image.
     """
-    exp = tifToExp(parentFilename)
+    exp = openFile(parentFilename)
     data = exp.image.array
 
     fig = plt.figure(figsize=(16, 8))
