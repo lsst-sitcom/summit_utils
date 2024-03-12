@@ -54,7 +54,7 @@ __all__ = (
     "plotSourcesOnImage",
 )
 
-KNOWN_CAMERAS = ("regular", "wide", "fast")
+KNOWN_CAMERAS = ("narrow", "wide", "fast")
 
 
 @dataclass(frozen=True)
@@ -73,7 +73,7 @@ class StarTrackerCamera:
     doSmoothPlot: bool
 
 
-narrowCam = StarTrackerCamera("regular", "", "", True, 102, 5, 25, 0.95, 5, True)
+narrowCam = StarTrackerCamera("narrow", "", "", True, 102, 5, 25, 0.95, 5, True)
 wideCam = StarTrackerCamera("wide", "_wide", " wide", True, 101, 5, 25, 0.8, 5, True)
 fastCam = StarTrackerCamera("fast", "_fast", " fast", True, 103, 2.5, 10, 0.95, 60, False)
 
