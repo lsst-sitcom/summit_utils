@@ -31,6 +31,7 @@ from astropy.coordinates import AltAz, SkyCoord
 from astropy.coordinates.earth import EarthLocation
 from astropy.time import Time
 from dateutil.tz import gettz
+from matplotlib.patches import Rectangle
 from scipy.ndimage import gaussian_filter
 
 import lsst.afw.detection as afwDetect
@@ -1073,3 +1074,47 @@ def digitizeData(data, nColors=256):
     scale = (maxVal - minVal) / len(cdf)
     bins = np.floor((data * scale - minVal)).astype(np.int64)
     return cdf[bins]
+
+
+def getBboxAround(centroid, boxSize, exp):
+    """Get a bbox centered on a point, clipped to the exposure.
+
+    If the bbox would extend beyond the bounds of the exposure it is clipped to
+    the exposure, resulting in a non-square bbox.
+
+    Parameters
+    ----------
+    centroid : `lsst.geom.Point`
+        The source centroid.
+    boxsize : `int`
+        The size of the box to centre around the centroid.
+    exp : `lsst.afw.image.Exposure`
+        The exposure, so the bbox can be clipped to not overrun the bounds.
+
+    Returns
+    -------
+    bbox : `lsst.geom.Box2I`
+        The bounding box, centered on the centroid unless clipping to the
+        exposure causes it to be non-square.
+    """
+    bbox = geom.BoxI().makeCenteredBox(centroid, geom.Extent2I(boxSize, boxSize))
+    bbox = bbox.clippedTo(exp.getBBox())
+    return bbox
+
+
+def bboxToMatplotlibRectanle(bbox):
+    """Convert a bbox to a matplotlib Rectangle for plotting.
+
+    Parameters
+    ----------
+    results : `lsst.geom.Box2I` or `lsst.geom.Box2D`
+        The bbox to convert.
+
+    Returns
+    -------
+    rectangle : `bool`
+        The rectangle.
+    """
+    ll = bbox.minX, bbox.minY
+    width, height = bbox.getDimensions()
+    return Rectangle(ll, width, height)
