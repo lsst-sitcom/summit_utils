@@ -178,7 +178,7 @@ def isStreamingModeFile(filename):
     # streaming filenames are like GC103_O_20240304_000007_0001316.fits
     # which is <camNum>_O_<dayObs>_<seqNum>_<streamSeqNum>.fits
     # so 5 sections means streaming, 4 means normal
-    return len(os.path.basename(filename).split("_")) == 5
+    return os.path.basename(filename).count("_") == 4
 
 
 def dayObsSeqNumFromFilename(filename):
