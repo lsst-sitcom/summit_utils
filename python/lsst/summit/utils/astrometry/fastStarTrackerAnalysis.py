@@ -57,7 +57,7 @@ __all__ = (
 KNOWN_CAMERAS = ("narrow", "wide", "fast")
 
 
-@dataclass(frozen=True)
+@dataclass(frozen=True, kw_only=True, slots=True)
 class StarTrackerCamera:
     """A frozen dataclass for StarTracker camera configs"""
 
@@ -73,9 +73,42 @@ class StarTrackerCamera:
     doSmoothPlot: bool
 
 
-narrowCam = StarTrackerCamera("narrow", "", "", True, 102, 5, 25, 0.95, 5, True)
-wideCam = StarTrackerCamera("wide", "_wide", " wide", True, 101, 5, 25, 0.8, 5, True)
-fastCam = StarTrackerCamera("fast", "_fast", " fast", True, 103, 2.5, 10, 0.95, 60, False)
+narrowCam = StarTrackerCamera(
+    cameraType="narrow",
+    suffix="",
+    suffixWithSpace="",
+    doAstrometry=True,
+    cameraNumber=102,
+    snr=5,
+    minPix=25,
+    brightSourceFraction=0.95,
+    scaleError=5,
+    doSmoothPlot=True,
+)
+wideCam = StarTrackerCamera(
+    cameraType="wide",
+    suffix="_wide",
+    suffixWithSpace=" wide",
+    doAstrometry=True,
+    cameraNumber=101,
+    snr=5,
+    minPix=25,
+    brightSourceFraction=0.8,
+    scaleError=5,
+    doSmoothPlot=True,
+)
+fastCam = StarTrackerCamera(
+    cameraType="fast",
+    suffix="_fast",
+    suffixWithSpace=" fast",
+    doAstrometry=True,
+    cameraNumber=103,
+    snr=2.5,
+    minPix=10,
+    brightSourceFraction=0.95,
+    scaleError=60,
+    doSmoothPlot=False,
+)
 
 
 def tifToExp(filename):
