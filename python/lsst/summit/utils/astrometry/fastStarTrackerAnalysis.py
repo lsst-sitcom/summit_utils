@@ -716,8 +716,8 @@ def plotSourceMovement(results, sourceIndex=0, allowInconsistent=False):
     frameNums = [s.frameNum for s in sourceDict.values()]
     sources = list(sourceDict.values())
 
-    allDayObs = set([s.dayObs for s in sources])
-    allSeqNums = set([s.seqNum for s in sources])
+    allDayObs = set(s.dayObs for s in sources)
+    allSeqNums = set(s.seqNum for s in sources)
     if len(allDayObs) > 1 or len(allSeqNums) > 1:
         raise ValueError(
             "The sources are from multiple days or sequences, found"
