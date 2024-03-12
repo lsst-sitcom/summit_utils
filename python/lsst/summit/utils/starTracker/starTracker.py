@@ -30,8 +30,19 @@ import lsst.afw.image as afwImage
 from lsst.summit.utils.utils import dayObsIntToString
 
 __all__ = (
+    "KNOWN_CAMERAS",
+    "narrowCam",
+    "wideCam",
+    "fastCam",
     "StarTrackerCamera",
     "tifToExp",
+    "fitsToExp",
+    "openFile",
+    "dayObsToDateTime",
+    "isStreamingModeFile",
+    "dayObsSeqNumFromFilename",
+    "dayObsSeqNumFrameNumFromFilename",
+    "getRawDataDirForDayObs",
 )
 
 KNOWN_CAMERAS = ("narrow", "wide", "fast")
