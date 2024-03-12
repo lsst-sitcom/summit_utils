@@ -149,7 +149,7 @@ def fitsToExp(filename):
 
 
 def openFile(filename):
-    """Open a file as an exposure.
+    """Open a file as an exposure, based on the file type.
 
     Parameters
     ----------
@@ -240,9 +240,9 @@ def dayObsSeqNumFromFilename(filename):
 
 
 def dayObsSeqNumFrameNumFromFilename(filename):
-    """Get the dayObs and seqNum from a filename.
+    """Get the dayObs, seqNum and frameNum from a filename.
 
-    If the file is a streaming mode file (`None`, `None`) is returned.
+    If the file is not a streaming mode file then a `ValueError` is raised.
 
     Parameters
     ----------
@@ -251,12 +251,20 @@ def dayObsSeqNumFrameNumFromFilename(filename):
 
     Returns
     -------
-    dayObs : `int` or `None`
+    dayObs : `int`
         The dayObs.
-    seqNum : `int` or `None`
+    seqNum : `int`
         The seqNum.
+    frameNum : `int`
+        The frameNum.
+
+    Raises
+    ------
+    ValueError
+        Raised if the file is not a streaming mode file.
     """
-    # filenames are like GC101_O_20221114_000005.fits
+    # filenames are like GC103_O_20240308_000169_0000321.fits
+    # which follows the pattern <camNum>_O_<dayObs>_<seqNum>_<frameNum>.fits
     filename = os.path.basename(filename)  # in case we're passed a full path
 
     if not isStreamingModeFile(filename):
@@ -264,10 +272,10 @@ def dayObsSeqNumFrameNumFromFilename(filename):
 
     # this is a regular file
     parts = filename.split("_")
-    _, _, dayObs, seqNum, subSeqNumAndSuffix = parts
-    subSeqNum = subSeqNumAndSuffix.removesuffix(".fits")
+    _, _, dayObs, seqNum, frameNumAndSuffix = parts
+    frameNum = frameNumAndSuffix.removesuffix(".fits")
 
-    return int(dayObs), int(seqNum), int(subSeqNum)
+    return int(dayObs), int(seqNum), int(frameNum)
 
 
 def getRawDataDirForDayObs(rootDataPath, camera, dayObs):
