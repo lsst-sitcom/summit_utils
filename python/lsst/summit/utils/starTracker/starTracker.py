@@ -24,9 +24,12 @@ import os
 from dataclasses import dataclass
 
 import numpy as np
+from astropy.io import fits
 from PIL import Image
 
 import lsst.afw.image as afwImage
+import lsst.daf.base as dafBase
+from lsst.afw.image import ExposureInfo, VisitInfo
 from lsst.summit.utils.utils import dayObsIntToString
 
 __all__ = (
@@ -144,7 +147,27 @@ def fitsToExp(filename):
     exp : `lsst.afw.image.Exposure`
         The exposure.
     """
-    exp = afwImage.ExposureF(filename)
+    with fits.open(filename) as f:
+        header = f[0].header
+        data = f[1].data
+
+    data = np.asarray(data, dtype=np.float32)
+    img = afwImage.ImageF(data)
+    maskedIm = afwImage.MaskedImageF(img)
+
+    viDict = {}
+    viDict["exposureTime"] = header.get("EXPTIME")
+
+    # set the midpoint of BEG and END as the DATE
+    begin = datetime.datetime.fromisoformat(header.get("DATE-BEG"))
+    end = datetime.datetime.fromisoformat(header.get("DATE-END"))
+    mid = begin + (end - begin) / 2
+    newTime = dafBase.DateTime(mid.isoformat(), dafBase.DateTime.Timescale.TAI)
+    viDict["date"] = newTime
+
+    vi = VisitInfo(**viDict)
+    expInfo = ExposureInfo(visitInfo=vi)
+    exp = afwImage.ExposureF(maskedIm, exposureInfo=expInfo)
     return exp
 
 
