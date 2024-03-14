@@ -336,7 +336,7 @@ def detectObjectsInExp(
 
 
 def fluxesFromFootprints(
-    footprints: (FootprintSet | Footprint | Iterable[Footprint]),
+    footprints: FootprintSet | Footprint | Iterable[Footprint],
     parentImage: afwImage.Image,
     subtractImageMedian=False,
 ) -> List[float]:
