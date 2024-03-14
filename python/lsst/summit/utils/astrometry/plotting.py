@@ -42,14 +42,14 @@ if TYPE_CHECKING:
 
 
 def plot(
-    exp: afwImage.Exposure,
-    icSrc: afwTable.SourceCatalog = None,
-    filteredSources: afwTable.SourceCatalog = None,
+    exp: "afwImage.Exposure",
+    icSrc: "afwTable.SourceCatalog" = None,
+    filteredSources: "afwTable.SourceCatalog" = None,
     saveAs: str = None,
     clipMin: float = 1,
     clipMax: float = 1000000,
     doSmooth: bool = True,
-    fig: matplotlib.figure.Figure | None = None,
+    fig: "matplotlib.figure.Figure" | None = None,
 ) -> None:
     """Plot an exposure, overlaying the selected sources and compass arrows.
 

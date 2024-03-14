@@ -73,7 +73,7 @@ class AstrometryNetResult:
         self.rmsErrorArsec
 
     @cached_property
-    def wcs(self) -> Any:
+    def wcs(self) -> "Any":
         with fits.open(self.wcsFile) as f:
             header = f[0].header
         return headerToWcs(header)
@@ -187,7 +187,7 @@ class CommandLineSolver:
             f.writelines(line + "\n" for line in lines)
         return filename
 
-    def _writeFitsTable(self, sourceCat: afwTable.SourceCatalog) -> str:
+    def _writeFitsTable(self, sourceCat: "afwTable.SourceCatalog") -> str:
         """Write the source table to a FITS file and return the filename.
 
         Parameters
@@ -223,15 +223,15 @@ class CommandLineSolver:
     # to the run method on the OnlineSolver
     def run(
         self,
-        exp: afwImage.Exposure,
-        sourceCat: afwTable.SourceCatalog,
+        exp: "afwImage.Exposure",
+        sourceCat: "afwTable.SourceCatalog",
         isWideField: bool,
         *,
         useGaia: bool = False,
         percentageScaleError: int = 10,
         radius: float | None = None,
         silent: bool = True,
-    ) -> AstrometryNetResult | None:
+    ) -> "AstrometryNetResult | None":
         """Get the astrometric solution for an image using astrometry.net using
         the binary ``solve-field`` and a set of index files.
 
@@ -367,13 +367,13 @@ class OnlineSolver:
     # to the run method on the CommandLineSolver
     def run(
         self,
-        exp: afwImage.Exposure,
-        sourceCat: afwTable.SourceCatalog,
+        exp: "afwImage.Exposure",
+        sourceCat: "afwTable.SourceCatalog",
         *,
         percentageScaleError: float = 10,
         radius: float | None = None,
         scaleEstimate: float | None = None,
-    ) -> Dict[str, Any]:
+    ) -> "Dict[str, Any] | None":
         """Get the astrometric solution for an image using the astrometry.net
         online solver.
 

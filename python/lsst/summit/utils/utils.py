@@ -22,6 +22,7 @@
 import datetime
 import logging
 import os
+from collections.abc import Iterable
 from typing import TYPE_CHECKING
 
 import astropy.units as u
@@ -50,9 +51,10 @@ from lsst.obs.lsst.translators.lsst import FILTER_DELIMITER
 from .astrometry.utils import genericCameraHeaderToWcs
 
 if TYPE_CHECKING:
-    from typing import Iterable, List, Tuple
+    from typing import List, Tuple
 
     import astro_metadata_translator
+    import matplotlib
 
     import lsst.afw.detection as afwDetection
     import lsst.daf.butler as dafButler
@@ -109,7 +111,7 @@ GOOGLE_CLOUD_MISSING_MSG = (
 )
 
 
-def countPixels(maskedImage: afwImage.MaskedImage, maskPlane: str) -> int:
+def countPixels(maskedImage: "afwImage.MaskedImage", maskPlane: str) -> int:
     """Count the number of pixels in an image with a given mask bit set.
 
     Parameters
@@ -128,7 +130,7 @@ def countPixels(maskedImage: afwImage.MaskedImage, maskPlane: str) -> int:
     return len(np.where(np.bitwise_and(maskedImage.mask.array, bit))[0])
 
 
-def quickSmooth(data: np.array, sigma: int = 2) -> np.array:
+def quickSmooth(data: "np.array", sigma: int = 2) -> "np.array":
     """Perform a quick smoothing of the image.
 
     Not to be used for scientific purposes, but improves the stretch and
@@ -151,7 +153,7 @@ def quickSmooth(data: np.array, sigma: int = 2) -> np.array:
     return smoothData
 
 
-def argMax2d(array: np.array) -> Tuple[Tuple[int, int], bool, List[Tuple[int, int]]]:
+def argMax2d(array: "np.array") -> "Tuple[Tuple[int, int], bool, List[Tuple[int, int]]]":
     """Get the index of the max value of an array and whether it's unique.
 
     If its not unique, returns a list of the other locations containing the
@@ -228,7 +230,7 @@ def dayObsSeqNumToVisitId(dayObs: int, seqNum: int) -> int:
     return int(f"{dayObs}{seqNum:05}")
 
 
-def getImageStats(exp: afwImage.Exposure) -> pipeBase.Struct:
+def getImageStats(exp: "afwImage.Exposure") -> "pipeBase.Struct":
     """Calculate a grab-bag of stats for an image. Must remain fast.
 
     Parameters
@@ -300,8 +302,8 @@ def getImageStats(exp: afwImage.Exposure) -> pipeBase.Struct:
 
 
 def detectObjectsInExp(
-    exp: afwImage.Exposure, nSigma: int = 10, nPixMin: int = 10, grow: int = 0
-) -> FootprintSet:
+    exp: "afwImage.Exposure", nSigma: int = 10, nPixMin: int = 10, grow: int = 0
+) -> "afwDetect.FootprintSet":
     """Quick and dirty object detection for an exposure.
 
     Return the footPrintSet for the objects in a preferably-postISR exposure.
@@ -336,10 +338,10 @@ def detectObjectsInExp(
 
 
 def fluxesFromFootprints(
-    footprints: FootprintSet | Footprint | Iterable[Footprint],
-    parentImage: afwImage.Image,
+    footprints: "afwDetect.FootprintSet | afwDetect.Footprint | Iterable[afwDetect.Footprint]",
+    parentImage: "afwImage.Image",
     subtractImageMedian=False,
-) -> List[float]:
+) -> "List[float]":
     """Calculate the flux from a set of footprints, given the parent image,
     optionally subtracting the whole-image median from each pixel as a very
     rough background subtraction.
@@ -389,7 +391,7 @@ def fluxesFromFootprints(
 
 
 def fluxFromFootprint(
-    footprint: afwDetection.Footprint, parentImage: afwImage.Image, backgroundValue: float = 0
+    footprint: "afwDetection.Footprint", parentImage: "afwImage.Image", backgroundValue: float = 0
 ) -> float:
     """Calculate the flux from a footprint, given the parent image, optionally
     subtracting a single value from each pixel as a very rough background
@@ -417,7 +419,7 @@ def fluxFromFootprint(
     return footprint.computeFluxFromImage(parentImage)
 
 
-def humanNameForCelestialObject(objName: str) -> List[str]:
+def humanNameForCelestialObject(objName: str) -> "List[str]":
     """Returns a list of all human names for obj, or [] if none are found.
 
     Parameters
@@ -444,8 +446,8 @@ def humanNameForCelestialObject(objName: str) -> List[str]:
 
 
 def _getAltAzZenithsFromSeqNum(
-    butler: dafButler.Butler, dayObs: int, seqNumList: List[int]
-) -> Tuple[List[float], List[float], List[float]]:
+    butler: "dafButler.Butler", dayObs: int, seqNumList: "List[int]"
+) -> "Tuple[List[float], List[float], List[float]]":
     """Get the alt, az and zenith angle for the seqNums of a given dayObs.
 
     Parameters
@@ -478,7 +480,7 @@ def _getAltAzZenithsFromSeqNum(
     return azimuths, elevations, zeniths
 
 
-def getFocusFromHeader(exp: afwImage.Exposure) -> float | None:
+def getFocusFromHeader(exp: "afwImage.Exposure") -> float | None:
     """Get the raw focus value from the header.
 
     Parameters
@@ -573,7 +575,7 @@ def getCurrentDayObs_humanStr() -> str:
     return dayObsIntToString(getCurrentDayObs_int())
 
 
-def getExpRecordAge(expRecord: dafButler.butler.DimensionRecord) -> float:
+def getExpRecordAge(expRecord: "dafButler.DimensionRecord") -> float:
     """Get the time, in seconds, since the end of exposure.
 
     Parameters
@@ -642,14 +644,14 @@ def getSite() -> str:
 
 
 def getAltAzFromSkyPosition(
-    skyPos: geom.SpherePoint,
-    visitInfo: afwImage.VisitInfo,
+    skyPos: "geom.SpherePoint",
+    visitInfo: "afwImage.VisitInfo",
     doCorrectRefraction: bool = False,
     wavelength: float = 500.0,
     pressureOverride: float | None = None,
     temperatureOverride: float | None = None,
     relativeHumidityOverride: float | None = None,
-):
+) -> "Tuple[geom.Angle, geom.Angle]":
     """Get the alt/az from the position on the sky and the time and location
     of the observation.
 
@@ -734,11 +736,11 @@ def getAltAzFromSkyPosition(
 
 
 def getExpPositionOffset(
-    exp1: afwImage.Exposure,
-    exp2: afwImage.Exposure,
+    exp1: "afwImage.Exposure",
+    exp2: "afwImage.Exposure",
     useWcs: bool = True,
     allowDifferentPlateScales: bool = False,
-) -> pipeBase.Struct:
+) -> "pipeBase.Struct":
     """Get the change in sky position between two exposures.
 
     Given two exposures, calculate the offset on the sky between the images.
@@ -886,7 +888,7 @@ def starTrackerFileToExposure(filename: str, logger: logging.Logger = None):
     return exp
 
 
-def obsInfoToDict(obsInfo: astro_metadata_translator.ObservationInfo) -> dict:
+def obsInfoToDict(obsInfo: "astro_metadata_translator.ObservationInfo") -> dict:
     """Convert an ObservationInfo to a dict.
 
     Parameters
@@ -903,8 +905,8 @@ def obsInfoToDict(obsInfo: astro_metadata_translator.ObservationInfo) -> dict:
 
 
 def getFieldNameAndTileNumber(
-    field: str, warn: bool = True, logger: logging.Logger = None
-) -> Tuple[str, int]:
+    field: str, warn: bool = True, logger: "logging.Logger" = None
+) -> "Tuple[str, int]":
     """Get the tile name and number of an observed field.
 
     It is assumed to always be appended, with an underscore, to the rest of the
@@ -1001,7 +1003,7 @@ def getFilterSeeingCorrection(filterName: str) -> float:
             raise ValueError(f"Unknown filter name: {filterName}")
 
 
-def getCdf(data: np.ndarray, scale: int, nBinsMax: int = 300_000) -> np.ndarray[int]:
+def getCdf(data: np.ndarray, scale: int, nBinsMax: int = 300_000) -> "np.ndarray[int]":
     """Return an approximate cumulative distribution function scaled to
     the [0, scale] range.
 
@@ -1048,7 +1050,7 @@ def getCdf(data: np.ndarray, scale: int, nBinsMax: int = 300_000) -> np.ndarray[
     return cdf, minVal, maxVal
 
 
-def getQuantiles(data: np.ndarray, nColors: int) -> List[float]:
+def getQuantiles(data: "np.ndarray", nColors: int) -> "List[float]":
     """Get a set of boundaries that equally distribute data into
     nColors intervals. The output can be used to make a colormap of nColors
     colors.
@@ -1092,7 +1094,7 @@ def getQuantiles(data: np.ndarray, nColors: int) -> List[float]:
     return boundaries
 
 
-def digitizeData(data: np.ndarray, nColors: int = 256) -> np.ndarray[int]:
+def digitizeData(data: "np.ndarray", nColors: int = 256) -> "np.ndarray[int]":
     """
     Scale data into nColors using its cumulative distribution function.
 
@@ -1114,7 +1116,7 @@ def digitizeData(data: np.ndarray, nColors: int = 256) -> np.ndarray[int]:
     return cdf[bins]
 
 
-def getBboxAround(centroid, boxSize, exp):
+def getBboxAround(centroid: "geom.Point", boxSize: int, exp: "afwImage.Exposure") -> "geom.Box2I":
     """Get a bbox centered on a point, clipped to the exposure.
 
     If the bbox would extend beyond the bounds of the exposure it is clipped to
@@ -1140,7 +1142,7 @@ def getBboxAround(centroid, boxSize, exp):
     return bbox
 
 
-def bboxToMatplotlibRectanle(bbox):
+def bboxToMatplotlibRectanle(bbox: "geom.Box2I | geom.Box2D") -> "matplotlib.patches.Rectangle":
     """Convert a bbox to a matplotlib Rectangle for plotting.
 
     Parameters
@@ -1150,7 +1152,7 @@ def bboxToMatplotlibRectanle(bbox):
 
     Returns
     -------
-    rectangle : `bool`
+    rectangle : `matplotlib.patches.Rectangle`
         The rectangle.
     """
     ll = bbox.minX, bbox.minY

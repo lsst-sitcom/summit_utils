@@ -22,6 +22,7 @@
 import datetime
 import os
 from dataclasses import dataclass
+from typing import TYPE_CHECKING
 
 import numpy as np
 from astropy.io import fits
@@ -31,6 +32,12 @@ import lsst.afw.image as afwImage
 import lsst.daf.base as dafBase
 from lsst.afw.image import ExposureInfo, VisitInfo
 from lsst.summit.utils.utils import dayObsIntToString
+
+if TYPE_CHECKING:
+    from typing import Tuple
+
+    import lsst.rubintv.production as rubintvProduction
+
 
 __all__ = (
     "KNOWN_CAMERAS",
@@ -105,7 +112,7 @@ fastCam = StarTrackerCamera(
 )
 
 
-def tifToExp(filename):
+def tifToExp(filename: str) -> "afwImage.Exposure":
     """Open a tif image as an exposure.
 
     Opens the file, sets a blank mask plane, and converts the data to
@@ -134,7 +141,7 @@ def tifToExp(filename):
     return exp
 
 
-def fitsToExp(filename):
+def fitsToExp(filename: str) -> "afwImage.Exposure":
     """Open a fits file as an exposure.
 
     Parameters
@@ -171,7 +178,7 @@ def fitsToExp(filename):
     return exp
 
 
-def openFile(filename):
+def openFile(filename: str) -> "afwImage.Exposure":
     """Open a file as an exposure, based on the file type.
 
     Parameters
@@ -192,7 +199,7 @@ def openFile(filename):
         raise ValueError("File type not recognized")
 
 
-def dayObsToDateTime(dayObs):
+def dayObsToDateTime(dayObs: int) -> datetime.datetime:
     """Convert a dayObs to a datetime.
 
     Parameters
@@ -208,7 +215,7 @@ def dayObsToDateTime(dayObs):
     return datetime.datetime.strptime(dayObsIntToString(dayObs), "%Y-%m-%d")
 
 
-def isStreamingModeFile(filename):
+def isStreamingModeFile(filename: str) -> bool:
     """Check if a filename is a streaming mode file.
 
     Parameters
@@ -228,7 +235,7 @@ def isStreamingModeFile(filename):
     return os.path.basename(filename).count("_") == 4
 
 
-def dayObsSeqNumFromFilename(filename):
+def dayObsSeqNumFromFilename(filename: str) -> "Tuple[int, int]":
     """Get the dayObs and seqNum from a filename.
 
     If the file is a streaming mode file (`None`, `None`) is returned.
@@ -262,7 +269,7 @@ def dayObsSeqNumFromFilename(filename):
     return int(dayObs), int(seqNum)
 
 
-def dayObsSeqNumFrameNumFromFilename(filename):
+def dayObsSeqNumFrameNumFromFilename(filename: str) -> "Tuple[int, int, int]":
     """Get the dayObs, seqNum and frameNum from a filename.
 
     If the file is not a streaming mode file then a `ValueError` is raised.
@@ -301,7 +308,9 @@ def dayObsSeqNumFrameNumFromFilename(filename):
     return int(dayObs), int(seqNum), int(frameNum)
 
 
-def getRawDataDirForDayObs(rootDataPath, camera, dayObs):
+def getRawDataDirForDayObs(
+    rootDataPath: str, camera: "rubintvProduction.starTracker.StarTrackerCamera", dayObs: int
+) -> str:
     """Get the raw data dir for a given dayObs.
 
     Parameters

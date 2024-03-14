@@ -33,7 +33,7 @@ if TYPE_CHECKING:
 
 
 def hasTimebaseErrors(
-    expRecord: dafButler.dimensions.DimensionRecord, client: EfdClient, maxDiff: float = 1.05
+    expRecord: "dafButler.dimensions.DimensionRecord", client: "EfdClient", maxDiff: float = 1.05
 ) -> bool:
     """Check if an exposure has cRIO timebase errors.
 

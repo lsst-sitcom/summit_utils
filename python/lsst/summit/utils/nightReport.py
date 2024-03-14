@@ -21,7 +21,6 @@
 
 import logging
 import pickle
-from collections.abc import Callable
 from dataclasses import dataclass
 from typing import TYPE_CHECKING
 
@@ -36,13 +35,15 @@ from lsst.utils.iteration import ensure_iterable
 from .utils import getFieldNameAndTileNumber, obsInfoToDict
 
 if TYPE_CHECKING:
+    import datetime
+    from collections.abc import Callable
     from typing import Any, Dict, List, Tuple
 
     import lsst.daf.butler as dafButler
 
 
 try:  # TODO: Remove post RFC-896: add humanize to rubin-env
-    precisedelta: Callable[[Any], str]
+    precisedelta: "Callable[[Any], str]"
     from humanize.time import precisedelta
 
     HAVE_HUMANIZE = True
@@ -110,7 +111,7 @@ class ColorAndMarker:
 class NightReport:
     _version = 1
 
-    def __init__(self, butler: dafButler.Butler, dayObs: int, loadFromFile: str = None):
+    def __init__(self, butler: "dafButler.Butler", dayObs: int, loadFromFile: str = None):
         self._supressAstroMetadataTranslatorWarnings()  # call early
         self.log = logging.getLogger("lsst.summit.utils.NightReport")
         self.butler = butler
@@ -212,7 +213,7 @@ class NightReport:
             record["target_name_short"] = shortTarget
         return self._getSortedData(records)
 
-    def getObsInfoAndMetadataForSeqNum(self, seqNum: int) -> Tuple[ObservationInfo, dict]:
+    def getObsInfoAndMetadataForSeqNum(self, seqNum: int) -> "Tuple[ObservationInfo, dict]":
         """Get the obsInfo and metadata for a given seqNum.
 
         TODO: Once we have a summit repo containing all this info, remove this
@@ -317,8 +318,8 @@ class NightReport:
         return allTargets
 
     def getSeqNumsMatching(
-        self, invert: bool = False, subset: List[int] = None, **kwargs: Dict[str, Any]
-    ) -> List[int]:
+        self, invert: bool = False, subset: "List[int]" = None, **kwargs: "Dict[str, Any]"
+    ) -> "List[int]":
         """Get seqNums which match/don't match all kwargs provided, e.g.
 
         report.getSeqNumsMatching(exposure_time=30,
@@ -454,7 +455,7 @@ class NightReport:
         sciEff = 100 * (timings["scienceTimeTotal"] / timings["nightLength"])
         print(f"Science shutter efficiency = {sciEff:.1f}%")
 
-    def getTimeDeltas(self) -> Dict[int, float]:
+    def getTimeDeltas(self) -> "Dict[int, float]":
         """Returns a dict, keyed by seqNum, of the time since the end of the
         last integration. The time since does include the readout, so is always
         greater than or equal to the readout time.
@@ -560,7 +561,7 @@ class NightReport:
                 return None
             return min(seqNums)
 
-    def printObsTable(self, **kwargs: Dict[str, Any]) -> None:
+    def printObsTable(self, **kwargs: "Dict[str, Any]") -> None:
         """Print a table of the days observations.
 
         Parameters
@@ -593,7 +594,7 @@ class NightReport:
         for line in lines:
             print(line)
 
-    def getExposureMidpoint(self, seqNum):
+    def getExposureMidpoint(self, seqNum: int) -> "datetime.datetime":
         """Return the midpoint of the exposure as a float in MJD.
 
         Parameters
@@ -611,7 +612,7 @@ class NightReport:
         return ((timespan.begin) + expTime / 2).to_datetime()
 
     def plotPerObjectAirMass(
-        self, objects: List[str] = None, airmassOneAtTop: bool = True, saveFig: str = ""
+        self, objects: "List[str]" = None, airmassOneAtTop: bool = True, saveFig: str = ""
     ) -> None:
         """Plot the airmass for objects observed over the course of the night.
 
@@ -662,8 +663,8 @@ class NightReport:
 
     def _makePolarPlot(
         self,
-        azimuthsInDegrees: List[float],
-        zenithAngles: List[float],
+        azimuthsInDegrees: "List[float]",
+        zenithAngles: "List[float]",
         marker: str = "*-",
         title: str | None = None,
         makeFig: bool = True,
@@ -705,7 +706,7 @@ class NightReport:
         return ax
 
     def makeAltAzCoveragePlot(
-        self, objects: List[str] | None = None, withLines: bool = False, saveFig: str = ""
+        self, objects: "List[str] | None" = None, withLines: bool = False, saveFig: str = ""
     ) -> None:
         """Make a polar plot of the azimuth and zenith angle for each object.
 

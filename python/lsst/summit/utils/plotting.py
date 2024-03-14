@@ -20,13 +20,13 @@
 # along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
 import logging
+from typing import TYPE_CHECKING
 
 import astropy.visualization as vis
 import matplotlib.colors as colors
 import matplotlib.pyplot as plt
 import numpy as np
 from mpl_toolkits.axes_grid1.axes_divider import make_axes_locatable
-from pyting import TYPE_CHECKING
 
 import lsst.afw.image as afwImage
 import lsst.geom as geom
@@ -44,11 +44,11 @@ if TYPE_CHECKING:
 
 
 def drawCompass(
-    ax: matplotlib.axes.Axes,
-    wcs: afwGeom.SkyWcs,
+    ax: "matplotlib.axes.Axes",
+    wcs: "afwGeom.SkyWcs",
     compassLocation: int = 300,
     arrowLength: float = 300.0,
-) -> matplotlib.axes.Axes:
+) -> "matplotlib.axes.Axes":
     """
     Draw the compass.
     The arrowLength is the length of compass arrows (arrows should have
@@ -125,13 +125,13 @@ def drawCompass(
 
 
 def plot(
-    inputData: np.ndarray | afwImage.Exposure | afwImage.Image | afwImage.MaskedImage,
-    figure: matplotlib.figure.Figure | None = None,
-    centroids: List[Tuple[int, int]] | None = None,
+    inputData: "np.ndarray | afwImage.Exposure | afwImage.Image | afwImage.MaskedImage",
+    figure: "matplotlib.figure.Figure | None" = None,
+    centroids: "List[Tuple[int, int]] | None" = None,
     footprints: (
-        afwDetection.FootprintSet | afwDetection.Footprint | List[afwDetection.Footprint] | None
+        "afwDetection.FootprintSet | afwDetection.Footprint | List[afwDetection.Footprint] | None"
     ) = None,
-    sourceCat: afwTable.SourceCatalog = None,
+    sourceCat: "afwTable.SourceCatalog" = None,
     title: str = None,
     showCompass: bool = True,
     stretch: str = "linear",
@@ -140,8 +140,8 @@ def plot(
     compassLocation: int = 300,
     addLegend: bool = False,
     savePlotAs: str = None,
-    logger: logging.Logger = None,
-) -> matplotlib.figure.Figure:
+    logger: "logging.Logger" = None,
+) -> "matplotlib.figure.Figure":
     """Plot an input image accommodating different data types and additional
     features, like: overplotting centroids, compass (if the input image
     has a WCS), stretching, plot title, and legend.

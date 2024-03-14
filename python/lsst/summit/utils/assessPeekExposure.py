@@ -46,9 +46,9 @@ from lsst.summit.utils.peekExposure import PeekExposureTask
 
 if TYPE_CHECKING:
     import argparse
+    from typing import Tuple
 
     import astropy
-    from typint import Tuple
 
 # Set logger level to higher than CRITICAL to suppress all output
 silentLogger = logging.getLogger("silentLogger")
@@ -86,7 +86,7 @@ def initializePoolProcess():
 
 
 # retrieve best-effort-isr and run PET on it
-def doWork(idx: int, row: astropy.table.Row, doPlot: bool) -> Tuple(str, str, float, int):
+def doWork(idx: int, row: "astropy.table.Row", doPlot: bool) -> "Tuple(str, str, float, int)":
     """Run PeekExposureTask on a single exposure.
 
     Parameters
@@ -200,7 +200,7 @@ def doWork(idx: int, row: astropy.table.Row, doPlot: bool) -> Tuple(str, str, fl
     return inTag, outTag, runtime, exposureId
 
 
-def main(args: argparse.Namespace) -> None:
+def main(args: "argparse.Namespace") -> None:
     # Set up cache directory and register cleanup
     defined, cacheDir = DatastoreCacheManager.set_fallback_cache_directory_if_unset()
     if defined:
