@@ -180,7 +180,7 @@ class BlockParser:
         The EFD client to use. If not specified, a new one is created.
     """
 
-    def __init__(self, dayObs: int, client: EfdClient | None = None):
+    def __init__(self, dayObs: int, client: "EfdClient | None" = None):
         self.log = logging.getLogger("lsst.summit.utils.blockUtils.BlockParser")
         self.dayObs = dayObs
 
@@ -300,7 +300,7 @@ class BlockParser:
             values.remove(None)
         return sorted(values)
 
-    def getBlockNums(self) -> List[int]:
+    def getBlockNums(self) -> "List[int]":
         """Get the block numbers which were run on the specified dayObs.
 
         Returns
@@ -310,7 +310,7 @@ class BlockParser:
         """
         return self._listColumnValues("blockNum")
 
-    def getSeqNums(self, block: int) -> Set[int]:
+    def getSeqNums(self, block: int) -> "Set[int]":
         """Get the seqNums for the specified block.
 
         Parameters
@@ -452,8 +452,8 @@ class BlockParser:
         return blockInfo
 
     def getEventsForBlock(
-        self, events: summitUtils.tmaUtils.TMAEvent, block: int, seqNum: int
-    ) -> summitUtils.tmaUtils.TMAEvent:
+        self, events: "summitUtils.tmaUtils.TMAEvent", block: int, seqNum: int
+    ) -> "summitUtils.tmaUtils.TMAEvent":
         """Get the events which occurred during the specified block.
 
         Parameters

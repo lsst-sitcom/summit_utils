@@ -41,7 +41,7 @@ except ImportError:
     HAS_EFD_CLIENT = False
 
 if TYPE_CHECKING:
-    from typing import List, Tuple
+    from typing import Dict, List, Tuple
 
     import astropy
 
@@ -84,12 +84,12 @@ TIME_CHUNKING = datetime.timedelta(minutes=15)
 
 def _getBeginEnd(
     dayObs: int = None,
-    begin: astropy.Time | None = None,
-    end: astropy.Time | None = None,
-    timespan: astropy.TimeDelta | None = None,
-    event: summitUtils.efdUtils.TmaEvent | None = None,
+    begin: "astropy.time.Time | None" = None,
+    end: "astropy.time.Time | None" = None,
+    timespan: "astropy.TimeDelta | None" = None,
+    event: "summitUtils.efdUtils.TmaEvent | None" = None,
     expRecord: int | None = None,
-) -> Tuple(astropy.Time, astropy.Time):
+) -> "Tuple[astropy.time.Time, astropy.time.Time]":
     """Calculate the begin and end times to pass to _getEfdData, given the
     kwargs passed to getEfdData.
 
@@ -168,20 +168,20 @@ def _getBeginEnd(
 
 
 def getEfdData(
-    client: EfdClient,
+    client: "EfdClient",
     topic: str,
     *,
-    columns: List[str] = None,
+    columns: "List[str]" = None,
     prePadding: float = 0,
     postPadding: float = 0,
     dayObs: int | None = None,
-    begin: astropy.Time | None = None,
-    end: astropy.Time | None = None,
-    timespan: astropy.TimeDelta | None = None,
-    event: summitUtils.efd_utils.TmaEvent | None = None,
-    expRecord: dafButler.dimensions.DimensionRecord | None = None,
+    begin: "astropy.Time | None" = None,
+    end: "astropy.Time | None" = None,
+    timespan: "astropy.TimeDelta | None" = None,
+    event: "summitUtils.efd_utils.TmaEvent | None" = None,
+    expRecord: "dafButler.dimensions.DimensionRecord | None" = None,
     warn: bool = True,
-) -> pd.DataFrame:
+) -> "pd.DataFrame":
     """Get one or more EFD topics over a time range, synchronously.
 
     The time range can be specified as either:
@@ -276,8 +276,12 @@ def getEfdData(
 
 
 async def _getEfdData(
-    client: EfdClient, topic: str, begin: astropy.Time, end: astropy.Time, columns: List[str] | None = None
-) -> pd.DataFrame:
+    client: "EfdClient",
+    topic: str,
+    begin: "astropy.Time",
+    end: "astropy.Time",
+    columns: "List[str] | None" = None,
+) -> "pd.DataFrame":
     """Get data for a topic from the EFD over the specified time range.
 
     Parameters
@@ -295,7 +299,7 @@ async def _getEfdData(
 
     Returns
     -------
-    data : `pd.DataFrame`
+    data : `'pd.DataFrame'`
         The data from the query.
     """
     if columns is None:
@@ -313,7 +317,7 @@ async def _getEfdData(
 
 
 def getMostRecentRowWithDataBefore(
-    client: EfdClient, topic: str, timeToLookBefore: astropy.Time, warnStaleAfterNMinutes: int = 60 * 12
+    client: "EfdClient", topic: str, timeToLookBefore: "astropy.Time", warnStaleAfterNMinutes: int = 60 * 12
 ) -> pd.Series:
     """Get the most recent row of data for a topic before a given time.
 
@@ -372,7 +376,7 @@ def getMostRecentRowWithDataBefore(
     return lastRow
 
 
-def makeEfdClient(testing: bool | None = False) -> EfdClient:
+def makeEfdClient(testing: bool | None = False) -> "EfdClient":
     """Automatically create an EFD client based on the site.
 
     Parameters
@@ -415,7 +419,7 @@ def makeEfdClient(testing: bool | None = False) -> EfdClient:
     raise RuntimeError(f"Could not create EFD client as the {site=} is not recognized")
 
 
-def expRecordToTimespan(expRecord: dafButler.dimensions.ExposureRecord) -> dict:
+def expRecordToTimespan(expRecord: "dafButler.dimensions.ExposureRecord") -> dict:
     """Get the timespan from an exposure record.
 
     Returns the timespan in a format where it can be used to directly unpack
@@ -438,7 +442,7 @@ def expRecordToTimespan(expRecord: dafButler.dimensions.ExposureRecord) -> dict:
     }
 
 
-def efdTimestampToAstropy(timestamp: float) -> astropy.time.Time:
+def efdTimestampToAstropy(timestamp: float) -> "astropy.time.Time":
     """Get an efd timestamp as an astropy.time.Time object.
 
     Parameters
@@ -454,7 +458,7 @@ def efdTimestampToAstropy(timestamp: float) -> astropy.time.Time:
     return Time(timestamp, format="unix")
 
 
-def astropyToEfdTimestamp(time: astropy.time.Time) -> float:
+def astropyToEfdTimestamp(time: "astropy.time.Time") -> float:
     """Get astropy Time object as an efd timestamp
 
     Parameters
@@ -472,12 +476,12 @@ def astropyToEfdTimestamp(time: astropy.time.Time) -> float:
 
 
 def clipDataToEvent(
-    df: pd.DataFrame,
-    event: summitUtils.efd_utils.TmaEvent | None,
+    df: "pd.DataFrame",
+    event: "summitUtils.efd_utils.TmaEvent | None",
     prePadding: float = 0,
     postPadding: float = 0,
-    logger: logging.Logger | None = None,
-) -> pd.DataFrame:
+    logger: "logging.Logger | None" = None,
+) -> "pd.DataFrame":
     """Clip a padded dataframe to an event.
 
     Parameters
@@ -576,7 +580,7 @@ def calcPreviousDay(dayObs: int) -> int:
     return offsetDayObs(dayObs, -1)
 
 
-def getDayObsStartTime(dayObs: int) -> astropy.time.Time:
+def getDayObsStartTime(dayObs: int) -> "astropy.time.Time":
     """Get the start of the given dayObs as an astropy.time.Time object.
 
     The observatory rolls the date over at UTC-12.
@@ -595,7 +599,7 @@ def getDayObsStartTime(dayObs: int) -> astropy.time.Time:
     return Time(pythonDateTime) + 12 * u.hour
 
 
-def getDayObsEndTime(dayObs: int) -> astropy.time.Time:
+def getDayObsEndTime(dayObs: int) -> "astropy.time.Time":
     """Get the end of the given dayObs as an astropy.time.Time object.
 
     Parameters
@@ -611,7 +615,7 @@ def getDayObsEndTime(dayObs: int) -> astropy.time.Time:
     return getDayObsStartTime(dayObs) + 24 * u.hour
 
 
-def getDayObsForTime(time: astropy.time.Time) -> int:
+def getDayObsForTime(time: "astropy.time.Time") -> int:
     """Get the dayObs in which an astropy.time.Time object falls.
 
     Parameters
@@ -635,7 +639,7 @@ def getDayObsForTime(time: astropy.time.Time) -> int:
     version="w_2023_40",
     category=FutureWarning,
 )
-def getSubTopics(client: EfdClient, topic: str) -> List[str]:
+def getSubTopics(client: "EfdClient", topic: str) -> "List[str]":
     """Get all the sub topics within a given topic.
 
     Note that the topic need not be a complete one, for example, rather than
@@ -660,7 +664,7 @@ def getSubTopics(client: EfdClient, topic: str) -> List[str]:
     return sorted([t for t in topics if t.startswith(topic)])
 
 
-def getTopics(client: EfdClient, toFind: str, caseSensitive: bool = False) -> List[str]:
+def getTopics(client: "EfdClient", toFind: str, caseSensitive: bool = False) -> "List[str]":
     """Return all the strings in topics which match the topic query string.
 
     Supports wildcards, which are denoted as `*``, as per shell globs.
@@ -700,14 +704,14 @@ def getTopics(client: EfdClient, toFind: str, caseSensitive: bool = False) -> Li
 
 
 def getCommands(
-    client: EfdClient,
-    commands: astropy.time.Time,
-    begin: astropy.time.Time,
-    end: astropy.time.Time,
+    client: "EfdClient",
+    commands: "astropy.time.Time",
+    begin: "astropy.time.Time",
+    end: "astropy.time.Time",
     prePadding: float,
     postPadding: float,
     timeFormat: str = "python",
-):
+) -> "Dict[datetime.datetime, str]":
     """Retrieve the commands issued within a specified time range.
 
     Parameters

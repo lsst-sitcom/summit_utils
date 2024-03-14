@@ -80,7 +80,7 @@ class BestEffortIsr:
     def __init__(
         self,
         *,
-        extraCollections: List[str] = [],
+        extraCollections: "List[str]" = [],
         defaultExtraIsrOptions: dict = {},
         doRepairCosmics: bool = True,
         doWrite: bool = True,
@@ -120,7 +120,7 @@ class BestEffortIsr:
         self._cache = {}
         self._cacheIsForDetector = None
 
-    def _applyConfigOverrides(self, config: pexConfig, overrides: dict) -> None:
+    def _applyConfigOverrides(self, config: "pexConfig", overrides: dict) -> None:
         """Update a config class with a dict of options.
 
         Parameters
@@ -144,9 +144,9 @@ class BestEffortIsr:
 
     @staticmethod
     def updateDataId(
-        expIdOrDataId: int | dict | dafButler.DataCoordinate | dafButler.DimensionRecord,
-        **kwargs: Dict[str, Any],
-    ) -> dict | dafButler.DataCoordinate | dafButler.DimensionRecord:
+        expIdOrDataId: "int | dict | dafButler.DataCoordinate | dafButler.DimensionRecord",
+        **kwargs: "Dict[str, Any]",
+    ) -> "dict | dafButler.DataCoordinate | dafButler.DimensionRecord":
         """Sanitize the expIdOrDataId to allow support both expIds and dataIds
 
         Supports expId as an integer, or a complete or partial dict. The dict
@@ -192,7 +192,7 @@ class BestEffortIsr:
         extraIsrOptions: dict = {},
         skipCosmics: bool = False,
         forceRemake: bool = False,
-        **kwargs: Dict[str, Any],
+        **kwargs: "Dict[str, Any]",
     ):
         """Get the postIsr and cosmic-repaired image for this dataId.
 
