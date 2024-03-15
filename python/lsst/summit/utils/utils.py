@@ -963,11 +963,15 @@ def getFilterSeeingCorrection(filterName):
     """
     match filterName:
         case "SDSSg_65mm":
-            return (477.0 / 500.0) ** 0.2
+            return (474.41 / 500.0) ** 0.2
         case "SDSSr_65mm":
-            return (623.0 / 500.0) ** 0.2
+            return (628.47 / 500.0) ** 0.2
         case "SDSSi_65mm":
-            return (762.0 / 500.0) ** 0.2
+            return (769.51 / 500.0) ** 0.2
+        case "SDSSz_65mm":
+            return (871.45 / 500.0) ** 0.2
+        case "SDSSy_65mm":
+            return (986.8 / 500.0) ** 0.2
         case _:
             raise ValueError(f"Unknown filter name: {filterName}")
 
