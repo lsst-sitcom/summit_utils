@@ -20,20 +20,17 @@
 # along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
 import logging
-from typing import TYPE_CHECKING
 
 import numpy as np
+from lsst_efd_client.efd_helper import EfdClient
+
+import lsst.daf.butler as dafButler
 
 from ..efdUtils import getEfdData
 
-if TYPE_CHECKING:
-    from lsst_efd_client.efd_helper import EfdClient
-
-    import lsst.daf.butler as dafButler
-
 
 def hasTimebaseErrors(
-    expRecord: "dafButler.dimensions.DimensionRecord", client: "EfdClient", maxDiff: float = 1.05
+    expRecord: dafButler.dimensions.DimensionRecord, client: EfdClient, maxDiff: float = 1.05
 ) -> bool:
     """Check if an exposure has cRIO timebase errors.
 

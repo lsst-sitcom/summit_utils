@@ -21,8 +21,13 @@
 
 import dataclasses
 import os
-from typing import TYPE_CHECKING
+from typing import Any, Dict
 
+import numpy as np
+
+import lsst.afw.cameraGeom as afwCameraGeom
+import lsst.afw.image as afwImage
+import lsst.ip.isr as ipIsr
 import lsst.pex.config as pexConfig
 import lsst.pipe.base as pipeBase
 import lsst.pipe.base.connectionTypes as cT
@@ -31,15 +36,6 @@ from lsst.ip.isr.isrTask import IsrTaskConnections
 from lsst.meas.algorithms.installGaussianPsf import InstallGaussianPsfTask
 from lsst.pipe.tasks.characterizeImage import CharacterizeImageTask
 from lsst.utils import getPackageDir
-
-if TYPE_CHECKING:
-    from typing import Any, Dict
-
-    import numpy as np
-
-    import lsst.afw.cameraGeom as afwCameraGeom
-    import lsst.afw.image as afwImage
-    import lsst.ip.isr as ipIsr
 
 __all__ = ["QuickLookIsrTask", "QuickLookIsrTaskConfig"]
 
@@ -99,7 +95,7 @@ class QuickLookIsrTask(pipeBase.PipelineTask):
     ConfigClass = QuickLookIsrTaskConfig
     _DefaultName = "quickLook"
 
-    def __init__(self, isrTask: IsrTask = IsrTask, **kwargs: "Dict[str, Any]"):
+    def __init__(self, isrTask: IsrTask = IsrTask, **kwargs: Dict[str, Any]):
         super().__init__(**kwargs)
         # Pass in IsrTask so that we can modify it slightly for unit tests.
         # Note that this is not an instance of the IsrTask class, but the class
@@ -109,29 +105,29 @@ class QuickLookIsrTask(pipeBase.PipelineTask):
 
     def run(
         self,
-        ccdExposure: "afwImage.Exposure",
+        ccdExposure: afwImage.Exposure,
         *,
-        camera: "afwCameraGeom.Camera | None" = None,
-        bias: "afwImage.Exposure | None" = None,
-        dark: "afwImage.Exposure | None" = None,
-        flat: "afwImage.Exposure  | None" = None,
-        fringes: "afwImage.Exposure | None" = None,
-        defects: "ipIsr.Defects | None" = None,
-        linearizer: "ipIsr.linearize.LinearizeBase | None" = None,
-        crosstalk: "ipIsr.crosstalk.CrosstalkCalib | None" = None,
-        bfKernel: "np.ndarray" = None,
-        newBFKernel: "np.ndarray | None" = None,
-        ptc: "ipIsr.PhotonTransferCurveDataset | None" = None,
+        camera: afwCameraGeom.Camera | None = None,
+        bias: afwImage.Exposure | None = None,
+        dark: afwImage.Exposure | None = None,
+        flat: afwImage.Exposure | None = None,
+        fringes: afwImage.Exposure | None = None,
+        defects: ipIsr.Defects | None = None,
+        linearizer: ipIsr.linearize.LinearizeBase | None = None,
+        crosstalk: ipIsr.crosstalk.CrosstalkCalib | None = None,
+        bfKernel: np.ndarray | None = None,
+        newBFKernel: np.ndarray | None = None,
+        ptc: ipIsr.PhotonTransferCurveDataset | None = None,
         crosstalkSources: list | None = None,
-        isrBaseConfig: "ipIsr.IsrTaskConfig | None" = None,
-        filterTransmission: "afwImage.TransmissionCurve | None" = None,
-        opticsTransmission: "afwImage.TransmissionCurve | None" = None,
-        strayLightData: "Any | None" = None,
-        sensorTransmission: "afwImage.TransmissionCurve | None" = None,
-        atmosphereTransmission: "afwImage.TransmissionCurve | None" = None,
-        deferredChargeCalib: "Any | None" = None,
-        illumMaskedImage: "afwImage.MaskedImage | None" = None,
-    ) -> "pipeBase.Struct":
+        isrBaseConfig: ipIsr.IsrTaskConfig | None = None,
+        filterTransmission: afwImage.TransmissionCurve | None = None,
+        opticsTransmission: afwImage.TransmissionCurve | None = None,
+        strayLightData: Any | None = None,
+        sensorTransmission: afwImage.TransmissionCurve | None = None,
+        atmosphereTransmission: afwImage.TransmissionCurve | None = None,
+        deferredChargeCalib: Any | None = None,
+        illumMaskedImage: afwImage.MaskedImage | None = None,
+    ) -> pipeBase.Struct:
         """Run isr and cosmic ray repair using, doing as much isr as possible.
 
         Retrieves as many calibration products as are available, and runs isr

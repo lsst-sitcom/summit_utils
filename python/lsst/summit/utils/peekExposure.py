@@ -24,13 +24,19 @@ __all__ = [
     "PeekExposureTask",
 ]
 
-from typing import TYPE_CHECKING
 
+from typing import Any, Dict, List, Tuple
+
+import astropy
 import numpy as np
 
 import lsst.afw.display as afwDisplay
+import lsst.afw.geom as afwGeom
+import lsst.afw.image as afwImage
 import lsst.afw.math as afwMath
+import lsst.afw.table as afwTable
 import lsst.daf.base as dafBase
+import lsst.geom as geom
 import lsst.pex.config as pexConfig
 import lsst.pipe.base as pipeBase
 from lsst.afw.detection import Psf
@@ -43,20 +49,10 @@ from lsst.meas.algorithms import SourceDetectionTask, SubtractBackgroundTask
 from lsst.meas.algorithms.installGaussianPsf import InstallGaussianPsfTask
 from lsst.meas.base import IdGenerator, SingleFrameMeasurementTask
 
-if TYPE_CHECKING:
-    from typing import Any, Dict, List, Set, Tuple
-
-    import astropy
-
-    import lsst.afw.geom as afwGeom
-    import lsst.afw.image as afwImage
-    import lsst.afw.table as afwTable
-    import lsst.geom as geom
-
 IDX_SENTINEL = -99999
 
 
-def _estimateMode(data: "np.ndarray", frac: float = 0.5):
+def _estimateMode(data: np.ndarray, frac: float = 0.5):
     """Estimate the mode of a 1d distribution.
 
     Finds the smallest interval containing the fraction ``frac`` of the data,
@@ -88,11 +84,11 @@ def _estimateMode(data: "np.ndarray", frac: float = 0.5):
 
 
 def _bearingToUnitVector(
-    wcs: "afwGeom.SkyWcs",
-    bearing: "geom.Angle",
-    imagePoint: "geom.Point2D",
-    skyPoint: "geom.SpherePoint | None" = None,
-) -> "geom.Extent2D":
+    wcs: afwGeom.SkyWcs,
+    bearing: geom.Angle,
+    imagePoint: geom.Point2D,
+    skyPoint: geom.SpherePoint | None = None,
+) -> geom.Extent2D:
     """Compute unit vector along given bearing at given point in the sky.
 
     Parameters
@@ -117,9 +113,7 @@ def _bearingToUnitVector(
     return dpt / dpt.computeNorm()
 
 
-def roseVectors(
-    wcs: "afwGeom.SkyWcs", imagePoint: "geom.Point2D", parAng: "geom.Angle | None" = None
-) -> dict:
+def roseVectors(wcs: afwGeom.SkyWcs, imagePoint: geom.Point2D, parAng: geom.Angle | None = None) -> dict:
     """Compute unit vectors in the N/W and optionally alt/az directions.
 
     Parameters
@@ -153,11 +147,11 @@ def roseVectors(
 
 
 def plotRose(
-    display: "afwDisplay.Display",
-    wcs: "afwGeom.SkyWcs",
-    imagePoint: "geom.Point2D",
-    parAng: "geom.Angle | None" = None,
-    len: int = 50,
+    display: afwDisplay.Display,
+    wcs: afwGeom.SkyWcs,
+    imagePoint: geom.Point2D,
+    parAng: geom.Angle | None = None,
+    len: float = 50,
 ) -> None:
     """Display unit vectors along N/W and optionally alt/az directions.
 
@@ -183,7 +177,7 @@ def plotRose(
 
 
 class DonutPsf(Psf):
-    def __init__(self, size: int, outerRad: float, innerRad: float):
+    def __init__(self, size: float, outerRad: float, innerRad: float):
         Psf.__init__(self, isFixed=True)
         self.size = size
         self.outerRad = outerRad
@@ -218,7 +212,7 @@ class DonutPsf(Psf):
     def _doComputeApertureFlux(self, radius: float, position=None, color=None):
         return 1 - np.exp(-0.5 * (radius / self.sigma) ** 2)
 
-    def __eq__(self, rhs: "DonutPsf") -> bool:
+    def __eq__(self, rhs: object) -> bool:
         if isinstance(rhs, DonutPsf):
             return self.size == rhs.size and self.outerRad == rhs.outerRad and self.innerRad == rhs.innerRad
         return False
@@ -302,7 +296,7 @@ class PeekTask(pipeBase.Task):
         self.algMetadata = dafBase.PropertyList()
         self.makeSubtask("measurement", schema=self.schema, algMetadata=self.algMetadata)
 
-    def run(self, exposure: "afwImage.ExposureF", binSize: int | None = None) -> "pipeBase.Struct":
+    def run(self, exposure: afwImage.ExposureF, binSize: int | None = None) -> pipeBase.Struct:
         """Peek at exposure.
 
         Parameters
@@ -391,8 +385,8 @@ class PeekDonutTask(pipeBase.Task):
         self.makeSubtask("peek")
 
     def run(
-        self, exposure: "afwImage.exposureF", donutDiameter: float, binSize: int | None = None
-    ) -> "pipeBase.Struct":
+        self, exposure: afwImage.exposure, donutDiameter: float, binSize: int | None = None
+    ) -> pipeBase.Struct:
         """Peek at donut exposure.
 
         Parameters
@@ -456,7 +450,7 @@ class PeekDonutTask(pipeBase.Task):
             binnedSourceCat=peekResult.sourceCat,
         )
 
-    def getGoodSources(self, binnedSourceCat: "afwTable.SourceCatalog") -> "np.ndarray":
+    def getGoodSources(self, binnedSourceCat: afwTable.SourceCatalog) -> np.ndarray:
         """Perform any filtering on the source catalog.
 
         Parameters
@@ -509,7 +503,7 @@ class PeekPhotoTask(pipeBase.Task):
         super().__init__(config=config, **kwargs)
         self.makeSubtask("peek")
 
-    def run(self, exposure: "afwImage.Exposure", binSize: int | None = None) -> "pipeBase.Struct":
+    def run(self, exposure: afwImage.Exposure, binSize: int | None = None) -> pipeBase.Struct:
         """Peek at donut exposure.
 
         Parameters
@@ -543,7 +537,7 @@ class PeekPhotoTask(pipeBase.Task):
             binnedSourceCat=peekResult.sourceCat,
         )
 
-    def getGoodSources(self, binnedSourceCat: "afwTable.SourceCatalog") -> "np.ndarray":
+    def getGoodSources(self, binnedSourceCat: afwTable.SourceCatalog) -> np.ndarray:
         """Perform any filtering on the source catalog.
 
         Parameters
@@ -609,7 +603,7 @@ class PeekSpecTask(pipeBase.Task):
         super().__init__(config=config, **kwargs)
         self.makeSubtask("peek")
 
-    def run(self, exposure: "afwImage.Exposure", binSize: int | None = None) -> "pipeBase.Struct":
+    def run(self, exposure: afwImage.Exposure, binSize: int | None = None) -> pipeBase.Struct:
         """Peek at spectroscopic exposure.
 
         Parameters
@@ -643,7 +637,7 @@ class PeekSpecTask(pipeBase.Task):
             binnedSourceCat=peekResult.sourceCat,
         )
 
-    def getGoodSources(self, binnedSourceCat: "afwTable.SourceCatalog") -> "np.ndarray":
+    def getGoodSources(self, binnedSourceCat: afwTable.SourceCatalog) -> np.ndarray:
         """Perform any filtering on the source catalog.
 
         Parameters
@@ -724,7 +718,7 @@ class PeekExposureTask(pipeBase.Task):
     ConfigClass = PeekExposureTaskConfig
     _DefaultName = "peekExposureTask"
 
-    def __init__(self, config: "Any", *, display: "Any" = None, **kwargs: "Dict[str, Any]"):
+    def __init__(self, config: Any, *, display: Any = None, **kwargs: Dict[str, Any]):
         super().__init__(config=config, **kwargs)
 
         self.makeSubtask("donut")
@@ -733,7 +727,7 @@ class PeekExposureTask(pipeBase.Task):
 
         self._display = display
 
-    def getDonutDiameter(self, exposure: "afwImage.Exposure") -> float:
+    def getDonutDiameter(self, exposure: afwImage.Exposure) -> float:
         """Estimate donut diameter from exposure metadata.
 
         Parameters
@@ -764,7 +758,7 @@ class PeekExposureTask(pipeBase.Task):
 
     def run(
         self,
-        exposure: "afwImage.Exposure",
+        exposure: afwImage.Exposure,
         *,
         doDisplay: bool = False,
         doDisplayIndices: bool = False,
@@ -809,17 +803,17 @@ class PeekExposureTask(pipeBase.Task):
                     Index of brightest source in source catalog.
                 - brightestCentroid : `lsst.geom.Point2D`
                     Brightest source centroid in unbinned pixel coords.
-                - brightestPixelShape : `lsst.geom.Quadrupole`
+                - brightestPixelShape : `lsst.afw.geom.Quadrupole`
                     Brightest source shape in unbinned pixel coords.
-                - brightestEquatorialShape : `lsst.geom.Quadrupole`
+                - brightestEquatorialShape : `lsst.afw.geom.Quadrupole`
                     Brightest source shape in equitorial coordinates (arcsec).
-                - brightestAltAzShape : `lsst.geom.Quadrupole`
+                - brightestAltAzShape : `lsst.afw.geom.Quadrupole`
                     Brightest source shape in alt/az coordinates (arcsec).
-                - psfPixelShape : `lsst.geom.Quadrupole`
+                - psfPixelShape : `lsst.afw.geom.Quadrupole`
                     Estimated PSF shape in unbinned pixel coords.
-                - psfEquatorialShape : `lsst.geom.Quadrupole`
+                - psfEquatorialShape : `lsst.afw.geom.Quadrupole`
                     Estimated PSF shape in equitorial coordinates (arcsec).
-                - psfAltAzShape : `lsst.geom.Quadrupole`
+                - psfAltAzShape : `lsst.afw.geom.Quadrupole`
                     Estimated PSF shape in alt/az coordinates (arcsec).
                 - pixelMedian : `float`
                     Median estimate of entire image.
@@ -852,13 +846,13 @@ class PeekExposureTask(pipeBase.Task):
 
     def _run(
         self,
-        exposure: "afwImage.Exposure",
+        exposure: afwImage.Exposure,
         doDisplay: bool,
         doDisplayIndices: bool,
         mode: str,
-        binSize: int,
-        donutDiameter: float,
-    ) -> None:
+        binSize: int | None,
+        donutDiameter: float | None,
+    ) -> pipeBase.Struct:
         """The actual run method, called by run()."""
         # If image is ~large, then use a subsampling of the image for
         # speedy median/mode estimates.
@@ -888,11 +882,7 @@ class PeekExposureTask(pipeBase.Task):
         maxFluxIdx, brightCentroid, brightShape = self.getBrightest(binnedSourceCat, binSize, goodSourceMask)
         psfShape = self.getPsfShape(binnedSourceCat, binSize, goodSourceMask)
 
-        equatorialShapes, altAzShapes = self.transformShapes(
-            [brightShape, psfShape],
-            exposure,
-            binSize,
-        )
+        equatorialShapes, altAzShapes = self.transformShapes([brightShape, psfShape], exposure, binSize)
 
         if doDisplay:
             self.updateDisplay(exposure, binSize, binnedSourceCat, maxFluxIdx, doDisplayIndices)
@@ -916,11 +906,11 @@ class PeekExposureTask(pipeBase.Task):
 
     def runPeek(
         self,
-        exposure: "afwImage.Exposure",
-        mode: "Set[str]",
+        exposure: afwImage.Exposure,
+        mode: "str",
         donutDiameter: float,
         binSize: int | None = None,
-    ) -> "Tuple(str, int, afwTable.SourceCatalog)":
+    ) -> Tuple[str, int, afwTable.SourceCatalog]:
         """Classify exposure and run appropriate PeekTask wrapper.
 
         Parameters
@@ -978,9 +968,7 @@ class PeekExposureTask(pipeBase.Task):
                 raise ValueError(f"Unknown mode {mode}")
         return result.mode, binSizeOut, result.binnedSourceCat
 
-    def transformTable(
-        self, binSize: int, binnedSourceCat: "afwTable.SourceCatalog"
-    ) -> "astropy.table.Table":
+    def transformTable(self, binSize: int, binnedSourceCat: afwTable.SourceCatalog) -> astropy.table.Table:
         """Make an astropy table from the source catalog but with
         transformations back to the original unbinned coordinates.
 
@@ -1031,8 +1019,8 @@ class PeekExposureTask(pipeBase.Task):
         return table
 
     def getBrightest(
-        self, binnedSourceCat: "afwTable.SourceCatalog", binSize: int, goodSourceMask: "np.ndarray[bool]"
-    ) -> "Tuple(int, geom.Point2D, geom.Quadrupole)":
+        self, binnedSourceCat: afwTable.SourceCatalog, binSize: int, goodSourceMask: np.ndarray[bool]
+    ) -> Tuple[int, geom.Point2D, afwGeom.Quadrupole]:
         """Find the brightest source in the catalog.
 
         Parameters
@@ -1050,7 +1038,7 @@ class PeekExposureTask(pipeBase.Task):
             Index of the brightest source in the catalog.
         brightCentroid : `lsst.geom.Point2D`
             Centroid of the brightest source (unbinned coords).
-        brightShape : `lsst.geom.Quadrupole`
+        brightShape : `lsst.afw.geom.Quadrupole`
             Shape of the brightest source (unbinned coords).
         """
         fluxes = np.array([source.getApInstFlux() for source in binnedSourceCat])
@@ -1083,8 +1071,8 @@ class PeekExposureTask(pipeBase.Task):
         return maxFluxIdx, brightCentroid, brightShape
 
     def getPsfShape(
-        self, binnedSourceCat: "afwTable.SourceCatalog", binSize: int, goodSourceMask: "np.ndarray[bool]"
-    ) -> "geom.Quadrupole":
+        self, binnedSourceCat: afwTable.SourceCatalog, binSize: int, goodSourceMask: np.ndarray[bool]
+    ) -> afwGeom.Quadrupole:
         """Estimate the modal PSF shape from the sources.
 
         Parameters
@@ -1098,7 +1086,7 @@ class PeekExposureTask(pipeBase.Task):
 
         Returns
         -------
-        psfShape : `lsst.geom.Quadrupole`
+        psfShape : `lsst.afw.geom.Quadrupole`
             Estimated PSF shape (unbinned coords).
         """
         fluxes = np.array([source.getApInstFlux() for source in binnedSourceCat])
@@ -1123,14 +1111,14 @@ class PeekExposureTask(pipeBase.Task):
         )
 
     def transformShapes(
-        self, shapes: "geom.Quadrupole", exposure: "afwImage.Exposure", binSize: int
-    ) -> "Tuple[List[geom.Quadrupole, geom.Quadrupole]]":
+        self, shapes: afwGeom.Quadrupole, exposure: afwImage.Exposure, binSize: int
+    ) -> Tuple[List[afwGeom.Quadrupole], List[afwGeom.Quadrupole]]:
         """Transform shapes from x/y pixel coordinates to equitorial and
         horizon coordinates.
 
         Parameters
         ----------
-        shapes : `list` of `lsst.geom.Quadrupole`
+        shapes : `list` of `lsst.afw.geom.Quadrupole`
             List of shapes (in pixel coordinates) to transform.
         exposure : `lsst.afw.image.Exposure`
             Exposure containing WCS and VisitInfo for transformation.
@@ -1139,10 +1127,10 @@ class PeekExposureTask(pipeBase.Task):
 
         Returns
         -------
-        equatorialShapes : `list` of `lsst.geom.Quadrupole`
+        equatorialShapes : `list` of `lsst.afw.geom.Quadrupole`
             List of shapes transformed to equitorial (North and West)
             coordinates.  Units are arcseconds.
-        altAzShapes : `list` of `lsst.geom.Quadrupole`
+        altAzShapes : `list` of `lsst.afw.geom.Quadrupole`
             List of shapes transformed to alt/az coordinates.  Units are
             arcseconds.
         """
@@ -1175,9 +1163,9 @@ class PeekExposureTask(pipeBase.Task):
 
     def updateDisplay(
         self,
-        exposure: "afwImage.Exposure",
+        exposure: afwImage.Exposure,
         binSize: int,
-        binnedSourceCat: "afwTable.SourceCatalog",
+        binnedSourceCat: afwTable.SourceCatalog,
         maxFluxIdx: int,
         doDisplayIndices: bool,
     ) -> None:

@@ -21,35 +21,31 @@
 
 import copy
 import logging
-from typing import TYPE_CHECKING
 
 import astropy.units as u
+import matplotlib
 import matplotlib.pyplot as plt
 import numpy as np
 from astropy.coordinates import Angle
 
+import lsst.afw.image as afwImage
+import lsst.afw.table as afwTable
 from lsst.obs.lsst.translators.latiss import AUXTEL_LOCATION
 
 from .. import quickSmooth
-
-if TYPE_CHECKING:
-    import matplotlib
-
-    import lsst.afw.image as afwImage
-    import lsst.afw.table as afwTable
 
 # TODO: Add some of Craig's nice overlay stuff here
 
 
 def plot(
-    exp: "afwImage.Exposure",
-    icSrc: "afwTable.SourceCatalog" = None,
-    filteredSources: "afwTable.SourceCatalog" = None,
-    saveAs: str = None,
+    exp: afwImage.Exposure,
+    icSrc: afwTable.SourceCatalog = None,
+    filteredSources: afwTable.SourceCatalog = None,
+    saveAs: str | None = None,
     clipMin: float = 1,
     clipMax: float = 1000000,
     doSmooth: bool = True,
-    fig: "matplotlib.figure.Figure" | None = None,
+    fig: matplotlib.figure.Figure | None = None,
 ) -> None:
     """Plot an exposure, overlaying the selected sources and compass arrows.
 

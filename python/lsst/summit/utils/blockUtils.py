@@ -18,26 +18,23 @@
 #
 # You should have received a copy of the GNU General Public License
 # along with this program.  If not, see <https://www.gnu.org/licenses/>.
+from __future__ import annotations
 
 import logging
 import re
 import time
 from dataclasses import dataclass
-from typing import TYPE_CHECKING
+from typing import List
 
 import numpy as np
 import pandas as pd
 from astropy.time import Time
+from lsst_efd_client.efd_helper import EfdClient
+
+import lsst.summit.utils as summitUtils
 
 from .efdUtils import efdTimestampToAstropy, getEfdData, makeEfdClient
 from .enums import ScriptState
-
-if TYPE_CHECKING:
-    from typing import List, Set
-
-    from lsst_efd_client.efd_client import EfdClient
-
-    import lsst.summit.utils as summitUtils
 
 __all__ = ("BlockParser", "BlockInfo", "ScriptStatePoint")
 
@@ -150,7 +147,7 @@ class ScriptStatePoint:
     def __repr__(self) -> str:
         return f"ScriptStatePoint(time={self.time!r}, state={self.state!r}, reason={self.reason!r})"
 
-    def _ipython_display_(self) -> str:
+    def _ipython_display_(self) -> None:
         """This is the function which runs when someone executes a cell in a
         notebook with just the class instance on its own, without calling
         print() or str() on it.
@@ -180,7 +177,7 @@ class BlockParser:
         The EFD client to use. If not specified, a new one is created.
     """
 
-    def __init__(self, dayObs: int, client: "EfdClient | None" = None):
+    def __init__(self, dayObs: int, client: EfdClient | None = None):
         self.log = logging.getLogger("lsst.summit.utils.blockUtils.BlockParser")
         self.dayObs = dayObs
 
@@ -300,7 +297,7 @@ class BlockParser:
             values.remove(None)
         return sorted(values)
 
-    def getBlockNums(self) -> "List[int]":
+    def getBlockNums(self) -> List[int]:
         """Get the block numbers which were run on the specified dayObs.
 
         Returns
@@ -310,7 +307,7 @@ class BlockParser:
         """
         return self._listColumnValues("blockNum")
 
-    def getSeqNums(self, block: int) -> "Set[int]":
+    def getSeqNums(self, block: int) -> List[int]:
         """Get the seqNums for the specified block.
 
         Parameters
@@ -452,8 +449,8 @@ class BlockParser:
         return blockInfo
 
     def getEventsForBlock(
-        self, events: "summitUtils.tmaUtils.TMAEvent", block: int, seqNum: int
-    ) -> "summitUtils.tmaUtils.TMAEvent":
+        self, events: summitUtils.tmaUtils.TMAEvent, block: int, seqNum: int
+    ) -> List[summitUtils.tmaUtils.TMAEvent]:
         """Get the events which occurred during the specified block.
 
         Parameters

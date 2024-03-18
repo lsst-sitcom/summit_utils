@@ -23,7 +23,7 @@ __all__ = ["SpectrumExaminer"]
 
 import warnings
 from itertools import groupby
-from typing import TYPE_CHECKING
+from typing import List, Tuple
 
 import matplotlib.pyplot as plt
 import numpy as np
@@ -32,16 +32,12 @@ from matplotlib.offsetbox import AnchoredText
 from mpl_toolkits.axes_grid1.axes_divider import make_axes_locatable
 from scipy.optimize import curve_fit
 
+import lsst.afw.display as afwDisplay
+import lsst.afw.image as afwImage
 from lsst.atmospec.processStar import ProcessStarTask
 from lsst.obs.lsst.translators.lsst import FILTER_DELIMITER
 from lsst.pipe.tasks.quickFrameMeasurement import QuickFrameMeasurementTask, QuickFrameMeasurementTaskConfig
 from lsst.summit.utils.utils import getImageStats
-
-if TYPE_CHECKING:
-    from typing import List, Tuple
-
-    import lsst.afw.display as afwDisplay
-    import lsst.afw.image as afwImage
 
 
 class SpectrumExaminer:
@@ -55,8 +51,8 @@ class SpectrumExaminer:
 
     def __init__(
         self,
-        exp: "afwImage.Exposure",
-        display: "afwDisplay.Display" = None,
+        exp: afwImage.Exposure,
+        display: afwDisplay.Display = None,
         debug: bool | None = False,
         savePlotAs: str | None = None,
         **kwargs,
@@ -79,7 +75,7 @@ class SpectrumExaminer:
         self.init()
 
     @staticmethod
-    def bboxToAwfDisplayLines(box) -> "List[List[Tuple[int, int]]]":
+    def bboxToAwfDisplayLines(box) -> List[List[Tuple[int, int]]]:
         """Takes a bbox, returns a list of lines such that they can be plotted:
 
         for line in lines:
@@ -274,7 +270,7 @@ class SpectrumExaminer:
     def init(self):
         pass
 
-    def generateStatsTextboxContent(self, section: int) -> None:
+    def generateStatsTextboxContent(self, section: int) -> str:
         x, y = self.qfmResult.brightestObjCentroid
 
         vi = self.exp.visitInfo
@@ -336,7 +332,7 @@ class SpectrumExaminer:
             lines.append(f"Good range = {self.goodSpectrumMinY},{self.goodSpectrumMaxY}")
             return "\n".join([line for line in lines])
 
-        return
+        return ""
 
     def run(self) -> None:
         self.qfmResult = self.qfmTask.run(self.exp)
@@ -369,7 +365,7 @@ class SpectrumExaminer:
         return
 
     @staticmethod
-    def getMedianAndBestFwhm(fwhmValues: "np.ndarray", minIndex: int, maxIndex: int) -> "Tuple[float, float]":
+    def getMedianAndBestFwhm(fwhmValues: np.ndarray, minIndex: int, maxIndex: int) -> Tuple[float, float]:
         with warnings.catch_warnings():  # to supress nan warnings, which are fine
             warnings.simplefilter("ignore")
             clippedValues = sigma_clip(fwhmValues[minIndex:maxIndex])
@@ -381,8 +377,8 @@ class SpectrumExaminer:
         return medianFwhm, bestFocusFwhm
 
     def getStableFwhmRegion(
-        self, fwhmValues: "np.ndarray", amplitudes: "np.ndarray", smoothing: int = 1, maxDifferential: int = 4
-    ) -> "Tuple[int, int]":
+        self, fwhmValues: np.ndarray, amplitudes: np.ndarray, smoothing: int = 1, maxDifferential: int = 4
+    ) -> Tuple[int, int]:
         # smooth the fwhmValues values
         # differentiate
         # take the longest contiguous region of 1s

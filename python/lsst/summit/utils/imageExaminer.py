@@ -21,8 +21,10 @@
 
 __all__ = ["ImageExaminer"]
 
-from typing import TYPE_CHECKING
 
+from typing import Dict, List, Tuple
+
+import matplotlib
 import matplotlib.patches as patches
 import matplotlib.pyplot as plt
 import numpy as np
@@ -34,18 +36,11 @@ from matplotlib.ticker import LinearLocator
 from numpy.linalg import norm
 from scipy.optimize import curve_fit
 
+import lsst.afw.image as afwImage
 import lsst.geom as geom
+import lsst.pipe as pipeBase
 from lsst.pipe.tasks.quickFrameMeasurement import QuickFrameMeasurementTask, QuickFrameMeasurementTaskConfig
 from lsst.summit.utils.utils import argMax2d, countPixels, getImageStats, quickSmooth
-
-if TYPE_CHECKING:
-    from typing import Dict, List, Tuple
-
-    import matplotlib
-
-    import lsst.afw.image as afwImage
-    import lsst.pipe as pipeBase
-
 
 SIGMATOFWHM = 2.0 * np.sqrt(2.0 * np.log(2.0))
 
@@ -131,7 +126,7 @@ class ImageExaminer:
         *,
         doTweakCentroid: bool = True,
         doForceCoM: bool = False,
-        savePlots: bool = None,
+        savePlots: str | None = None,
         centroid: "Tuple[float, float] | None" = None,
         boxHalfSize: int = 50,
     ):
@@ -188,7 +183,7 @@ class ImageExaminer:
         """
         return np.asarray(coords, dtype=int)
 
-    def intRoundCoords(self, coords: "Tuple[float | int, float | int]") -> np.ndarray[int]:
+    def intRoundCoords(self, coords: "Tuple[float | int, float | int]") -> "Tuple[int, int]":
         """Get rounded integer versions of coordinates for dereferencing arrays
 
         Parameters are rounded to the nearest integer value and returned.
@@ -200,7 +195,7 @@ class ImageExaminer:
 
         Returns
         -------
-        intCoords : `np.array` of `int`
+        intCoords : Tuple[int, int]
             The coordinates as integers, rounded to the nearest values.
         """
         return (int(round(coords[0])), int(round(coords[1])))
@@ -314,7 +309,7 @@ class ImageExaminer:
 
         return bbox
 
-    def getStarBoxData(self) -> "np.array":
+    def getStarBoxData(self) -> "np.ndarray[int]":
         """Get the image data for the star.
 
         Calculates the maximum valid box, and uses that to return the image
@@ -331,7 +326,7 @@ class ImageExaminer:
         self.nSatPixInBox = countPixels(self.exp.maskedImage[self.starBbox], "SAT")
         return self.exp.image[bbox].array
 
-    def getMeshGrid(self, data: "np.array") -> "Tuple[np.array, np.array]":
+    def getMeshGrid(self, data: "np.ndarray[int]") -> "Tuple[np.array, np.array]":
         """Get the meshgrid for a data array.
 
         Parameters
@@ -642,12 +637,12 @@ class ImageExaminer:
         if plotDirect:
             plt.show()
 
-    def plotStats(self, ax: "matplotlib.axes", lines: "List[str]") -> None:
+    def plotStats(self, ax: "matplotlib.axes.Axe", lines: "List[str]") -> None:
         """Make the stats box 'plot'.
 
         Parameters
         ----------
-        ax : `maplotlib.axes`
+        ax : `maplotlib.axes.Axe`
             Axes to use.
         lines : `list` of `str`
             The data to include in the text box
