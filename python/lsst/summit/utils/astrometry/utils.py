@@ -19,24 +19,22 @@
 # You should have received a copy of the GNU General Public License
 # along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
-from typing import TYPE_CHECKING
 
+from typing import Dict
+
+import astropy
 import astropy.units as u
 import numpy as np
 from astropy.coordinates import AltAz, EarthLocation, SkyCoord
 from astropy.time import Time
 
+import lsst.afw.geom as afwGeom
+import lsst.afw.image as afwImage
+import lsst.afw.table as afwTable
+import lsst.pipe.base as pipeBase
 from lsst.afw.geom import SkyWcs
 from lsst.daf.base import PropertySet
 from lsst.pipe.tasks.characterizeImage import CharacterizeImageConfig, CharacterizeImageTask
-
-if TYPE_CHECKING:
-    import astropy
-
-    import lsst.afw.geom as afwGeom
-    import lsst.afw.image as afwImage
-    import lsst.afw.table as afwTable
-    import lsst.pipe.base as pipeBase
 
 __all__ = [
     "claverHeaderToWcs",
@@ -53,8 +51,8 @@ __all__ = [
 
 
 def claverHeaderToWcs(
-    exp: "afwImage.Exposuse", nominalRa: float | None = None, nominalDec: float | None = None
-) -> "afwGeom.SkyWcs":
+    exp: afwImage.Exposure, nominalRa: float | None = None, nominalDec: float | None = None
+) -> afwGeom.SkyWcs:
     """Given an exposure taken by Chuck Claver at his house, construct a wcs
     with the ra/dec set to zenith unless a better guess is supplied.
 
@@ -157,7 +155,7 @@ def getAverageElFromHeader(header: dict) -> float:
     return (elStart + elEnd) / 2
 
 
-def patchHeader(header: dict) -> float:
+def patchHeader(header: dict) -> Dict[str, float]:
     """This is a TEMPORARY function to patch some info into the headers."""
     if header.get("CAMCODE") == "GC102":  # regular aka narrow camera
         # the narrow camera currently is wrong about its place scale by of ~2.2
@@ -179,7 +177,7 @@ def patchHeader(header: dict) -> float:
     return header
 
 
-def genericCameraHeaderToWcs(exp: dict) -> "afwGeom.SkyWcs":
+def genericCameraHeaderToWcs(exp: dict) -> afwGeom.SkyWcs:
     header = exp.getMetadata().toDict()
     header = patchHeader(header)
 
@@ -204,7 +202,7 @@ def genericCameraHeaderToWcs(exp: dict) -> "afwGeom.SkyWcs":
     return wcs
 
 
-def getIcrsAtZenith(lon: float, lat: float, height: float, utc: float) -> "astropy.coordinates.SkyCoord":
+def getIcrsAtZenith(lon: float, lat: float, height: float, utc: float) -> astropy.coordinates.SkyCoord:
     """Get the icrs at zenith given a lat/long/height/time in UTC.
 
     Parameters
@@ -229,7 +227,7 @@ def getIcrsAtZenith(lon: float, lat: float, height: float, utc: float) -> "astro
     return skyCoord.transform_to("icrs")
 
 
-def headerToWcs(header: dict) -> "afwGeom.SkyWcs":
+def headerToWcs(header: dict) -> afwGeom.SkyWcs:
     """Convert an astrometry.net wcs header dict to a DM wcs object.
 
     Parameters
@@ -246,7 +244,7 @@ def headerToWcs(header: dict) -> "afwGeom.SkyWcs":
     return SkyWcs(wcsPropSet)
 
 
-def runCharactierizeImage(exp: "afwImage.Exposure", snr: float, minPix: int) -> "pipeBase.Struct":
+def runCharactierizeImage(exp: afwImage.Exposure, snr: float, minPix: int) -> pipeBase.Struct:
     """Run the image characterization task, finding only bright sources.
 
     Parameters
@@ -294,12 +292,12 @@ def runCharactierizeImage(exp: "afwImage.Exposure", snr: float, minPix: int) -> 
 
 
 def filterSourceCatOnBrightest(
-    catalog: "afwTable.SourceCatalog",
+    catalog: afwTable.SourceCatalog,
     brightFraction: float,
     minSources: int = 15,
     maxSources: int = 200,
     flux_field: str = "base_CircularApertureFlux_3_0_instFlux",
-) -> "afwTable.SourceCatalog":
+) -> afwTable.SourceCatalog:
     """Filter a sourceCat on the brightness, leaving only the top fraction.
 
     Return a catalog containing the brightest sources in the input. Makes an

@@ -22,7 +22,7 @@
 import datetime
 import os
 from dataclasses import dataclass
-from typing import TYPE_CHECKING
+from typing import Tuple
 
 import numpy as np
 from astropy.io import fits
@@ -30,14 +30,9 @@ from PIL import Image
 
 import lsst.afw.image as afwImage
 import lsst.daf.base as dafBase
+import lsst.rubintv.production as rubintvProduction
 from lsst.afw.image import ExposureInfo, VisitInfo
 from lsst.summit.utils.utils import dayObsIntToString
-
-if TYPE_CHECKING:
-    from typing import Tuple
-
-    import lsst.rubintv.production as rubintvProduction
-
 
 __all__ = (
     "KNOWN_CAMERAS",
@@ -112,7 +107,7 @@ fastCam = StarTrackerCamera(
 )
 
 
-def tifToExp(filename: str) -> "afwImage.Exposure":
+def tifToExp(filename: str) -> afwImage.Exposure:
     """Open a tif image as an exposure.
 
     Opens the file, sets a blank mask plane, and converts the data to
@@ -141,7 +136,7 @@ def tifToExp(filename: str) -> "afwImage.Exposure":
     return exp
 
 
-def fitsToExp(filename: str) -> "afwImage.Exposure":
+def fitsToExp(filename: str) -> afwImage.Exposure:
     """Open a fits file as an exposure.
 
     Parameters
@@ -178,7 +173,7 @@ def fitsToExp(filename: str) -> "afwImage.Exposure":
     return exp
 
 
-def openFile(filename: str) -> "afwImage.Exposure":
+def openFile(filename: str) -> afwImage.Exposure:
     """Open a file as an exposure, based on the file type.
 
     Parameters
@@ -235,7 +230,7 @@ def isStreamingModeFile(filename: str) -> bool:
     return os.path.basename(filename).count("_") == 4
 
 
-def dayObsSeqNumFromFilename(filename: str) -> "Tuple[int, int]":
+def dayObsSeqNumFromFilename(filename: str) -> Tuple[int, int]:
     """Get the dayObs and seqNum from a filename.
 
     If the file is a streaming mode file (`None`, `None`) is returned.
@@ -269,7 +264,7 @@ def dayObsSeqNumFromFilename(filename: str) -> "Tuple[int, int]":
     return int(dayObs), int(seqNum)
 
 
-def dayObsSeqNumFrameNumFromFilename(filename: str) -> "Tuple[int, int, int]":
+def dayObsSeqNumFrameNumFromFilename(filename: str) -> Tuple[int, int, int]:
     """Get the dayObs, seqNum and frameNum from a filename.
 
     If the file is not a streaming mode file then a `ValueError` is raised.
@@ -309,7 +304,7 @@ def dayObsSeqNumFrameNumFromFilename(filename: str) -> "Tuple[int, int, int]":
 
 
 def getRawDataDirForDayObs(
-    rootDataPath: str, camera: "rubintvProduction.starTracker.StarTrackerCamera", dayObs: int
+    rootDataPath: str, camera: rubintvProduction.starTracker.StarTrackerCamera, dayObs: int
 ) -> str:
     """Get the raw data dir for a given dayObs.
 

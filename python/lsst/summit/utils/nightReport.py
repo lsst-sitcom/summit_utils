@@ -19,10 +19,12 @@
 # You should have received a copy of the GNU General Public License
 # along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
+import datetime
 import logging
 import pickle
+from collections.abc import Callable, Iterable
 from dataclasses import dataclass
-from typing import TYPE_CHECKING
+from typing import Any, Dict, List, Tuple
 
 import matplotlib
 import matplotlib.pyplot as plt
@@ -30,17 +32,10 @@ import numpy as np
 from astro_metadata_translator import ObservationInfo
 from matplotlib.pyplot import cm
 
+import lsst.daf.butler as dafButler
 from lsst.utils.iteration import ensure_iterable
 
 from .utils import getFieldNameAndTileNumber, obsInfoToDict
-
-if TYPE_CHECKING:
-    import datetime
-    from collections.abc import Callable
-    from typing import Any, Dict, List, Tuple
-
-    import lsst.daf.butler as dafButler
-
 
 try:  # TODO: Remove post RFC-896: add humanize to rubin-env
     precisedelta: "Callable[[Any], str]"
@@ -111,7 +106,7 @@ class ColorAndMarker:
 class NightReport:
     _version = 1
 
-    def __init__(self, butler: "dafButler.Butler", dayObs: int, loadFromFile: str = None):
+    def __init__(self, butler: dafButler.Butler, dayObs: int, loadFromFile: str | None = None):
         self._supressAstroMetadataTranslatorWarnings()  # call early
         self.log = logging.getLogger("lsst.summit.utils.NightReport")
         self.butler = butler
@@ -301,7 +296,7 @@ class NightReport:
             seqNum: self.data[seqNum]["timespan"].begin.to_datetime() for seqNum in sorted(self.data.keys())
         }
 
-    def getObservedObjects(self, ignoreTileNum: bool = True) -> dict:
+    def getObservedObjects(self, ignoreTileNum: bool = True) -> list:
         """Get a list of the observed objects for the night.
 
         Repeated observations of individual imaging fields have _NNN appended
@@ -318,8 +313,8 @@ class NightReport:
         return allTargets
 
     def getSeqNumsMatching(
-        self, invert: bool = False, subset: "List[int]" = None, **kwargs: "Dict[str, Any]"
-    ) -> "List[int]":
+        self, invert: bool = False, subset: List[int] | None = None, **kwargs: "str"
+    ) -> List[int]:
         """Get seqNums which match/don't match all kwargs provided, e.g.
 
         report.getSeqNumsMatching(exposure_time=30,
@@ -382,7 +377,7 @@ class NightReport:
             markerMap[star] = ColorAndMarker(colors[colorIndex], MARKER_SEQUENCE[markerIndex])
         return markerMap
 
-    def calcShutterTimes(self) -> dict:
+    def calcShutterTimes(self) -> dict | None:
         """Calculate the total time spent on science, engineering and readout.
 
         Science and engineering time both include the time spent on readout,
@@ -412,7 +407,7 @@ class NightReport:
         scienceIntegration = sum([self.data[s]["exposure_time"] for s in sciSeqNums])
         scienceTimeTotal = scienceIntegration.value + (len(sciSeqNums) * READOUT_TIME)
 
-        result = {}
+        result: "Dict[str, float | int]" = {}
         result["firstObs"] = firstObs
         result["lastObs"] = lastObs
         result["startTime"] = begin
@@ -455,7 +450,7 @@ class NightReport:
         sciEff = 100 * (timings["scienceTimeTotal"] / timings["nightLength"])
         print(f"Science shutter efficiency = {sciEff:.1f}%")
 
-    def getTimeDeltas(self) -> "Dict[int, float]":
+    def getTimeDeltas(self) -> Dict[int, float]:
         """Returns a dict, keyed by seqNum, of the time since the end of the
         last integration. The time since does include the readout, so is always
         greater than or equal to the readout time.
@@ -513,7 +508,7 @@ class NightReport:
             for line in messages:
                 print(line)
 
-    def getObservingStartSeqNum(self, method: str = "safe") -> int:
+    def getObservingStartSeqNum(self, method: str = "safe") -> int | None:
         """Get the seqNum at which on-sky observations started.
 
         If no on-sky observations were taken ``None`` is returned.
@@ -560,8 +555,9 @@ class NightReport:
                 self.log.warning("No cwfs images found, observing is assumed not to have started.")
                 return None
             return min(seqNums)
+        return None
 
-    def printObsTable(self, **kwargs: "Dict[str, Any]") -> None:
+    def printObsTable(self, **kwargs: Any) -> None:
         """Print a table of the days observations.
 
         Parameters
@@ -594,7 +590,7 @@ class NightReport:
         for line in lines:
             print(line)
 
-    def getExposureMidpoint(self, seqNum: int) -> "datetime.datetime":
+    def getExposureMidpoint(self, seqNum: int) -> datetime.datetime:
         """Return the midpoint of the exposure as a float in MJD.
 
         Parameters
@@ -612,7 +608,7 @@ class NightReport:
         return ((timespan.begin) + expTime / 2).to_datetime()
 
     def plotPerObjectAirMass(
-        self, objects: "List[str]" = None, airmassOneAtTop: bool = True, saveFig: str = ""
+        self, objects: Iterable[str] | None = None, airmassOneAtTop: bool = True, saveFig: str = ""
     ) -> None:
         """Plot the airmass for objects observed over the course of the night.
 
@@ -663,14 +659,14 @@ class NightReport:
 
     def _makePolarPlot(
         self,
-        azimuthsInDegrees: "List[float]",
-        zenithAngles: "List[float]",
+        azimuthsInDegrees: List[float],
+        zenithAngles: List[float],
         marker: str = "*-",
         title: str | None = None,
         makeFig: bool = True,
         color: str | None = None,
         objName: str | None = None,
-    ) -> matplotlib.axes:
+    ) -> matplotlib.axes.Axes:
         """Private method to actually do the polar plotting.
 
         azimuthsInDegrees : `list` [`float`]
@@ -691,7 +687,7 @@ class NightReport:
 
         Returns
         -------
-        ax : `matplotlib.axes.Axes`
+        ax : `matplotlib.axes.Axe`
             The axes on which the plot was made.
         """
         if makeFig:
@@ -706,7 +702,7 @@ class NightReport:
         return ax
 
     def makeAltAzCoveragePlot(
-        self, objects: "List[str] | None" = None, withLines: bool = False, saveFig: str = ""
+        self, objects: Iterable[str] | None = None, withLines: bool = False, saveFig: str = ""
     ) -> None:
         """Make a polar plot of the azimuth and zenith angle for each object.
 

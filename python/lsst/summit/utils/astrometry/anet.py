@@ -28,20 +28,16 @@ import uuid
 import warnings
 from dataclasses import dataclass
 from functools import cached_property
-from typing import TYPE_CHECKING
+from typing import Any, Dict
 
 import numpy as np
 from astropy.io import fits
 
+import lsst.afw.image as afwImage
+import lsst.afw.table as afwTable
 import lsst.geom as geom
 
 from .utils import headerToWcs
-
-if TYPE_CHECKING:
-    from typing import Any, Dict
-
-    import lsst.afw.image as afwImage
-    import lsst.afw.table as afwTable
 
 __all__ = ["AstrometryNetResult", "CommandLineSolver", "OnlineSolver"]
 
@@ -73,7 +69,7 @@ class AstrometryNetResult:
         self.rmsErrorArsec
 
     @cached_property
-    def wcs(self) -> "Any":
+    def wcs(self) -> Any:
         with fits.open(self.wcsFile) as f:
             header = f[0].header
         return headerToWcs(header)
@@ -83,7 +79,7 @@ class AstrometryNetResult:
         return self.wcs.getPixelScale().asArcseconds()
 
     @cached_property
-    def meanSqErr(self) -> float:
+    def meanSqErr(self) -> float | None:
         if not self.corrFile:
             return None
 
@@ -103,6 +99,7 @@ class AstrometryNetResult:
             return meanSqErr
         except Exception as e:
             print(f"Failed for calculate astrometric scatter: {repr(e)}")
+        return None
 
     @cached_property
     def rmsErrorPixels(self) -> float:
@@ -187,7 +184,7 @@ class CommandLineSolver:
             f.writelines(line + "\n" for line in lines)
         return filename
 
-    def _writeFitsTable(self, sourceCat: "afwTable.SourceCatalog") -> str:
+    def _writeFitsTable(self, sourceCat: afwTable.SourceCatalog) -> str:
         """Write the source table to a FITS file and return the filename.
 
         Parameters
@@ -223,15 +220,15 @@ class CommandLineSolver:
     # to the run method on the OnlineSolver
     def run(
         self,
-        exp: "afwImage.Exposure",
-        sourceCat: "afwTable.SourceCatalog",
+        exp: afwImage.Exposure,
+        sourceCat: afwTable.SourceCatalog,
         isWideField: bool,
         *,
         useGaia: bool = False,
         percentageScaleError: int = 10,
         radius: float | None = None,
         silent: bool = True,
-    ) -> "AstrometryNetResult | None":
+    ) -> AstrometryNetResult | None:
         """Get the astrometric solution for an image using astrometry.net using
         the binary ``solve-field`` and a set of index files.
 
@@ -367,13 +364,13 @@ class OnlineSolver:
     # to the run method on the CommandLineSolver
     def run(
         self,
-        exp: "afwImage.Exposure",
-        sourceCat: "afwTable.SourceCatalog",
+        exp: afwImage.Exposure,
+        sourceCat: afwTable.SourceCatalog,
         *,
         percentageScaleError: float = 10,
         radius: float | None = None,
         scaleEstimate: float | None = None,
-    ) -> "Dict[str, Any] | None":
+    ) -> Dict[str, Any] | None:
         """Get the astrometric solution for an image using the astrometry.net
         online solver.
 
