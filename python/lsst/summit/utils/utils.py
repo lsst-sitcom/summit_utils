@@ -23,7 +23,7 @@ import datetime
 import logging
 import os
 from collections.abc import Iterable
-from typing import List, Tuple
+from typing import Union
 
 import astro_metadata_translator
 import astropy.units as u
@@ -148,7 +148,7 @@ def quickSmooth(data: np.ndarray[int], sigma: float = 2) -> np.ndarray[int]:
     return smoothData
 
 
-def argMax2d(array: np.array) -> Tuple[Tuple[int, int], bool, List[Tuple[int, int]]]:
+def argMax2d(array: np.array) -> tuple[tuple[int, int], bool, list[tuple[int, int]]]:
     """Get the index of the max value of an array and whether it's unique.
 
     If its not unique, returns a list of the other locations containing the
@@ -336,7 +336,7 @@ def fluxesFromFootprints(
     footprints: afwDetect.FootprintSet | afwDetect.Footprint | Iterable[afwDetect.Footprint],
     parentImage: afwImage.Image,
     subtractImageMedian=False,
-) -> List[float]:
+) -> np.ndarray[float]:
     """Calculate the flux from a set of footprints, given the parent image,
     optionally subtracting the whole-image median from each pixel as a very
     rough background subtraction.
@@ -414,7 +414,7 @@ def fluxFromFootprint(
     return footprint.computeFluxFromImage(parentImage)
 
 
-def humanNameForCelestialObject(objName: str) -> List[str]:
+def humanNameForCelestialObject(objName: str) -> list[str]:
     """Returns a list of all human names for obj, or [] if none are found.
 
     Parameters
@@ -441,8 +441,8 @@ def humanNameForCelestialObject(objName: str) -> List[str]:
 
 
 def _getAltAzZenithsFromSeqNum(
-    butler: dafButler.Butler, dayObs: int, seqNumList: List[int]
-) -> Tuple[List[float], List[float], List[float]]:
+    butler: dafButler.Butler, dayObs: int, seqNumList: list[int]
+) -> tuple[list[float], list[float], list[float]]:
     """Get the alt, az and zenith angle for the seqNums of a given dayObs.
 
     Parameters
@@ -475,7 +475,7 @@ def _getAltAzZenithsFromSeqNum(
     return azimuths, elevations, zeniths
 
 
-def getFocusFromHeader(exp: "afwImage.Exposure") -> float | None:
+def getFocusFromHeader(exp: afwImage.Exposure) -> float | None:
     """Get the raw focus value from the header.
 
     Parameters
@@ -548,7 +548,7 @@ def setupLogging(longlog: bool = False) -> None:
     CliLog.initLog(longlog=longlog)
 
 
-def getCurrentDayObs_datetime() -> int:
+def getCurrentDayObs_datetime() -> datetime.date:
     """Get the current day_obs - the observatory rolls the date over at UTC-12
 
     Returned as datetime.date(2022, 4, 28)
@@ -646,7 +646,7 @@ def getAltAzFromSkyPosition(
     pressureOverride: float | None = None,
     temperatureOverride: float | None = None,
     relativeHumidityOverride: float | None = None,
-) -> Tuple[geom.Angle, geom.Angle]:
+) -> tuple[geom.Angle, geom.Angle]:
     """Get the alt/az from the position on the sky and the time and location
     of the observation.
 
@@ -901,7 +901,7 @@ def obsInfoToDict(obsInfo: astro_metadata_translator.ObservationInfo) -> dict:
 
 def getFieldNameAndTileNumber(
     field: str, warn: bool = True, logger: logging.Logger | None = None
-) -> "Tuple[str, int]":
+) -> tuple[str, int]:
     """Get the tile name and number of an observed field.
 
     It is assumed to always be appended, with an underscore, to the rest of the
@@ -998,7 +998,9 @@ def getFilterSeeingCorrection(filterName: str) -> float:
             raise ValueError(f"Unknown filter name: {filterName}")
 
 
-def getCdf(data: np.ndarray, scale: int, nBinsMax: int = 300_000) -> np.ndarray[int]:
+def getCdf(
+    data: np.ndarray, scale: int, nBinsMax: int = 300_000
+) -> tuple[Union[np.ndarray[int], float], float, float]:
     """Return an approximate cumulative distribution function scaled to
     the [0, scale] range.
 
@@ -1045,7 +1047,7 @@ def getCdf(data: np.ndarray, scale: int, nBinsMax: int = 300_000) -> np.ndarray[
     return cdf, minVal, maxVal
 
 
-def getQuantiles(data: np.ndarray, nColors: int) -> List[float]:
+def getQuantiles(data: np.ndarray, nColors: int) -> list[float]:
     """Get a set of boundaries that equally distribute data into
     nColors intervals. The output can be used to make a colormap of nColors
     colors.

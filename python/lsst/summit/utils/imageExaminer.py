@@ -22,8 +22,6 @@
 __all__ = ["ImageExaminer"]
 
 
-from typing import Dict, List, Tuple
-
 import matplotlib
 import matplotlib.patches as patches
 import matplotlib.pyplot as plt
@@ -38,7 +36,7 @@ from scipy.optimize import curve_fit
 
 import lsst.afw.image as afwImage
 import lsst.geom as geom
-import lsst.pipe as pipeBase
+import lsst.pipe.base as pipeBase
 from lsst.pipe.tasks.quickFrameMeasurement import QuickFrameMeasurementTask, QuickFrameMeasurementTaskConfig
 from lsst.summit.utils.utils import argMax2d, countPixels, getImageStats, quickSmooth
 
@@ -122,12 +120,12 @@ class ImageExaminer:
 
     def __init__(
         self,
-        exp: "afwImage.Exposure",
+        exp: afwImage.Exposure,
         *,
         doTweakCentroid: bool = True,
         doForceCoM: bool = False,
         savePlots: str | None = None,
-        centroid: "Tuple[float, float] | None" = None,
+        centroid: tuple[float, float] | None = None,
         boxHalfSize: int = 50,
     ):
         self.exp = exp
@@ -166,7 +164,7 @@ class ImageExaminer:
 
         self.radialAverageAndFit()
 
-    def intCoords(self, coords: "Tuple[float | int, float | int]") -> np.ndarray[int]:
+    def intCoords(self, coords: tuple[float | int, float | int]) -> np.ndarray[int]:
         """Get integer versions of the coordinates for dereferencing arrays.
 
         Parameters are not rounded, but just cast as ints.
@@ -183,7 +181,7 @@ class ImageExaminer:
         """
         return np.asarray(coords, dtype=int)
 
-    def intRoundCoords(self, coords: "Tuple[float | int, float | int]") -> "Tuple[int, int]":
+    def intRoundCoords(self, coords: tuple[float | int, float | int]) -> tuple[int, int]:
         """Get rounded integer versions of coordinates for dereferencing arrays
 
         Parameters are rounded to the nearest integer value and returned.
@@ -245,7 +243,7 @@ class ImageExaminer:
         return self.imStats
 
     @staticmethod
-    def _calcMaxBoxHalfSize(centroid: "Tuple[float, float]", chipBbox: "geom.Box") -> int:
+    def _calcMaxBoxHalfSize(centroid: tuple[float, float], chipBbox: geom.Box2D) -> int:
         """Calculate the maximum size the box can be without going outside the
         detector's bounds.
 
@@ -274,7 +272,7 @@ class ImageExaminer:
         assert maxSize >= 0, "Box calculation went wrong"
         return maxSize
 
-    def _calcBbox(self, centroid: "Tuple[float, float]") -> "geom.Box2I":
+    def _calcBbox(self, centroid: tuple[float, float]) -> geom.Box2I:
         """Get the largest valid bounding box, given the centroid and box size.
 
         Parameters
@@ -309,7 +307,7 @@ class ImageExaminer:
 
         return bbox
 
-    def getStarBoxData(self) -> "np.ndarray[int]":
+    def getStarBoxData(self) -> np.ndarray[int]:
         """Get the image data for the star.
 
         Calculates the maximum valid box, and uses that to return the image
@@ -326,7 +324,7 @@ class ImageExaminer:
         self.nSatPixInBox = countPixels(self.exp.maskedImage[self.starBbox], "SAT")
         return self.exp.image[bbox].array
 
-    def getMeshGrid(self, data: "np.ndarray[int]") -> "Tuple[np.array, np.array]":
+    def getMeshGrid(self, data: np.ndarray[int]) -> tuple[np.array, np.array]:
         """Get the meshgrid for a data array.
 
         Parameters
@@ -429,12 +427,12 @@ class ImageExaminer:
         """
         return self.radii[np.argmin(np.abs((percentage / 100) - self.cumFluxesNorm))]
 
-    def plotRadialAverage(self, ax: "matplotlib.axes | None" = None) -> None:
+    def plotRadialAverage(self, ax: matplotlib.axes.Axes | None = None) -> None:
         """Make the radial average plot.
 
         Parameters
         ----------
-        ax : `matplotlib.axes`, optional
+        ax : `matplotlib.axes.Axes`, optional
             If ``None`` a new figure is created. Supply axes if including this
             as a subplot.
         """
@@ -462,12 +460,12 @@ class ImageExaminer:
         if plotDirect:
             plt.show()
 
-    def plotContours(self, ax: "matplotlib.axes | None" = None, nContours: int = 10) -> None:
+    def plotContours(self, ax: matplotlib.axes.Axes | None = None, nContours: int = 10) -> None:
         """Make the contour plot.
 
         Parameters
         ----------
-        ax : `maplotlib.axes`, optional
+        ax : `maplotlib.axes.Axes`, optional
             If ``None`` a new figure is created. Supply axes if including this
             as a subplot.
         nContours : `int`, optional
@@ -492,7 +490,7 @@ class ImageExaminer:
         if plotDirect:
             plt.show()
 
-    def plotSurface(self, ax: "matplotlib.axes | None" = None, useColor: bool = True) -> None:
+    def plotSurface(self, ax: matplotlib.axes.Axes | None = None, useColor: bool = True) -> None:
         """Make the surface plot.
 
         Parameters
@@ -536,7 +534,7 @@ class ImageExaminer:
         if plotDirect:
             plt.show()
 
-    def plotStar(self, ax: "matplotlib.axes | None" = None, logScale: bool = False) -> None:
+    def plotStar(self, ax: matplotlib.axes.Axes | None = None, logScale: bool = False) -> None:
         """Make the PSF cutout plot.
 
         Parameters
@@ -568,7 +566,7 @@ class ImageExaminer:
         if plotDirect:
             plt.show()
 
-    def plotFullExp(self, ax: "matplotlib.axes | None" = None) -> None:
+    def plotFullExp(self, ax: matplotlib.axes.Axes | None = None) -> None:
         """Make the full image cutout plot.
 
         Parameters
@@ -599,7 +597,7 @@ class ImageExaminer:
         if plotDirect:
             plt.show()
 
-    def plotRowColSlices(self, ax: "matplotlib.axes | None" = None, logScale: bool = False) -> None:
+    def plotRowColSlices(self, ax: matplotlib.axes.Axes | None = None, logScale: bool = False) -> None:
         """Make the row and column slice plot.
 
         Parameters
@@ -637,7 +635,7 @@ class ImageExaminer:
         if plotDirect:
             plt.show()
 
-    def plotStats(self, ax: "matplotlib.axes.Axe", lines: "List[str]") -> None:
+    def plotStats(self, ax: matplotlib.axes.Axes, lines: list[str]) -> None:
         """Make the stats box 'plot'.
 
         Parameters
@@ -658,12 +656,12 @@ class ImageExaminer:
         ax.add_artist(stats_text)
         ax.axis("off")
 
-    def plotCurveOfGrowth(self, ax: "matplotlib.axes | None" = None) -> None:
+    def plotCurveOfGrowth(self, ax: matplotlib.axes.Axes | None = None) -> None:
         """Make the encircled energy plot.
 
         Parameters
         ----------
-        ax : `maplotlib.axes`, optional
+        ax : `maplotlib.axes.Axes`, optional
             If ``None`` a new figure is created. Supply axes if including this
             as a subplot.
         """
@@ -738,7 +736,7 @@ class ImageExaminer:
         plt.close("all")
 
     @staticmethod
-    def translateStats(imStats: "pipeBase.Struct", mappingDict: "Dict[str, str]") -> "List[str]":
+    def translateStats(imStats: pipeBase.Struct, mappingDict: dict[str, str]) -> list[str]:
         """Create the text for the stats box from the stats themselves.
 
         Parameters

@@ -22,7 +22,6 @@
 import datetime
 import os
 from dataclasses import dataclass
-from typing import Tuple
 
 import numpy as np
 from astropy.io import fits
@@ -230,7 +229,7 @@ def isStreamingModeFile(filename: str) -> bool:
     return os.path.basename(filename).count("_") == 4
 
 
-def dayObsSeqNumFromFilename(filename: str) -> Tuple[int, int]:
+def dayObsSeqNumFromFilename(filename: str) -> tuple[int, int]:
     """Get the dayObs and seqNum from a filename.
 
     If the file is a streaming mode file (`None`, `None`) is returned.
@@ -264,7 +263,7 @@ def dayObsSeqNumFromFilename(filename: str) -> Tuple[int, int]:
     return int(dayObs), int(seqNum)
 
 
-def dayObsSeqNumFrameNumFromFilename(filename: str) -> Tuple[int, int, int]:
+def dayObsSeqNumFrameNumFromFilename(filename: str) -> tuple[int, int, int]:
     """Get the dayObs, seqNum and frameNum from a filename.
 
     If the file is not a streaming mode file then a `ValueError` is raised.

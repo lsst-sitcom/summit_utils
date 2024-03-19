@@ -28,7 +28,7 @@ import uuid
 import warnings
 from dataclasses import dataclass
 from functools import cached_property
-from typing import Any, Dict
+from typing import Any
 
 import numpy as np
 from astropy.io import fits
@@ -370,7 +370,7 @@ class OnlineSolver:
         percentageScaleError: float = 10,
         radius: float | None = None,
         scaleEstimate: float | None = None,
-    ) -> Dict[str, Any] | None:
+    ) -> dict[str, Any] | None:
         """Get the astrometric solution for an image using the astrometry.net
         online solver.
 

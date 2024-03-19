@@ -22,7 +22,7 @@
 import copy
 import itertools
 from collections.abc import Sequence
-from typing import Any, Dict, List
+from typing import Any
 
 from deprecated.sphinx import deprecated
 
@@ -80,7 +80,7 @@ def _configureForSite() -> None:
 _configureForSite()
 
 
-def getLatissDefaultCollections() -> List[str]:
+def getLatissDefaultCollections() -> list[str]:
     """Get the default set of LATISS collections, updated for the site at
     which the code is being run.
 
@@ -112,7 +112,7 @@ def _update_RECENT_DAY(day: int) -> None:
 
 def makeDefaultLatissButler(
     *,
-    extraCollections: List[str] | None = None,
+    extraCollections: list[str] | None = None,
     writeable: bool = False,
     embargo: bool = False,
 ) -> dafButler.Butler:
@@ -156,7 +156,7 @@ def makeDefaultLatissButler(
     version="v26.0",
     category=FutureWarning,
 )
-def datasetExists(butler: dafButler.Butler, dataProduct: str, dataId: dict, **kwargs: Dict[str, Any]) -> bool:
+def datasetExists(butler: dafButler.Butler, dataProduct: str, dataId: dict, **kwargs: Any) -> bool:
     """Collapse the tri-state behaviour of butler.datasetExists to a boolean.
 
     Parameters
@@ -177,7 +177,7 @@ def datasetExists(butler: dafButler.Butler, dataProduct: str, dataId: dict, **kw
     return butler.exists(dataProduct, dataId, **kwargs)
 
 
-def updateDataId(dataId, **kwargs: Dict[str, Any]) -> dict | dafButler.DataCoordinate:
+def updateDataId(dataId, **kwargs: Any) -> dict | dafButler.DataCoordinate:
     """Update a DataCoordinate or dataId dict with kwargs.
 
     Provides a single interface for adding the detector key (or others) to a
@@ -254,7 +254,7 @@ def getMostRecentDayObs(butler: dafButler.Butler) -> int:
     return recentDay
 
 
-def getSeqNumsForDayObs(butler: dafButler.Butler, day_obs: int, extraWhere: str = "") -> List[int]:
+def getSeqNumsForDayObs(butler: dafButler.Butler, day_obs: int, extraWhere: str = "") -> list[int]:
     """Get a list of all seq_nums taken on a given day_obs.
 
     Parameters
@@ -283,7 +283,7 @@ def getSeqNumsForDayObs(butler: dafButler.Butler, day_obs: int, extraWhere: str 
     return sorted([r.seq_num for r in records])
 
 
-def sortRecordsByDayObsThenSeqNum(records: List[dict]) -> List[dict]:
+def sortRecordsByDayObsThenSeqNum(records: list[dict]) -> list[dict]:
     """Sort a set of records by dayObs, then seqNum to get the order in which
     they were taken.
 
@@ -318,7 +318,7 @@ def sortRecordsByDayObsThenSeqNum(records: List[dict]) -> List[dict]:
     return records
 
 
-def getDaysWithData(butler: dafButler.Butler, datasetType: str = "raw"):
+def getDaysWithData(butler: dafButler.Butler, datasetType: str = "raw") -> list[int]:
     """Get all the days for which LATISS has taken data on the mountain.
 
     Parameters
@@ -365,7 +365,7 @@ def getMostRecentDataId(butler: dafButler.Butler) -> dict:
     return dataId
 
 
-def getExpIdFromDayObsSeqNum(butler: dafButler.Butler, dataId: dict):
+def getExpIdFromDayObsSeqNum(butler: dafButler.Butler, dataId: dict) -> dict:
     """Get the exposure id for the dataId.
 
     Parameters
@@ -384,7 +384,7 @@ def getExpIdFromDayObsSeqNum(butler: dafButler.Butler, dataId: dict):
     return {"exposure": expRecord.id}
 
 
-def updateDataIdOrDataCord(dataId: dict, **updateKwargs: "int"):
+def updateDataIdOrDataCord(dataId: dict, **updateKwargs: int) -> dict:
     """Add key, value pairs to a dataId or data coordinate.
 
     Parameters
@@ -525,7 +525,7 @@ def getExpRecordFromDataId(butler: dafButler.Butler, dataId: dict) -> dafButler.
     return expRecords.pop()
 
 
-def getDayObsSeqNumFromExposureId(butler: dafButler.Butler, dataId: dict) -> Dict[str, int]:
+def getDayObsSeqNumFromExposureId(butler: dafButler.Butler, dataId: dict) -> dict[str, int]:
     """Get the day_obs and seq_num for an exposure id.
 
     Parameters
@@ -717,7 +717,7 @@ def getLatissOnSkyDataIds(
     full: bool = True,
     startDate: int | None = None,
     endDate: int | None = None,
-) -> List[dict]:
+) -> list[dict]:
     """Get a list of all on-sky dataIds taken.
 
     Parameters
@@ -808,7 +808,7 @@ def getExpRecord(
         raise ValueError("Must supply either expId or (dayObs AND seqNum)")
 
     where = "instrument=inst"  # Note you can't use =instrument as bind-strings can't clash with dimensions
-    bind: "Dict[str, str | int]" = {"inst": instrument}
+    bind: "dict[str, str | int]" = {"inst": instrument}
     if expId:
         where += " AND exposure.id=expId"
         bind.update({"expId": expId})

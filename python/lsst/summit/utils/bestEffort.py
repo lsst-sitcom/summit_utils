@@ -21,7 +21,7 @@
 
 import logging
 import os
-from typing import Any, Dict, List
+from typing import Any
 
 import lsst.afw.image as afwImage
 import lsst.daf.butler as dafButler
@@ -77,7 +77,7 @@ class BestEffortIsr:
     def __init__(
         self,
         *,
-        extraCollections: List[str] = [],
+        extraCollections: list[str] = [],
         defaultExtraIsrOptions: dict = {},
         doRepairCosmics: bool = True,
         doWrite: bool = True,
@@ -142,7 +142,7 @@ class BestEffortIsr:
     @staticmethod
     def updateDataId(
         expIdOrDataId: int | dict | dafButler.DataCoordinate | dafButler.DimensionRecord,
-        **kwargs: Dict[str, Any],
+        **kwargs: Any,
     ) -> dict | dafButler.DataCoordinate | dafButler.DimensionRecord:
         """Sanitize the expIdOrDataId to allow support both expIds and dataIds
 
@@ -189,7 +189,7 @@ class BestEffortIsr:
         extraIsrOptions: dict = {},
         skipCosmics: bool = False,
         forceRemake: bool = False,
-        **kwargs: Dict[str, Any],
+        **kwargs: Any,
     ) -> afwImage.Exposure:
         """Get the postIsr and cosmic-repaired image for this dataId.
 

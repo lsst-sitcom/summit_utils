@@ -21,7 +21,7 @@
 
 import dataclasses
 import os
-from typing import Any, Dict
+from typing import Any
 
 import numpy as np
 
@@ -48,7 +48,7 @@ class QuickLookIsrTaskConnections(IsrTaskConnections):
     minimum values to zero.
     """
 
-    def __init__(self, *, config: "Any" = None):
+    def __init__(self, *, config: Any = None):
         # programatically clone all of the connections from isrTask
         # setting minimum values to zero for everything except the ccdExposure
         super().__init__(config=IsrTask.ConfigClass())  # need a dummy config, isn't used other than for ctor
@@ -95,7 +95,7 @@ class QuickLookIsrTask(pipeBase.PipelineTask):
     ConfigClass = QuickLookIsrTaskConfig
     _DefaultName = "quickLook"
 
-    def __init__(self, isrTask: IsrTask = IsrTask, **kwargs: Dict[str, Any]):
+    def __init__(self, isrTask: IsrTask = IsrTask, **kwargs: Any):
         super().__init__(**kwargs)
         # Pass in IsrTask so that we can modify it slightly for unit tests.
         # Note that this is not an instance of the IsrTask class, but the class
