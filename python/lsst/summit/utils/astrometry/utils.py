@@ -20,8 +20,6 @@
 # along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
 
-from typing import Dict
-
 import astropy
 import astropy.units as u
 import numpy as np
@@ -155,7 +153,7 @@ def getAverageElFromHeader(header: dict) -> float:
     return (elStart + elEnd) / 2
 
 
-def patchHeader(header: dict) -> Dict[str, float]:
+def patchHeader(header: dict) -> dict[str, float]:
     """This is a TEMPORARY function to patch some info into the headers."""
     if header.get("CAMCODE") == "GC102":  # regular aka narrow camera
         # the narrow camera currently is wrong about its place scale by of ~2.2

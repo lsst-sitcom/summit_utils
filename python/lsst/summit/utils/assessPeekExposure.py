@@ -30,7 +30,6 @@ import time
 import warnings
 from collections import namedtuple
 from pathlib import Path
-from typing import Tuple
 
 import astropy
 import matplotlib.pyplot as plt
@@ -62,7 +61,7 @@ AUXTEL_PIXEL_SCALE = 0.1  # arcsec/pixel
 
 
 # get one BestEffortIsr,afwDisplay per subprocess
-def initializePoolProcess():
+def initializePoolProcess() -> None:
     """Initialize the multiprocessing pool process.
 
     Sets up some variables we only want to create once per process, including
@@ -82,7 +81,7 @@ def initializePoolProcess():
 
 
 # retrieve best-effort-isr and run PET on it
-def doWork(idx: int, row: astropy.table.Row, doPlot: bool) -> Tuple[str, str, float, int]:
+def doWork(idx: int, row: astropy.table.Row, doPlot: bool) -> tuple[str, str, float, int]:
     """Run PeekExposureTask on a single exposure.
 
     Parameters

@@ -20,7 +20,6 @@
 # along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
 import logging
-from typing import List, Tuple
 
 import astropy.visualization as vis
 import matplotlib
@@ -122,9 +121,9 @@ def drawCompass(
 def plot(
     inputData: np.ndarray | afwImage.Exposure | afwImage.Image | afwImage.MaskedImage,
     figure: matplotlib.figure.Figure | None = None,
-    centroids: List[Tuple[int, int]] | None = None,
+    centroids: list[tuple[int, int]] | None = None,
     footprints: (
-        afwDetection.FootprintSet | afwDetection.Footprint | List[afwDetection.Footprint] | None
+        afwDetection.FootprintSet | afwDetection.Footprint | list[afwDetection.Footprint] | None
     ) = None,
     sourceCat: afwTable.SourceCatalog = None,
     title: str | None = None,

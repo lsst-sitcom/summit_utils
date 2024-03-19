@@ -23,7 +23,7 @@ __all__ = ["SpectrumExaminer"]
 
 import warnings
 from itertools import groupby
-from typing import List, Tuple
+from typing import Any
 
 import matplotlib.pyplot as plt
 import numpy as np
@@ -55,7 +55,7 @@ class SpectrumExaminer:
         display: afwDisplay.Display = None,
         debug: bool | None = False,
         savePlotAs: str | None = None,
-        **kwargs,
+        **kwargs: Any,
     ):
         super().__init__(**kwargs)
         self.exp = exp
@@ -75,7 +75,7 @@ class SpectrumExaminer:
         self.init()
 
     @staticmethod
-    def bboxToAwfDisplayLines(box) -> List[List[Tuple[int, int]]]:
+    def bboxToAwfDisplayLines(box) -> list[list[tuple[int, int]]]:
         """Takes a bbox, returns a list of lines such that they can be plotted:
 
         for line in lines:
@@ -106,7 +106,7 @@ class SpectrumExaminer:
         else:
             print("No display set")
 
-    def calcGoodSpectrumSection(self, threshold: int = 5, windowSize: int = 5) -> "Tuple[int, int]":
+    def calcGoodSpectrumSection(self, threshold: int = 5, windowSize: int = 5) -> tuple[int, int]:
         length = len(self.ridgeLineLocations)
         chunks = length // windowSize
         stddevs = []
@@ -365,7 +365,7 @@ class SpectrumExaminer:
         return
 
     @staticmethod
-    def getMedianAndBestFwhm(fwhmValues: np.ndarray, minIndex: int, maxIndex: int) -> Tuple[float, float]:
+    def getMedianAndBestFwhm(fwhmValues: np.ndarray, minIndex: int, maxIndex: int) -> tuple[float, float]:
         with warnings.catch_warnings():  # to supress nan warnings, which are fine
             warnings.simplefilter("ignore")
             clippedValues = sigma_clip(fwhmValues[minIndex:maxIndex])
@@ -378,7 +378,7 @@ class SpectrumExaminer:
 
     def getStableFwhmRegion(
         self, fwhmValues: np.ndarray, amplitudes: np.ndarray, smoothing: int = 1, maxDifferential: int = 4
-    ) -> Tuple[int, int]:
+    ) -> tuple[int, int]:
         # smooth the fwhmValues values
         # differentiate
         # take the longest contiguous region of 1s

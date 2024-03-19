@@ -24,7 +24,6 @@ import asyncio
 import datetime
 import logging
 import re
-from typing import Dict, List, Tuple
 
 import astropy
 import pandas as pd
@@ -85,7 +84,7 @@ def _getBeginEnd(
     timespan: astropy.time.TimeDelta | None = None,
     event: summitUtils.efdUtils.TmaEvent | None = None,
     expRecord: dafButler.dimensions.DimensionRecord | None = None,
-) -> Tuple[astropy.time.Time, astropy.time.Time]:
+) -> tuple[astropy.time.Time, astropy.time.Time]:
     """Calculate the begin and end times to pass to _getEfdData, given the
     kwargs passed to getEfdData.
 
@@ -168,7 +167,7 @@ def getEfdData(
     client: EfdClient,
     topic: str,
     *,
-    columns: List[str] | None = None,
+    columns: list[str] | None = None,
     prePadding: float = 0,
     postPadding: float = 0,
     dayObs: int | None = None,
@@ -277,7 +276,7 @@ async def _getEfdData(
     topic: str,
     begin: astropy.Time,
     end: astropy.Time,
-    columns: "List[str] | None" = None,
+    columns: list[str] | None = None,
 ) -> pd.DataFrame:
     """Get data for a topic from the EFD over the specified time range.
 
@@ -296,7 +295,7 @@ async def _getEfdData(
 
     Returns
     -------
-    data : `'pd.DataFrame'`
+    data : `pd.DataFrame`
         The data from the query.
     """
     if columns is None:
@@ -578,7 +577,7 @@ def calcPreviousDay(dayObs: int) -> int:
     return offsetDayObs(dayObs, -1)
 
 
-def getDayObsStartTime(dayObs: int) -> "astropy.time.Time":
+def getDayObsStartTime(dayObs: int) -> astropy.time.Time:
     """Get the start of the given dayObs as an astropy.time.Time object.
 
     The observatory rolls the date over at UTC-12.
@@ -637,7 +636,7 @@ def getDayObsForTime(time: astropy.time.Time) -> int:
     version="w_2023_40",
     category=FutureWarning,
 )
-def getSubTopics(client: EfdClient, topic: str) -> List[str]:
+def getSubTopics(client: EfdClient, topic: str) -> list[str]:
     """Get all the sub topics within a given topic.
 
     Note that the topic need not be a complete one, for example, rather than
@@ -662,7 +661,7 @@ def getSubTopics(client: EfdClient, topic: str) -> List[str]:
     return sorted([t for t in topics if t.startswith(topic)])
 
 
-def getTopics(client: EfdClient, toFind: str, caseSensitive: bool = False) -> List[str]:
+def getTopics(client: EfdClient, toFind: str, caseSensitive: bool = False) -> list[str]:
     """Return all the strings in topics which match the topic query string.
 
     Supports wildcards, which are denoted as `*``, as per shell globs.
@@ -703,13 +702,13 @@ def getTopics(client: EfdClient, toFind: str, caseSensitive: bool = False) -> Li
 
 def getCommands(
     client: EfdClient,
-    commands: List[str],
+    commands: list[str],
     begin: astropy.time.Time,
     end: astropy.time.Time,
     prePadding: float,
     postPadding: float,
     timeFormat: str = "python",
-) -> Dict[int, str]:
+) -> dict[int, str]:
     """Retrieve the commands issued within a specified time range.
 
     Parameters
@@ -749,7 +748,7 @@ def getCommands(
 
     commands = list(ensure_iterable(commands))
 
-    commandTimes: Dict[astropy.Time, str] = {}
+    commandTimes: dict[astropy.Time, str] = {}
     for command in commands:
         data = getEfdData(
             client,

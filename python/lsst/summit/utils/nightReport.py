@@ -24,7 +24,7 @@ import logging
 import pickle
 from collections.abc import Callable, Iterable
 from dataclasses import dataclass
-from typing import Any, Dict, List, Tuple
+from typing import Any
 
 import matplotlib
 import matplotlib.pyplot as plt
@@ -208,7 +208,7 @@ class NightReport:
             record["target_name_short"] = shortTarget
         return self._getSortedData(records)
 
-    def getObsInfoAndMetadataForSeqNum(self, seqNum: int) -> "Tuple[ObservationInfo, dict]":
+    def getObsInfoAndMetadataForSeqNum(self, seqNum: int) -> tuple[ObservationInfo, dict]:
         """Get the obsInfo and metadata for a given seqNum.
 
         TODO: Once we have a summit repo containing all this info, remove this
@@ -313,8 +313,8 @@ class NightReport:
         return allTargets
 
     def getSeqNumsMatching(
-        self, invert: bool = False, subset: List[int] | None = None, **kwargs: "str"
-    ) -> List[int]:
+        self, invert: bool = False, subset: list[int] | None = None, **kwargs: str
+    ) -> list[int]:
         """Get seqNums which match/don't match all kwargs provided, e.g.
 
         report.getSeqNumsMatching(exposure_time=30,
@@ -407,7 +407,7 @@ class NightReport:
         scienceIntegration = sum([self.data[s]["exposure_time"] for s in sciSeqNums])
         scienceTimeTotal = scienceIntegration.value + (len(sciSeqNums) * READOUT_TIME)
 
-        result: "Dict[str, float | int]" = {}
+        result: dict[str, float | int] = {}
         result["firstObs"] = firstObs
         result["lastObs"] = lastObs
         result["startTime"] = begin
@@ -450,7 +450,7 @@ class NightReport:
         sciEff = 100 * (timings["scienceTimeTotal"] / timings["nightLength"])
         print(f"Science shutter efficiency = {sciEff:.1f}%")
 
-    def getTimeDeltas(self) -> Dict[int, float]:
+    def getTimeDeltas(self) -> dict[int, float]:
         """Returns a dict, keyed by seqNum, of the time since the end of the
         last integration. The time since does include the readout, so is always
         greater than or equal to the readout time.
@@ -659,8 +659,8 @@ class NightReport:
 
     def _makePolarPlot(
         self,
-        azimuthsInDegrees: List[float],
-        zenithAngles: List[float],
+        azimuthsInDegrees: list[float],
+        zenithAngles: list[float],
         marker: str = "*-",
         title: str | None = None,
         makeFig: bool = True,
