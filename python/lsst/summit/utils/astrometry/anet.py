@@ -28,10 +28,13 @@ import uuid
 import warnings
 from dataclasses import dataclass
 from functools import cached_property
+from typing import Any
 
 import numpy as np
 from astropy.io import fits
 
+import lsst.afw.image as afwImage
+import lsst.afw.table as afwTable
 import lsst.geom as geom
 
 from .utils import headerToWcs
@@ -66,17 +69,17 @@ class AstrometryNetResult:
         self.rmsErrorArsec
 
     @cached_property
-    def wcs(self):
+    def wcs(self) -> Any:
         with fits.open(self.wcsFile) as f:
             header = f[0].header
         return headerToWcs(header)
 
     @cached_property
-    def plateScale(self):
+    def plateScale(self) -> float:
         return self.wcs.getPixelScale().asArcseconds()
 
     @cached_property
-    def meanSqErr(self):
+    def meanSqErr(self) -> float | None:
         if not self.corrFile:
             return None
 
@@ -96,13 +99,14 @@ class AstrometryNetResult:
             return meanSqErr
         except Exception as e:
             print(f"Failed for calculate astrometric scatter: {repr(e)}")
+        return None
 
     @cached_property
-    def rmsErrorPixels(self):
+    def rmsErrorPixels(self) -> float:
         return np.sqrt(self.meanSqErr)
 
     @cached_property
-    def rmsErrorArsec(self):
+    def rmsErrorArsec(self) -> float:
         return self.rmsErrorPixels * self.plateScale
 
 
@@ -126,11 +130,11 @@ class CommandLineSolver:
 
     def __init__(
         self,
-        indexFilePath=None,
-        checkInParallel=True,
-        timeout=300,
-        binary="solve-field",
-        fluxSlot="base_CircularApertureFlux_3_0_instFlux",
+        indexFilePath: str | None = None,
+        checkInParallel: bool = True,
+        timeout: int = 300,
+        binary: str = "solve-field",
+        fluxSlot: str = "base_CircularApertureFlux_3_0_instFlux",
     ):
         self.indexFilePath = indexFilePath
         self.checkInParallel = checkInParallel
@@ -143,7 +147,7 @@ class CommandLineSolver:
                 " put it on your PATH or specify the full path to it in the 'binary' argument"
             )
 
-    def _writeConfigFile(self, wide, useGaia):
+    def _writeConfigFile(self, wide: bool, useGaia: bool) -> str:
         """Write a temporary config file for astrometry.net.
 
         Parameters
@@ -180,7 +184,7 @@ class CommandLineSolver:
             f.writelines(line + "\n" for line in lines)
         return filename
 
-    def _writeFitsTable(self, sourceCat):
+    def _writeFitsTable(self, sourceCat: afwTable.SourceCatalog) -> str:
         """Write the source table to a FITS file and return the filename.
 
         Parameters
@@ -215,8 +219,16 @@ class CommandLineSolver:
     # try to keep this call sig and the defaults as similar as possible
     # to the run method on the OnlineSolver
     def run(
-        self, exp, sourceCat, isWideField, *, useGaia=False, percentageScaleError=10, radius=None, silent=True
-    ):
+        self,
+        exp: afwImage.Exposure,
+        sourceCat: afwTable.SourceCatalog,
+        isWideField: bool,
+        *,
+        useGaia: bool = False,
+        percentageScaleError: int = 10,
+        radius: float | None = None,
+        silent: bool = True,
+    ) -> AstrometryNetResult | None:
         """Get the astrometric solution for an image using astrometry.net using
         the binary ``solve-field`` and a set of index files.
 
@@ -327,7 +339,7 @@ class OnlineSolver:
             self.adn.api_key = self.apiKey
 
     @staticmethod
-    def getApiKey():
+    def getApiKey() -> str:
         """Get the astrometry.net API key if possible.
 
         Raises a RuntimeError if it isn't found.
@@ -350,7 +362,15 @@ class OnlineSolver:
 
     # try to keep this call sig and the defaults as similar as possible
     # to the run method on the CommandLineSolver
-    def run(self, exp, sourceCat, *, percentageScaleError=10, radius=None, scaleEstimate=None):
+    def run(
+        self,
+        exp: afwImage.Exposure,
+        sourceCat: afwTable.SourceCatalog,
+        *,
+        percentageScaleError: float = 10,
+        radius: float | None = None,
+        scaleEstimate: float | None = None,
+    ) -> dict[str, Any] | None:
         """Get the astrometric solution for an image using the astrometry.net
         online solver.
 

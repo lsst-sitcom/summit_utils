@@ -18,15 +18,20 @@
 #
 # You should have received a copy of the GNU General Public License
 # along with this program.  If not, see <https://www.gnu.org/licenses/>.
+from __future__ import annotations
 
 import logging
 import re
 import time
 from dataclasses import dataclass
+from typing import List
 
 import numpy as np
 import pandas as pd
 from astropy.time import Time
+from lsst_efd_client.efd_helper import EfdClient
+
+import lsst.summit.utils as summitUtils
 
 from .efdUtils import efdTimestampToAstropy, getEfdData, makeEfdClient
 from .enums import ScriptState
@@ -91,20 +96,20 @@ class BlockInfo:
     tickets: list
     states: list
 
-    def __repr__(self):
+    def __repr__(self) -> str:
         return (
             f"BlockInfo(blockNumber={self.blockNumber}, blockId={self.blockId}, salIndices={self.salIndices},"
             f" tickets={self.tickets}, states={self.states!r}"
         )
 
-    def _ipython_display_(self):
+    def _ipython_display_(self) -> None:
         """This is the function which runs when someone executes a cell in a
         notebook with just the class instance on its own, without calling
         print() or str() on it.
         """
         print(self.__str__())
 
-    def __str__(self):
+    def __str__(self) -> str:
         # no literal \n allowed inside {} portion of f-strings until python
         # 3.12, but it can go in via a variable
         newline = "  \n"
@@ -139,17 +144,17 @@ class ScriptStatePoint:
     state: ScriptState
     reason: str
 
-    def __repr__(self):
+    def __repr__(self) -> str:
         return f"ScriptStatePoint(time={self.time!r}, state={self.state!r}, reason={self.reason!r})"
 
-    def _ipython_display_(self):
+    def _ipython_display_(self) -> None:
         """This is the function which runs when someone executes a cell in a
         notebook with just the class instance on its own, without calling
         print() or str() on it.
         """
         print(self.__str__())
 
-    def __str__(self):
+    def __str__(self) -> str:
         reasonStr = f" - {self.reason}" if self.reason else ""
         return f"{self.state.name:>10} @ {self.time.isot}{reasonStr}"
 
@@ -172,7 +177,7 @@ class BlockParser:
         The EFD client to use. If not specified, a new one is created.
     """
 
-    def __init__(self, dayObs, client=None):
+    def __init__(self, dayObs: int, client: EfdClient | None = None):
         self.log = logging.getLogger("lsst.summit.utils.blockUtils.BlockParser")
         self.dayObs = dayObs
 
@@ -187,7 +192,7 @@ class BlockParser:
         self.augmentData()
         self.log.debug(f"Parsing data took {(time.time()-t0):.5f} seconds")
 
-    def getDataForDayObs(self):
+    def getDataForDayObs(self) -> None:
         """Retrieve the data for the specified dayObs from the EFD."""
         # Tiago thinks no individual block seqNums should take more than an
         # hour to run, so pad the dayObs by 1.5 hours to make sure we catch
@@ -198,7 +203,7 @@ class BlockParser:
         )
         self.data = data
 
-    def augmentDataSlow(self):
+    def augmentDataSlow(self) -> None:
         """Parse each row in the data frame individually, pulling the
         information out into its own columns.
         """
@@ -234,7 +239,7 @@ class BlockParser:
                 data.loc[index, "blockDayObs"] = blockDayObs
                 data.loc[index, "blockSeqNum"] = blockSeqNum
 
-    def augmentData(self):
+    def augmentData(self) -> None:
         """Parse the dataframe using vectorized methods, pulling the
         information out into its own columns.
 
@@ -272,7 +277,7 @@ class BlockParser:
             data["blockDayObs"] = nanSeries
             data["blockSeqNum"] = nanSeries
 
-    def _listColumnValues(self, column, removeNone=True):
+    def _listColumnValues(self, column: str, removeNone: bool = True) -> list:
         """Get all the different values for the specified column, as a list.
 
         Parameters
@@ -292,7 +297,7 @@ class BlockParser:
             values.remove(None)
         return sorted(values)
 
-    def getBlockNums(self):
+    def getBlockNums(self) -> List[int]:
         """Get the block numbers which were run on the specified dayObs.
 
         Returns
@@ -302,7 +307,7 @@ class BlockParser:
         """
         return self._listColumnValues("blockNum")
 
-    def getSeqNums(self, block):
+    def getSeqNums(self, block: int) -> List[int]:
         """Get the seqNums for the specified block.
 
         Parameters
@@ -322,7 +327,7 @@ class BlockParser:
         seqNums = seqNums.dropna()
         return sorted(set(seqNums))
 
-    def getRows(self, block, seqNum=None):
+    def getRows(self, block: int, seqNum: int | None = None):
         """Get all rows of data which relate to the specified block.
 
         If the seqNum is specified, only the rows for that sequence number are
@@ -357,7 +362,7 @@ class BlockParser:
             return rowsForBlock
         return rowsForBlock[rowsForBlock["blockSeqNum"] == seqNum]
 
-    def printBlockEvolution(self, block, seqNum=None):
+    def printBlockEvolution(self, block: int, seqNum: int | None = None):
         """Display the evolution of the specified block.
 
         If the seqNum is specified, the evolution of that specific block
@@ -381,7 +386,7 @@ class BlockParser:
             blockInfo = self.getBlockInfo(block, seqNum)
             print(blockInfo, "\n")
 
-    def getBlockInfo(self, block, seqNum):
+    def getBlockInfo(self, block: int, seqNum: int):
         """Get the block info for the specified block.
 
         Parses the rows relating to this block execution, and returns
@@ -443,7 +448,9 @@ class BlockParser:
 
         return blockInfo
 
-    def getEventsForBlock(self, events, block, seqNum):
+    def getEventsForBlock(
+        self, events: summitUtils.tmaUtils.TMAEvent, block: int, seqNum: int
+    ) -> List[summitUtils.tmaUtils.TMAEvent]:
         """Get the events which occurred during the specified block.
 
         Parameters
