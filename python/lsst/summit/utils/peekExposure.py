@@ -25,7 +25,7 @@ __all__ = [
 ]
 
 
-from typing import Any, Dict, List, Tuple
+from typing import Any
 
 import astropy
 import numpy as np
@@ -283,7 +283,7 @@ class PeekTask(pipeBase.Task):
     ConfigClass = PeekTaskConfig
     _DefaultName = "peek"
 
-    def __init__(self, schema: "Any | None" = None, **kwargs: "Dict[str, Any]"):
+    def __init__(self, schema: Any | None = None, **kwargs: Any):
         super().__init__(**kwargs)
 
         if schema is None:
@@ -380,7 +380,7 @@ class PeekDonutTask(pipeBase.Task):
     ConfigClass = PeekDonutTaskConfig
     _DefaultName = "peekDonut"
 
-    def __init__(self, config: "Any", **kwargs: "Dict[str, Any]"):
+    def __init__(self, config: Any, **kwargs: Any):
         super().__init__(config=config, **kwargs)
         self.makeSubtask("peek")
 
@@ -499,7 +499,7 @@ class PeekPhotoTask(pipeBase.Task):
     ConfigClass = PeekPhotoTaskConfig
     _DefaultName = "peekPhoto"
 
-    def __init__(self, config: "Any", **kwargs: "Dict[str, Any]"):
+    def __init__(self, config: "Any", **kwargs: Any):
         super().__init__(config=config, **kwargs)
         self.makeSubtask("peek")
 
@@ -599,7 +599,7 @@ class PeekSpecTask(pipeBase.Task):
     ConfigClass = PeekSpecTaskConfig
     _DefaultName = "peekSpec"
 
-    def __init__(self, config: "Any", **kwargs: "Dict[str, Any]"):
+    def __init__(self, config: Any, **kwargs: Any):
         super().__init__(config=config, **kwargs)
         self.makeSubtask("peek")
 
@@ -718,7 +718,7 @@ class PeekExposureTask(pipeBase.Task):
     ConfigClass = PeekExposureTaskConfig
     _DefaultName = "peekExposureTask"
 
-    def __init__(self, config: Any, *, display: Any = None, **kwargs: Dict[str, Any]):
+    def __init__(self, config: Any, *, display: Any = None, **kwargs: Any):
         super().__init__(config=config, **kwargs)
 
         self.makeSubtask("donut")
@@ -910,7 +910,7 @@ class PeekExposureTask(pipeBase.Task):
         mode: "str",
         donutDiameter: float,
         binSize: int | None = None,
-    ) -> Tuple[str, int, afwTable.SourceCatalog]:
+    ) -> tuple[str, int, afwTable.SourceCatalog]:
         """Classify exposure and run appropriate PeekTask wrapper.
 
         Parameters
@@ -1020,7 +1020,7 @@ class PeekExposureTask(pipeBase.Task):
 
     def getBrightest(
         self, binnedSourceCat: afwTable.SourceCatalog, binSize: int, goodSourceMask: np.ndarray[bool]
-    ) -> Tuple[int, geom.Point2D, afwGeom.Quadrupole]:
+    ) -> tuple[int, geom.Point2D, afwGeom.Quadrupole]:
         """Find the brightest source in the catalog.
 
         Parameters
@@ -1112,7 +1112,7 @@ class PeekExposureTask(pipeBase.Task):
 
     def transformShapes(
         self, shapes: afwGeom.Quadrupole, exposure: afwImage.Exposure, binSize: int
-    ) -> Tuple[List[afwGeom.Quadrupole], List[afwGeom.Quadrupole]]:
+    ) -> tuple[list[afwGeom.Quadrupole], list[afwGeom.Quadrupole]]:
         """Transform shapes from x/y pixel coordinates to equitorial and
         horizon coordinates.
 
