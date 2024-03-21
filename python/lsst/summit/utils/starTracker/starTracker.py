@@ -69,7 +69,7 @@ class StarTrackerCamera:
 
 narrowCam = StarTrackerCamera(
     cameraType="narrow",
-    suffix="",
+    suffix="_narrow",
     suffixWithSpace="",
     doAstrometry=True,
     cameraNumber=102,
