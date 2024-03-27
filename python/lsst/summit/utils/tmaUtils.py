@@ -372,24 +372,29 @@ def plotEvent(
     # Use the native color cycle for the lines. Because they're on different
     # axes they don't cycle by themselves
     lineColors = [p["color"] for p in plt.rcParams["axes.prop_cycle"]]
+    nColors = len(lineColors)
     colorCounter = 0
 
-    ax1.plot(azimuthData["actualPosition"], label="Azimuth position", c=lineColors[colorCounter])
+    ax1.plot(azimuthData["actualPosition"], label="Azimuth position", c=lineColors[colorCounter % nColors])
     colorCounter += 1
     ax1.yaxis.set_major_formatter(FuncFormatter(tickFormatter))
     ax1.set_ylabel("Azimuth (degrees)")
 
     ax1_twin = ax1.twinx()
-    ax1_twin.plot(elevationData["actualPosition"], label="Elevation position", c=lineColors[colorCounter])
+    ax1_twin.plot(
+        elevationData["actualPosition"], label="Elevation position", c=lineColors[colorCounter % nColors]
+    )
     colorCounter += 1
     ax1_twin.yaxis.set_major_formatter(FuncFormatter(tickFormatter))
     ax1_twin.set_ylabel("Elevation (degrees)")
     ax1.set_xticks([])  # remove x tick labels on the hidden upper x-axis
 
     ax2_twin = ax2.twinx()
-    ax2.plot(azimuthData["actualTorque"], label="Azimuth torque", c=lineColors[colorCounter])
+    ax2.plot(azimuthData["actualTorque"], label="Azimuth torque", c=lineColors[colorCounter % nColors])
     colorCounter += 1
-    ax2_twin.plot(elevationData["actualTorque"], label="Elevation torque", c=lineColors[colorCounter])
+    ax2_twin.plot(
+        elevationData["actualTorque"], label="Elevation torque", c=lineColors[colorCounter % nColors]
+    )
     colorCounter += 1
     ax2.set_ylabel("Azimuth torque (Nm)")
     ax2_twin.set_ylabel("Elevation torque (Nm)")
@@ -425,10 +430,16 @@ def plotEvent(
         image_az_rms = az_rms * np.cos(elVals[0] * np.pi / 180.0)
         image_el_rms = el_rms
         image_impact_rms = np.sqrt(image_az_rms**2 + image_el_rms**2)
-        ax1p5.plot(clippedAzimuthData["azError"], label="Azimuth tracking error", c=lineColors[colorCounter])
+        ax1p5.plot(
+            clippedAzimuthData["azError"],
+            label="Azimuth tracking error",
+            c=lineColors[colorCounter % nColors],
+        )
         colorCounter += 1
         ax1p5.plot(
-            clippedElevationData["elError"], label="Elevation tracking error", c=lineColors[colorCounter]
+            clippedElevationData["elError"],
+            label="Elevation tracking error",
+            c=lineColors[colorCounter % nColors],
         )
         colorCounter += 1
         ax1p5.axhline(0.01, ls="-.", color="black")
@@ -463,11 +474,13 @@ def plotEvent(
 
     for commandTime, command in commands.items():
         plotTime = getPlotTime(commandTime)
-        ax1_twin.axvline(plotTime, c=lineColors[colorCounter], ls="--", alpha=0.75, label=f"{command}")
+        ax1_twin.axvline(
+            plotTime, c=lineColors[colorCounter % nColors], ls="--", alpha=0.75, label=f"{command}"
+        )
         # extend lines down across lower plot, but do not re-add label
-        ax2_twin.axvline(plotTime, c=lineColors[colorCounter], ls="--", alpha=0.75)
+        ax2_twin.axvline(plotTime, c=lineColors[colorCounter % nColors], ls="--", alpha=0.75)
         if ax1p5:
-            ax1p5.axvline(plotTime, c=lineColors[colorCounter], ls="--", alpha=0.75)
+            ax1p5.axvline(plotTime, c=lineColors[colorCounter % nColors], ls="--", alpha=0.75)
         colorCounter += 1
 
     # combine the legends and put inside the plot
