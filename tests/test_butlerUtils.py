@@ -21,6 +21,7 @@
 
 import copy
 import datetime
+import matplotlib.pyplot as plt
 import os
 import random
 import unittest
@@ -28,7 +29,8 @@ from typing import Iterable
 
 import lsst.daf.butler as dafButler
 import lsst.utils.tests
-from lsst.daf.butler import DatasetRef, NamedKeyMapping
+from lsst.daf.butler import DatasetRef
+from collections.abc import Mapping
 from lsst.resources import ResourcePath
 from lsst.summit.utils.butlerUtils import removeDataProduct  # noqa: F401
 from lsst.summit.utils.butlerUtils import (
@@ -62,6 +64,17 @@ from lsst.summit.utils.butlerUtils import (
     updateDataId,
     updateDataIdOrDataCord,
 )
+
+
+def custom_show(*args, **kwargs):
+    pass
+
+
+# Override the show function with our custom one
+# to avoid getting the next Warning:
+# UserWarning: FigureCanvasAgg is non-interactive, and thus cannot be shown
+# plt.show()
+plt.show = custom_show
 
 
 class ButlerUtilsTestCase(lsst.utils.tests.TestCase):
@@ -112,9 +125,9 @@ class ButlerUtilsTestCase(lsst.utils.tests.TestCase):
         self.dataCoordMinimal = self.butler.registry.expandDataId(self.rawDataIdNoDayObSeqNum, detector=0)
         self.dataCoordFullView = self.butler.registry.expandDataId(
             self.rawDataIdNoDayObSeqNum, detector=0
-        ).full
+        ).mapping
         self.assertIsInstance(self.dataCoordMinimal, dafButler.dimensions.DataCoordinate)
-        self.assertIsInstance(self.dataCoordFullView, NamedKeyMapping)
+        self.assertIsInstance(self.dataCoordFullView, Mapping)
 
     def test_getLatissDefaultCollections(self):
         defaultCollections = getLatissDefaultCollections()
@@ -244,9 +257,9 @@ class ButlerUtilsTestCase(lsst.utils.tests.TestCase):
             self.assertTrue(getExpId(bad) is None)
 
     def test_datasetExists(self):
-        self.assertTrue(datasetExists(self.butler, "raw", self.rawDataId))
-        self.assertTrue(datasetExists(self.butler, "raw", self.expIdOnly))
-        self.assertTrue(datasetExists(self.butler, "raw", self.dayObsSeqNumIdOnly))
+        self.assertTrue(self.butler.exists("raw", self.rawDataId))
+        self.assertTrue(self.butler.exists("raw", self.expIdOnly))
+        self.assertTrue(self.butler.exists("raw", self.dayObsSeqNumIdOnly))
         return
 
     def test_sortRecordsByDayObsThenSeqNum(self):

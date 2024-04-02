@@ -627,7 +627,7 @@ class NightReport:
 
         objects = ensure_iterable(objects)
 
-        plt.figure(figsize=(10, 6))
+        plt.figure(figsize=(16, 12))
         for star in objects:
             if star in CALIB_VALUES:
                 continue
@@ -723,7 +723,7 @@ class NightReport:
             objects = self.stars
         objects = ensure_iterable(objects)
 
-        _ = plt.figure(figsize=(14, 10))
+        _ = plt.figure(figsize=(16, 12))
 
         for obj in objects:
             if obj in CALIB_VALUES:
@@ -746,7 +746,7 @@ class NightReport:
             )
         lgnd = ax.legend(bbox_to_anchor=(1.05, 1), prop={"size": 15}, loc="upper left")
         ax.set_title("Axial coverage - azimuth (theta, deg) vs zenith angle (r, deg)", size=20)
-        for h in lgnd.legendHandles:
+        for h in lgnd.legend_handles:
             size = 14
             if "-" in marker:
                 size += 5
