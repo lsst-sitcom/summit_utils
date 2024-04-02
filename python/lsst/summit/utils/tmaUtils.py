@@ -74,6 +74,9 @@ NO_DATA_SENTINEL = "NODATA"
 # position when tracking. 20Hz data times three points = 150ms.
 TRACKING_RESIDUAL_TAIL_CLIP = -0.15  # seconds
 
+MOUNT_IMAGE_WARNING_LEVEL = 0.01  # this determines the colouring of the cells in the table, yellow for this
+MOUNT_IMAGE_BAD_LEVEL = 0.05  # and red for this
+
 
 def getSlewsFromEventList(events):
     """Get the slew events from a list of TMAEvents.
@@ -262,6 +265,7 @@ def plotEvent(
     elevationData=None,
     doFilterResiduals=False,
     maxDelta=0.1,
+    metadataWriter=None,
 ):
     """Plot the TMA axis positions over the course of a given TMAEvent.
 
@@ -318,6 +322,13 @@ def plotEvent(
         The maximum difference between the model and the actual data, in
         arcseconds, to allow before filtering the data point. Ignored if
         ``doFilterResiduals`` is `False`.
+    metadataWriter : `callable`, optional
+        Should be a callable
+        ``lsst.rubintv.production.utils.writeMetadataShard`` function that has
+        had the path filled in with ``functools.patrial`` so that it will just
+        write out the data when called with the event's dayObs and a
+        dictionary containing the row data that should be written.
+
     Returns
     -------
     fig : `matplotlib.figure.Figure`
@@ -458,6 +469,16 @@ def plotEvent(
                 f"{nReplacedAz} bad azimuth values and {nReplacedEl} bad elevation values were replaced",
                 transform=ax1p5.transAxes,
             )
+        if metadataWriter is not None:
+            md = {"Tracking image impact": f"{image_impact_rms:.3f}"}
+            flagKey = "_Tracking image impact"
+            if image_impact_rms > MOUNT_IMAGE_BAD_LEVEL:
+                md.update({flagKey: "bad"})
+            elif image_impact_rms > MOUNT_IMAGE_WARNING_LEVEL:
+                md.update({flagKey: "warning"})
+
+            rowData = {event.seqNum: md}
+            metadataWriter(dayObs=event.dayObs, mdDict=rowData)
 
     if prePadding or postPadding:
         # note the conversion to utc because the x-axis from the dataframe
