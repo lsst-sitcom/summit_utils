@@ -82,6 +82,8 @@ class M1M3ICSAnalysis:
             log.getChild(type(self).__name__) if log is not None else logging.getLogger(type(self).__name__)
         )
 
+        self.acceleration_compensation = None
+        self.velocity_compensation = None
         self.event = event
         self.inner_pad = inner_pad * u.second
         self.outer_pad = outer_pad * u.second
@@ -105,7 +107,7 @@ class M1M3ICSAnalysis:
 
         self.log.info("Packing results into a Series")
         self.stats = self.pack_stats_series()
-
+        
     def find_stable_region(self) -> tuple[Time, Time]:
         """
         Find the stable region of the dataset. By stable, we mean the region
@@ -226,6 +228,14 @@ class M1M3ICSAnalysis:
         }
 
         self.log.info("Merging datasets")
+        for key, df in queries.items():
+            self.log.debug(
+                f"Dataset {key} has {df.index.size} rows.\n"
+                f" It starts at {df.index[0]} and ends at {df.index[-1]}"
+                f" with time resolution of {np.diff(df.index).min()} seconds.\n"
+                f" It uses the timezone {df.index.tz}"
+                )
+            
         df_list = [df for _, df in queries.items()]
         merged_df = df_list[0]
 
@@ -288,13 +298,19 @@ class M1M3ICSAnalysis:
                 self.log.warning(f"Empty dataset for {topic}. Returning a zero-padded dataframe.")
                 begin_timestamp = pd.Timestamp(self.event.begin.unix, unit="s")
                 end_timestamp = pd.Timestamp(self.event.end.unix, unit="s")
-                index = pd.DatetimeIndex(pd.date_range(begin_timestamp, end_timestamp, freq="1S"))
+                index = pd.DatetimeIndex(pd.date_range(begin_timestamp, end_timestamp, freq="50ms", tz="UTC"))
                 df = pd.DataFrame(
                     columns=columns,
                     index=index,
                     data=np.zeros((index.size, len(columns))),
                 )
-
+        
+        if "appliedVelocityForces" in topic:
+            self.velocity_compensation = "off" if all(df == 0) else "on"
+        
+        if "appliedAccelerationForces" in topic:
+            self.acceleration_compensation = "off" if all(df == 0) else "on"
+        
         if rename_columns is not None:
             df = df.rename(columns=rename_columns)
 

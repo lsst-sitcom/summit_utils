@@ -3,6 +3,7 @@ import logging
 import matplotlib.pyplot as plt
 import pandas as pd
 from astropy.time import Time
+from matplotlib.lines import Line2D
 
 from lsst.summit.utils.type_utils import M1M3ICSAnalysis
 
@@ -128,17 +129,20 @@ def customize_fig(fig: plt.Figure, dataset: M1M3ICSAnalysis):
     dataset : `M1M3ICSAnalysis`
         The dataset object containing the data to be plotted and metadata.
     """
-    t_fmt = "%Y%m%d %H:%M:%S"
+    t_fmt = "%Y-%m-%dT%H:%M:%S"
     fig.suptitle(
         f"HP Measured Data\n "
-        f"DayObs {dataset.event.dayObs} "
-        f"SeqNum {dataset.event.seqNum} "
-        f"v{dataset.event.version}\n "
+        f"DayObs {dataset.event.dayObs}, "
+        f"SeqNum {dataset.event.seqNum}, "
+        f"v{dataset.event.version}, "
         f"{dataset.df.index[0].strftime(t_fmt)} - "
-        f"{dataset.df.index[-1].strftime(t_fmt)}"
+        f"{dataset.df.index[-1].strftime(t_fmt)}\n"
+        f"Az from {dataset.stats['az_start']:.2f} to {dataset.stats['az_end']:.2f} deg"
+        f" El from {dataset.stats['el_start']:.2f} to {dataset.stats['el_end']:.2f} deg, "
+        f" Acc Forces {dataset.acceleration_compensation}, Vel Forces {dataset.velocity_compensation}, ",
+        y=1.00,
     )
-
-    fig.subplots_adjust(hspace=0)
+    fig.subplots_adjust(hspace=0.1)
 
 
 def customize_hp_plot(ax: plt.Axes, lines: list[plt.Line2D]) -> None:
@@ -158,7 +162,7 @@ def customize_hp_plot(ax: plt.Axes, lines: list[plt.Line2D]) -> None:
     ax.set_xlabel("Time [UTC]")
     ax.set_ylabel("HP Measured\n Forces [N]")
     ax.set_ylim(-3100, 3100)
-    ax.grid(linestyle=":", alpha=0.2)
+    ax.grid(linestyle=":", alpha=0.5)
 
 
 def add_hp_limits(ax: plt.Axes):
@@ -221,8 +225,10 @@ def plot_velocity_data(ax: plt.Axes, dataset: M1M3ICSAnalysis) -> None:
     ax.plot(dataset.df["el_actual_velocity"], color="teal", label="El Velocity")
     ax.grid(linestyle=":", alpha=0.2)
     ax.set_ylabel("Actual Velocity\n [deg/s]")
-    ax.legend(ncol=2, fontsize="x-small")
-
+    
+    l1 = Line2D([0], [0], color="royalblue", lw=1, label="Az Velocity")
+    l2 = Line2D([0], [0], color="teal", lw=1, label="El Velocity")
+    ax.legend(ncol=2, fontsize="x-small", handles=[l1, l2])
 
 def plot_torque_data(ax: plt.Axes, dataset: M1M3ICSAnalysis) -> None:
     """
@@ -239,7 +245,10 @@ def plot_torque_data(ax: plt.Axes, dataset: M1M3ICSAnalysis) -> None:
     ax.plot(dataset.df["el_actual_torque"], color="salmon", label="El Torque")
     ax.grid(linestyle=":", alpha=0.2)
     ax.set_ylabel("Actual Torque\n [kN.m]")
-    ax.legend(ncol=2, fontsize="x-small")
+    
+    l1 = Line2D([0], [0], color="firebrick", lw=1, label="Az Torque")
+    l2 = Line2D([0], [0], color="salmon", lw=1, label="El Torque")
+    ax.legend(ncol=2, fontsize="x-small", handles=[l1, l2])
 
 
 def plot_stable_region(
@@ -300,7 +309,7 @@ def plot_hp_measured_data(
     fig.clear()
 
     # Add subplots
-    gs = fig.add_gridspec(4, 1, height_ratios=[1, 2, 1, 1])
+    gs = fig.add_gridspec(4, 1, height_ratios=[0.75, 2, 1, 1])
 
     ax_label = fig.add_subplot(gs[0])
     ax_hp = fig.add_subplot(gs[1])
@@ -310,15 +319,15 @@ def plot_hp_measured_data(
     # Remove frame from axis dedicated to label
     ax_label.axis("off")
 
+    slew_begin = Time(dataset.event.begin, scale="utc")
+    slew_end = Time(dataset.event.end, scale="utc")
+    
     # Plotting
     line_list: list[plt.Line2D] = []
     for hp in range(dataset.number_of_hardpoints):
         topic = dataset.measured_forces_topics[hp]
         line = plot_hp_data(ax_hp, dataset.df[topic], f"HP{hp+1}")
         line_list.append(line)
-
-    slew_begin = Time(dataset.event.begin, scale="utc")
-    slew_end = Time(dataset.event.end, scale="utc")
 
     mark_slew_begin_end(ax_hp, slew_begin, slew_end)
     mark_slew_begin_end(ax_vel, slew_begin, slew_end)
@@ -340,7 +349,7 @@ def plot_hp_measured_data(
             command = command.replace("lsst.sal.", "")
             for ax in (ax_hp, ax_tor, ax_vel):  # so that the line spans all plots
                 line = ax.axvline(
-                    commandTime.utc.datetime,
+                    commandTime,
                     c=lineColors[colorCounter],
                     ls="--",
                     alpha=0.75,
@@ -352,7 +361,7 @@ def plot_hp_measured_data(
     customize_hp_plot(ax_hp, line_list)
 
     handles, labels = ax_hp.get_legend_handles_labels()
-    ax_label.legend(handles, labels, loc="center", frameon=False, ncol=4, fontsize="x-small")
+    ax_label.legend(handles, labels, loc="lower center", frameon=False, ncol=4, fontsize="x-small", bbox_to_anchor=(0.5, -0.2))
 
     customize_fig(fig, dataset)
 
