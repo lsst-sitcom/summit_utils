@@ -22,20 +22,16 @@
 import asyncio
 import datetime
 import logging
-import re
 
-import pandas as pd
 from astropy import units as u
 from astropy.time import Time, TimeDelta
 from deprecated.sphinx import deprecated
-
-from lsst.utils.iteration import ensure_iterable
 
 from .utils import getSite
 
 HAS_EFD_CLIENT = True
 try:
-    from lsst_efd_client import EfdClient
+    from lsst_efd_client import EfdClientSync
 except ImportError:
     HAS_EFD_CLIENT = False
 
@@ -72,84 +68,10 @@ COMMAND_ALIASES = {
 TIME_CHUNKING = datetime.timedelta(minutes=15)
 
 
-def _getBeginEnd(dayObs=None, begin=None, end=None, timespan=None, event=None, expRecord=None):
-    """Calculate the begin and end times to pass to _getEfdData, given the
-    kwargs passed to getEfdData.
-
-    Parameters
-    ----------
-    dayObs : `int`
-        The dayObs to query. If specified, this is used to determine the begin
-        and end times.
-    begin : `astropy.Time`
-        The begin time for the query. If specified, either an end time or a
-        timespan must be supplied.
-    end : `astropy.Time`
-        The end time for the query. If specified, a begin time must also be
-        supplied.
-    timespan : `astropy.TimeDelta`
-        The timespan for the query. If specified, a begin time must also be
-        supplied.
-    event : `lsst.summit.utils.efdUtils.TmaEvent`
-        The event to query. If specified, this is used to determine the begin
-        and end times, and all other options are disallowed.
-    expRecord : `lsst.daf.butler.dimensions.DimensionRecord`
-        The exposure record containing the timespan to query. If specified, all
-        other options are disallowed.
-
-    Returns
-    -------
-    begin : `astropy.Time`
-        The begin time for the query.
-    end : `astropy.Time`
-        The end time for the query.
-    """
-    if expRecord is not None:
-        forbiddenOpts = [event, begin, end, timespan, dayObs]
-        if any(x is not None for x in forbiddenOpts):
-            raise ValueError("You can't specify both an expRecord and a begin/end or timespan or dayObs")
-        begin = expRecord.timespan.begin
-        end = expRecord.timespan.end
-        return begin, end
-
-    if event is not None:
-        forbiddenOpts = [begin, end, timespan, dayObs]
-        if any(x is not None for x in forbiddenOpts):
-            raise ValueError("You can't specify both an event and a begin/end or timespan or dayObs")
-        begin = event.begin
-        end = event.end
-        return begin, end
-
-    # check for dayObs, and that other options aren't inconsistently specified
-    if dayObs is not None:
-        forbiddenOpts = [begin, end, timespan]
-        if any(x is not None for x in forbiddenOpts):
-            raise ValueError("You can't specify both a dayObs and a begin/end or timespan")
-        begin = getDayObsStartTime(dayObs)
-        end = getDayObsEndTime(dayObs)
-        return begin, end
-    # can now disregard dayObs entirely
-
-    if begin is None:
-        raise ValueError("You must specify either a dayObs or a begin/end or begin/timespan")
-    # can now rely on begin, so just need to deal with end/timespan
-
-    if end is None and timespan is None:
-        raise ValueError("If you specify a begin, you must specify either a end or a timespan")
-    if end is not None and timespan is not None:
-        raise ValueError("You can't specify both a end and a timespan")
-    if end is None:
-        if timespan > datetime.timedelta(minutes=0):
-            end = begin + timespan  # the normal case
-        else:
-            end = begin  # the case where timespan is negative
-            begin = begin + timespan  # adding the negative to the start, i.e. subtracting it to bring back
-
-    assert begin is not None
-    assert end is not None
-    return begin, end
-
-
+@deprecated(
+    reason="This functionality has been included in the EfdClient.",
+    category=FutureWarning,
+)
 def getEfdData(
     client,
     topic,
@@ -238,61 +160,15 @@ def getEfdData(
     # is now being checked means this shouldn't be a problem now.
 
     # TODO: RFC-948 Move this import back to top of file once is implemented.
-    import nest_asyncio
-
-    begin, end = _getBeginEnd(dayObs, begin, end, timespan, event, expRecord)
-    begin -= TimeDelta(prePadding, format="sec")
-    end += TimeDelta(postPadding, format="sec")
-
-    nest_asyncio.apply()
-    loop = asyncio.get_event_loop()
-    ret = loop.run_until_complete(
-        _getEfdData(client=client, topic=topic, begin=begin, end=end, columns=columns)
+    return client.get_efd_data(
+        topic, columns, prePadding, postPadding, dayObs, begin, end, timespan, event, expRecord, warn
     )
-    if ret.empty and warn:
-        log = logging.getLogger(__name__)
-        log.warning(
-            f"Topic {topic} is in the schema, but no data was returned by the query for the specified"
-            " time range"
-        )
-    return ret
 
 
-async def _getEfdData(client, topic, begin, end, columns=None):
-    """Get data for a topic from the EFD over the specified time range.
-
-    Parameters
-    ----------
-    client : `lsst_efd_client.efd_helper.EfdClient`
-        The EFD client to use.
-    topic : `str`
-        The topic to query.
-    begin : `astropy.Time`
-        The begin time for the query.
-    end : `astropy.Time`
-        The end time for the query.
-    columns : `list` of `str`, optional
-        The columns to query. If not specified, all columns are returned.
-
-    Returns
-    -------
-    data : `pd.DataFrame`
-        The data from the query.
-    """
-    if columns is None:
-        columns = ["*"]
-    columns = list(ensure_iterable(columns))
-
-    availableTopics = await client.get_topics()
-
-    if topic not in availableTopics:
-        raise ValueError(f"Topic {topic} not in EFD schema")
-
-    data = await client.select_time_series(topic, columns, begin.utc, end.utc)
-
-    return data
-
-
+@deprecated(
+    reason="This functionality has been included in the EfdClient.",
+    category=FutureWarning,
+)
 def getMostRecentRowWithDataBefore(client, topic, timeToLookBefore, warnStaleAfterNMinutes=60 * 12):
     """Get the most recent row of data for a topic before a given time.
 
@@ -319,36 +195,7 @@ def getMostRecentRowWithDataBefore(client, topic, timeToLookBefore, warnStaleAft
     ValueError:
         If the topic is not in the EFD schema.
     """
-    staleAge = datetime.timedelta(warnStaleAfterNMinutes)
-
-    firstDayPossible = getDayObsStartTime(20190101)
-
-    if timeToLookBefore < firstDayPossible:
-        raise ValueError(f"Requested time {timeToLookBefore} is before any data was put in the EFD")
-
-    df = pd.DataFrame()
-    beginTime = timeToLookBefore
-    while df.empty and beginTime > firstDayPossible:
-        df = getEfdData(client, topic, begin=beginTime, timespan=-TIME_CHUNKING, warn=False)
-        beginTime -= TIME_CHUNKING
-
-    if beginTime < firstDayPossible and df.empty:  # we ran all the way back to the beginning of time
-        raise ValueError(
-            f"The entire EFD was searched backwards from {timeToLookBefore} and no data was "
-            f"found in {topic=}"
-        )
-
-    lastRow = df.iloc[-1]
-    commandTime = efdTimestampToAstropy(lastRow["private_efdStamp"])
-
-    commandAge = timeToLookBefore - commandTime
-    if commandAge > staleAge:
-        log = logging.getLogger(__name__)
-        log.warning(
-            f"Component {topic} was last set {commandAge.sec/60:.1} minutes" " before the requested time"
-        )
-
-    return lastRow
+    return client.get_most_recent_row_with_data_before(topic, timeToLookBefore, warnStaleAfterNMinutes)
 
 
 def makeEfdClient(testing=False):
@@ -373,7 +220,7 @@ def makeEfdClient(testing=False):
         raise RuntimeError("Could not create EFD client because importing lsst_efd_client failed.")
 
     if testing:
-        return EfdClient("usdf_efd")
+        return EfdClientSync("usdf_efd")
 
     try:
         site = getSite()
@@ -381,15 +228,15 @@ def makeEfdClient(testing=False):
         raise RuntimeError("Could not create EFD client as the site could not be determined") from e
 
     if site == "summit":
-        return EfdClient("summit_efd")
+        return EfdClientSync("summit_efd")
     if site == "tucson":
-        return EfdClient("tucson_teststand_efd")
+        return EfdClientSync("tucson_teststand_efd")
     if site == "base":
-        return EfdClient("base_efd")
+        return EfdClientSync("base_efd")
     if site in ["staff-rsp", "rubin-devl", "usdf-k8s"]:
-        return EfdClient("usdf_efd")
+        return EfdClientSync("usdf_efd")
     if site == "jenkins":
-        return EfdClient("usdf_efd")
+        return EfdClientSync("usdf_efd")
 
     raise RuntimeError(f"Could not create EFD client as the {site=} is not recognized")
 
@@ -633,6 +480,10 @@ def getSubTopics(client, topic):
     return sorted([t for t in topics if t.startswith(topic)])
 
 
+@deprecated(
+    reason="This functionality has been included in the EfdClient.",
+    category=FutureWarning,
+)
 def getTopics(client, toFind, caseSensitive=False):
     """Return all the strings in topics which match the topic query string.
 
@@ -657,21 +508,13 @@ def getTopics(client, toFind, caseSensitive=False):
     matches : `list` of `str`
         The list of matching topics.
     """
-    loop = asyncio.get_event_loop()
-    topics = loop.run_until_complete(client.get_topics())
-
-    # Replace wildcard with regex equivalent
-    pattern = toFind.replace("*", ".*")
-    flags = re.IGNORECASE if not caseSensitive else 0
-
-    matches = []
-    for topic in topics:
-        if re.match(pattern, topic, flags):
-            matches.append(topic)
-
-    return matches
+    client.get_topics(toFind, caseSensitive)
 
 
+@deprecated(
+    reason="This functionality has been included in the EfdClient.",
+    category=FutureWarning,
+)
 def getCommands(client, commands, begin, end, prePadding, postPadding, timeFormat="python"):
     """Retrieve the commands issued within a specified time range.
 
@@ -707,40 +550,4 @@ def getCommands(client, commands, begin, end, prePadding, postPadding, timeForma
         Raise if there is already a command at a timestamp in the dictionary,
         i.e. there is a collision.
     """
-    if timeFormat not in ["pandas", "astropy", "python"]:
-        raise ValueError(f"format must be one of 'pandas', 'astropy' or 'python', not {timeFormat=}")
-
-    commands = list(ensure_iterable(commands))
-
-    commandTimes = {}
-    for command in commands:
-        data = getEfdData(
-            client,
-            command,
-            begin=begin,
-            end=end,
-            prePadding=prePadding,
-            postPadding=postPadding,
-            warn=False,  # most commands will not be issue so we expect many empty queries
-        )
-        for time, _ in data.iterrows():
-            # this is much the most simple data structure, and the chance
-            # of commands being *exactly* simultaneous is minimal so try
-            # it like this, and just raise if we get collisions for now. So
-            # far in testing this seems to be just fine.
-
-            timeKey = None
-            match timeFormat:
-                case "pandas":
-                    timeKey = time
-                case "astropy":
-                    timeKey = Time(time)
-                case "python":
-                    timeKey = time.to_pydatetime()
-
-            if timeKey in commandTimes:
-                raise ValueError(
-                    f"There is already a command at {timeKey=} -" " make a better data structure!"
-                )
-            commandTimes[timeKey] = command
-    return commandTimes
+    client.get_commands(commands, begin, end, prePadding, postPadding, timeFormat)
