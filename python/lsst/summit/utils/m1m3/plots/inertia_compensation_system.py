@@ -1,4 +1,5 @@
 import logging
+import pytz
 
 import matplotlib.pyplot as plt
 import pandas as pd
@@ -46,10 +47,10 @@ def plot_hp_data(ax: plt.Axes, data: pd.Series | list, label: str) -> plt.Line2D
     ----------
     ax : `plt.Axes`
         The axes on which the data is plotted.
-    topic : `str`
-        The topic of the data.
     data : `Series` or `list`
         The data points to be plotted.
+    t0 : `astropy.time.Time`
+        Start of a slew. Used as an offset to convert the x-axis to seconds.
     label : `str`
         The label for the plotted data.
 
@@ -58,7 +59,7 @@ def plot_hp_data(ax: plt.Axes, data: pd.Series | list, label: str) -> plt.Line2D
     lines : `plt.Line2D`
         The plotted data as a Line2D object.
     """
-    line = ax.plot(data, "-", label=label, lw=0.5)
+    line = ax.plot(data, linestyle="-", label=label, linewidth=0.5)
     #  Make this function consistent with others by returning single Line2D
     return line[0]
 
@@ -82,8 +83,8 @@ def mark_slew_begin_end(ax: plt.Axes, slew_begin: Time, slew_end: Time) -> plt.L
     line : `matplotlib.lines.Line2D`
         The Line2D object representing the line drawn at the slew end.
     """
-    _ = ax.axvline(slew_begin.datetime, lw=0.5, ls="--", c="k", zorder=-1)
-    line = ax.axvline(slew_end.datetime, lw=0.5, ls="--", c="k", zorder=-1, label="Slew Start/Stop")
+    _ = ax.axvline(slew_begin, lw=0.5, ls="--", c="k", zorder=-1)
+    line = ax.axvline(slew_end, lw=0.5, ls="--", c="k", zorder=-1, label="Slew Start/Stop")
     return line
 
 
@@ -105,9 +106,10 @@ def mark_padded_slew_begin_end(ax: plt.Axes, begin: Time, end: Time) -> plt.Line
     line : `matplotlib.lines.Line2D`
         The Line2D object representing the line drawn at the padded slew end.
     """
-    _ = ax.axvline(begin.datetime, alpha=0.5, lw=0.5, ls="-", c="k", zorder=-1)
+    print(">>>>>>", begin, end)
+    _ = ax.axvline(begin, alpha=0.5, lw=0.5, ls="-", c="k", zorder=-1)
     line = ax.axvline(
-        end.datetime,
+        end,
         alpha=0.5,
         lw=0.5,
         ls="-",
@@ -138,11 +140,11 @@ def customize_fig(fig: plt.Figure, dataset: M1M3ICSAnalysis):
         f"{dataset.df.index[0].strftime(t_fmt)} - "
         f"{dataset.df.index[-1].strftime(t_fmt)}\n"
         f"Az from {dataset.stats['az_start']:.2f} to {dataset.stats['az_end']:.2f} deg"
-        f" El from {dataset.stats['el_start']:.2f} to {dataset.stats['el_end']:.2f} deg, "
-        f" Acc Forces {dataset.acceleration_compensation}, Vel Forces {dataset.velocity_compensation}, ",
+        f" El from {dataset.stats['el_start']:.2f} to {dataset.stats['el_end']:.2f} deg, ",
         y=1.00,
     )
-    fig.subplots_adjust(hspace=0.1)
+    fig.tight_layout()
+    fig.subplots_adjust(hspace=0.05)
 
 
 def customize_hp_plot(ax: plt.Axes, lines: list[plt.Line2D]) -> None:
@@ -159,7 +161,6 @@ def customize_hp_plot(ax: plt.Axes, lines: list[plt.Line2D]) -> None:
     limit_lines = add_hp_limits(ax)
     lines.extend(limit_lines)
 
-    ax.set_xlabel("Time [UTC]")
     ax.set_ylabel("HP Measured\n Forces [N]")
     ax.set_ylim(-3100, 3100)
     ax.grid(linestyle=":", alpha=0.5)
@@ -223,12 +224,13 @@ def plot_velocity_data(ax: plt.Axes, dataset: M1M3ICSAnalysis) -> None:
     """
     ax.plot(dataset.df["az_actual_velocity"], color="royalblue", label="Az Velocity")
     ax.plot(dataset.df["el_actual_velocity"], color="teal", label="El Velocity")
-    ax.grid(linestyle=":", alpha=0.2)
-    ax.set_ylabel("Actual Velocity\n [deg/s]")
-    
+    ax.grid(linestyle=":", alpha=0.5)
+    ax.set_ylabel("Actual\n Velocity\n [deg/s]")
+
     l1 = Line2D([0], [0], color="royalblue", lw=1, label="Az Velocity")
     l2 = Line2D([0], [0], color="teal", lw=1, label="El Velocity")
     ax.legend(ncol=2, fontsize="x-small", handles=[l1, l2])
+
 
 def plot_torque_data(ax: plt.Axes, dataset: M1M3ICSAnalysis) -> None:
     """
@@ -243,9 +245,9 @@ def plot_torque_data(ax: plt.Axes, dataset: M1M3ICSAnalysis) -> None:
     """
     ax.plot(dataset.df["az_actual_torque"], color="firebrick", label="Az Torque")
     ax.plot(dataset.df["el_actual_torque"], color="salmon", label="El Torque")
-    ax.grid(linestyle=":", alpha=0.2)
-    ax.set_ylabel("Actual Torque\n [kN.m]")
-    
+    ax.grid(linestyle=":", alpha=0.5)
+    ax.set_ylabel("Actual\n Torque\n [kN.m]")
+
     l1 = Line2D([0], [0], color="firebrick", lw=1, label="Az Torque")
     l2 = Line2D([0], [0], color="salmon", lw=1, label="El Torque")
     ax.legend(ncol=2, fontsize="x-small", handles=[l1, l2])
@@ -309,7 +311,7 @@ def plot_hp_measured_data(
     fig.clear()
 
     # Add subplots
-    gs = fig.add_gridspec(4, 1, height_ratios=[0.75, 2, 1, 1])
+    gs = fig.add_gridspec(4, 1, height_ratios=[0.5, 2, 1, 1])
 
     ax_label = fig.add_subplot(gs[0])
     ax_hp = fig.add_subplot(gs[1])
@@ -319,9 +321,13 @@ def plot_hp_measured_data(
     # Remove frame from axis dedicated to label
     ax_label.axis("off")
 
-    slew_begin = Time(dataset.event.begin, scale="utc")
-    slew_end = Time(dataset.event.end, scale="utc")
-    
+    # Convert the dataframe index to seconds using `slew_begin` as reference
+    slew_begin = dataset.event.begin.to_datetime(timezone=pytz.timezone("UTC"))
+    slew_end = (dataset.event.end.to_datetime(timezone=pytz.timezone("UTC")) - slew_begin).total_seconds()
+
+    original_index = dataset.df.index.copy()
+    dataset.df.index = (dataset.df.index - slew_begin).total_seconds()
+
     # Plotting
     line_list: list[plt.Line2D] = []
     for hp in range(dataset.number_of_hardpoints):
@@ -329,15 +335,14 @@ def plot_hp_measured_data(
         line = plot_hp_data(ax_hp, dataset.df[topic], f"HP{hp+1}")
         line_list.append(line)
 
-    mark_slew_begin_end(ax_hp, slew_begin, slew_end)
-    mark_slew_begin_end(ax_vel, slew_begin, slew_end)
-    line = mark_slew_begin_end(ax_tor, slew_begin, slew_end)
+    # Since slew_begin is our reference time, we can set it to zero
+    mark_slew_begin_end(ax_hp, slew_begin=0, slew_end=slew_end)
+    mark_slew_begin_end(ax_vel, slew_begin=0, slew_end=slew_end)
+    line = mark_slew_begin_end(ax_tor, slew_begin=0, slew_end=slew_end)
     line_list.append(line)
 
-    mark_padded_slew_begin_end(ax_hp, slew_begin - dataset.outer_pad, slew_end + dataset.outer_pad)
-    mark_padded_slew_begin_end(ax_vel, slew_begin - dataset.outer_pad, slew_end + dataset.outer_pad)
-    line = mark_padded_slew_begin_end(ax_tor, slew_begin - dataset.outer_pad, slew_end + dataset.outer_pad)
-    line_list.append(line)
+    outer_pad = dataset.outer_pad.value
+    ax_hp.set_xlim(-outer_pad, slew_end + outer_pad)
 
     plot_velocity_data(ax_vel, dataset)
     plot_torque_data(ax_tor, dataset)
@@ -346,6 +351,7 @@ def plot_hp_measured_data(
     colorCounter = 0
     if commands is not None:
         for commandTime, command in commands.items():
+            commandTime = (commandTime - slew_begin).total_seconds()
             command = command.replace("lsst.sal.", "")
             for ax in (ax_hp, ax_tor, ax_vel):  # so that the line spans all plots
                 line = ax.axvline(
@@ -359,10 +365,25 @@ def plot_hp_measured_data(
             colorCounter += 1  # increment color so each line is different
 
     customize_hp_plot(ax_hp, line_list)
+    # ax_hp.xaxis.set_ticklabels([])
+    # ax_tor.xaxis.set_ticklabels([])
+    ax_vel.set_xlabel("Time from slew start [s]")
 
     handles, labels = ax_hp.get_legend_handles_labels()
-    ax_label.legend(handles, labels, loc="lower center", frameon=False, ncol=4, fontsize="x-small", bbox_to_anchor=(0.5, -0.2))
+    ncol = 4 if len(handles) <= 10 else 5
 
+    ax_label.legend(
+        handles,
+        labels,
+        loc="lower center",
+        frameon=False,
+        ncol=ncol,
+        fontsize="x-small",
+        bbox_to_anchor=(0.5, -0.2),
+    )
+
+    # Ugly workaround to keep the index as timestamps
+    dataset.df.index = original_index
     customize_fig(fig, dataset)
 
     return fig
