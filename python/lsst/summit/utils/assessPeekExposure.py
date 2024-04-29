@@ -208,7 +208,6 @@ def main(args: argparse.Namespace) -> None:
         table = Table.read(path)
     table["exposureId"] = table["day_obs"] * 100_000 + table["sequence_number"]
     table = table[args.start : args.end]
-
     intags = np.unique(table["finalTag"])
 
     # Possible PET outcomes

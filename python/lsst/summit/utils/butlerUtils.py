@@ -21,7 +21,7 @@
 
 import copy
 import itertools
-from collections.abc import Sequence
+from collections.abc import Iterable
 from typing import Any
 
 from deprecated.sphinx import deprecated
@@ -283,18 +283,20 @@ def getSeqNumsForDayObs(butler: dafButler.Butler, day_obs: int, extraWhere: str 
     return sorted([r.seq_num for r in records])
 
 
-def sortRecordsByDayObsThenSeqNum(records: list[dict]) -> list[dict]:
+def sortRecordsByDayObsThenSeqNum(
+    records: list[dafButler.DimensionRecord],
+) -> list[dafButler.DimensionRecord]:
     """Sort a set of records by dayObs, then seqNum to get the order in which
     they were taken.
 
     Parameters
     ----------
-    records : `list` of `dict`
+    records : `list` of `dafButler.DimensionRecord`
         The records to be sorted.
 
     Returns
     -------
-    sortedRecords : `list` of `dict`
+    sortedRecords : `list` of `dafButler.DimensionRecord`
         The sorted records
 
     Raises
@@ -384,7 +386,7 @@ def getExpIdFromDayObsSeqNum(butler: dafButler.Butler, dataId: dict) -> dict:
     return {"exposure": expRecord.id}
 
 
-def updateDataIdOrDataCord(dataId: dict, **updateKwargs: int) -> dict:
+def updateDataIdOrDataCord(dataId: dict, **updateKwargs: Any) -> dict:
     """Add key, value pairs to a dataId or data coordinate.
 
     Parameters
@@ -460,7 +462,7 @@ def fillDataId(butler: dafButler.Butler, dataId: dict) -> dict:
     return dataId
 
 
-def _assureDict(dataId: dict) -> dict:
+def _assureDict(dataId: dict | dafButler.dimensions.DataCoordinate | dafButler.DimensionRecord) -> dict:
     """Turn any data-identifier-like object into a dict.
 
     Parameters
@@ -478,13 +480,13 @@ def _assureDict(dataId: dict) -> dict:
         return dataId
     elif hasattr(dataId, "items"):  # dafButler.dimensions.DataCoordinate
         return {str(k): v for k, v in dataId.items()}  # str() required due to full names
-    elif hasattr(dataId, "dataId"):  # dafButler.dimensions.DimensionRecord
+    elif hasattr(dataId, "dataId"):  # dafButler.DimensionRecord
         return {str(k): v for k, v in dataId.dataId.items()}
     else:
         raise RuntimeError(f"Failed to coerce {type(dataId)} to dict")
 
 
-def getExpRecordFromDataId(butler: dafButler.Butler, dataId: dict) -> dafButler.dimensions.DimensionRecord:
+def getExpRecordFromDataId(butler: dafButler.Butler, dataId: dict) -> dafButler.DimensionRecord:
     """Get the exposure record for a given dataId.
 
     Parameters
@@ -712,7 +714,7 @@ def getExpId(dataId: dict | dafButler.DimensionRecord) -> int | None:
 
 def getLatissOnSkyDataIds(
     butler: dafButler.Butler,
-    skipTypes: Sequence[str] = ("bias", "dark", "flat"),
+    skipTypes: Iterable[str] = ("bias", "dark", "flat"),
     checkObject: bool = True,
     full: bool = True,
     startDate: int | None = None,

@@ -25,7 +25,6 @@ import os
 from collections.abc import Iterable
 from typing import Union
 
-import astro_metadata_translator
 import astropy.units as u
 import matplotlib
 import numpy as np
@@ -125,7 +124,7 @@ def countPixels(maskedImage: afwImage.MaskedImage, maskPlane: str) -> int:
     return len(np.where(np.bitwise_and(maskedImage.mask.array, bit))[0])
 
 
-def quickSmooth(data: np.ndarray[int], sigma: float = 2) -> np.ndarray[int]:
+def quickSmooth(data: np.ndarray[float], sigma: float = 2) -> np.ndarray[float]:
     """Perform a quick smoothing of the image.
 
     Not to be used for scientific purposes, but improves the stretch and
@@ -297,7 +296,7 @@ def getImageStats(exp: afwImage.Exposure) -> pipeBase.Struct:
 
 
 def detectObjectsInExp(
-    exp: afwImage.Exposure, nSigma: int = 10, nPixMin: int = 10, grow: int = 0
+    exp: afwImage.Exposure, nSigma: float = 10, nPixMin: int = 10, grow: int = 0
 ) -> afwDetect.FootprintSet:
     """Quick and dirty object detection for an exposure.
 
@@ -883,7 +882,7 @@ def starTrackerFileToExposure(filename: str, logger: logging.Logger | None = Non
     return exp
 
 
-def obsInfoToDict(obsInfo: astro_metadata_translator.ObservationInfo) -> dict:
+def obsInfoToDict(obsInfo: ObservationInfo) -> dict:
     """Convert an ObservationInfo to a dict.
 
     Parameters

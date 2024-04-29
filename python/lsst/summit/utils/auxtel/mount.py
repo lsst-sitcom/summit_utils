@@ -29,9 +29,7 @@ import lsst.daf.butler as dafButler
 from ..efdUtils import getEfdData
 
 
-def hasTimebaseErrors(
-    expRecord: dafButler.dimensions.DimensionRecord, client: EfdClient, maxDiff: float = 1.05
-) -> bool:
+def hasTimebaseErrors(expRecord: dafButler.DimensionRecord, client: EfdClient, maxDiff: float = 1.05) -> bool:
     """Check if an exposure has cRIO timebase errors.
 
     Data in the lsst.sal.ATMCS.mount_AzEl_Encoders topic is a packed

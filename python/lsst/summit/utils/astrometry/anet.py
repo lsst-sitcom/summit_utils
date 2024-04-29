@@ -33,6 +33,7 @@ from typing import Any
 import numpy as np
 from astropy.io import fits
 
+import lsst.afw.geom as afwGeom
 import lsst.afw.image as afwImage
 import lsst.afw.table as afwTable
 import lsst.geom as geom
@@ -69,7 +70,7 @@ class AstrometryNetResult:
         self.rmsErrorArsec
 
     @cached_property
-    def wcs(self) -> Any:
+    def wcs(self) -> afwGeom.SkyWcs:
         with fits.open(self.wcsFile) as f:
             header = f[0].header
         return headerToWcs(header)
@@ -132,7 +133,7 @@ class CommandLineSolver:
         self,
         indexFilePath: str | None = None,
         checkInParallel: bool = True,
-        timeout: int = 300,
+        timeout: float | int = 300,
         binary: str = "solve-field",
         fluxSlot: str = "base_CircularApertureFlux_3_0_instFlux",
     ):
@@ -225,7 +226,7 @@ class CommandLineSolver:
         isWideField: bool,
         *,
         useGaia: bool = False,
-        percentageScaleError: int = 10,
+        percentageScaleError: float | int = 10,
         radius: float | None = None,
         silent: bool = True,
     ) -> AstrometryNetResult | None:
@@ -367,7 +368,7 @@ class OnlineSolver:
         exp: afwImage.Exposure,
         sourceCat: afwTable.SourceCatalog,
         *,
-        percentageScaleError: float = 10,
+        percentageScaleError: float | int = 10,
         radius: float | None = None,
         scaleEstimate: float | None = None,
     ) -> dict[str, Any] | None:

@@ -284,19 +284,19 @@ class NightReport:
         self.stars = self.getObservedObjects()
         self.cMap = self.makeStarColorAndMarkerMap(self.stars)
 
-    def getDatesForSeqNums(self) -> dict:
+    def getDatesForSeqNums(self) -> dict[int, datetime.datetime]:
         """Get a dict of {seqNum: date} for the report.
 
         Returns
         -------
-        dates : `dict`
+        dates : `dict[int, datetime.datetime]`
             Dict of {seqNum: date} for the current report.
         """
         return {
             seqNum: self.data[seqNum]["timespan"].begin.to_datetime() for seqNum in sorted(self.data.keys())
         }
 
-    def getObservedObjects(self, ignoreTileNum: bool = True) -> list:
+    def getObservedObjects(self, ignoreTileNum: bool = True) -> list[str]:
         """Get a list of the observed objects for the night.
 
         Repeated observations of individual imaging fields have _NNN appended
@@ -468,7 +468,7 @@ class NightReport:
 
         return {s: dt for s, dt in zip(seqNums, dts)}
 
-    def printObsGaps(self, threshold: int = 100, includeCalibs: bool = False) -> None:
+    def printObsGaps(self, threshold: float | int = 100, includeCalibs: bool = False) -> None:
         """Print out the gaps between observations in a human-readable format.
 
         Prints the most recent gaps first.

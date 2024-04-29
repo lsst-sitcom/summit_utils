@@ -27,7 +27,7 @@ import lsst.afw.image as afwImage
 import lsst.daf.butler as dafButler
 from lsst.daf.butler.registry import ConflictingDefinitionError
 from lsst.ip.isr import IsrTask
-from lsst.pex.config import Config as pexConfig
+from lsst.pex.config import Config
 from lsst.summit.utils.butlerUtils import getLatissDefaultCollections
 from lsst.summit.utils.quickLook import QuickLookIsrTask
 from lsst.utils import getPackageDir
@@ -117,7 +117,7 @@ class BestEffortIsr:
         self._cache = {}
         self._cacheIsForDetector = None
 
-    def _applyConfigOverrides(self, config: pexConfig, overrides: dict) -> None:
+    def _applyConfigOverrides(self, config: Config, overrides: dict) -> None:
         """Update a config class with a dict of options.
 
         Parameters
@@ -143,7 +143,7 @@ class BestEffortIsr:
     def updateDataId(
         expIdOrDataId: int | dict | dafButler.DataCoordinate | dafButler.DimensionRecord,
         **kwargs: Any,
-    ) -> dict | dafButler.DataCoordinate | dafButler.DimensionRecord:
+    ) -> dict | dafButler.DataCoordinate:
         """Sanitize the expIdOrDataId to allow support both expIds and dataIds
 
         Supports expId as an integer, or a complete or partial dict. The dict
@@ -185,7 +185,7 @@ class BestEffortIsr:
 
     def getExposure(
         self,
-        expIdOrDataId: dict,
+        expIdOrDataId: int | dict | dafButler.DataCoordinate | dafButler.DimensionRecord,
         extraIsrOptions: dict = {},
         skipCosmics: bool = False,
         forceRemake: bool = False,

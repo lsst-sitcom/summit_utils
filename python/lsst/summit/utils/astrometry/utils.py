@@ -20,6 +20,8 @@
 # along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
 
+from typing import Any
+
 import astropy
 import astropy.units as u
 import numpy as np
@@ -153,7 +155,7 @@ def getAverageElFromHeader(header: dict) -> float:
     return (elStart + elEnd) / 2
 
 
-def patchHeader(header: dict) -> dict[str, float]:
+def patchHeader(header: dict[str, float | int | str]) -> dict[str, float | int | str]:
     """This is a TEMPORARY function to patch some info into the headers."""
     if header.get("CAMCODE") == "GC102":  # regular aka narrow camera
         # the narrow camera currently is wrong about its place scale by of ~2.2
@@ -175,7 +177,7 @@ def patchHeader(header: dict) -> dict[str, float]:
     return header
 
 
-def genericCameraHeaderToWcs(exp: dict) -> afwGeom.SkyWcs:
+def genericCameraHeaderToWcs(exp: Any) -> afwGeom.SkyWcs:
     header = exp.getMetadata().toDict()
     header = patchHeader(header)
 
@@ -200,7 +202,7 @@ def genericCameraHeaderToWcs(exp: dict) -> afwGeom.SkyWcs:
     return wcs
 
 
-def getIcrsAtZenith(lon: float, lat: float, height: float, utc: float) -> astropy.coordinates.SkyCoord:
+def getIcrsAtZenith(lon: float, lat: float, height: float, utc: str) -> astropy.coordinates.SkyCoord:
     """Get the icrs at zenith given a lat/long/height/time in UTC.
 
     Parameters

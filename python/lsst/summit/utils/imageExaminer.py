@@ -243,7 +243,7 @@ class ImageExaminer:
         return self.imStats
 
     @staticmethod
-    def _calcMaxBoxHalfSize(centroid: tuple[float, float], chipBbox: geom.Box2D) -> int:
+    def _calcMaxBoxHalfSize(centroid: tuple[float, float], chipBbox: geom.Box2I | geom.Box2D) -> int:
         """Calculate the maximum size the box can be without going outside the
         detector's bounds.
 
@@ -307,7 +307,7 @@ class ImageExaminer:
 
         return bbox
 
-    def getStarBoxData(self) -> np.ndarray[int]:
+    def getStarBoxData(self) -> np.ndarray[float]:
         """Get the image data for the star.
 
         Calculates the maximum valid box, and uses that to return the image
@@ -640,7 +640,7 @@ class ImageExaminer:
 
         Parameters
         ----------
-        ax : `maplotlib.axes.Axe`
+        ax : `maplotlib.axes.Axes`
             Axes to use.
         lines : `list` of `str`
             The data to include in the text box

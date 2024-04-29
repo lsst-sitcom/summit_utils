@@ -29,7 +29,6 @@ from PIL import Image
 
 import lsst.afw.image as afwImage
 import lsst.daf.base as dafBase
-import lsst.rubintv.production as rubintvProduction
 from lsst.afw.image import ExposureInfo, VisitInfo
 from lsst.summit.utils.utils import dayObsIntToString
 
@@ -302,16 +301,14 @@ def dayObsSeqNumFrameNumFromFilename(filename: str) -> tuple[int, int, int]:
     return int(dayObs), int(seqNum), int(frameNum)
 
 
-def getRawDataDirForDayObs(
-    rootDataPath: str, camera: rubintvProduction.starTracker.StarTrackerCamera, dayObs: int
-) -> str:
+def getRawDataDirForDayObs(rootDataPath: str, camera: StarTrackerCamera, dayObs: int) -> str:
     """Get the raw data dir for a given dayObs.
 
     Parameters
     ----------
     rootDataPath : `str`
         The root data path.
-    camera : `lsst.rubintv.production.starTracker.StarTrackerCamera`
+    camera : `lsst.summit.utils.starTracker.StarTrackerCamera`
         The camera to get the raw data for.
     dayObs : `int`
         The dayObs.

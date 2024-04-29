@@ -24,17 +24,15 @@ import logging
 import re
 import time
 from dataclasses import dataclass
-from typing import List
 
 import numpy as np
 import pandas as pd
 from astropy.time import Time
 from lsst_efd_client.efd_helper import EfdClient
 
-import lsst.summit.utils as summitUtils
-
 from .efdUtils import efdTimestampToAstropy, getEfdData, makeEfdClient
 from .enums import ScriptState
+from .tmaUtils import TMAEvent
 
 __all__ = ("BlockParser", "BlockInfo", "ScriptStatePoint")
 
@@ -297,7 +295,7 @@ class BlockParser:
             values.remove(None)
         return sorted(values)
 
-    def getBlockNums(self) -> List[int]:
+    def getBlockNums(self) -> list[int]:
         """Get the block numbers which were run on the specified dayObs.
 
         Returns
@@ -307,7 +305,7 @@ class BlockParser:
         """
         return self._listColumnValues("blockNum")
 
-    def getSeqNums(self, block: int) -> List[int]:
+    def getSeqNums(self, block: int) -> list[int]:
         """Get the seqNums for the specified block.
 
         Parameters
@@ -448,9 +446,7 @@ class BlockParser:
 
         return blockInfo
 
-    def getEventsForBlock(
-        self, events: summitUtils.tmaUtils.TMAEvent, block: int, seqNum: int
-    ) -> List[summitUtils.tmaUtils.TMAEvent]:
+    def getEventsForBlock(self, events: list[TMAEvent], block: int, seqNum: int) -> list[TMAEvent]:
         """Get the events which occurred during the specified block.
 
         Parameters

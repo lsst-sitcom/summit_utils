@@ -23,9 +23,7 @@ import dataclasses
 import os
 from typing import Any
 
-import numpy as np
-
-import lsst.afw.cameraGeom as afwCameraGeom
+import lsst.afw.cameraGeom as camGeom
 import lsst.afw.image as afwImage
 import lsst.ip.isr as ipIsr
 import lsst.pex.config as pexConfig
@@ -75,11 +73,7 @@ class QuickLookIsrTaskConnections(IsrTaskConnections):
 class QuickLookIsrTaskConfig(pipeBase.PipelineTaskConfig, pipelineConnections=QuickLookIsrTaskConnections):
     """Configuration parameters for QuickLookIsrTask."""
 
-    doRepairCosmics = pexConfig.Field(
-        dtype=bool,
-        doc="Interpolate over cosmic rays?",
-        default=True,
-    )
+    doRepairCosmics = pexConfig.Field(dtype=bool, doc="Interpolate over cosmic rays?", default=True)
 
 
 class QuickLookIsrTask(pipeBase.PipelineTask):
@@ -107,7 +101,7 @@ class QuickLookIsrTask(pipeBase.PipelineTask):
         self,
         ccdExposure: afwImage.Exposure,
         *,
-        camera: afwCameraGeom.Camera | None = None,
+        camera: camGeom.Camera | None = None,
         bias: afwImage.Exposure | None = None,
         dark: afwImage.Exposure | None = None,
         flat: afwImage.Exposure | None = None,
@@ -115,8 +109,8 @@ class QuickLookIsrTask(pipeBase.PipelineTask):
         defects: ipIsr.Defects | None = None,
         linearizer: ipIsr.linearize.LinearizeBase | None = None,
         crosstalk: ipIsr.crosstalk.CrosstalkCalib | None = None,
-        bfKernel: np.ndarray | None = None,
-        newBFKernel: np.ndarray | None = None,
+        bfKernel: ipIsr.BrighterFatterKernel | None = None,
+        newBFKernel: ipIsr.BrighterFatterKernel | None = None,
         ptc: ipIsr.PhotonTransferCurveDataset | None = None,
         crosstalkSources: list | None = None,
         isrBaseConfig: ipIsr.IsrTaskConfig | None = None,
@@ -162,6 +156,8 @@ class QuickLookIsrTask(pipeBase.PipelineTask):
             Calibration for crosstalk.
         bfKernel : `numpy.ndarray`, optional
             Brighter-fatter kernel.
+        newBFKernel : `numpy.ndarray`, optional
+            New Brighter-fatter kernel.
         ptc : `lsst.ip.isr.PhotonTransferCurveDataset`, optional
             Photon transfer curve dataset, with, e.g., gains
             and read noise.
@@ -189,8 +185,6 @@ class QuickLookIsrTask(pipeBase.PipelineTask):
             atmosphere, assumed to be spatially constant.
         illumMaskedImage : `lsst.afw.image.MaskedImage`, optional
             Illumination correction image.
-        detectorNum : `int`, optional
-            The integer number for the detector to process.
         bfGains : `dict` of `float`, optional
             Gains used to override the detector's nominal gains for the
             brighter-fatter correction. A dict keyed by amplifier name for

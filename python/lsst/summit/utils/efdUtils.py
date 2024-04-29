@@ -32,9 +32,9 @@ from astropy.time import Time, TimeDelta
 from deprecated.sphinx import deprecated
 
 import lsst.daf.butler as dafButler
-import lsst.summit.utils as summitUtils
 from lsst.utils.iteration import ensure_iterable
 
+from .tmaUtils import TMAEvent
 from .utils import getSite
 
 HAS_EFD_CLIENT = True
@@ -82,8 +82,8 @@ def _getBeginEnd(
     begin: astropy.time.Time | None = None,
     end: astropy.time.Time | None = None,
     timespan: astropy.time.TimeDelta | None = None,
-    event: summitUtils.efdUtils.TmaEvent | None = None,
-    expRecord: dafButler.dimensions.DimensionRecord | None = None,
+    event: TMAEvent | None = None,
+    expRecord: dafButler.DimensionRecord | None = None,
 ) -> tuple[astropy.time.Time, astropy.time.Time]:
     """Calculate the begin and end times to pass to _getEfdData, given the
     kwargs passed to getEfdData.
@@ -174,7 +174,7 @@ def getEfdData(
     begin: astropy.Time | None = None,
     end: astropy.Time | None = None,
     timespan: astropy.TimeDelta | None = None,
-    event: summitUtils.efd_utils.TmaEvent | None = None,
+    event: TMAEvent | None = None,
     expRecord: dafButler.dimensions.DimensionRecord | None = None,
     warn: bool = True,
 ) -> pd.DataFrame:
@@ -313,7 +313,10 @@ async def _getEfdData(
 
 
 def getMostRecentRowWithDataBefore(
-    client: EfdClient, topic: str, timeToLookBefore: astropy.Time, warnStaleAfterNMinutes: int = 60 * 12
+    client: EfdClient,
+    topic: str,
+    timeToLookBefore: astropy.Time,
+    warnStaleAfterNMinutes: float | int = 60 * 12,
 ) -> pd.Series:
     """Get the most recent row of data for a topic before a given time.
 
@@ -372,12 +375,12 @@ def getMostRecentRowWithDataBefore(
     return lastRow
 
 
-def makeEfdClient(testing: bool | None = False) -> EfdClient:
+def makeEfdClient(testing: bool | None) -> EfdClient:
     """Automatically create an EFD client based on the site.
 
     Parameters
     ----------
-    testing : `bool`, optional
+    testing : `bool`
         Set to ``True`` if running in a test suite. This will default to using
         the USDF EFD, for which data has been recorded for replay by the ``vcr`
         package. Note data must be re-recorded to ``vcr`` from both inside and
@@ -415,7 +418,7 @@ def makeEfdClient(testing: bool | None = False) -> EfdClient:
     raise RuntimeError(f"Could not create EFD client as the {site=} is not recognized")
 
 
-def expRecordToTimespan(expRecord: dafButler.dimensions.ExposureRecord) -> dict:
+def expRecordToTimespan(expRecord: dafButler.DimensionRecord) -> dict:
     """Get the timespan from an exposure record.
 
     Returns the timespan in a format where it can be used to directly unpack
@@ -423,7 +426,7 @@ def expRecordToTimespan(expRecord: dafButler.dimensions.ExposureRecord) -> dict:
 
     Parameters
     ----------
-    expRecord : `lsst.daf.butler.dimensions.ExposureRecord`
+    expRecord : `lsst.daf.butler.DimensionRecord`
         The exposure record.
 
     Returns
@@ -473,7 +476,7 @@ def astropyToEfdTimestamp(time: astropy.time.Time) -> float:
 
 def clipDataToEvent(
     df: pd.DataFrame,
-    event: summitUtils.efd_utils.TmaEvent | None,
+    event: TMAEvent,
     prePadding: float = 0,
     postPadding: float = 0,
     logger: logging.Logger | None = None,
@@ -500,7 +503,6 @@ def clipDataToEvent(
     clipped : `pd.DataFrame`
         The clipped dataframe.
     """
-    assert event is not None
     begin = event.begin.value - prePadding
     end = event.end.value + postPadding
 
@@ -708,7 +710,7 @@ def getCommands(
     prePadding: float,
     postPadding: float,
     timeFormat: str = "python",
-) -> dict[int, str]:
+) -> dict[astropy.Time | pd.Timestamp | datetime.datetime, str]:
     """Retrieve the commands issued within a specified time range.
 
     Parameters
@@ -748,7 +750,7 @@ def getCommands(
 
     commands = list(ensure_iterable(commands))
 
-    commandTimes: dict[astropy.Time, str] = {}
+    commandTimes: dict[astropy.Time | pd.Timestamp | datetime.datetime, str] = {}
     for command in commands:
         data = getEfdData(
             client,

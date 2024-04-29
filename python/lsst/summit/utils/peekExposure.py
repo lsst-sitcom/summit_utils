@@ -187,7 +187,7 @@ class DonutPsf(Psf):
     def __deepcopy__(self, memo=None):
         return DonutPsf(self.size, self.outerRad, self.innerRad)
 
-    def resized(self, width: int, height: int):
+    def resized(self, width: float, height: float):
         assert width == height
         return DonutPsf(width, self.outerRad, self.innerRad)
 
@@ -296,7 +296,7 @@ class PeekTask(pipeBase.Task):
         self.algMetadata = dafBase.PropertyList()
         self.makeSubtask("measurement", schema=self.schema, algMetadata=self.algMetadata)
 
-    def run(self, exposure: afwImage.ExposureF, binSize: int | None = None) -> pipeBase.Struct:
+    def run(self, exposure: afwImage.Exposure, binSize: int | None = None) -> pipeBase.Struct:
         """Peek at exposure.
 
         Parameters
@@ -385,7 +385,7 @@ class PeekDonutTask(pipeBase.Task):
         self.makeSubtask("peek")
 
     def run(
-        self, exposure: afwImage.exposure, donutDiameter: float, binSize: int | None = None
+        self, exposure: afwImage.Exposure, donutDiameter: float, binSize: int | None = None
     ) -> pipeBase.Struct:
         """Peek at donut exposure.
 
@@ -499,7 +499,7 @@ class PeekPhotoTask(pipeBase.Task):
     ConfigClass = PeekPhotoTaskConfig
     _DefaultName = "peekPhoto"
 
-    def __init__(self, config: "Any", **kwargs: Any):
+    def __init__(self, config: Any, **kwargs: Any):
         super().__init__(config=config, **kwargs)
         self.makeSubtask("peek")
 
@@ -907,7 +907,7 @@ class PeekExposureTask(pipeBase.Task):
     def runPeek(
         self,
         exposure: afwImage.Exposure,
-        mode: "str",
+        mode: str,
         donutDiameter: float,
         binSize: int | None = None,
     ) -> tuple[str, int, afwTable.SourceCatalog]:
