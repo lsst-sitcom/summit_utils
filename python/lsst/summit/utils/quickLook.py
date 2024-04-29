@@ -23,6 +23,8 @@ import dataclasses
 import os
 from typing import Any
 
+import numpy as np
+
 import lsst.afw.cameraGeom as camGeom
 import lsst.afw.image as afwImage
 import lsst.ip.isr as ipIsr
@@ -110,7 +112,7 @@ class QuickLookIsrTask(pipeBase.PipelineTask):
         linearizer: ipIsr.linearize.LinearizeBase | None = None,
         crosstalk: ipIsr.crosstalk.CrosstalkCalib | None = None,
         bfKernel: ipIsr.BrighterFatterKernel | None = None,
-        newBFKernel: ipIsr.BrighterFatterKernel | None = None,
+        newBFKernel: np.ndarray | None = None,
         ptc: ipIsr.PhotonTransferCurveDataset | None = None,
         crosstalkSources: list | None = None,
         isrBaseConfig: ipIsr.IsrTaskConfig | None = None,
@@ -154,7 +156,7 @@ class QuickLookIsrTask(pipeBase.PipelineTask):
             Functor for linearization.
         crosstalk : `lsst.ip.isr.crosstalk.CrosstalkCalib`, optional
             Calibration for crosstalk.
-        bfKernel : `numpy.ndarray`, optional
+        bfKernel : `ipIsr.BrighterFatterKernel`, optional
             Brighter-fatter kernel.
         newBFKernel : `numpy.ndarray`, optional
             New Brighter-fatter kernel.
