@@ -120,7 +120,7 @@ def getTracksFromEventList(
     return [e for e in events if e.type == TMAState.TRACKING]
 
 
-def getTorqueMaxima(table: pd.array):
+def getTorqueMaxima(table: pd.DataFrame):
     """Print the maximum positive and negative azimuth and elevation torques.
 
     Designed to be used with the table as downloaded from RubinTV.
