@@ -375,7 +375,7 @@ def getMostRecentRowWithDataBefore(
     return lastRow
 
 
-def makeEfdClient(testing: bool | None) -> EfdClient:
+def makeEfdClient(testing: bool | None = False) -> EfdClient:
     """Automatically create an EFD client based on the site.
 
     Parameters
@@ -390,7 +390,7 @@ def makeEfdClient(testing: bool | None) -> EfdClient:
 
     Returns
     -------
-    efdClient : `lsst_efd_client.efd_helper.EfdClient`
+    efdClient : `lsst_efd_client.efd_helper.EfdClient`, optional
         The EFD client to use for the current site.
     """
     if not HAS_EFD_CLIENT:
