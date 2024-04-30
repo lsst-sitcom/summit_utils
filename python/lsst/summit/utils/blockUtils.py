@@ -24,6 +24,7 @@ import logging
 import re
 import time
 from dataclasses import dataclass
+from typing import TYPE_CHECKING
 
 import numpy as np
 import pandas as pd
@@ -32,7 +33,9 @@ from lsst_efd_client.efd_helper import EfdClient
 
 from .efdUtils import efdTimestampToAstropy, getEfdData, makeEfdClient
 from .enums import ScriptState
-from .tmaUtils import TMAEvent
+
+if TYPE_CHECKING:
+    from .tmaUtils import TMAEvent
 
 __all__ = ("BlockParser", "BlockInfo", "ScriptStatePoint")
 

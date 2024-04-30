@@ -24,6 +24,7 @@ import asyncio
 import datetime
 import logging
 import re
+from typing import TYPE_CHECKING
 
 import astropy
 import pandas as pd
@@ -34,7 +35,9 @@ from deprecated.sphinx import deprecated
 import lsst.daf.butler as dafButler
 from lsst.utils.iteration import ensure_iterable
 
-from .tmaUtils import TMAEvent
+if TYPE_CHECKING:
+    from .tmaUtils import TMAEvent
+
 from .utils import getSite
 
 HAS_EFD_CLIENT = True
@@ -102,7 +105,7 @@ def _getBeginEnd(
     timespan : `astropy.TimeDelta`
         The timespan for the query. If specified, a begin time must also be
         supplied.
-    event : `lsst.summit.utils.efdUtils.TmaEvent`
+    event : `lsst.summit.utils.efdUtils.TMAEvent`
         The event to query. If specified, this is used to determine the begin
         and end times, and all other options are disallowed.
     expRecord : `lsst.daf.butler.dimensions.DimensionRecord`
@@ -217,7 +220,7 @@ def getEfdData(
     timespan : `astropy.TimeDelta`, optional
         The timespan for the query. If specified, a begin time must also be
         supplied.
-    event : `lsst.summit.utils.efdUtils.TmaEvent`, optional
+    event : `lsst.summit.utils.efdUtils.TMAEvent`, optional
         The event to query. If specified, this is used to determine the begin
         and end times, and all other options are disallowed.
     expRecord : `lsst.daf.butler.dimensions.DimensionRecord`, optional
@@ -487,7 +490,7 @@ def clipDataToEvent(
     ----------
     df : `pd.DataFrame`
         The dataframe to clip.
-    event : `lsst.summit.utils.efdUtils.TmaEvent`
+    event : `lsst.summit.utils.efdUtils.TMAEvent`
         The event to clip to.
     prePadding : `float`, optional
         The amount of time before the nominal start of the event to include, in
