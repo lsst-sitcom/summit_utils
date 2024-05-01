@@ -27,7 +27,7 @@ import logging
 import re
 from collections.abc import Iterable
 from dataclasses import dataclass, field
-from typing import Any, Union
+from typing import TYPE_CHECKING, Any, Union
 
 import astropy
 import humanize
@@ -37,7 +37,6 @@ import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
 from astropy.time import Time
-from lsst_efd_client.efd_helper import EfdClient
 from matplotlib.ticker import FuncFormatter
 
 from lsst.utils.iteration import ensure_iterable
@@ -56,6 +55,12 @@ from .efdUtils import (
 )
 from .enums import AxisMotionState, PowerState
 from .utils import dayObsIntToString, getCurrentDayObs_int
+
+if TYPE_CHECKING:
+    try:
+        from lsst_efd_client import EfdClient
+    except ImportError:
+        EfdClient = None
 
 __all__ = (
     "TMAStateMachine",

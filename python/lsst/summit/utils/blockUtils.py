@@ -29,13 +29,17 @@ from typing import TYPE_CHECKING
 import numpy as np
 import pandas as pd
 from astropy.time import Time
-from lsst_efd_client.efd_helper import EfdClient
 
 from .efdUtils import efdTimestampToAstropy, getEfdData, makeEfdClient
 from .enums import ScriptState
 
 if TYPE_CHECKING:
     from .tmaUtils import TMAEvent
+
+    try:
+        from lsst_efd_client import EfdClient
+    except ImportError:
+        EfdClient = None  # this is currently just for mypy
 
 __all__ = ("BlockParser", "BlockInfo", "ScriptStatePoint")
 
