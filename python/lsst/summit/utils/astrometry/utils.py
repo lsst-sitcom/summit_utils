@@ -19,11 +19,19 @@
 # You should have received a copy of the GNU General Public License
 # along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
+
+from typing import Any
+
+import astropy
 import astropy.units as u
 import numpy as np
 from astropy.coordinates import AltAz, EarthLocation, SkyCoord
 from astropy.time import Time
 
+import lsst.afw.geom as afwGeom
+import lsst.afw.image as afwImage
+import lsst.afw.table as afwTable
+import lsst.pipe.base as pipeBase
 from lsst.afw.geom import SkyWcs
 from lsst.daf.base import PropertySet
 from lsst.pipe.tasks.characterizeImage import CharacterizeImageConfig, CharacterizeImageTask
@@ -42,7 +50,9 @@ __all__ = [
 ]
 
 
-def claverHeaderToWcs(exp, nominalRa=None, nominalDec=None):
+def claverHeaderToWcs(
+    exp: afwImage.Exposure, nominalRa: float | None = None, nominalDec: float | None = None
+) -> afwGeom.SkyWcs:
     """Given an exposure taken by Chuck Claver at his house, construct a wcs
     with the ra/dec set to zenith unless a better guess is supplied.
 
@@ -105,7 +115,7 @@ def claverHeaderToWcs(exp, nominalRa=None, nominalDec=None):
 
 # don't be tempted to get cute and try to combine these 4 functions. It would
 # be easy to do but it's not unlikley they will diverge in the future.
-def getAverageRaFromHeader(header):
+def getAverageRaFromHeader(header: dict) -> float:
     raStart = header.get("RASTART")
     raEnd = header.get("RAEND")
     if not raStart or not raEnd:
@@ -115,7 +125,7 @@ def getAverageRaFromHeader(header):
     return (raStart + raEnd) / 2
 
 
-def getAverageDecFromHeader(header):
+def getAverageDecFromHeader(header: dict) -> float:
     decStart = header.get("DECSTART")
     decEnd = header.get("DECEND")
     if not decStart or not decEnd:
@@ -125,7 +135,7 @@ def getAverageDecFromHeader(header):
     return (decStart + decEnd) / 2
 
 
-def getAverageAzFromHeader(header):
+def getAverageAzFromHeader(header: dict) -> float:
     azStart = header.get("AZSTART")
     azEnd = header.get("AZEND")
     if not azStart or not azEnd:
@@ -135,7 +145,7 @@ def getAverageAzFromHeader(header):
     return (azStart + azEnd) / 2
 
 
-def getAverageElFromHeader(header):
+def getAverageElFromHeader(header: dict) -> float:
     elStart = header.get("ELSTART")
     elEnd = header.get("ELEND")
     if not elStart or not elEnd:
@@ -145,7 +155,7 @@ def getAverageElFromHeader(header):
     return (elStart + elEnd) / 2
 
 
-def patchHeader(header):
+def patchHeader(header: dict[str, float | int | str]) -> dict[str, float | int | str]:
     """This is a TEMPORARY function to patch some info into the headers."""
     if header.get("CAMCODE") == "GC102":  # regular aka narrow camera
         # the narrow camera currently is wrong about its place scale by of ~2.2
@@ -167,7 +177,7 @@ def patchHeader(header):
     return header
 
 
-def genericCameraHeaderToWcs(exp):
+def genericCameraHeaderToWcs(exp: Any) -> afwGeom.SkyWcs:
     header = exp.getMetadata().toDict()
     header = patchHeader(header)
 
@@ -192,7 +202,7 @@ def genericCameraHeaderToWcs(exp):
     return wcs
 
 
-def getIcrsAtZenith(lon, lat, height, utc):
+def getIcrsAtZenith(lon: float, lat: float, height: float, utc: str) -> astropy.coordinates.SkyCoord:
     """Get the icrs at zenith given a lat/long/height/time in UTC.
 
     Parameters
@@ -217,7 +227,7 @@ def getIcrsAtZenith(lon, lat, height, utc):
     return skyCoord.transform_to("icrs")
 
 
-def headerToWcs(header):
+def headerToWcs(header: dict) -> afwGeom.SkyWcs:
     """Convert an astrometry.net wcs header dict to a DM wcs object.
 
     Parameters
@@ -234,7 +244,7 @@ def headerToWcs(header):
     return SkyWcs(wcsPropSet)
 
 
-def runCharactierizeImage(exp, snr, minPix):
+def runCharactierizeImage(exp: afwImage.Exposure, snr: float, minPix: int) -> pipeBase.Struct:
     """Run the image characterization task, finding only bright sources.
 
     Parameters
@@ -282,12 +292,12 @@ def runCharactierizeImage(exp, snr, minPix):
 
 
 def filterSourceCatOnBrightest(
-    catalog,
-    brightFraction,
-    minSources=15,
-    maxSources=200,
-    flux_field="base_CircularApertureFlux_3_0_instFlux",
-):
+    catalog: afwTable.SourceCatalog,
+    brightFraction: float,
+    minSources: int = 15,
+    maxSources: int = 200,
+    flux_field: str = "base_CircularApertureFlux_3_0_instFlux",
+) -> afwTable.SourceCatalog:
     """Filter a sourceCat on the brightness, leaving only the top fraction.
 
     Return a catalog containing the brightest sources in the input. Makes an

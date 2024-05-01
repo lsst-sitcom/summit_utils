@@ -18,15 +18,20 @@
 #
 # You should have received a copy of the GNU General Public License
 # along with this program.  If not, see <https://www.gnu.org/licenses/>.
+from __future__ import annotations
 
 import datetime
 import enum
 import itertools
 import logging
 import re
+from collections.abc import Iterable
 from dataclasses import dataclass, field
+from typing import TYPE_CHECKING, Any, Union
 
+import astropy
 import humanize
+import matplotlib
 import matplotlib.dates as mdates
 import matplotlib.pyplot as plt
 import numpy as np
@@ -50,6 +55,12 @@ from .efdUtils import (
 )
 from .enums import AxisMotionState, PowerState
 from .utils import dayObsIntToString, getCurrentDayObs_int
+
+if TYPE_CHECKING:
+    try:
+        from lsst_efd_client import EfdClient
+    except ImportError:
+        EfdClient = None
 
 __all__ = (
     "TMAStateMachine",
@@ -78,7 +89,9 @@ MOUNT_IMAGE_WARNING_LEVEL = 0.01  # this determines the colouring of the cells i
 MOUNT_IMAGE_BAD_LEVEL = 0.05  # and red for this
 
 
-def getSlewsFromEventList(events):
+def getSlewsFromEventList(
+    events: list[TMAEvent],
+) -> list[TMAEvent]:
     """Get the slew events from a list of TMAEvents.
 
     Parameters
@@ -94,7 +107,9 @@ def getSlewsFromEventList(events):
     return [e for e in events if e.type == TMAState.SLEWING]
 
 
-def getTracksFromEventList(events):
+def getTracksFromEventList(
+    events: list[TMAEvent],
+) -> list[TMAEvent]:
     """Get the tracking events from a list of TMAEvents.
 
     Parameters
@@ -110,7 +125,7 @@ def getTracksFromEventList(events):
     return [e for e in events if e.type == TMAState.TRACKING]
 
 
-def getTorqueMaxima(table):
+def getTorqueMaxima(table: pd.DataFrame):
     """Print the maximum positive and negative azimuth and elevation torques.
 
     Designed to be used with the table as downloaded from RubinTV.
@@ -131,11 +146,11 @@ def getTorqueMaxima(table):
 
 
 def getAzimuthElevationDataForEvent(
-    client,
-    event,
-    prePadding=0,
-    postPadding=0,
-):
+    client: EfdClient,
+    event: TMAEvent,
+    prePadding: float = 0,
+    postPadding: float = 0,
+) -> tuple[pd.Dataframe, pd.Dataframe]:
     """Get the data for the az/el telemetry topics for a given TMAEvent.
 
     The error between the actual and demanded positions is calculated and added
@@ -186,7 +201,7 @@ def getAzimuthElevationDataForEvent(
     return azimuthData, elevationData
 
 
-def filterBadValues(values, maxDelta=0.1, maxConsecutiveValues=3):
+def filterBadValues(values: list | np.ndarray, maxDelta: float = 0.1, maxConsecutiveValues: int = 3) -> int:
     """Filter out bad values from a dataset, replacing them in-place.
 
     This function replaces non-physical points in the dataset with an
@@ -255,16 +270,16 @@ def filterBadValues(values, maxDelta=0.1, maxConsecutiveValues=3):
 
 
 def plotEvent(
-    client,
-    event,
-    fig=None,
-    prePadding=0,
-    postPadding=0,
-    commands={},
-    azimuthData=None,
-    elevationData=None,
-    doFilterResiduals=False,
-    maxDelta=0.1,
+    client: EfdClient,
+    event: TMAEvent,
+    fig: matplotlib.figure.Figure | None = None,
+    prePadding: float = 0,
+    postPadding: float = 0,
+    commands: dict[pd.Timestamp | datetime.datetime, str] = {},
+    azimuthData: pd.DataFrame | None = None,
+    elevationData: pd.DataFrame | None = None,
+    doFilterResiduals: bool = False,
+    maxDelta: float = 0.1,
     metadataWriter=None,
 ):
     """Plot the TMA axis positions over the course of a given TMAEvent.
@@ -306,7 +321,7 @@ def plotEvent(
         The amount of time to pad the event with after the end time, in
         seconds.
     commands : `dict` [`pd.Timestamp`, `str`], or
-               `dict` [`datetime.datetime`, `str`], oroptional
+               `dict` [`datetime.datetime`, `str`], or optional
         A dictionary of commands to plot on the figure. The keys are the times
         at which a command was issued, and the value is the command string, as
         returned by efdUtils.getCommands().
@@ -335,12 +350,12 @@ def plotEvent(
         The figure on which the plot was made.
     """
 
-    def tickFormatter(value, tick_number):
+    def tickFormatter(value, tick_number: float) -> str:
         # Convert the value to a string without subtracting large numbers
         # tick_number is unused.
         return f"{value:.2f}"
 
-    def getPlotTime(time):
+    def getPlotTime(time: pd.Timestamp | Time | datetime.datetime):
         """Get the right time to plot a point from the various time formats."""
         match time:
             case pd.Timestamp():
@@ -532,14 +547,14 @@ def plotEvent(
 
 
 def getCommandsDuringEvent(
-    client,
-    event,
-    commands=("raDecTarget"),
-    prePadding=0,
-    postPadding=0,
-    timeFormat="python",
-    log=None,
-    doLog=True,
+    client: EfdClient,
+    event: TMAEvent,
+    commands: Iterable[str] = ("raDecTarget"),
+    prePadding: float = 0,
+    postPadding: float = 0,
+    timeFormat: str = "python",
+    log: logging.Logger | None = None,
+    doLog: bool = True,
 ):
     """Get the commands issued during an event.
 
@@ -598,7 +613,7 @@ def getCommandsDuringEvent(
     return commandTimes
 
 
-def _initializeTma(tma):
+def _initializeTma(tma: TMAStateMachine) -> None:
     """Helper function to turn a TMA into a valid state for testing.
 
     Do not call directly in normal usage or code, as this just arbitrarily
@@ -688,7 +703,7 @@ class TMAEvent:
     _startRow: int
     _endRow: int
 
-    def __lt__(self, other):
+    def __lt__(self, other: TMAEvent) -> bool:
         if self.version != other.version:
             raise ValueError(
                 f"Cannot compare TMAEvents with different versions: {self.version} != {other.version}"
@@ -699,14 +714,14 @@ class TMAEvent:
             return self.seqNum < other.seqNum
         return False
 
-    def __repr__(self):
+    def __repr__(self) -> str:
         return (
             f"TMAEvent(dayObs={self.dayObs}, seqNum={self.seqNum}, type={self.type!r},"
             f" endReason={self.endReason!r}, duration={self.duration}, begin={self.begin!r},"
             f" end={self.end!r}"
         )
 
-    def __hash__(self):
+    def __hash__(self) -> int:
         # deliberately don't hash the blockInfos here, as they are not
         # a core part of the event itself, and are listy and cause problems
         return hash(
@@ -724,10 +739,10 @@ class TMAEvent:
             )
         )
 
-    def _ipython_display_(self):
+    def _ipython_display_(self) -> None:
         print(self.__str__())
 
-    def __str__(self):
+    def __str__(self) -> str:
         def indent(string):
             return "\n" + "\n".join(["    " + s for s in string.splitlines()])
 
@@ -746,7 +761,13 @@ class TMAEvent:
             f"blockInfos: {blockInfoStr}"
         )
 
-    def associatedWith(self, block=None, blockSeqNum=None, ticket=None, salIndex=None):
+    def associatedWith(
+        self,
+        block: int | None = None,
+        blockSeqNum: int | None = None,
+        ticket: str | None = None,
+        salIndex: int | None = None,
+    ) -> bool:
         """Check whether an event is associated with a set of parameters.
 
         Check if an event is associated with a specific block and/or ticket
@@ -833,11 +854,11 @@ class TMAState(enum.IntEnum):
     FAULT = 3
     OFF = 4
 
-    def __repr__(self):
+    def __repr__(self) -> str:
         return f"TMAState.{self.name}"
 
 
-def getAxisAndType(rowFor):
+def getAxisAndType(rowFor: str) -> tuple[str, str]:
     """Get the axis the data relates to, and the type of data it contains.
 
     Parameters
@@ -874,17 +895,17 @@ class ListViewOfDict:
     components, such that they can be manipulated in their logical sets.
     """
 
-    def __init__(self, underlyingDictionary, keysToLink):
+    def __init__(self, underlyingDictionary: dict, keysToLink: list):
         self.dictionary = underlyingDictionary
         self.keys = keysToLink
 
-    def __getitem__(self, index):
+    def __getitem__(self, index: Any) -> Any:
         return self.dictionary[self.keys[index]]
 
-    def __setitem__(self, index, value):
+    def __setitem__(self, index: int, value: Any) -> None:
         self.dictionary[self.keys[index]] = value
 
-    def __len__(self):
+    def __len__(self) -> int:
         return len(self.keys)
 
 
@@ -914,7 +935,7 @@ class TMAStateMachine:
 
     _UNINITIALIZED_VALUE: int = -999
 
-    def __init__(self, engineeringMode=True, debug=False):
+    def __init__(self, engineeringMode: bool = True, debug: bool = False):
         self.engineeringMode = engineeringMode
         self.log = logging.getLogger("lsst.summit.utils.tmaUtils.TMA")
         if debug:
@@ -953,7 +974,7 @@ class TMAStateMachine:
         self.ON_LIKE = (PowerState.ON, PowerState.TURNING_ON)
         self.FAULT_LIKE = (PowerState.FAULT,)  # note the trailing comma - this must be an iterable
 
-    def apply(self, row):
+    def apply(self, row: pd.Series) -> None:
         """Apply a row of data to the TMA state.
 
         Checks that the row contains data for a later time than any data
@@ -987,7 +1008,9 @@ class TMAStateMachine:
             # full-blown failure
             raise RuntimeError(f"Failed to apply {value} to {axis}{rowType} with state {self._parts}") from e
 
-    def _getRowPayload(self, row, rowType, rowFor):
+    def _getRowPayload(
+        self, row: pd.Series, rowType: str, rowFor: str
+    ) -> bool | AxisMotionState | PowerState:
         """Get the relevant value from the row.
 
         Given the row, and which component it relates to, get the relevant
@@ -1023,7 +1046,7 @@ class TMAStateMachine:
                 raise ValueError(f"Failed to get row payload with {rowType=} and {row=}")
 
     @property
-    def _isValid(self):
+    def _isValid(self) -> bool:
         """Has the TMA had a value applied to all its components?
 
         If any component has not yet had a value applied, the TMA is not valid,
@@ -1039,23 +1062,23 @@ class TMAStateMachine:
     # state inspection properties - a high level way of inspecting the state as
     # an API
     @property
-    def isMoving(self):
+    def isMoving(self) -> bool:
         return self.state in [TMAState.TRACKING, TMAState.SLEWING]
 
     @property
-    def isNotMoving(self):
+    def isNotMoving(self) -> bool:
         return not self.isMoving
 
     @property
-    def isTracking(self):
+    def isTracking(self) -> bool:
         return self.state == TMAState.TRACKING
 
     @property
-    def isSlewing(self):
+    def isSlewing(self) -> bool:
         return self.state == TMAState.SLEWING
 
     @property
-    def canMove(self):
+    def canMove(self) -> bool:
         badStates = [PowerState.OFF, PowerState.TURNING_OFF, PowerState.FAULT, PowerState.UNKNOWN]
         return bool(
             self._isValid
@@ -1068,23 +1091,23 @@ class TMAStateMachine:
     # the logic much easier to read, e.g. to see if anything is moving, we can
     # write `if not any(_axisInMotion):`
     @property
-    def _axesInFault(self):
+    def _axesInFault(self) -> list[bool]:
         return [x in self.FAULT_LIKE for x in self.system]
 
     @property
-    def _axesOff(self):
+    def _axesOff(self) -> list[bool]:
         return [x in self.OFF_LIKE for x in self.system]
 
     @property
-    def _axesOn(self):
+    def _axesOn(self) -> list[bool]:
         return [not x for x in self._axesOn]
 
     @property
-    def _axesInMotion(self):
+    def _axesInMotion(self) -> list[bool]:
         return [x in self.MOVING_LIKE for x in self.motion]
 
     @property
-    def _axesTRACKING(self):
+    def _axesTRACKING(self) -> list[bool]:
         """Note this is deliberately named _axesTRACKING and not _axesTracking
         to make it clear that this is the AxisMotionState type of TRACKING and
         not the normal conceptual notion of tracking (the sky, i.e. as opposed
@@ -1093,11 +1116,11 @@ class TMAStateMachine:
         return [x == AxisMotionState.TRACKING for x in self.motion]
 
     @property
-    def _axesInPosition(self):
+    def _axesInPosition(self) -> list[bool]:
         return [x is True for x in self.inPosition]
 
     @property
-    def state(self):
+    def state(self) -> TMAState:
         """The overall state of the TMA.
 
         Note that this is both a property, and also the method which applies
@@ -1195,7 +1218,7 @@ class TMAEventMaker:
         "lsst.sal.MTMount.logevent_elevationSystemState",
     ]
 
-    def __init__(self, client=None):
+    def __init__(self, client: EfdClient | None = None):
         if client is not None:
             self.client = client
         else:
@@ -1211,7 +1234,7 @@ class TMAEventMaker:
         state: TMAState
 
     @staticmethod
-    def isToday(dayObs):
+    def isToday(dayObs: int) -> bool:
         """Find out if the specified dayObs is today, or in the past.
 
         If the day is today, the function returns ``True``, if it is in the
@@ -1240,7 +1263,7 @@ class TMAEventMaker:
         return False
 
     @staticmethod
-    def _shortName(topic):
+    def _shortName(topic: str) -> str:
         """Get the short name of a topic.
 
         Parameters
@@ -1257,7 +1280,7 @@ class TMAEventMaker:
         # lsst.sal.MTMount.logevent_azimuthInPosition
         return topic.split("_")[-1]
 
-    def _mergeData(self, data):
+    def _mergeData(self, data: dict[str, pd.DataFrame]) -> pd.DataFrame:
         """Merge a dict of dataframes based on private_efdStamp, recording
         where each row came from.
 
@@ -1326,7 +1349,7 @@ class TMAEventMaker:
 
         return merged
 
-    def getEvent(self, dayObs, seqNum):
+    def getEvent(self, dayObs: int, seqNum: int) -> TMAEvent | None:
         """Get a specific event for a given dayObs and seqNum.
 
         Repeated calls for the same ``dayObs`` will use the cached data if the
@@ -1361,7 +1384,7 @@ class TMAEventMaker:
             self.log.warning(f"Event {seqNum} not found for {dayObs}")
             return None
 
-    def getEvents(self, dayObs, addBlockInfo=True):
+    def getEvents(self, dayObs: int, addBlockInfo: bool = True) -> list[TMAEvent]:
         """Get the TMA events for the specified dayObs.
 
         Gets the required mount data from the cache or the EFD as required,
@@ -1429,7 +1452,7 @@ class TMAEventMaker:
         return events
 
     @staticmethod
-    def dataFound(data):
+    def dataFound(data: pd.DataFrame) -> bool:
         """Check if any data was found.
 
         Parameters
@@ -1447,7 +1470,7 @@ class TMAEventMaker:
         # string directly.
         return not (isinstance(data, str) and data == NO_DATA_SENTINEL)
 
-    def _getEfdDataForDayObs(self, dayObs):
+    def _getEfdDataForDayObs(self, dayObs: int) -> None:
         """Get the EFD data for the specified dayObs and store it in the cache.
 
         Gets the EFD data for all components, as a dict of dataframes keyed by
@@ -1482,7 +1505,9 @@ class TMAEventMaker:
             merged = self._mergeData(data)
             self._data[dayObs] = merged
 
-    def _calculateEventsFromMergedData(self, data, dayObs, dataIsForCurrentDay, addBlockInfo):
+    def _calculateEventsFromMergedData(
+        self, data: pd.DataFrame, dayObs: int, dataIsForCurrentDay: bool, addBlockInfo: bool
+    ) -> list[TMAEvent]:
         """Calculate the list of events from the merged data.
 
         Runs the merged data, row by row, through the TMA state machine (with
@@ -1538,7 +1563,9 @@ class TMAEventMaker:
             self.addBlockDataToEvents(dayObs, events)
         return events
 
-    def _statesToEventTuples(self, states, dataIsForCurrentDay):
+    def _statesToEventTuples(
+        self, states: dict[int, TMAEvent], dataIsForCurrentDay: bool
+    ) -> list[ParsedState]:
         """Get the event-tuples from the dictionary of TMAStates.
 
         Chunks the states into blocks of the same state, so that we can create
@@ -1636,7 +1663,11 @@ class TMAEventMaker:
 
         return parsedStates
 
-    def addBlockDataToEvents(self, dayObs, events):
+    def addBlockDataToEvents(
+        self,
+        dayObs: int,
+        events: list[TMAEvent] | TMAEvent,
+    ) -> None:
         """Find all the block data in the EFD for the specified events.
 
         Finds all the block data in the EFD relating to the events, parses it,
@@ -1680,7 +1711,9 @@ class TMAEventMaker:
                     # dataclass attribute after creation.
                     object.__setattr__(event, "blockInfos", toSet)
 
-    def _makeEventsFromStateTuples(self, states, dayObs, data):
+    def _makeEventsFromStateTuples(
+        self, states: list[tuple[Union[Time, int, TMAState]]], dayObs: int, data: pd.DataFrame
+    ) -> list[TMAEvent]:
         """For the list of state-tuples, create a list of ``TMAEvent`` objects.
 
         Given the underlying data, and the start/stop points for each event,
@@ -1726,7 +1759,7 @@ class TMAEventMaker:
         return events
 
     @staticmethod
-    def printTmaDetailedState(tma):
+    def printTmaDetailedState(tma: TMAStateMachine) -> None:
         """Print the full state of all the components of the TMA.
 
         Currently this is the azimuth and elevation axes' power and motion
@@ -1755,7 +1788,7 @@ class TMAEventMaker:
             )
         print(f"Overall system state: {tma.state.name}")
 
-    def printFullDayStateEvolution(self, dayObs, taiOrUtc="utc"):
+    def printFullDayStateEvolution(self, dayObs: int, taiOrUtc: str = "utc") -> None:
         """Print the full TMA state evolution for the specified dayObs.
 
         Replays all the data from the EFD for the specified dayObs through
@@ -1789,7 +1822,12 @@ class TMAEventMaker:
         )
         self.printEventDetails(fakeEvent, taiOrUtc=taiOrUtc, printHeader=False)
 
-    def printEventDetails(self, event, taiOrUtc="tai", printHeader=True):
+    def printEventDetails(
+        self,
+        event: TMAEvent,
+        taiOrUtc: str = "tai",
+        printHeader: bool = False,
+    ) -> None:
         """Print a detailed breakdown of all state transitions during an event.
 
         Note: this is not the most efficient way to do this, but it is much the
@@ -1878,7 +1916,7 @@ class TMAEventMaker:
                 tma.apply(row)
                 tmaStates[rowNum] = tma.state
 
-    def findEvent(self, time):
+    def findEvent(self, time: astropy.time.Time) -> TMAEvent | None:
         """Find the event which contains the specified time.
 
         If the specified time lies within an event, that event is returned. If

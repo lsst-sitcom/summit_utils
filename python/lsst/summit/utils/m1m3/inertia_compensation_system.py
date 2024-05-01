@@ -497,7 +497,7 @@ class M1M3ICSAnalysis:
         # Display the resulting Series
         return result_series
 
-    def get_extreme_value(self, column):
+    def get_extreme_value(self, column: str) -> float:
         """
         Returns the most extreme (either max or min) value from a given column.
 
@@ -515,7 +515,7 @@ class M1M3ICSAnalysis:
         extreme_value = self.df.loc[index_of_extreme, column]
         return extreme_value
 
-    def get_nearest_value(self, column, timestamp):
+    def get_nearest_value(self, column: str, timestamp: Time) -> float:
         """
         Returns the nearest value to a given timestamp from a given column.
 

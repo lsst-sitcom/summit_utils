@@ -20,6 +20,7 @@
 # along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
 
+import argparse
 import atexit
 import logging
 import multiprocessing
@@ -30,6 +31,7 @@ import warnings
 from collections import namedtuple
 from pathlib import Path
 
+import astropy
 import matplotlib.pyplot as plt
 import numpy as np
 from astropy.table import Table
@@ -59,7 +61,7 @@ AUXTEL_PIXEL_SCALE = 0.1  # arcsec/pixel
 
 
 # get one BestEffortIsr,afwDisplay per subprocess
-def initializePoolProcess():
+def initializePoolProcess() -> None:
     """Initialize the multiprocessing pool process.
 
     Sets up some variables we only want to create once per process, including
@@ -79,7 +81,7 @@ def initializePoolProcess():
 
 
 # retrieve best-effort-isr and run PET on it
-def doWork(idx, row, doPlot):
+def doWork(idx: int, row: astropy.table.Row, doPlot: bool) -> tuple[str, str, float, int]:
     """Run PeekExposureTask on a single exposure.
 
     Parameters
@@ -193,7 +195,7 @@ def doWork(idx, row, doPlot):
     return inTag, outTag, runtime, exposureId
 
 
-def main(args):
+def main(args: argparse.Namespace) -> None:
     # Set up cache directory and register cleanup
     defined, cacheDir = DatastoreCacheManager.set_fallback_cache_directory_if_unset()
     if defined:
@@ -206,7 +208,6 @@ def main(args):
         table = Table.read(path)
     table["exposureId"] = table["day_obs"] * 100_000 + table["sequence_number"]
     table = table[args.start : args.end]
-
     intags = np.unique(table["finalTag"])
 
     # Possible PET outcomes

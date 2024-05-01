@@ -23,6 +23,7 @@ __all__ = ["SpectrumExaminer"]
 
 import warnings
 from itertools import groupby
+from typing import Any
 
 import matplotlib.pyplot as plt
 import numpy as np
@@ -31,6 +32,8 @@ from matplotlib.offsetbox import AnchoredText
 from mpl_toolkits.axes_grid1.axes_divider import make_axes_locatable
 from scipy.optimize import curve_fit
 
+import lsst.afw.display as afwDisplay
+import lsst.afw.image as afwImage
 from lsst.atmospec.processStar import ProcessStarTask
 from lsst.obs.lsst.translators.lsst import FILTER_DELIMITER
 from lsst.pipe.tasks.quickFrameMeasurement import QuickFrameMeasurementTask, QuickFrameMeasurementTaskConfig
@@ -46,7 +49,14 @@ class SpectrumExaminer:
     # ConfigClass = SummarizeImageTaskConfig
     # _DefaultName = "summarizeImage"
 
-    def __init__(self, exp, display=None, debug=False, savePlotAs=None, **kwargs):
+    def __init__(
+        self,
+        exp: afwImage.Exposure,
+        display: afwDisplay.Display = None,
+        debug: bool | None = False,
+        savePlotAs: str | None = None,
+        **kwargs: Any,
+    ):
         super().__init__(**kwargs)
         self.exp = exp
         self.display = display
@@ -65,7 +75,7 @@ class SpectrumExaminer:
         self.init()
 
     @staticmethod
-    def bboxToAwfDisplayLines(box):
+    def bboxToAwfDisplayLines(box) -> list[list[tuple[int, int]]]:
         """Takes a bbox, returns a list of lines such that they can be plotted:
 
         for line in lines:
@@ -77,11 +87,11 @@ class SpectrumExaminer:
         y1 = box.endY
         return [[(x0, y0), (x1, y0)], [(x0, y0), (x0, y1)], [(x1, y0), (x1, y1)], [(x0, y1), (x1, y1)]]
 
-    def eraseDisplay(self):
+    def eraseDisplay(self) -> None:
         if self.display:
             self.display.erase()
 
-    def displaySpectrumBbox(self):
+    def displaySpectrumBbox(self) -> None:
         if self.display:
             lines = self.bboxToAwfDisplayLines(self.spectrumbbox)
             for line in lines:
@@ -89,14 +99,14 @@ class SpectrumExaminer:
         else:
             print("No display set")
 
-    def displayStarLocation(self):
+    def displayStarLocation(self) -> None:
         if self.display:
             self.display.dot("x", *self.qfmResult.brightestObjCentroid, size=50)
             self.display.dot("o", *self.qfmResult.brightestObjCentroid, size=50)
         else:
             print("No display set")
 
-    def calcGoodSpectrumSection(self, threshold=5, windowSize=5):
+    def calcGoodSpectrumSection(self, threshold: int = 5, windowSize: int = 5) -> tuple[int, int]:
         length = len(self.ridgeLineLocations)
         chunks = length // windowSize
         stddevs = []
@@ -117,7 +127,7 @@ class SpectrumExaminer:
 
         return (minPoint, maxPoint)
 
-    def fit(self):
+    def fit(self) -> None:
         def gauss(x, a, x0, sigma):
             return a * np.exp(-((x - x0) ** 2) / (2 * sigma**2))
 
@@ -146,7 +156,7 @@ class SpectrumExaminer:
         parameters[:, 2] = np.abs(parameters[:, 2])
         self.parameters = parameters
 
-    def plot(self):
+    def plot(self) -> None:
         fig = plt.figure(figsize=(10, 10))
 
         # spectrum
@@ -260,7 +270,7 @@ class SpectrumExaminer:
     def init(self):
         pass
 
-    def generateStatsTextboxContent(self, section):
+    def generateStatsTextboxContent(self, section: int) -> str:
         x, y = self.qfmResult.brightestObjCentroid
 
         vi = self.exp.visitInfo
@@ -322,9 +332,9 @@ class SpectrumExaminer:
             lines.append(f"Good range = {self.goodSpectrumMinY},{self.goodSpectrumMaxY}")
             return "\n".join([line for line in lines])
 
-        return
+        return ""
 
-    def run(self):
+    def run(self) -> None:
         self.qfmResult = self.qfmTask.run(self.exp)
         self.intCentroidX = int(np.round(self.qfmResult.brightestObjCentroid)[0])
         self.intCentroidY = int(np.round(self.qfmResult.brightestObjCentroid)[1])
@@ -355,7 +365,7 @@ class SpectrumExaminer:
         return
 
     @staticmethod
-    def getMedianAndBestFwhm(fwhmValues, minIndex, maxIndex):
+    def getMedianAndBestFwhm(fwhmValues: np.ndarray, minIndex: int, maxIndex: int) -> tuple[float, float]:
         with warnings.catch_warnings():  # to supress nan warnings, which are fine
             warnings.simplefilter("ignore")
             clippedValues = sigma_clip(fwhmValues[minIndex:maxIndex])
@@ -366,7 +376,9 @@ class SpectrumExaminer:
             bestFocusFwhm = np.nanpercentile(np.asarray(clippedValues), 2)
         return medianFwhm, bestFocusFwhm
 
-    def getStableFwhmRegion(self, fwhmValues, amplitudes, smoothing=1, maxDifferential=4):
+    def getStableFwhmRegion(
+        self, fwhmValues: np.ndarray, amplitudes: np.ndarray, smoothing: int = 1, maxDifferential: int = 4
+    ) -> tuple[int, int]:
         # smooth the fwhmValues values
         # differentiate
         # take the longest contiguous region of 1s
