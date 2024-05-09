@@ -30,6 +30,7 @@ import time
 import warnings
 from collections import namedtuple
 from pathlib import Path
+from typing import Any
 
 import astropy
 import matplotlib.pyplot as plt
@@ -38,7 +39,6 @@ from astropy.table import Table
 from astropy.utils.exceptions import AstropyUserWarning
 from tabulate import tabulate
 from tqdm import tqdm
-from typing import Any
 
 import lsst.afw.display as afwDisplay
 from lsst.afw.geom import ellipses

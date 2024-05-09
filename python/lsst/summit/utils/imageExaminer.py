@@ -25,14 +25,13 @@ __all__ = ["ImageExaminer"]
 import matplotlib
 import matplotlib.patches as patches
 import matplotlib.pyplot as plt
-from mpl_toolkits.mplot3d import Axes3D
 import numpy as np
-
 import scipy.ndimage as ndImage
 from matplotlib import cm
 from matplotlib.colors import LogNorm
 from matplotlib.offsetbox import AnchoredText
 from matplotlib.ticker import LinearLocator
+from mpl_toolkits.mplot3d import Axes3D
 from numpy.linalg import norm
 from scipy.optimize import curve_fit
 

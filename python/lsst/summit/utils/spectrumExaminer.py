@@ -35,10 +35,10 @@ from scipy.optimize import curve_fit
 import lsst.afw.display as afwDisplay
 import lsst.afw.image as afwImage
 from lsst.atmospec.processStar import ProcessStarTask
+from lsst.geom import Box2I
 from lsst.obs.lsst.translators.lsst import FILTER_DELIMITER
 from lsst.pipe.tasks.quickFrameMeasurement import QuickFrameMeasurementTask, QuickFrameMeasurementTaskConfig
 from lsst.summit.utils.utils import getImageStats
-from lsst.geom import Box2I
 
 
 class SpectrumExaminer:
@@ -183,7 +183,7 @@ class SpectrumExaminer:
         axHist.set_title("Spectrum pixel histogram")
         text = f"Underflow = {underflow}"
         text += f"\nOverflow = {overflow}"
-        anchored_text = AnchoredText(text, loc='1', pad=0.5)
+        anchored_text = AnchoredText(text, loc="1", pad=0.5)
         axHist.add_artist(anchored_text)
 
         # peak fluxes

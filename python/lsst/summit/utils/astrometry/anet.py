@@ -337,6 +337,7 @@ class OnlineSolver:
         with warnings.catch_warnings():
             warnings.simplefilter("ignore")
             from astroquery.astrometry_net import AstrometryNet
+
             self.apiKey = self.getApiKey()  # raises if not present so do first
             self.adn = AstrometryNet()
             self.adn.api_key = self.apiKey

@@ -63,6 +63,7 @@ class AxisMotionState(enum.IntEnum):
     static, so this is a reasonable thing to do, and much easier than setting
     up a dependency on ts_idl.
     """
+
     STOPPING = 0
     STOPPED = 1
     MOVING_POINT_TO_POINT = 2
@@ -85,6 +86,7 @@ class PowerState(enum.IntEnum):
     static, so this is a reasonable thing to do, and much easier than setting
     up a dependency on ts_idl.
     """
+
     OFF = 0
     ON = 1
     FAULT = 2

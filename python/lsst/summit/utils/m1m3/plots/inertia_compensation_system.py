@@ -1,9 +1,9 @@
 import logging
+from typing import Any, TypedDict
 
 import matplotlib.pyplot as plt
 import pandas as pd
 from astropy.time import Time
-from typing import Any, TypedDict
 
 from lsst.summit.utils.type_utils import M1M3ICSAnalysis
 

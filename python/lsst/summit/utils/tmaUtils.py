@@ -27,7 +27,7 @@ import logging
 import re
 from collections.abc import Iterable
 from dataclasses import dataclass, field
-from typing import TYPE_CHECKING, Any, Callable, Union
+from typing import TYPE_CHECKING, Any, Callable
 
 import astropy
 import humanize
@@ -1789,8 +1789,8 @@ class TMAEventMaker:
         # elevation - Power:          ON Motion: MOVING_POINT_TO_POINT InPosition: False       # noqa: W505
         for axis in axes:
             f"{axis:>{axisPad}} - "
-            power_state = p[f'{axis}SystemState']
-            motion_state = p[f'{axis}MotionState']
+            power_state = p[f"{axis}SystemState"]
+            motion_state = p[f"{axis}MotionState"]
             if isinstance(power_state, PowerState):
                 f"Power: {power_state.name:>{powerPad}} "
             if isinstance(motion_state, AxisMotionState):

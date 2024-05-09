@@ -28,11 +28,11 @@ from typing import Any
 
 import matplotlib
 import matplotlib.pyplot as plt
-from matplotlib.projections.polar import PolarAxes
 import numpy as np
 from astro_metadata_translator import ObservationInfo
-from matplotlib.pyplot import cm
 from matplotlib.dates import date2num
+from matplotlib.projections.polar import PolarAxes
+from matplotlib.pyplot import cm
 
 import lsst.daf.butler as dafButler
 from lsst.utils.iteration import ensure_iterable

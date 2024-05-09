@@ -23,12 +23,10 @@ import datetime
 import logging
 import os
 from collections.abc import Iterable, Sequence
-from typing import Union
 
 import astropy.units as u
 import matplotlib
 import numpy as np
-import numpy.typing as npt
 from astro_metadata_translator import ObservationInfo
 from astropy.coordinates import AltAz, SkyCoord
 from astropy.coordinates.earth import EarthLocation
@@ -998,9 +996,7 @@ def getFilterSeeingCorrection(filterName: str) -> float:
             raise ValueError(f"Unknown filter name: {filterName}")
 
 
-def getCdf(
-    data: np.ndarray, scale: int, nBinsMax: int = 300_000
-) -> tuple[np.ndarray | float, float, float]:
+def getCdf(data: np.ndarray, scale: int, nBinsMax: int = 300_000) -> tuple[np.ndarray | float, float, float]:
     """Return an approximate cumulative distribution function scaled to
     the [0, scale] range.
 

@@ -195,7 +195,7 @@ class DonutPsf(Psf):
     def _doComputeKernelImage(self, position: int | None = None, color: str | None = None) -> ImageD:
         bbox = self.computeBBox(self.getAveragePosition())
         img = ImageD(bbox, 0.0)
-        x, y = np.ogrid[bbox.minY : bbox.maxY + 1, bbox.minX : bbox.maxX + 1]   
+        x, y = np.ogrid[bbox.minY : bbox.maxY + 1, bbox.minX : bbox.maxX + 1]
         rsqr = x**2 + y**2
         w = (rsqr < self.outerRad**2) & (rsqr > self.innerRad**2)
         img.array[w] = 1.0
@@ -211,10 +211,7 @@ class DonutPsf(Psf):
         return Quadrupole(Ixx, Ixx, 0.0)
 
     def _doComputeApertureFlux(
-        self, 
-        radius: float,
-        position: int | None = None,
-        color: str | None = None
+        self, radius: float, position: int | None = None, color: str | None = None
     ) -> float:
         return 1 - np.exp(-0.5 * (radius / self.sigma) ** 2)
 

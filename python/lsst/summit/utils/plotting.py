@@ -19,6 +19,7 @@
 # You should have received a copy of the GNU General Public License
 # along with this program.  If not, see <https://www.gnu.org/licenses/>.
 from __future__ import annotations
+
 import logging
 
 import astropy.visualization as vis
@@ -245,7 +246,7 @@ def plot(
 
     if showCompass:
         try:
-            assert hasattr(inputData, 'getWcs'), "inputData does not have a getWcs method"
+            assert hasattr(inputData, "getWcs"), "inputData does not have a getWcs method"
             wcs = inputData.getWcs()
         except AttributeError:
             logger.warning("Failed to get WCS from input data. Compass will not be plotted.")
