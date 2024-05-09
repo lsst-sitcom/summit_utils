@@ -18,7 +18,7 @@
 #
 # You should have received a copy of the GNU General Public License
 # along with this program.  If not, see <https://www.gnu.org/licenses/>.
-
+from __future__ import annotations
 import logging
 
 import astropy.visualization as vis
@@ -33,7 +33,6 @@ import lsst.afw.geom as afwGeom
 import lsst.afw.image as afwImage
 import lsst.afw.table as afwTable
 import lsst.geom as geom
-from lsst.afw.detection import Footprint, FootprintSet
 from lsst.summit.utils import getQuantiles
 
 
@@ -246,6 +245,7 @@ def plot(
 
     if showCompass:
         try:
+            assert hasattr(inputData, 'getWcs'), "inputData does not have a getWcs method"
             wcs = inputData.getWcs()
         except AttributeError:
             logger.warning("Failed to get WCS from input data. Compass will not be plotted.")
@@ -277,10 +277,10 @@ def plot(
 
     if footprints:
         match footprints:
-            case FootprintSet():
-                fs = FootprintSet.getFootprints(footprints)
+            case afwDetection.FootprintSet():
+                fs = afwDetection.FootprintSet.getFootprints(footprints)
                 xy = [_.getCentroid() for _ in fs]
-            case Footprint():
+            case afwDetection.Footprint():
                 xy = [footprints.getCentroid()]
             case list():
                 xy = []

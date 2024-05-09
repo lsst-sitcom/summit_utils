@@ -22,12 +22,13 @@
 import datetime
 import logging
 import os
-from collections.abc import Iterable
+from collections.abc import Iterable, Sequence
 from typing import Union
 
 import astropy.units as u
 import matplotlib
 import numpy as np
+import numpy.typing as npt
 from astro_metadata_translator import ObservationInfo
 from astropy.coordinates import AltAz, SkyCoord
 from astropy.coordinates.earth import EarthLocation
@@ -334,7 +335,7 @@ def detectObjectsInExp(
 def fluxesFromFootprints(
     footprints: afwDetect.FootprintSet | afwDetect.Footprint | Iterable[afwDetect.Footprint],
     parentImage: afwImage.Image,
-    subtractImageMedian=False,
+    subtractImageMedian: bool = False,
 ) -> np.ndarray[float]:
     """Calculate the flux from a set of footprints, given the parent image,
     optionally subtracting the whole-image median from each pixel as a very
@@ -373,7 +374,7 @@ def fluxesFromFootprints(
     )
     if isinstance(footprints, FootprintSet):
         footprints = footprints.getFootprints()
-    elif isinstance(footprints, Iterable):
+    elif isinstance(footprints, Sequence):
         if not isinstance(footprints[0], Footprint):
             raise TypeError(badTypeMsg)
     elif isinstance(footprints, Footprint):
@@ -900,7 +901,7 @@ def obsInfoToDict(obsInfo: ObservationInfo) -> dict:
 
 def getFieldNameAndTileNumber(
     field: str, warn: bool = True, logger: logging.Logger | None = None
-) -> tuple[str, int]:
+) -> tuple[str, int | None]:
     """Get the tile name and number of an observed field.
 
     It is assumed to always be appended, with an underscore, to the rest of the
@@ -923,7 +924,7 @@ def getFieldNameAndTileNumber(
         logger = logging.getLogger("lsst.summit.utils.utils.getFieldNameAndTileNumber")
 
     if "_" not in field:
-        if warn:
+        if warn and logger is not None:
             logger.warning(
                 f"Field {field} does not contain an underscore," " so cannot determine the tile number."
             )
@@ -933,7 +934,7 @@ def getFieldNameAndTileNumber(
         fieldParts = field.split("_")
         fieldNum = int(fieldParts[-1])
     except ValueError:
-        if warn:
+        if warn and logger is not None:
             logger.warning(
                 f"Field {field} does not contain only an integer after the final underscore"
                 " so cannot determine the tile number."
@@ -999,7 +1000,7 @@ def getFilterSeeingCorrection(filterName: str) -> float:
 
 def getCdf(
     data: np.ndarray, scale: int, nBinsMax: int = 300_000
-) -> tuple[Union[np.ndarray[int], float], float, float]:
+) -> tuple[np.ndarray | float, float, float]:
     """Return an approximate cumulative distribution function scaled to
     the [0, scale] range.
 
@@ -1046,7 +1047,7 @@ def getCdf(
     return cdf, minVal, maxVal
 
 
-def getQuantiles(data: np.ndarray, nColors: int) -> list[float]:
+def getQuantiles(data: np.ndarray, nColors: int) -> np.ndarray[float]:
     """Get a set of boundaries that equally distribute data into
     nColors intervals. The output can be used to make a colormap of nColors
     colors.
@@ -1082,7 +1083,7 @@ def getQuantiles(data: np.ndarray, nColors: int) -> list[float]:
         cdf, minVal, maxVal = getCdf(data, nColors)
         if np.isnan(minVal):  # cdf calculation has failed because all data is nan
             return np.asarray([np.nan for _ in range(nColors)])
-
+        assert isinstance(cdf, np.ndarray), "cdf is not an np.ndarray"
         scale = (maxVal - minVal) / len(cdf)
 
         boundaries = np.asarray([np.argmax(cdf >= i) * scale + minVal for i in range(nColors)] + [maxVal])
@@ -1107,6 +1108,7 @@ def digitizeData(data: np.ndarray, nColors: int = 256) -> np.ndarray[int]:
         Scaled data in the [0, nColors - 1] range.
     """
     cdf, minVal, maxVal = getCdf(data, nColors - 1)
+    assert isinstance(cdf, np.ndarray), "cdf is not an np.ndarray"
     scale = (maxVal - minVal) / len(cdf)
     bins = np.floor((data * scale - minVal)).astype(np.int64)
     return cdf[bins]

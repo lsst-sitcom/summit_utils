@@ -28,9 +28,11 @@ from typing import Any
 
 import matplotlib
 import matplotlib.pyplot as plt
+from matplotlib.projections.polar import PolarAxes
 import numpy as np
 from astro_metadata_translator import ObservationInfo
 from matplotlib.pyplot import cm
+from matplotlib.dates import date2num
 
 import lsst.daf.butler as dafButler
 from lsst.utils.iteration import ensure_iterable
@@ -99,7 +101,7 @@ SOUTHPOLESTAR = "HD 185975"
 class ColorAndMarker:
     """Class for holding colors and marker symbols"""
 
-    color: list
+    color: str
     marker: str = "*"
 
 
@@ -111,11 +113,11 @@ class NightReport:
         self.log = logging.getLogger("lsst.summit.utils.NightReport")
         self.butler = butler
         self.dayObs = dayObs
-        self.data = dict()
-        self._expRecordsLoaded = set()  # set of the expRecords loaded
-        self._obsInfosLoaded = set()  # set of the seqNums loaded
-        self.stars = None
-        self.cMap = None
+        self.data: dict = dict()
+        self._expRecordsLoaded: set = set()  # set of the expRecords loaded
+        self._obsInfosLoaded: set = set()  # set of the seqNums loaded
+        self.stars: list[str] = []
+        self.cMap: dict[str, ColorAndMarker] = {}
         if loadFromFile is not None:
             self._load(loadFromFile)
         self.rebuild()  # sets stars and cMap
@@ -367,10 +369,10 @@ class NightReport:
             break
 
     @staticmethod
-    def makeStarColorAndMarkerMap(stars: list) -> dict:
+    def makeStarColorAndMarkerMap(stars: list[str]) -> dict[str, ColorAndMarker]:
         """Create a color/marker map for a list of observed objects."""
         markerMap = {}
-        colors = cm.rainbow(np.linspace(0, 1, N_STARS_PER_SYMBOL))
+        colors = cm.rainbow(np.linspace(0, 1, N_STARS_PER_SYMBOL))  # type: ignore # mypy doesn't recognize dynamically created colormap attributes # noqa: E501
         for i, star in enumerate(stars):
             markerIndex = i // (N_STARS_PER_SYMBOL)
             colorIndex = i % (N_STARS_PER_SYMBOL)
@@ -641,7 +643,8 @@ class NightReport:
             obsTimes = [self.getExposureMidpoint(seqNum) for seqNum in seqNums]
             color = self.cMap[star].color
             marker = self.cMap[star].marker
-            plt.plot(obsTimes, airMasses, color=color, marker=marker, label=star, ms=10, ls="")
+            obsDates = date2num(obsTimes)
+            plt.plot(obsDates, airMasses, color=color, marker=marker, label=star, ms=10, ls="")
 
         plt.ylabel("Airmass", fontsize=20)
         plt.xlabel("Time (UTC)", fontsize=20)
@@ -697,6 +700,7 @@ class NightReport:
         if makeFig:
             _ = plt.figure(figsize=(10, 10))
         ax = plt.subplot(111, polar=True)
+        assert isinstance(ax, PolarAxes), "Expected a polar plot"
         ax.plot([a * np.pi / 180 for a in azimuthsInDegrees], zenithAngles, marker, c=color, label=objName)
         if title:
             ax.set_title(title, va="bottom")
@@ -755,7 +759,10 @@ class NightReport:
             )
         lgnd = ax.legend(bbox_to_anchor=(1.05, 1), prop={"size": 15}, loc="upper left")
         ax.set_title("Axial coverage - azimuth (theta, deg) vs zenith angle (r, deg)", size=20)
+
         for h in lgnd.legend_handles:
+            if h is None:
+                continue
             size = 14
             if "-" in marker:
                 size += 5

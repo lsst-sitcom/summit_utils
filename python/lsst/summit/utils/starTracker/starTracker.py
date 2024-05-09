@@ -228,7 +228,7 @@ def isStreamingModeFile(filename: str) -> bool:
     return os.path.basename(filename).count("_") == 4
 
 
-def dayObsSeqNumFromFilename(filename: str) -> tuple[int, int]:
+def dayObsSeqNumFromFilename(filename: str) -> tuple[int, int] | tuple[None, None]:
     """Get the dayObs and seqNum from a filename.
 
     If the file is a streaming mode file (`None`, `None`) is returned.

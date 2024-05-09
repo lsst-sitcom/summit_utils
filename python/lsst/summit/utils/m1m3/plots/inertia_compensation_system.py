@@ -3,6 +3,7 @@ import logging
 import matplotlib.pyplot as plt
 import pandas as pd
 from astropy.time import Time
+from typing import Any, TypedDict
 
 from lsst.summit.utils.type_utils import M1M3ICSAnalysis
 
@@ -35,6 +36,12 @@ HP_OPERATIONAL_LIMIT: float = 450  # [N]
 
 FIGURE_WIDTH = 10
 FIGURE_HEIGHT = 7
+
+
+class HPLimitsDict(TypedDict, total=False):
+    pos_limit: float
+    neg_limit: float
+    ls: str
 
 
 def plot_hp_data(ax: plt.Axes, data: pd.Series | list, label: str) -> plt.Line2D:
@@ -117,7 +124,7 @@ def mark_padded_slew_begin_end(ax: plt.Axes, begin: Time, end: Time) -> plt.Line
     return line
 
 
-def customize_fig(fig: plt.Figure, dataset: M1M3ICSAnalysis):
+def customize_fig(fig: plt.Figure, dataset: M1M3ICSAnalysis) -> None:
     """
     Add a title to a figure and adjust its subplots spacing
 
@@ -161,7 +168,7 @@ def customize_hp_plot(ax: plt.Axes, lines: list[plt.Line2D]) -> None:
     ax.grid(linestyle=":", alpha=0.2)
 
 
-def add_hp_limits(ax: plt.Axes):
+def add_hp_limits(ax: plt.Axes) -> list[plt.Line2D]:
     """
     Add horizontal lines to represent the breakaway limits, the fatigue limits,
     and the operational limits.
@@ -181,7 +188,7 @@ def add_hp_limits(ax: plt.Axes):
     ax : `plt.Axes`
         The axes on which the velocity data is plotted.
     """
-    hp_limits = {
+    hp_limits: dict[str, HPLimitsDict] = {
         "HP Breakaway Limit": {"pos_limit": HP_BREAKAWAY_LIMIT, "neg_limit": -HP_BREAKAWAY_LIMIT, "ls": "-"},
         "Repeated Load Limit (30% breakaway)": {
             "pos_limit": HP_FATIGUE_LIMIT,
@@ -195,7 +202,7 @@ def add_hp_limits(ax: plt.Axes):
         },
     }
 
-    kwargs = dict(alpha=0.5, lw=1.0, c="r", zorder=-1)
+    kwargs: dict[str, Any] = dict(alpha=0.5, lw=1.0, c="r", zorder=-1)
     line_list = []
 
     for key, sub_dict in hp_limits.items():

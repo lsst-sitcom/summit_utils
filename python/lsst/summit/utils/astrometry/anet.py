@@ -104,7 +104,9 @@ class AstrometryNetResult:
 
     @cached_property
     def rmsErrorPixels(self) -> float:
-        return np.sqrt(self.meanSqErr)
+        _meanSqErr = self.meanSqErr
+        assert _meanSqErr is not None, "No meanSqErr calculated, cannot calculate rmsErrorPixels."
+        return np.sqrt(_meanSqErr)
 
     @cached_property
     def rmsErrorArsec(self) -> float:
@@ -166,6 +168,7 @@ class CommandLineSolver:
         """
         fileSet = "4100" if wide else "4200"
         fileSet = "5200/LITE" if useGaia else fileSet
+        assert self.indexFilePath is not None, "No index file path set"
         indexFileDir = os.path.join(self.indexFilePath, fileSet)
         if not os.path.isdir(indexFileDir):
             raise RuntimeError(
@@ -318,8 +321,8 @@ class CommandLineSolver:
                 print("but failed to find a solution.")
                 return None
 
-            result = AstrometryNetResult(wcsFile, corrFile)
-            return result
+            astronomy_results = AstrometryNetResult(wcsFile, corrFile)
+            return astronomy_results
         else:
             print("Fit failed")
         return None
@@ -328,13 +331,12 @@ class CommandLineSolver:
 class OnlineSolver:
     """A class to solve an image using the Astrometry.net online service."""
 
-    def __init__(self):
+    def __init__(self) -> None:
         # import seems to spew warnings even if the required key is present
         # so we swallow them, and raise on init if the key is missing
         with warnings.catch_warnings():
             warnings.simplefilter("ignore")
             from astroquery.astrometry_net import AstrometryNet
-
             self.apiKey = self.getApiKey()  # raises if not present so do first
             self.adn = AstrometryNet()
             self.adn.api_key = self.apiKey

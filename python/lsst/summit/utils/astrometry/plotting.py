@@ -27,6 +27,7 @@ import matplotlib
 import matplotlib.pyplot as plt
 import numpy as np
 from astropy.coordinates import Angle
+from typing import Any
 
 import lsst.afw.image as afwImage
 import lsst.afw.table as afwTable
@@ -111,8 +112,9 @@ def plot(
 
     if icSrc:
         plt.scatter(icSrc["base_SdssCentroid_x"], icSrc["base_SdssCentroid_y"], color="red", marker="x")
+    markerStyle: dict[str, Any] = dict()
     if filteredSources:
-        markerStyle = dict(
+        markerStyle.update(dict(
             marker="o",
             linestyle="",
             markersize=20,
@@ -120,7 +122,7 @@ def plot(
             color="green",
             markeredgecolor="green",
             fillstyle="none",
-        )
+        ))
         plt.plot(
             filteredSources["base_SdssCentroid_x"], filteredSources["base_SdssCentroid_y"], **markerStyle
         )

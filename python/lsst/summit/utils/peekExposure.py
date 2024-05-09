@@ -18,6 +18,7 @@
 #
 # You should have received a copy of the GNU General Public License
 # along with this program.  If not, see <https://www.gnu.org/licenses/>.
+from __future__ import annotations
 
 __all__ = [
     "PeekExposureTaskConfig",
@@ -52,7 +53,7 @@ from lsst.meas.base import IdGenerator, SingleFrameMeasurementTask
 IDX_SENTINEL = -99999
 
 
-def _estimateMode(data: np.ndarray, frac: float = 0.5):
+def _estimateMode(data: np.ndarray, frac: float = 0.5) -> float:
     """Estimate the mode of a 1d distribution.
 
     Finds the smallest interval containing the fraction ``frac`` of the data,
@@ -184,32 +185,37 @@ class DonutPsf(Psf):
         self.innerRad = innerRad
         self.dimensions = Extent2I(size, size)
 
-    def __deepcopy__(self, memo=None):
+    def __deepcopy__(self, memo: Any | None = None) -> DonutPsf:
         return DonutPsf(self.size, self.outerRad, self.innerRad)
 
-    def resized(self, width: float, height: float):
+    def resized(self, width: float, height: float) -> DonutPsf:
         assert width == height
         return DonutPsf(width, self.outerRad, self.innerRad)
 
-    def _doComputeKernelImage(self, position=None, color=None):
+    def _doComputeKernelImage(self, position: int | None = None, color: str | None = None) -> ImageD:
         bbox = self.computeBBox(self.getAveragePosition())
         img = ImageD(bbox, 0.0)
-        x, y = np.ogrid[bbox.minY : bbox.maxY + 1, bbox.minX : bbox.maxX + 1]
+        x, y = np.ogrid[bbox.minY : bbox.maxY + 1, bbox.minX : bbox.maxX + 1]   
         rsqr = x**2 + y**2
         w = (rsqr < self.outerRad**2) & (rsqr > self.innerRad**2)
         img.array[w] = 1.0
         img.array /= np.sum(img.array)
         return img
 
-    def _doComputeBBox(self, position=None, color=None):
+    def _doComputeBBox(self, position: int | None = None, color: str | None = None) -> Box2I:
         return Box2I(Point2I(-self.dimensions / 2), self.dimensions)
 
-    def _doComputeShape(self, position=None, color=None):
+    def _doComputeShape(self, position: int | None = None, color: str | None = None) -> Quadrupole:
         Ixx = self.outerRad**4 - self.innerRad**4
         Ixx /= self.outerRad**2 - self.innerRad**2
         return Quadrupole(Ixx, Ixx, 0.0)
 
-    def _doComputeApertureFlux(self, radius: float, position=None, color=None):
+    def _doComputeApertureFlux(
+        self, 
+        radius: float,
+        position: int | None = None,
+        color: str | None = None
+    ) -> float:
         return 1 - np.exp(-0.5 * (radius / self.sigma) ** 2)
 
     def __eq__(self, rhs: object) -> bool:
@@ -765,7 +771,7 @@ class PeekExposureTask(pipeBase.Task):
         mode: str = "auto",
         binSize: int | None = None,
         donutDiameter: float | None = None,
-    ):
+    ) -> pipeBase.Struct:
         """
         Parameters
         ----------

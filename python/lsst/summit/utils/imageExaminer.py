@@ -25,7 +25,9 @@ __all__ = ["ImageExaminer"]
 import matplotlib
 import matplotlib.patches as patches
 import matplotlib.pyplot as plt
+from mpl_toolkits.mplot3d import Axes3D
 import numpy as np
+
 import scipy.ndimage as ndImage
 from matplotlib import cm
 from matplotlib.colors import LogNorm
@@ -324,7 +326,7 @@ class ImageExaminer:
         self.nSatPixInBox = countPixels(self.exp.maskedImage[self.starBbox], "SAT")
         return self.exp.image[bbox].array
 
-    def getMeshGrid(self, data: np.ndarray[int]) -> tuple[np.array, np.array]:
+    def getMeshGrid(self, data: np.ndarray[float]) -> tuple[np.ndarray[float], np.ndarray[float]]:
         """Get the meshgrid for a data array.
 
         Parameters
@@ -359,7 +361,7 @@ class ImageExaminer:
         center = np.array([xlen / 2, ylen / 2])
         # TODO: add option to move centroid to max pixel for radial (argmax 2d)
 
-        distances = []
+        distances: list[float] = []
         values = []
 
         # could be much faster, but the array is tiny so its fine
@@ -367,10 +369,11 @@ class ImageExaminer:
             for j in range(ylen):
                 value = self.data[i, j]
                 dist = norm((i, j) - center)
-                if dist > xlen // 2:
+                fDist = float(dist)
+                if fDist > xlen // 2:
                     continue  # clip to box size, we don't need a factor of sqrt(2) extra
                 values.append(value)
-                distances.append(dist)
+                distances.append(fDist)
 
         peakPos = 0
         amplitude = np.max(values)
@@ -400,7 +403,7 @@ class ImageExaminer:
         # sort distances and values in step by distance
         d = np.array([(r, v) for (r, v) in sorted(zip(self.radialDistances, self.radialValues))])
         self.radii = d[:, 0]
-        values = d[:, 1]
+        values = list(d[:, 1])
         self.cumFluxes = np.cumsum(values)
         self.cumFluxesNorm = self.cumFluxes / np.max(self.cumFluxes)
 
@@ -449,7 +452,7 @@ class ImageExaminer:
 
         ax.plot(distances, values, "x", label="Radial average")
         if not fitFailed:
-            fitline = gauss(distances, *pars)
+            fitline = [gauss(distance, *pars) for distance in distances]
             ax.plot(distances, fitline, label="Gaussian fit")
 
         ax.set_ylabel("Flux (ADU)")
@@ -490,12 +493,12 @@ class ImageExaminer:
         if plotDirect:
             plt.show()
 
-    def plotSurface(self, ax: matplotlib.axes.Axes | None = None, useColor: bool = True) -> None:
+    def plotSurface(self, ax: Axes3D | None = None, useColor: bool = True) -> None:
         """Make the surface plot.
 
         Parameters
         ----------
-        ax : `maplotlib.axes`, optional
+        ax : `maplotlib.axes.Axes3D`, optional
             If ``None`` a new figure is created. Supply axes if including this
             as a subplot.
         useColor : `bool`, optional
@@ -511,7 +514,7 @@ class ImageExaminer:
                 self.xx,
                 self.yy,
                 self.data,
-                cmap=cm.plasma,
+                cmap=cm.plasma,  # type: ignore # mypy doesn't recognize dynamically created colormap attr.
                 linewidth=1,
                 antialiased=True,
                 color="k",
@@ -522,7 +525,7 @@ class ImageExaminer:
                 self.xx,
                 self.yy,
                 self.data,
-                cmap=cm.gray,  # noqa F841
+                cmap=cm.gray,  # type: ignore # mypy doesn't recognize dynamically created colormap attributes
                 linewidth=1,
                 antialiased=True,
                 color="k",
@@ -582,8 +585,8 @@ class ImageExaminer:
             plotDirect = True
 
         imData = quickSmooth(self.exp.image.array, 2.5)
-        vmin = np.percentile(imData, 10)
-        vmax = np.percentile(imData, 99.9)
+        vmin = float(np.percentile(imData, 10))
+        vmax = float(np.percentile(imData, 99.9))
         ax.imshow(
             imData, norm=LogNorm(vmin=vmin, vmax=vmax), origin="lower", cmap="gray_r", interpolation="bicubic"
         )

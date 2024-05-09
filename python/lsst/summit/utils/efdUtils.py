@@ -522,7 +522,7 @@ def clipDataToEvent(
     return clipped_df
 
 
-def offsetDayObs(dayObs: int, nDays: int):
+def offsetDayObs(dayObs: int, nDays: int) -> int:
     """Offset a dayObs by a given number of days.
 
     Parameters

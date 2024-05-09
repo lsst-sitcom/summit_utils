@@ -2,6 +2,7 @@ from typing import Protocol
 
 import pandas as pd
 from astropy import units as u
+from astropy.time import Time
 
 HAS_EFD_CLIENT = True
 try:
@@ -20,6 +21,14 @@ class Event(Protocol):
 
     @property
     def seqNum(self) -> int:
+        """Day of the observation."""
+
+    @property
+    def begin(self) -> Time:
+        """Day of the observation."""
+
+    @property
+    def end(self) -> Time:
         """Day of the observation."""
 
     @property

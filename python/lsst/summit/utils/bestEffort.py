@@ -114,7 +114,7 @@ class BestEffortIsr:
 
         self.defaultExtraIsrOptions = defaultExtraIsrOptions
 
-        self._cache = {}
+        self._cache: dict = {}
         self._cacheIsForDetector = None
 
     def _applyConfigOverrides(self, config: Config, overrides: dict) -> None:

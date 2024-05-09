@@ -27,7 +27,7 @@ import logging
 import re
 from collections.abc import Iterable
 from dataclasses import dataclass, field
-from typing import TYPE_CHECKING, Any, Union
+from typing import TYPE_CHECKING, Any, Callable, Union
 
 import astropy
 import humanize
@@ -125,7 +125,7 @@ def getTracksFromEventList(
     return [e for e in events if e.type == TMAState.TRACKING]
 
 
-def getTorqueMaxima(table: pd.DataFrame):
+def getTorqueMaxima(table: pd.DataFrame) -> None:
     """Print the maximum positive and negative azimuth and elevation torques.
 
     Designed to be used with the table as downloaded from RubinTV.
@@ -143,6 +143,7 @@ def getTorqueMaxima(table: pd.DataFrame):
         minPos = np.argmin(table[col])
         minVal = table[col].iloc[minPos]
         print(f"Max negative {axis:9} torque during seqNum {minPos:>4}: {minVal/1000:>7.1f}kNm")
+    return None
 
 
 def getAzimuthElevationDataForEvent(
@@ -280,8 +281,8 @@ def plotEvent(
     elevationData: pd.DataFrame | None = None,
     doFilterResiduals: bool = False,
     maxDelta: float = 0.1,
-    metadataWriter=None,
-):
+    metadataWriter: Callable | None = None,
+) -> matplotlib.figure.Figure:
     """Plot the TMA axis positions over the course of a given TMAEvent.
 
     Plots the axis motion profiles for the given event, with optional padding
@@ -350,17 +351,17 @@ def plotEvent(
         The figure on which the plot was made.
     """
 
-    def tickFormatter(value, tick_number: float) -> str:
+    def tickFormatter(value: float, tick_number: float) -> str:
         # Convert the value to a string without subtracting large numbers
         # tick_number is unused.
         return f"{value:.2f}"
 
-    def getPlotTime(time: pd.Timestamp | Time | datetime.datetime):
+    def getPlotTime(time: pd.Timestamp | Time | datetime.datetime) -> datetime.datetime:
         """Get the right time to plot a point from the various time formats."""
         match time:
             case pd.Timestamp():
                 return time.to_pydatetime()
-            case Time():
+            case astropy.time.Time():
                 return time.utc.datetime
             case datetime.datetime():
                 return time
@@ -381,7 +382,7 @@ def plotEvent(
 
     fig.clear()
     ax1p5 = None  # need to always be defined
-    if event.type.name == "TRACKING":
+    if event.type == TMAState.TRACKING:
         ax1, ax1p5, ax2 = fig.subplots(
             3, sharex=True, gridspec_kw={"wspace": 0, "hspace": 0, "height_ratios": [2.5, 1, 1]}
         )
@@ -433,7 +434,7 @@ def plotEvent(
     ax2.xaxis.set_major_locator(mdates.AutoDateLocator())
     ax2.xaxis.set_major_formatter(mdates.DateFormatter("%H:%M:%S"))
 
-    if event.type.name == "TRACKING":
+    if event.type == TMAState.TRACKING:
         # returns a copy
         clippedAzimuthData = clipDataToEvent(azimuthData, event, postPadding=TRACKING_RESIDUAL_TAIL_CLIP)
         clippedElevationData = clipDataToEvent(elevationData, event, postPadding=TRACKING_RESIDUAL_TAIL_CLIP)
@@ -456,6 +457,7 @@ def plotEvent(
         image_az_rms = az_rms * np.cos(elVals[0] * np.pi / 180.0)
         image_el_rms = el_rms
         image_impact_rms = np.sqrt(image_az_rms**2 + image_el_rms**2)
+        assert ax1p5 is not None
         ax1p5.plot(
             clippedAzimuthData["azError"],
             label="Azimuth tracking error",
@@ -555,7 +557,7 @@ def getCommandsDuringEvent(
     timeFormat: str = "python",
     log: logging.Logger | None = None,
     doLog: bool = True,
-):
+) -> dict[datetime.datetime, str]:
     """Get the commands issued during an event.
 
     Get the times at which the specified commands were issued during the event.
@@ -693,8 +695,8 @@ class TMAEvent:
 
     dayObs: int
     seqNum: int
-    type: str  # can be 'SLEWING', 'TRACKING'
-    endReason: str  # can be 'STOPPED', 'TRACKING', 'FAULT', 'SLEWING', 'OFF'
+    type: TMAState  # can be 'SLEWING', 'TRACKING'
+    endReason: TMAState  # can be 'STOPPED', 'TRACKING', 'FAULT', 'SLEWING', 'OFF'
     duration: float  # seconds
     begin: Time
     end: Time
@@ -743,7 +745,7 @@ class TMAEvent:
         print(self.__str__())
 
     def __str__(self) -> str:
-        def indent(string):
+        def indent(string: str) -> str:
             return "\n" + "\n".join(["    " + s for s in string.splitlines()])
 
         blockInfoStr = "None"
@@ -907,6 +909,10 @@ class ListViewOfDict:
 
     def __len__(self) -> int:
         return len(self.keys)
+
+    def __iter__(self) -> Any:
+        for key in self.keys:
+            yield self.dictionary[key]
 
 
 class TMAStateMachine:
@@ -1224,7 +1230,7 @@ class TMAEventMaker:
         else:
             self.client = makeEfdClient()
         self.log = logging.getLogger(__name__)
-        self._data = {}
+        self._data: dict = {}
 
     @dataclass(frozen=True)
     class ParsedState:
@@ -1329,7 +1335,7 @@ class TMAEventMaker:
                 merged = df.copy()
             else:
                 merged = pd.merge(merged, df, **mergeArgs)
-
+        assert merged is not None, "merged data is None"
         merged = merged.loc[:, ~merged.columns.duplicated()]  # Remove duplicate columns after merge
 
         if len(merged) != originalRowCounter:
@@ -1564,7 +1570,7 @@ class TMAEventMaker:
         return events
 
     def _statesToEventTuples(
-        self, states: dict[int, TMAEvent], dataIsForCurrentDay: bool
+        self, states: dict[int, TMAState], dataIsForCurrentDay: bool
     ) -> list[ParsedState]:
         """Get the event-tuples from the dictionary of TMAStates.
 
@@ -1688,6 +1694,8 @@ class TMAEventMaker:
             # and scare users so it gets reported
             self.log.exception(f"Failed to parse block data for {dayObs=}, {e}")
             return
+        if not isinstance(events, list):
+            events = [events]
         blocks = blockParser.getBlockNums()
         blockDict = {}
         for block in blocks:
@@ -1712,7 +1720,7 @@ class TMAEventMaker:
                     object.__setattr__(event, "blockInfos", toSet)
 
     def _makeEventsFromStateTuples(
-        self, states: list[tuple[Union[Time, int, TMAState]]], dayObs: int, data: pd.DataFrame
+        self, states: list[ParsedState], dayObs: int, data: pd.DataFrame
     ) -> list[TMAEvent]:
         """For the list of state-tuples, create a list of ``TMAEvent`` objects.
 
@@ -1780,12 +1788,14 @@ class TMAEventMaker:
         #   azimuth - Power:          ON Motion:               STOPPED InPosition: True        # noqa: W505
         # elevation - Power:          ON Motion: MOVING_POINT_TO_POINT InPosition: False       # noqa: W505
         for axis in axes:
-            print(
-                f"{axis:>{axisPad}} - "
-                f"Power: {p[f'{axis}SystemState'].name:>{powerPad}} "
-                f"Motion: {p[f'{axis}MotionState'].name:>{motionPad}} "
-                f"InPosition: {p[f'{axis}InPosition']}"
-            )
+            f"{axis:>{axisPad}} - "
+            power_state = p[f'{axis}SystemState']
+            motion_state = p[f'{axis}MotionState']
+            if isinstance(power_state, PowerState):
+                f"Power: {power_state.name:>{powerPad}} "
+            if isinstance(motion_state, AxisMotionState):
+                f"Motion: {motion_state.name:>{motionPad}} "
+            f"InPosition: {p[f'{axis}InPosition']}"
         print(f"Overall system state: {tma.state.name}")
 
     def printFullDayStateEvolution(self, dayObs: int, taiOrUtc: str = "utc") -> None:

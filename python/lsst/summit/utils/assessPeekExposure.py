@@ -38,6 +38,7 @@ from astropy.table import Table
 from astropy.utils.exceptions import AstropyUserWarning
 from tabulate import tabulate
 from tqdm import tqdm
+from typing import Any
 
 import lsst.afw.display as afwDisplay
 from lsst.afw.geom import ellipses
@@ -58,6 +59,8 @@ AssessPeekExposureGlobals = namedtuple(
 
 SIGMA_TO_FWHM = 2.0 * np.sqrt(2.0 * np.log(2.0))
 AUXTEL_PIXEL_SCALE = 0.1  # arcsec/pixel
+
+apeGlobals: None | AssessPeekExposureGlobals = None
 
 
 # get one BestEffortIsr,afwDisplay per subprocess
@@ -105,6 +108,7 @@ def doWork(idx: int, row: astropy.table.Row, doPlot: bool) -> tuple[str, str, fl
         Exposure ID of the exposure.
     """
     global apeGlobals
+    assert apeGlobals is not None, "initializePoolProcess must be called before doWork"
     bestEffort, pet, display, fig, ax = apeGlobals
     exposureId = row["exposureId"]
     dataId = {"instrument": "LATISS", "exposure": exposureId, "detector": 0}
@@ -219,7 +223,7 @@ def main(args: argparse.Namespace) -> None:
         "<10",  # agrees to 10 arcsec
         ">10",  # disagrees by more than 10 arcsec
     ]
-    results = {}
+    results: dict[str, Any] = {}
     for intag in intags:
         results[intag] = {}
         for outtag in outtags:
