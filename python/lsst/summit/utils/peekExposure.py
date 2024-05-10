@@ -211,7 +211,7 @@ class DonutPsf(Psf):
         return Quadrupole(Ixx, Ixx, 0.0)
 
     def _doComputeApertureFlux(
-        self, radius: float, position: int | None = None, color: str | None = None
+            self, radius: float, position: int | None = None, color: str | None = None
     ) -> float:
         return 1 - np.exp(-0.5 * (radius / self.sigma) ** 2)
 

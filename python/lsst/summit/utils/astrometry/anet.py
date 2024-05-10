@@ -63,7 +63,7 @@ class AstrometryNetResult:
     wcsFile: str
     corrFile: str | None = None
 
-    def __post_init__(self):
+    def __post_init__(self) -> None:
         # touch these properties to ensure the files needed to calculate them
         # are read immediately, in case they are deleted from temp
         self.wcs
@@ -104,9 +104,8 @@ class AstrometryNetResult:
 
     @cached_property
     def rmsErrorPixels(self) -> float:
-        _meanSqErr = self.meanSqErr
-        assert _meanSqErr is not None, "No meanSqErr calculated, cannot calculate rmsErrorPixels."
-        return np.sqrt(_meanSqErr)
+        assert self.meanSqErr is not None, "No meanSqErr calculated, cannot calculate rmsErrorPixels."
+        return np.sqrt(self.meanSqErr)
 
     @cached_property
     def rmsErrorArsec(self) -> float:
