@@ -21,16 +21,17 @@
 
 import copy
 import datetime
-import matplotlib.pyplot as plt
 import os
 import random
 import unittest
+from collections.abc import Mapping
 from typing import Iterable
+
+import matplotlib.pyplot as plt
 
 import lsst.daf.butler as dafButler
 import lsst.utils.tests
 from lsst.daf.butler import DatasetRef
-from collections.abc import Mapping
 from lsst.resources import ResourcePath
 from lsst.summit.utils.butlerUtils import removeDataProduct  # noqa: F401
 from lsst.summit.utils.butlerUtils import (
@@ -42,7 +43,6 @@ from lsst.summit.utils.butlerUtils import (
     _get_expid_key,
     _get_seqnum_key,
     _seqnum_present,
-    datasetExists,
     fillDataId,
     getDatasetRefForDataId,
     getDayObs,
