@@ -21,6 +21,7 @@
 
 from .bestEffort import *
 from .butlerUtils import *
+from .consdbClient import *
 from .imageExaminer import *
 from .nightReport import *
 from .peekExposure import *
