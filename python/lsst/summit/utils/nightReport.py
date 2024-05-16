@@ -609,7 +609,7 @@ class NightReport:
 
     def plotPerObjectAirMass(
         self, objects: Iterable[str] | None = None, airmassOneAtTop: bool = True, saveFig: str = ""
-    ) -> None:
+    ) -> matplotlib.figure.Figure:
         """Plot the airmass for objects observed over the course of the night.
 
         Parameters
@@ -621,13 +621,18 @@ class NightReport:
             expect.
         saveFig : `str`, optional
             Save the figure to this file path?
+
+        Return
+        ------
+        fig : `matplotlib.figure.Figure`
+            The figure object.
         """
         if not objects:
             objects = self.stars
 
         objects = ensure_iterable(objects)
 
-        plt.figure(figsize=(10, 6))
+        fig = plt.figure(figsize=(16, 12))
         for star in objects:
             if star in CALIB_VALUES:
                 continue
@@ -654,8 +659,7 @@ class NightReport:
         plt.tight_layout()
         if saveFig:
             plt.savefig(saveFig)
-        plt.show()
-        plt.close()
+        return fig
 
     def _makePolarPlot(
         self,
@@ -703,7 +707,7 @@ class NightReport:
 
     def makeAltAzCoveragePlot(
         self, objects: Iterable[str] | None = None, withLines: bool = False, saveFig: str = ""
-    ) -> None:
+    ) -> matplotlib.figure.Figure:
         """Make a polar plot of the azimuth and zenith angle for each object.
 
         Plots the azimuth on the theta axis, and zenith angle (not altitude!)
@@ -718,12 +722,17 @@ class NightReport:
             Connect the points with lines?
         saveFig : `str`, optional
             Save the figure to this file path?
+
+        Return
+        ------
+        fig : `matplotlib.figure.Figure`
+            The figure object.
         """
         if not objects:
             objects = self.stars
         objects = ensure_iterable(objects)
 
-        _ = plt.figure(figsize=(14, 10))
+        fig = plt.figure(figsize=(16, 12))
 
         for obj in objects:
             if obj in CALIB_VALUES:
@@ -746,7 +755,7 @@ class NightReport:
             )
         lgnd = ax.legend(bbox_to_anchor=(1.05, 1), prop={"size": 15}, loc="upper left")
         ax.set_title("Axial coverage - azimuth (theta, deg) vs zenith angle (r, deg)", size=20)
-        for h in lgnd.legendHandles:
+        for h in lgnd.legend_handles:
             size = 14
             if "-" in marker:
                 size += 5
@@ -755,5 +764,4 @@ class NightReport:
         plt.tight_layout()
         if saveFig:
             plt.savefig(saveFig)
-        plt.show()
-        plt.close()
+        return fig

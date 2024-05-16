@@ -322,7 +322,7 @@ class TMAEventMakerTestCase(lsst.utils.tests.TestCase):
     @vcr.use_cassette()
     def test_noDataBehaviour(self):
         eventMaker = self.tmaEventMaker
-        noDataDayObs = 19500101  # do not use 19700101 - there is data for that day!
+        noDataDayObs = 19600101  # do not use 19700101 - there is data for that day!
         with self.assertLogs(level="WARNING") as cm:
             correctMsg = f"No EFD data found for dayObs={noDataDayObs}"
             events = eventMaker.getEvents(noDataDayObs)

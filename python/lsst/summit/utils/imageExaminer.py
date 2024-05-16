@@ -679,10 +679,15 @@ class ImageExaminer:
         if plotDirect:
             plt.show()
 
-    def plot(self) -> None:
+    def plot(self) -> matplotlib.figure.Figure:
         """Plot all the subplots together, including the stats box.
 
         Image is saved if ``savefig`` was set.
+
+        Return
+        ------
+        fig : `matplotlib.figure.Figure`
+            The figure object.
         """
         figsize = 6
         fig = plt.figure(figsize=(figsize * 3, figsize * 2))
@@ -732,8 +737,7 @@ class ImageExaminer:
         if self.savePlots:
             print(f"Plot saved to {self.savePlots}")
             fig.savefig(self.savePlots)
-        plt.show()
-        plt.close("all")
+        return fig
 
     @staticmethod
     def translateStats(imStats: pipeBase.Struct, mappingDict: dict[str, str]) -> list[str]:

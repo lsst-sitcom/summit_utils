@@ -444,7 +444,7 @@ def fillDataId(butler: dafButler.Butler, dataId: dict) -> dict:
     dataId, _ = butler._rewrite_data_id(dataId, butler.get_dataset_type("raw"))
 
     # now expand and turn back to a dict
-    dataId = butler.registry.expandDataId(dataId, detector=0).full  # this call is VERY slow
+    dataId = butler.registry.expandDataId(dataId, detector=0).mapping  # this call is VERY slow
     dataId = _assureDict(dataId)
 
     missingExpId = getExpId(dataId) is None
@@ -478,10 +478,12 @@ def _assureDict(dataId: dict | dafButler.dimensions.DataCoordinate | dafButler.D
     """
     if isinstance(dataId, dict):
         return dataId
+    elif hasattr(dataId, "mapping"):  # dafButler.dimensions.DataCoordinate
+        return {str(k): v for k, v in dataId.mapping.items()}
     elif hasattr(dataId, "items"):  # dafButler.dimensions.DataCoordinate
         return {str(k): v for k, v in dataId.items()}  # str() required due to full names
     elif hasattr(dataId, "dataId"):  # dafButler.DimensionRecord
-        return {str(k): v for k, v in dataId.dataId.items()}
+        return {str(k): v for k, v in dataId.dataId.mapping.items()}
     else:
         raise RuntimeError(f"Failed to coerce {type(dataId)} to dict")
 
@@ -774,7 +776,7 @@ def getLatissOnSkyDataIds(
     dataIds = [r.dataId for r in filter(isOnSky, itertools.chain(*recordSets))]
     if full:
         expandedIds = [
-            updateDataIdOrDataCord(butler.registry.expandDataId(dataId, detector=0).full)
+            updateDataIdOrDataCord(butler.registry.expandDataId(dataId, detector=0).mapping)
             for dataId in dataIds
         ]
         filledIds = [fillDataId(butler, dataId) for dataId in expandedIds]
