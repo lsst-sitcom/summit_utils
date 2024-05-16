@@ -130,9 +130,7 @@ class SpectrumExaminer:
 
     def fit(self) -> None:
         def gauss(
-            x: float | np.ndarray[float],
-            a: float, x0: float,
-            sigma: float
+            x: float | np.ndarray[float], a: float, x0: float, sigma: float
         ) -> float | np.ndarray[float]:
             return a * np.exp(-((x - x0) ** 2) / (2 * sigma**2))
 
