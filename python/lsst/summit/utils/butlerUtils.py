@@ -482,7 +482,7 @@ def _assureDict(dataId: dict | dafButler.dimensions.DataCoordinate | dafButler.D
         return {str(k): v for k, v in dataId.mapping.items()}
     elif hasattr(dataId, "items"):  # dafButler.dimensions.DataCoordinate
         return {str(k): v for k, v in dataId.items()}  # str() required due to full names
-    elif hasattr(dataId, "dataId"):  # dafButler.dimensions.DimensionRecord
+    elif hasattr(dataId, "dataId"):  # dafButler.DimensionRecord
         return {str(k): v for k, v in dataId.dataId.mapping.items()}
     else:
         raise RuntimeError(f"Failed to coerce {type(dataId)} to dict")

@@ -27,8 +27,6 @@ import unittest
 from collections.abc import Mapping
 from typing import Iterable
 
-import matplotlib.pyplot as plt
-
 import lsst.daf.butler as dafButler
 import lsst.utils.tests
 from lsst.daf.butler import DatasetRef
@@ -64,17 +62,6 @@ from lsst.summit.utils.butlerUtils import (
     updateDataId,
     updateDataIdOrDataCord,
 )
-
-
-def custom_show(*args, **kwargs):
-    pass
-
-
-# Override the show function with our custom one
-# to avoid getting the next Warning:
-# UserWarning: FigureCanvasAgg is non-interactive, and thus cannot be shown
-# plt.show()
-plt.show = custom_show
 
 
 class ButlerUtilsTestCase(lsst.utils.tests.TestCase):
