@@ -1788,14 +1788,18 @@ class TMAEventMaker:
         #   azimuth - Power:          ON Motion:               STOPPED InPosition: True        # noqa: W505
         # elevation - Power:          ON Motion: MOVING_POINT_TO_POINT InPosition: False       # noqa: W505
         for axis in axes:
-            f"{axis:>{axisPad}} - "
-            power_state = p[f"{axis}SystemState"]
-            motion_state = p[f"{axis}MotionState"]
-            if isinstance(power_state, PowerState):
-                f"Power: {power_state.name:>{powerPad}} "
-            if isinstance(motion_state, AxisMotionState):
-                f"Motion: {motion_state.name:>{motionPad}} "
-            f"InPosition: {p[f'{axis}InPosition']}"
+            print(f"{axis:>{axisPad}} - ", end="")
+            powerState = p[f"{axis}SystemState"]
+            motionState = p[f"{axis}MotionState"]
+            if isinstance(powerState, PowerState):
+                print(f"Power: {powerState.name:>{powerPad}} ", end="")
+            else:
+                print(f"Power: {powerState:>{powerPad}} ", end="")
+            if isinstance(motionState, AxisMotionState):
+                print(f"Motion: {motionState.name:>{motionPad}} ", end="")
+            else:
+                print(f"Motion: {motionState:>{motionPad}} ", end="")
+            print(f"InPosition: {p[f'{axis}InPosition']}", end="")
         print(f"Overall system state: {tma.state.name}")
 
     def printFullDayStateEvolution(self, dayObs: int, taiOrUtc: str = "utc") -> None:

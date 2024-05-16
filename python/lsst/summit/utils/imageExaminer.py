@@ -44,7 +44,7 @@ from lsst.summit.utils.utils import argMax2d, countPixels, getImageStats, quickS
 SIGMATOFWHM = 2.0 * np.sqrt(2.0 * np.log(2.0))
 
 
-def gauss(x: float, a: float, x0: float, sigma: float) -> float:
+def gauss(x: float | np.array[float], a: float, x0: float, sigma: float) -> float:
     return a * np.exp(-((x - x0) ** 2) / (2 * sigma**2))
 
 
@@ -402,7 +402,7 @@ class ImageExaminer:
         # sort distances and values in step by distance
         d = np.array([(r, v) for (r, v) in sorted(zip(self.radialDistances, self.radialValues))])
         self.radii = d[:, 0]
-        values = list(d[:, 1])
+        values = d[:, 1]
         self.cumFluxes = np.cumsum(values)
         self.cumFluxesNorm = self.cumFluxes / np.max(self.cumFluxes)
 
@@ -451,7 +451,7 @@ class ImageExaminer:
 
         ax.plot(distances, values, "x", label="Radial average")
         if not fitFailed:
-            fitline = [gauss(distance, *pars) for distance in distances]
+            fitline = gauss(distances, *pars)
             ax.plot(distances, fitline, label="Gaussian fit")
 
         ax.set_ylabel("Flux (ADU)")
@@ -584,8 +584,8 @@ class ImageExaminer:
             plotDirect = True
 
         imData = quickSmooth(self.exp.image.array, 2.5)
-        vmin = float(np.percentile(imData, 10))
-        vmax = float(np.percentile(imData, 99.9))
+        vmin = np.percentile(imData, 10)
+        vmax = np.percentile(imData, 99.9)
         ax.imshow(
             imData, norm=LogNorm(vmin=vmin, vmax=vmax), origin="lower", cmap="gray_r", interpolation="bicubic"
         )

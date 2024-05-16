@@ -132,7 +132,7 @@ class CommandLineSolver:
 
     def __init__(
         self,
-        indexFilePath: str | None = None,
+        indexFilePath: str,
         checkInParallel: bool = True,
         timeout: float | int = 300,
         binary: str = "solve-field",
@@ -167,7 +167,6 @@ class CommandLineSolver:
         """
         fileSet = "4100" if wide else "4200"
         fileSet = "5200/LITE" if useGaia else fileSet
-        assert self.indexFilePath is not None, "No index file path set"
         indexFileDir = os.path.join(self.indexFilePath, fileSet)
         if not os.path.isdir(indexFileDir):
             raise RuntimeError(
@@ -320,8 +319,8 @@ class CommandLineSolver:
                 print("but failed to find a solution.")
                 return None
 
-            astronomy_results = AstrometryNetResult(wcsFile, corrFile)
-            return astronomy_results
+            fitResult = AstrometryNetResult(wcsFile, corrFile)
+            return fitResult
         else:
             print("Fit failed")
         return None

@@ -372,7 +372,8 @@ class NightReport:
     def makeStarColorAndMarkerMap(stars: list[str]) -> dict[str, ColorAndMarker]:
         """Create a color/marker map for a list of observed objects."""
         markerMap = {}
-        colors = cm.rainbow(np.linspace(0, 1, N_STARS_PER_SYMBOL))  # type: ignore # mypy doesn't recognize dynamically created colormap attributes # noqa: E501
+        # mypy doesn't recognize dynamically created colormap attributes
+        colors = cm.rainbow(np.linspace(0, 1, N_STARS_PER_SYMBOL))  # type: ignore
         for i, star in enumerate(stars):
             markerIndex = i // (N_STARS_PER_SYMBOL)
             colorIndex = i % (N_STARS_PER_SYMBOL)

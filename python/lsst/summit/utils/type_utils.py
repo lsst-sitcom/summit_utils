@@ -25,11 +25,11 @@ class Event(Protocol):
 
     @property
     def begin(self) -> Time:
-        """Day of the observation."""
+        """The point at which the event begins."""
 
     @property
     def end(self) -> Time:
-        """Day of the observation."""
+        """The point at which the event ends."""
 
     @property
     def version(self) -> int:

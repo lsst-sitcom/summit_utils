@@ -746,7 +746,7 @@ def getLatissOnSkyDataIds(
         The dataIds.
     """
 
-    def isOnSky(expRecord: Any) -> bool:
+    def isOnSky(expRecord: dafButler.DimensionRecord) -> bool:
         imageType = expRecord.observation_type
         obj = expRecord.target_name
         if checkObject and obj == "NOTSET":

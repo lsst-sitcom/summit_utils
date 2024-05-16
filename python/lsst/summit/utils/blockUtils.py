@@ -471,7 +471,8 @@ class BlockParser:
             The events.
         """
         blockInfo = self.getBlockInfo(block, seqNum)
-        assert blockInfo is not None, f"No blockInfo found for {block=}, {seqNum=}"
+        if blockInfo is None:
+            return []
         begin = blockInfo.begin
         end = blockInfo.end
 
