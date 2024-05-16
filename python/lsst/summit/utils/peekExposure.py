@@ -192,7 +192,7 @@ class DonutPsf(Psf):
         assert width == height
         return DonutPsf(width, self.outerRad, self.innerRad)
 
-    def _doComputeKernelImage(self, position: int | None = None, color: str | None = None) -> ImageD:
+    def _doComputeKernelImage(self, position: int | None = None, color: str | None = None) -> Point2D:
         bbox = self.computeBBox(self.getAveragePosition())
         img = ImageD(bbox, 0.0)
         x, y = np.ogrid[bbox.minY : bbox.maxY + 1, bbox.minX : bbox.maxX + 1]

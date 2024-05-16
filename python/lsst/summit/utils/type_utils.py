@@ -21,7 +21,7 @@ class Event(Protocol):
 
     @property
     def seqNum(self) -> int:
-        """Day of the observation."""
+        """The sequence number of the event within the day."""
 
     @property
     def begin(self) -> Time:

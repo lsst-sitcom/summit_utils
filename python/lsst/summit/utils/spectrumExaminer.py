@@ -129,7 +129,11 @@ class SpectrumExaminer:
         return (minPoint, maxPoint)
 
     def fit(self) -> None:
-        def gauss(x: float | np.array[float], a: float, x0: float, sigma: float) -> float:
+        def gauss(
+            x: float | np.ndarray[float],
+            a: float, x0: float,
+            sigma: float
+        ) -> float | np.ndarray[float]:
             return a * np.exp(-((x - x0) ** 2) / (2 * sigma**2))
 
         data = self.spectrumData[self.goodSlice]
