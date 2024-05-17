@@ -192,7 +192,9 @@ class DonutPsf(Psf):
         assert width == height
         return DonutPsf(width, self.outerRad, self.innerRad)
 
-    def _doComputeKernelImage(self, position: int | None = None, color: str | None = None) -> Point2D:
+    def _doComputeKernelImage(
+        self, position: Point2D | None = None, color: afwImage.Color | None = None
+    ) -> ImageD:
         bbox = self.computeBBox(self.getAveragePosition())
         img = ImageD(bbox, 0.0)
         x, y = np.ogrid[bbox.minY : bbox.maxY + 1, bbox.minX : bbox.maxX + 1]
@@ -202,16 +204,18 @@ class DonutPsf(Psf):
         img.array /= np.sum(img.array)
         return img
 
-    def _doComputeBBox(self, position: int | None = None, color: str | None = None) -> Box2I:
+    def _doComputeBBox(self, position: Point2D | None = None, color: afwImage.Color | None = None) -> Box2I:
         return Box2I(Point2I(-self.dimensions / 2), self.dimensions)
 
-    def _doComputeShape(self, position: int | None = None, color: str | None = None) -> Quadrupole:
+    def _doComputeShape(
+        self, position: Point2D | None = None, color: afwImage.Color | None = None
+    ) -> Quadrupole:
         Ixx = self.outerRad**4 - self.innerRad**4
         Ixx /= self.outerRad**2 - self.innerRad**2
         return Quadrupole(Ixx, Ixx, 0.0)
 
     def _doComputeApertureFlux(
-        self, radius: float, position: int | None = None, color: str | None = None
+        self, radius: float, position: Point2D | None = None, color: afwImage.Color | None = None
     ) -> float:
         return 1 - np.exp(-0.5 * (radius / self.sigma) ** 2)
 
