@@ -71,7 +71,6 @@ def _configureForSite() -> None:
         # don't fail for k8s where this cannot yet be determined
         print("WARNING: failed to automatically determine site")
         site = None
-
     if site == "tucson":
         global RECENT_DAY
         RECENT_DAY = 20211104  # TTS has limited data, so use this day
@@ -177,7 +176,7 @@ def datasetExists(butler: dafButler.Butler, dataProduct: str, dataId: dict, **kw
     return butler.exists(dataProduct, dataId, **kwargs)
 
 
-def updateDataId(dataId, **kwargs: Any) -> dict | dafButler.DataCoordinate:
+def updateDataId(dataId: dict | dafButler.DataCoordinate, **kwargs: Any) -> dict | dafButler.DataCoordinate:
     """Update a DataCoordinate or dataId dict with kwargs.
 
     Provides a single interface for adding the detector key (or others) to a
@@ -747,7 +746,7 @@ def getLatissOnSkyDataIds(
         The dataIds.
     """
 
-    def isOnSky(expRecord):
+    def isOnSky(expRecord: dafButler.DimensionRecord) -> bool:
         imageType = expRecord.observation_type
         obj = expRecord.target_name
         if checkObject and obj == "NOTSET":

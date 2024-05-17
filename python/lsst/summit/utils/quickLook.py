@@ -111,8 +111,8 @@ class QuickLookIsrTask(pipeBase.PipelineTask):
         defects: ipIsr.Defects | None = None,
         linearizer: ipIsr.linearize.LinearizeBase | None = None,
         crosstalk: ipIsr.crosstalk.CrosstalkCalib | None = None,
-        bfKernel: ipIsr.BrighterFatterKernel | None = None,
-        newBFKernel: np.ndarray | None = None,
+        bfKernel: np.ndarray | None = None,
+        newBFKernel: ipIsr.BrighterFatterKernel | None = None,
         ptc: ipIsr.PhotonTransferCurveDataset | None = None,
         crosstalkSources: list | None = None,
         isrBaseConfig: ipIsr.IsrTaskConfig | None = None,
@@ -156,9 +156,9 @@ class QuickLookIsrTask(pipeBase.PipelineTask):
             Functor for linearization.
         crosstalk : `lsst.ip.isr.crosstalk.CrosstalkCalib`, optional
             Calibration for crosstalk.
-        bfKernel : `ipIsr.BrighterFatterKernel`, optional
+        bfKernel : `numpy.ndarray`, optional
             Brighter-fatter kernel.
-        newBFKernel : `numpy.ndarray`, optional
+        newBFKernel : `ipIsr.BrighterFatterKernel`, optional
             New Brighter-fatter kernel.
         ptc : `lsst.ip.isr.PhotonTransferCurveDataset`, optional
             Photon transfer curve dataset, with, e.g., gains

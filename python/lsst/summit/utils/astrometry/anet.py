@@ -63,7 +63,7 @@ class AstrometryNetResult:
     wcsFile: str
     corrFile: str | None = None
 
-    def __post_init__(self):
+    def __post_init__(self) -> None:
         # touch these properties to ensure the files needed to calculate them
         # are read immediately, in case they are deleted from temp
         self.wcs
@@ -104,6 +104,7 @@ class AstrometryNetResult:
 
     @cached_property
     def rmsErrorPixels(self) -> float:
+        assert self.meanSqErr is not None, "No meanSqErr calculated, cannot calculate rmsErrorPixels."
         return np.sqrt(self.meanSqErr)
 
     @cached_property
@@ -131,7 +132,7 @@ class CommandLineSolver:
 
     def __init__(
         self,
-        indexFilePath: str | None = None,
+        indexFilePath: str,
         checkInParallel: bool = True,
         timeout: float | int = 300,
         binary: str = "solve-field",
@@ -318,8 +319,8 @@ class CommandLineSolver:
                 print("but failed to find a solution.")
                 return None
 
-            result = AstrometryNetResult(wcsFile, corrFile)
-            return result
+            fitResult = AstrometryNetResult(wcsFile, corrFile)
+            return fitResult
         else:
             print("Fit failed")
         return None
@@ -328,7 +329,7 @@ class CommandLineSolver:
 class OnlineSolver:
     """A class to solve an image using the Astrometry.net online service."""
 
-    def __init__(self):
+    def __init__(self) -> None:
         # import seems to spew warnings even if the required key is present
         # so we swallow them, and raise on init if the key is missing
         with warnings.catch_warnings():

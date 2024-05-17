@@ -35,6 +35,7 @@ from scipy.optimize import curve_fit
 import lsst.afw.display as afwDisplay
 import lsst.afw.image as afwImage
 from lsst.atmospec.processStar import ProcessStarTask
+from lsst.geom import Box2I
 from lsst.obs.lsst.translators.lsst import FILTER_DELIMITER
 from lsst.pipe.tasks.quickFrameMeasurement import QuickFrameMeasurementTask, QuickFrameMeasurementTaskConfig
 from lsst.summit.utils.utils import getImageStats
@@ -75,7 +76,7 @@ class SpectrumExaminer:
         self.init()
 
     @staticmethod
-    def bboxToAwfDisplayLines(box) -> list[list[tuple[int, int]]]:
+    def bboxToAwfDisplayLines(box: Box2I) -> list[list[tuple[int, int]]]:
         """Takes a bbox, returns a list of lines such that they can be plotted:
 
         for line in lines:
@@ -128,7 +129,9 @@ class SpectrumExaminer:
         return (minPoint, maxPoint)
 
     def fit(self) -> None:
-        def gauss(x, a, x0, sigma):
+        def gauss(
+            x: float | np.ndarray[float], a: float, x0: float, sigma: float
+        ) -> float | np.ndarray[float]:
             return a * np.exp(-((x - x0) ** 2) / (2 * sigma**2))
 
         data = self.spectrumData[self.goodSlice]
@@ -182,7 +185,7 @@ class SpectrumExaminer:
         axHist.set_title("Spectrum pixel histogram")
         text = f"Underflow = {underflow}"
         text += f"\nOverflow = {overflow}"
-        anchored_text = AnchoredText(text, loc=1, pad=0.5)
+        anchored_text = AnchoredText(text, loc="1", pad=0.5)
         axHist.add_artist(anchored_text)
 
         # peak fluxes
@@ -267,7 +270,7 @@ class SpectrumExaminer:
         if self.savePlotAs:
             fig.savefig(self.savePlotAs)
 
-    def init(self):
+    def init(self) -> None:
         pass
 
     def generateStatsTextboxContent(self, section: int) -> str:

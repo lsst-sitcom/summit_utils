@@ -332,7 +332,7 @@ class BlockParser:
         seqNums = seqNums.dropna()
         return sorted(set(seqNums))
 
-    def getRows(self, block: int, seqNum: int | None = None):
+    def getRows(self, block: int, seqNum: int | None = None) -> pd.DataFrame:
         """Get all rows of data which relate to the specified block.
 
         If the seqNum is specified, only the rows for that sequence number are
@@ -367,7 +367,7 @@ class BlockParser:
             return rowsForBlock
         return rowsForBlock[rowsForBlock["blockSeqNum"] == seqNum]
 
-    def printBlockEvolution(self, block: int, seqNum: int | None = None):
+    def printBlockEvolution(self, block: int, seqNum: int | None = None) -> None:
         """Display the evolution of the specified block.
 
         If the seqNum is specified, the evolution of that specific block
@@ -391,7 +391,7 @@ class BlockParser:
             blockInfo = self.getBlockInfo(block, seqNum)
             print(blockInfo, "\n")
 
-    def getBlockInfo(self, block: int, seqNum: int):
+    def getBlockInfo(self, block: int, seqNum: int) -> BlockInfo | None:
         """Get the block info for the specified block.
 
         Parses the rows relating to this block execution, and returns
@@ -412,7 +412,7 @@ class BlockParser:
         rows = self.getRows(block, seqNum=seqNum)
         if rows.empty:
             print(f"No {seqNum=} on dayObs={self.dayObs} for {block=}")
-            return
+            return None
 
         blockIds = set()
         tickets = set()
@@ -471,6 +471,8 @@ class BlockParser:
             The events.
         """
         blockInfo = self.getBlockInfo(block, seqNum)
+        if blockInfo is None:
+            return []
         begin = blockInfo.begin
         end = blockInfo.end
 
