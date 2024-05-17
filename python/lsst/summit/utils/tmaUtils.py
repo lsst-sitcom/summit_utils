@@ -1785,21 +1785,19 @@ class TMAEventMaker:
         powerPad = max(len(s.name) for s in PowerState)
 
         # example output to show what's being done with the padding:
-        #   azimuth - Power:          ON Motion:               STOPPED InPosition: True        # noqa: W505
+        # azimuth   - Power:          ON Motion:               STOPPED InPosition: True        # noqa: W505
         # elevation - Power:          ON Motion: MOVING_POINT_TO_POINT InPosition: False       # noqa: W505
         for axis in axes:
-            print(f"{axis:>{axisPad}} - ", end="")
             powerState = p[f"{axis}SystemState"]
             motionState = p[f"{axis}MotionState"]
-            if isinstance(powerState, PowerState):
-                print(f"Power: {powerState.name:>{powerPad}} ", end="")
-            else:
-                print(f"Power: {powerState:>{powerPad}} ", end="")
-            if isinstance(motionState, AxisMotionState):
-                print(f"Motion: {motionState.name:>{motionPad}} ", end="")
-            else:
-                print(f"Motion: {motionState:>{motionPad}} ", end="")
-            print(f"InPosition: {p[f'{axis}InPosition']}", end="")
+            assert isinstance(powerState, PowerState)
+            assert isinstance(motionState, AxisMotionState)
+            print(
+                f"{axis:>{axisPad}} - "
+                f"Power: {powerState.name:>{powerPad}} "
+                f"Motion: {motionState.name:>{motionPad}} "
+                f"InPosition: {p[f'{axis}InPosition']}"
+            )
         print(f"Overall system state: {tma.state.name}")
 
     def printFullDayStateEvolution(self, dayObs: int, taiOrUtc: str = "utc") -> None:

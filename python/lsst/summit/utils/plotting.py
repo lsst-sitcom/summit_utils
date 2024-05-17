@@ -248,7 +248,7 @@ def plot(
         try:
             assert hasattr(inputData, "getWcs"), "inputData does not have a getWcs method"
             wcs = inputData.getWcs()
-        except AttributeError:
+        except AssertionError:
             logger.warning("Failed to get WCS from input data. Compass will not be plotted.")
             wcs = None
 
