@@ -31,10 +31,35 @@ def client():
     return ConsDbClient("http://example.com/consdb")
 
 
-def test_table_name(client):
+def test_table_name():
     instrument = "latiss"
     obs_type = "exposure"
-    assert client.compute_flexible_metadata_table_name(instrument, obs_type) == "cdb_latiss.exposure_flexdata"
+    assert (
+        ConsDbClient.compute_flexible_metadata_table_name(instrument, obs_type)
+        == "cdb_latiss.exposure_flexdata"
+    )
+
+
+def test_exposure_id():
+    assert ConsDbClient.compute_exposure_id("latiss", "O", 20240402, 35) == 2024040200035
+    assert ConsDbClient.compute_exposure_id("LATISS", "C", 20240402, 35) == 2024040200035
+    assert ConsDbClient.compute_exposure_id("LSSTComCamSim", "S", 20240402, 35) == 7024040200035
+    with pytest.raises(ValueError):
+        ConsDbClient.compute_exposure_id("bad_instrument", "O", 20240402, 35)
+
+
+def test_ccdexposure_id():
+    assert ConsDbClient.compute_ccdexposure_id("latiss", 2024040200035, 0) == 5205 * (2**23) + 35 * 256 + 0
+    with pytest.raises(ValueError):
+        ConsDbClient.compute_ccdexposure_id("latiss", 20240402000035, 1)
+    with pytest.raises(ValueError):
+        ConsDbClient.compute_ccdexposure_id("LsstComCam", 20240402000035, 9)
+    with pytest.raises(ValueError):
+        ConsDbClient.compute_ccdexposure_id("LsstCam", 20240402000035, 205)
+    assert (
+        ConsDbClient.compute_ccdexposure_id("LSSTComCamSim", 7024040200035, 2)
+        == 5 * (2**37) + 5205 * (2**23) + 35 * 256 + 2
+    )
 
 
 @responses.activate
@@ -159,4 +184,5 @@ def test_schema(client):
 
 # TODO: more POST tests
 #    client.insert(instrument, table, obs_id, values, allow_update)
+#    client.insert_multiple(instrument, table, obs_dict, allow_update)
 #    client.query(query)

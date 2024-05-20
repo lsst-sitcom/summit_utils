@@ -165,6 +165,58 @@ class ConsDbClient:
         return response
 
     @staticmethod
+    def compute_exposure_id(instrument: str, controller: str, day_obs: int, seq_num) -> int:
+        instrument = instrument.lower()
+        if instrument == "latiss":
+            from lsst.obs.lsst.translators import LatissTranslator
+
+            return LatissTranslator.compute_exposure_id(day_obs, seq_num, controller)
+        elif instrument == "lsstcomcam":
+            from lsst.obs.lsst.translators import LsstComCamTranslator
+
+            return LsstComCamTranslator.compute_exposure_id(day_obs, seq_num, controller)
+        elif instrument == "lsstcomcamsim":
+            from lsst.obs.lsst.translators import LsstComCamSimTranslator
+
+            return LsstComCamSimTranslator.compute_exposure_id(day_obs, seq_num, controller)
+        elif instrument == "lsstcam":
+            from lsst.obs.lsst.translators import LsstCamTranslator
+
+            return LsstCamTranslator.compute_exposure_id(day_obs, seq_num, controller)
+        else:
+            raise ValueError("Unknown instrument {instrument}")
+
+    @staticmethod
+    def compute_ccdexposure_id(instrument: str, exposure_id: int, detector: int) -> int:
+        instrument = instrument.lower()
+        if instrument == "latiss":
+            if detector != 0:
+                raise ValueError("Invalid detector {detector} for LATISS")
+            from lsst.obs.lsst.translators import LatissTranslator
+
+            return LatissTranslator.compute_detector_exposure_id(exposure_id, detector)
+        elif instrument == "lsstcomcam":
+            if detector < 0 or detector >= 9:
+                raise ValueError("Invalid detector {detector} for LSSTComCam")
+            from lsst.obs.lsst.translators import LsstComCamTranslator
+
+            return LsstComCamTranslator.compute_detector_exposure_id(exposure_id, detector)
+        elif instrument == "lsstcomcamsim":
+            if detector < 0 or detector >= 9:
+                raise ValueError("Invalid detector {detector} for LSSTComCamSim")
+            from lsst.obs.lsst.translators import LsstComCamSimTranslator
+
+            return LsstComCamSimTranslator.compute_detector_exposure_id(exposure_id, detector)
+        elif instrument == "lsstcam":
+            if detector < 0 or detector >= 205:
+                raise ValueError("Invalid detector {detector} for LSSTCam")
+            from lsst.obs.lsst.translators import LsstCamTranslator
+
+            return LsstCamTranslator.compute_detector_exposure_id(exposure_id, detector)
+        else:
+            raise ValueError("Unknown instrument {instrument}")
+
+    @staticmethod
     def compute_flexible_metadata_table_name(instrument: str, obs_type: str) -> str:
         """Compute the name of a flexible metadata table.
 
@@ -186,6 +238,26 @@ class ConsDbClient:
         """
         return f"cdb_{instrument}.{obs_type}_flexdata"
 
+    @staticmethod
+    def compute_fixed_metadata_namespace(instrument: str) -> str:
+        """Compute the namespace for a fixed metadata table.
+
+        Each instrument has its own namespace in the ConsDB.
+        This function is useful when issuing SQL queries, and it avoids a
+        round-trip to the server.
+
+        Parameters
+        ----------
+        instrument : `str`
+            Name of the instrument (e.g. ``LATISS``).
+
+        Returns
+        -------
+        namespace_name : `str`
+            Name of the appropriate namespace
+        """
+        return f"cdb_{instrument}"
+
     def add_flexible_metadata_key(
         self,
         instrument: str,
@@ -193,8 +265,8 @@ class ConsDbClient:
         key: str,
         dtype: str,
         doc: str,
-        unit: str = None,
-        ucd: str = None,
+        unit: str | None = None,
+        ucd: str | None = None,
     ) -> requests.Response:
         """Add a key to a flexible metadata table.
 
@@ -416,6 +488,55 @@ class ConsDbClient:
             quote(table),
             "obs",
             quote(str(obs_id)),
+        )
+        if allow_update:
+            url += "?u=1"
+        return self._handle_post(url, data)
+
+    def insert_multiple(
+        self,
+        instrument: str,
+        table: str,
+        obs_dict: dict[int, dict[str, Any]],
+        *,
+        allow_update=False,
+    ) -> requests.Response:
+        """Insert values into a single ConsDB fixed metadata table.
+
+        Parameters
+        ----------
+        instrument : `str`
+            Name of the instrument (e.g. ``LATISS``).
+        table : `str`
+            Name of the table to insert into.
+        obs_dict : `dict` [ `int`, `dict` [ `str`, `Any` ] ]
+            Dictionary of observation ids, each with a dictionary of
+            column/value pairs to add for each observation.
+        allow_update : `bool`, optional
+            If ``True``, allow replacement of values of existing columns.
+
+        Returns
+        -------
+        response : `requests.Response`
+            HTTP response from the server, with 200 status for success.
+
+        Raises
+        ------
+        ValueError
+            Raised if no values are provided in ``obs_dict``.
+        requests.exceptions.RequestException
+            Raised if any kind of connection error occurs.
+        requests.exceptions.HTTPError
+            Raised if a non-successful status is returned.
+        """
+        if not obs_dict:
+            raise ValueError(f"No values to insert for {instrument} {table}")
+        data = {"table": table, "obs_dict": obs_dict}
+        url = _urljoin(
+            self.url,
+            "insert",
+            quote(instrument),
+            quote(table),
         )
         if allow_update:
             url += "?u=1"
