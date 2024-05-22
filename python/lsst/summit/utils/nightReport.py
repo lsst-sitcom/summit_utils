@@ -199,8 +199,8 @@ class NightReport:
         expRecords = self.butler.registry.queryDimensionRecords(
             "exposure", where="exposure.day_obs=dayObs", bind={"dayObs": dayObs}, datasets="raw"
         )
-        expRecords = list(expRecords)
-        records = {e.seq_num: e.toDict() for e in expRecords}  # not guaranteed to be in order
+        listExpRecords = list(expRecords)
+        records = {e.seq_num: e.toDict() for e in listExpRecords}  # not guaranteed to be in order
         for record in records.values():
             target = record["target_name"] if record["target_name"] is not None else ""
             if target:
@@ -762,7 +762,7 @@ class NightReport:
         ax.set_title("Axial coverage - azimuth (theta, deg) vs zenith angle (r, deg)", size=20)
 
         for h in lgnd.legend_handles:
-            if h is None:
+            if h is None or not isinstance(h, matplotlib.lines.Line2D):
                 continue
             size = 14
             if "-" in marker:

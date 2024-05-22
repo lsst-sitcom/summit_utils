@@ -93,7 +93,7 @@ class BestEffortIsr:
         if repoString is None:
             repoString = "LATISS" if not embargo else "/repo/embargo"
         try:
-            self.butler = dafButler.Butler(
+            self.butler = dafButler.Butler.from_config(
                 repoString,
                 collections=self.collections,
                 instrument="LATISS",
@@ -115,7 +115,7 @@ class BestEffortIsr:
         self.defaultExtraIsrOptions = defaultExtraIsrOptions
 
         self._cache: dict = {}
-        self._cacheIsForDetector = None
+        self._cacheIsForDetector: Any | int | str | None = None
 
     def _applyConfigOverrides(self, config: Config, overrides: dict) -> None:
         """Update a config class with a dict of options.

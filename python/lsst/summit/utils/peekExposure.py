@@ -25,11 +25,11 @@ __all__ = [
     "PeekExposureTask",
 ]
 
-
 from typing import Any
 
 import astropy
 import numpy as np
+import numpy.typing as npt
 
 import lsst.afw.display as afwDisplay
 import lsst.afw.geom as afwGeom
@@ -53,7 +53,7 @@ from lsst.meas.base import IdGenerator, SingleFrameMeasurementTask
 IDX_SENTINEL = -99999
 
 
-def _estimateMode(data: np.ndarray, frac: float = 0.5) -> float:
+def _estimateMode(data: npt.NDArray[np.float_], frac: float = 0.5) -> float:
     """Estimate the mode of a 1d distribution.
 
     Finds the smallest interval containing the fraction ``frac`` of the data,
@@ -71,6 +71,7 @@ def _estimateMode(data: np.ndarray, frac: float = 0.5) -> float:
     mode : float
         Estimated mode of the data.
     """
+
     data = data[np.isfinite(data)]
     if len(data) == 0:
         return np.nan
@@ -231,8 +232,8 @@ class PeekTaskConfig(pexConfig.Config):
     installPsf = pexConfig.ConfigurableField(
         target=InstallGaussianPsfTask,
         doc="Install a PSF model",
-    )
-    doInstallPsf = pexConfig.Field(
+    )  # type: ignore
+    doInstallPsf: pexConfig.Field[bool] = pexConfig.Field(
         dtype=bool,
         default=True,
         doc="Install a PSF model?",
@@ -240,10 +241,12 @@ class PeekTaskConfig(pexConfig.Config):
     background = pexConfig.ConfigurableField(
         target=SubtractBackgroundTask,
         doc="Estimate background",
-    )
-    detection = pexConfig.ConfigurableField(target=SourceDetectionTask, doc="Detect sources")
-    measurement = pexConfig.ConfigurableField(target=SingleFrameMeasurementTask, doc="Measure sources")
-    defaultBinSize = pexConfig.Field(
+    )  # type: ignore
+    detection = pexConfig.ConfigurableField(target=SourceDetectionTask, doc="Detect sources")  # type: ignore
+    measurement = pexConfig.ConfigurableField(
+        target=SingleFrameMeasurementTask, doc="Measure sources"
+    )  # type: ignore
+    defaultBinSize: pexConfig.Field[int] = pexConfig.Field(
         dtype=int,
         default=1,
         doc="Default binning factor for exposure (often overridden).",
@@ -288,6 +291,11 @@ class PeekTask(pipeBase.Task):
     """
 
     ConfigClass = PeekTaskConfig
+    config: PeekTaskConfig
+    installPsf: InstallGaussianPsfTask
+    background: SubtractBackgroundTask
+    detection: SourceDetectionTask
+    measurement: SingleFrameMeasurementTask
     _DefaultName = "peek"
 
     def __init__(self, schema: Any | None = None, **kwargs: Any):
@@ -331,7 +339,7 @@ class PeekTask(pipeBase.Task):
             exposure.setMaskedImage(binned)
 
         if self.config.doInstallPsf:
-            self.installPsf.run(exposure=exposure)
+            self.installPsf.runa(exposure=exposure)
 
         self.background.run(exposure)
 
@@ -354,17 +362,17 @@ class PeekDonutTaskConfig(pexConfig.Config):
     peek = pexConfig.ConfigurableField(
         target=PeekTask,
         doc="Peek configuration",
-    )
+    )  # type: ignore
     resolution = pexConfig.Field(
         dtype=float,
         default=16.0,
         doc="Target number of pixels for a binned donut",
-    )
+    )  # type: ignore
     binSizeMax = pexConfig.Field(
         dtype=int,
         default=10,
         doc="Maximum binning factor for donut mode",
-    )
+    )  # type: ignore
 
     def setDefaults(self) -> None:
         super().setDefaults()
@@ -385,6 +393,8 @@ class PeekDonutTask(pipeBase.Task):
     """
 
     ConfigClass = PeekDonutTaskConfig
+    config: PeekDonutTaskConfig
+    peek: PeekTask
     _DefaultName = "peekDonut"
 
     def __init__(self, config: Any, **kwargs: Any):
@@ -481,8 +491,8 @@ class PeekPhotoTaskConfig(pexConfig.Config):
     peek = pexConfig.ConfigurableField(
         target=PeekTask,
         doc="Peek configuration",
-    )
-    binSize = pexConfig.Field(
+    )  # type: ignore
+    binSize: pexConfig.Field[int] = pexConfig.Field(
         dtype=int,
         default=2,
         doc="Binning factor for exposure",
@@ -504,6 +514,8 @@ class PeekPhotoTask(pipeBase.Task):
     """
 
     ConfigClass = PeekPhotoTaskConfig
+    config: PeekPhotoTaskConfig
+    peek: PeekTask
     _DefaultName = "peekPhoto"
 
     def __init__(self, config: Any, **kwargs: Any):
@@ -568,13 +580,13 @@ class PeekSpecTaskConfig(pexConfig.Config):
     peek = pexConfig.ConfigurableField(
         target=PeekTask,
         doc="Peek configuration",
-    )
-    binSize = pexConfig.Field(
+    )  # type: ignore
+    binSize: pexConfig.Field[int] = pexConfig.Field(
         dtype=int,
         default=2,
         doc="binning factor for exposure",
     )
-    maxFootprintAspectRatio = pexConfig.Field(
+    maxFootprintAspectRatio: pexConfig.Field[int] = pexConfig.Field(
         dtype=float,
         default=10.0,
         doc="Maximum detection footprint aspect ratio to consider as 0th order" " (non-dispersed) light.",
@@ -604,6 +616,8 @@ class PeekSpecTask(pipeBase.Task):
     """
 
     ConfigClass = PeekSpecTaskConfig
+    config: PeekSpecTaskConfig
+    peek: PeekTask
     _DefaultName = "peekSpec"
 
     def __init__(self, config: Any, **kwargs: Any):
@@ -662,7 +676,8 @@ class PeekSpecTask(pipeBase.Task):
         fpShapes = [src.getFootprint().getShape() for src in binnedSourceCat]
         # Filter out likely spectrum detections
         goodSourceMask &= np.array(
-            [sh.getIyy() < self.config.maxFootprintAspectRatio * sh.getIxx() for sh in fpShapes], dtype=bool
+            [sh.getIyy() < self.config.maxFootprintAspectRatio * sh.getIxx() for sh in fpShapes],
+            dtype=np.bool_,
         )
         return goodSourceMask
 
@@ -670,12 +685,12 @@ class PeekSpecTask(pipeBase.Task):
 class PeekExposureTaskConfig(pexConfig.Config):
     """Config class for the PeekExposureTask."""
 
-    donutThreshold = pexConfig.Field(
+    donutThreshold: pexConfig.Field[float] = pexConfig.Field(
         dtype=float,
         default=50.0,
         doc="Size threshold in pixels for when to switch to donut mode.",
     )
-    doPhotoFallback = pexConfig.Field(
+    doPhotoFallback: pexConfig.Field[bool] = pexConfig.Field(
         dtype=bool,
         default=True,
         doc="If True, fall back to photo mode if spec mode fails.",
@@ -683,15 +698,15 @@ class PeekExposureTaskConfig(pexConfig.Config):
     donut = pexConfig.ConfigurableField(
         target=PeekDonutTask,
         doc="PeekDonut task",
-    )
+    )  # type: ignore
     photo = pexConfig.ConfigurableField(
         target=PeekPhotoTask,
         doc="PeekPhoto task",
-    )
+    )  # type: ignore
     spec = pexConfig.ConfigurableField(
         target=PeekSpecTask,
         doc="PeekSpec task",
-    )
+    )  # type: ignore
 
 
 class PeekExposureTask(pipeBase.Task):
@@ -723,6 +738,10 @@ class PeekExposureTask(pipeBase.Task):
     """
 
     ConfigClass = PeekExposureTaskConfig
+    config: PeekExposureTaskConfig
+    donut: PeekDonutTask
+    photo: PeekPhotoTask
+    spec: PeekSpecTask
     _DefaultName = "peekExposureTask"
 
     def __init__(self, config: Any, *, display: Any = None, **kwargs: Any):
@@ -1026,7 +1045,7 @@ class PeekExposureTask(pipeBase.Task):
         return table
 
     def getBrightest(
-        self, binnedSourceCat: afwTable.SourceCatalog, binSize: int, goodSourceMask: np.ndarray[bool]
+        self, binnedSourceCat: afwTable.SourceCatalog, binSize: int, goodSourceMask: npt.NDArray[np.bool_]
     ) -> tuple[int, geom.Point2D, afwGeom.Quadrupole]:
         """Find the brightest source in the catalog.
 
@@ -1078,7 +1097,7 @@ class PeekExposureTask(pipeBase.Task):
         return maxFluxIdx, brightCentroid, brightShape
 
     def getPsfShape(
-        self, binnedSourceCat: afwTable.SourceCatalog, binSize: int, goodSourceMask: np.ndarray[bool]
+        self, binnedSourceCat: afwTable.SourceCatalog, binSize: int, goodSourceMask: npt.NDArray[np.bool_]
     ) -> afwGeom.Quadrupole:
         """Estimate the modal PSF shape from the sources.
 

@@ -21,7 +21,7 @@
 
 import copy
 import itertools
-from collections.abc import Iterable
+from collections.abc import Iterable, Mapping
 from typing import Any
 
 from deprecated.sphinx import deprecated
@@ -138,7 +138,7 @@ def makeDefaultLatissButler(
         collections.extend(extraCollections)
     try:
         repoString = "LATISS" if not embargo else "/repo/embargo"
-        butler = dafButler.Butler(
+        butler = dafButler.Butler.from_config(
             repoString, collections=collections, writeable=writeable, instrument="LATISS"
         )
     except (FileNotFoundError, RuntimeError):
@@ -173,7 +173,7 @@ def datasetExists(butler: dafButler.Butler, dataProduct: str, dataId: dict, **kw
         True if the dataProduct exists for the dataProduct and can be retreived
         else False.
     """
-    return butler.exists(dataProduct, dataId, **kwargs)
+    return bool(butler.exists(dataProduct, dataId, **kwargs))
 
 
 def updateDataId(dataId: dict | dafButler.DataCoordinate, **kwargs: Any) -> dict | dafButler.DataCoordinate:
@@ -283,7 +283,7 @@ def getSeqNumsForDayObs(butler: dafButler.Butler, day_obs: int, extraWhere: str 
 
 
 def sortRecordsByDayObsThenSeqNum(
-    records: list[dafButler.DimensionRecord],
+    records: dafButler.registry.queries.DimensionRecordQueryResults | list[dafButler.DimensionRecord],
 ) -> list[dafButler.DimensionRecord]:
     """Sort a set of records by dayObs, then seqNum to get the order in which
     they were taken.
@@ -385,7 +385,9 @@ def getExpIdFromDayObsSeqNum(butler: dafButler.Butler, dataId: dict) -> dict:
     return {"exposure": expRecord.id}
 
 
-def updateDataIdOrDataCord(dataId: dict, **updateKwargs: Any) -> dict:
+def updateDataIdOrDataCord(
+    dataId: dafButler.DataCoordinate | Mapping[str, int | str | None], **updateKwargs: Any
+) -> dict:
     """Add key, value pairs to a dataId or data coordinate.
 
     Parameters
@@ -411,7 +413,9 @@ def updateDataIdOrDataCord(dataId: dict, **updateKwargs: Any) -> dict:
     return newId
 
 
-def fillDataId(butler: dafButler.Butler, dataId: dict) -> dict:
+def fillDataId(
+    butler: dafButler.Butler, dataId: Mapping[str, int | str | None]
+) -> Mapping[str, int | str | None]:
     """Given a dataId, fill it with values for all available dimensions.
 
     Parameters
@@ -461,7 +465,7 @@ def fillDataId(butler: dafButler.Butler, dataId: dict) -> dict:
     return dataId
 
 
-def _assureDict(dataId: dict | dafButler.dimensions.DataCoordinate | dafButler.DimensionRecord) -> dict:
+def _assureDict(dataId: Mapping | dafButler.dimensions.DataCoordinate | dafButler.DimensionRecord) -> dict:
     """Turn any data-identifier-like object into a dict.
 
     Parameters
@@ -521,11 +525,11 @@ def getExpRecordFromDataId(butler: dafButler.Butler, dataId: dict) -> dafButler.
             "exposure", where=where, bind={"dayObs": dayObs, "seq_num": seqNum}, datasets="raw"
         )
 
-    expRecords = set(expRecords)
+    filteredExpRecords = set(expRecords)
     if not expRecords:
         raise LookupError(f"No exposure records found for {dataId}")
-    assert len(expRecords) == 1, f"Found {len(expRecords)} exposure records for {dataId}"
-    return expRecords.pop()
+    assert len(filteredExpRecords) == 1, f"Found {len(filteredExpRecords)} exposure records for {dataId}"
+    return filteredExpRecords.pop()
 
 
 def getDayObsSeqNumFromExposureId(butler: dafButler.Butler, dataId: dict) -> dict[str, int]:
@@ -559,17 +563,17 @@ def getDayObsSeqNumFromExposureId(butler: dafButler.Butler, dataId: dict) -> dic
     expRecords = butler.registry.queryDimensionRecords(
         "exposure", where=where, bind={"expId": expId}, datasets="raw"
     )
-    expRecords = set(expRecords)
-    if not expRecords:
+    filteredExpRecords = set(expRecords)
+    if not filteredExpRecords:
         raise LookupError(f"No exposure records found for {dataId}")
-    assert len(expRecords) == 1, f"Found {len(expRecords)} exposure records for {dataId}"
-    record = expRecords.pop()
+    assert len(filteredExpRecords) == 1, f"Found {len(filteredExpRecords)} exposure records for {dataId}"
+    record = filteredExpRecords.pop()
     return {"day_obs": record.day_obs, "seq_num": record.seq_num}
 
 
 def getDatasetRefForDataId(
     butler: dafButler.Butler, datasetType: str | dafButler.DatasetType, dataId: dict
-) -> dafButler.DatasetRef:
+) -> dafButler.DatasetRef | None:
     """Get the datasetReference for a dataId.
 
     Parameters
@@ -612,6 +616,8 @@ def removeDataProduct(
     if datasetType == "raw":
         raise RuntimeError("I'm sorry, Dave, I'm afraid I can't do that.")
     dRef = getDatasetRefForDataId(butler, datasetType, dataId)
+    if dRef is None:
+        return
     butler.pruneDatasets([dRef], disassociate=True, unstore=True, purge=True)
     return
 
@@ -720,7 +726,7 @@ def getLatissOnSkyDataIds(
     full: bool = True,
     startDate: int | None = None,
     endDate: int | None = None,
-) -> list[dict]:
+) -> list[Mapping[str, int | str | None]]:
     """Get a list of all on-sky dataIds taken.
 
     Parameters
@@ -820,10 +826,10 @@ def getExpRecord(
         bind.update({"dayObs": dayObs, "seqNum": seqNum})
 
     expRecords = butler.registry.queryDimensionRecords("exposure", where=where, bind=bind, datasets="raw")
-    expRecords = list(set(expRecords))  # must call set as this may contain many duplicates
-    if len(expRecords) != 1:
+    filteredExpRecords = list(set(expRecords))  # must call set as this may contain many duplicates
+    if len(filteredExpRecords) != 1:
         raise RuntimeError(
             f"Failed to find unique exposure record for {instrument=} with"
-            f" {expId=}, {dayObs=}, {seqNum=}, got {len(expRecords)} records"
+            f" {expId=}, {dayObs=}, {seqNum=}, got {len(filteredExpRecords)} records"
         )
-    return expRecords[0]
+    return filteredExpRecords[0]
