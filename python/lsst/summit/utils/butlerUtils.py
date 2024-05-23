@@ -156,10 +156,7 @@ def makeDefaultLatissButler(
     category=FutureWarning,
 )
 def datasetExists(
-    butler: dafButler.Butler,
-    dataProduct: str,
-    dataId: dafButler.DataId,
-    **kwargs: Any
+    butler: dafButler.Butler, dataProduct: str, dataId: dafButler.DataId, **kwargs: Any
 ) -> bool:
     """Collapse the tri-state behaviour of butler.datasetExists to a boolean.
 
