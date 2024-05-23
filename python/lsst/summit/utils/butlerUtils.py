@@ -155,7 +155,12 @@ def makeDefaultLatissButler(
     version="v26.0",
     category=FutureWarning,
 )
-def datasetExists(butler: dafButler.Butler, dataProduct: str, dataId: dict, **kwargs: Any) -> bool:
+def datasetExists(
+    butler: dafButler.Butler,
+    dataProduct: str,
+    dataId: dafButler.DataId,
+    **kwargs: Any
+) -> bool:
     """Collapse the tri-state behaviour of butler.datasetExists to a boolean.
 
     Parameters
@@ -164,7 +169,7 @@ def datasetExists(butler: dafButler.Butler, dataProduct: str, dataId: dict, **kw
         The butler
     dataProduct : `str`
         The type of data product to check for
-    dataId : `dict`
+    dataId : `dafButler.DataId`
         The dataId of the dataProduct to check for
 
     Returns
@@ -176,7 +181,7 @@ def datasetExists(butler: dafButler.Butler, dataProduct: str, dataId: dict, **kw
     return bool(butler.exists(dataProduct, dataId, **kwargs))
 
 
-def updateDataId(dataId: dict | dafButler.DataCoordinate, **kwargs: Any) -> dict | dafButler.DataCoordinate:
+def updateDataId(dataId: dafButler.DataId, **kwargs: Any) -> dafButler.DataId:
     """Update a DataCoordinate or dataId dict with kwargs.
 
     Provides a single interface for adding the detector key (or others) to a
@@ -184,7 +189,7 @@ def updateDataId(dataId: dict | dafButler.DataCoordinate, **kwargs: Any) -> dict
 
     Parameters
     ----------
-    dataId : `dict` or `lsst.daf.butler.DataCoordinate`
+    dataId : `dafButler.DataId`
         The dataId to update.
     kwargs : `dict`
         The keys and values to add to the dataId.
@@ -346,7 +351,7 @@ def getDaysWithData(butler: dafButler.Butler, datasetType: str = "raw") -> list[
     return sorted(set([r.day_obs for r in records]))
 
 
-def getMostRecentDataId(butler: dafButler.Butler) -> dict:
+def getMostRecentDataId(butler: dafButler.Butler) -> dict[str, Any]:
     """Get the dataId for the most recent observation.
 
     Parameters
@@ -356,7 +361,7 @@ def getMostRecentDataId(butler: dafButler.Butler) -> dict:
 
     Returns
     -------
-    dataId : `dict`
+    dataId : `dict[str, Any]`
         The dataId of the most recent exposure.
     """
     lastDay = getMostRecentDayObs(butler)
@@ -366,19 +371,19 @@ def getMostRecentDataId(butler: dafButler.Butler) -> dict:
     return dataId
 
 
-def getExpIdFromDayObsSeqNum(butler: dafButler.Butler, dataId: dict) -> dict:
+def getExpIdFromDayObsSeqNum(butler: dafButler.Butler, dataId: dafButler.DataId) -> dict[str, int]:
     """Get the exposure id for the dataId.
 
     Parameters
     ----------
     butler : `lsst.daf.butler.Butler
         The butler to query.
-    dataId : `dict`
+    dataId : `dafButler.DataId`
         The dataId for which to return the exposure id.
 
     Returns
     -------
-    dataId : `dict`
+    dataId : `dict[str, int]`
         The dataId of the most recent exposure.
     """
     expRecord = getExpRecordFromDataId(butler, dataId)
@@ -392,7 +397,7 @@ def updateDataIdOrDataCord(dataId: dafButler.DataId, **updateKwargs: Any) -> Map
     ----------
     dataId : `dafButler.DataId`
         The dataId for which to return the exposure id.
-    updateKwargs : `dict`
+    updateKwargs : `dict[str, Any]`
         The key value pairs add to the dataId or dataCoord.
 
     Returns
@@ -462,19 +467,19 @@ def fillDataId(butler: dafButler.direct_butler.DirectButler, dataId: dafButler.D
 
 
 def _assureDict(
-    dataId: Mapping | dafButler.dimensions.DataCoordinate | dafButler.DimensionRecord,
+    dataId: dafButler.DataId | dafButler.DimensionRecord,
 ) -> dict[str, Any]:
     """Turn any data-identifier-like object into a dict.
 
     Parameters
     ----------
-    dataId : `dict` or `lsst.daf.butler.dimensions.DataCoordinate` or
+    dataId : `dafButler.DataId` or
              `lsst.daf.butler.dimensions.DimensionRecord`
         The data identifier.
 
     Returns
     -------
-    dataId : `dict`
+    dataId : `dict[str, Any]`
         The data identifier as a dict.
     """
     if isinstance(dataId, dict):
@@ -489,14 +494,14 @@ def _assureDict(
         raise RuntimeError(f"Failed to coerce {type(dataId)} to dict")
 
 
-def getExpRecordFromDataId(butler: dafButler.Butler, dataId: dict) -> dafButler.DimensionRecord:
+def getExpRecordFromDataId(butler: dafButler.Butler, dataId: dafButler.DataId) -> dafButler.DimensionRecord:
     """Get the exposure record for a given dataId.
 
     Parameters
     ----------
     butler : `lsst.daf.butler.Butler`
         The butler.
-    dataId : `dict`
+    dataId : `dafButler.DataId`
         The dataId.
 
     Returns
@@ -530,19 +535,19 @@ def getExpRecordFromDataId(butler: dafButler.Butler, dataId: dict) -> dafButler.
     return filteredExpRecords.pop()
 
 
-def getDayObsSeqNumFromExposureId(butler: dafButler.Butler, dataId: Mapping[str, Any]) -> Mapping[str, int]:
+def getDayObsSeqNumFromExposureId(butler: dafButler.Butler, dataId: Mapping[str, Any]) -> dict[str, int]:
     """Get the day_obs and seq_num for an exposure id.
 
     Parameters
     ----------
     butler : `lsst.daf.butler.Butler`
         The butler.
-    dataId : `dict`
+    dataId : ` Mapping[str, Any]`
         The dataId containing the exposure id.
 
     Returns
     -------
-    dataId : `dict`
+    dataId : ` dict[str, int]`
         A dict containing only the day_obs and seq_num.
     """
     if (dayObs := getDayObs(dataId)) and (seqNum := getSeqNum(dataId)):
@@ -570,7 +575,7 @@ def getDayObsSeqNumFromExposureId(butler: dafButler.Butler, dataId: Mapping[str,
 
 
 def getDatasetRefForDataId(
-    butler: dafButler.Butler, datasetType: str | dafButler.DatasetType, dataId: dict
+    butler: dafButler.Butler, datasetType: str | dafButler.DatasetType, dataId: dict[str, Any]
 ) -> dafButler.DatasetRef | None:
     """Get the datasetReference for a dataId.
 
@@ -580,7 +585,7 @@ def getDatasetRefForDataId(
         The butler.
     datasetType : `str` or `datasetType`
         The dataset type.
-    dataId : `dict`
+    dataId : `dict[str, Any]`
         The dataId.
 
     Returns
@@ -597,7 +602,7 @@ def getDatasetRefForDataId(
 
 
 def removeDataProduct(
-    butler: dafButler.Butler, datasetType: str | dafButler.DatasetType, dataId: dict
+    butler: dafButler.Butler, datasetType: str | dafButler.DatasetType, dataId: dict[str, Any]
 ) -> None:
     """Remove a data prodcut from the registry. Use with caution.
 
@@ -607,7 +612,7 @@ def removeDataProduct(
         The butler.
     datasetType : `str` or `datasetType`
         The dataset type.
-    dataId : `dict`
+    dataId : `dict[str, Any]`
         The dataId.
 
     """
@@ -662,7 +667,7 @@ def getDayObs(dataId: Mapping[str, Any] | dafButler.DimensionRecord) -> int | No
 
     Parameters
     ----------
-    dataId : `dict` or `lsst.daf.butler.DimensionRecord`
+    dataId : `Mapping[str, Any]` or `lsst.daf.butler.DimensionRecord`
         The dataId.
 
     Returns
@@ -682,7 +687,7 @@ def getSeqNum(dataId: Mapping[str, Any] | dafButler.DimensionRecord) -> int | No
 
     Parameters
     ----------
-    dataId : `dict` or `lsst.daf.butler.DimensionRecord`
+    dataId : `Mapping[str, Any]` or `lsst.daf.butler.DimensionRecord`
         The dataId.
 
     Returns
@@ -702,7 +707,7 @@ def getExpId(dataId: Mapping[str, Any] | dafButler.DimensionRecord) -> int | Non
 
     Parameters
     ----------
-    dataId : `dict` or `lsst.daf.butler.DimensionRecord`
+    dataId : `Mapping[str, Any]` or `lsst.daf.butler.DimensionRecord`
         The dataId.
 
     Returns
