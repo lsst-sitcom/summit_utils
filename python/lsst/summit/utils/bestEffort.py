@@ -115,7 +115,7 @@ class BestEffortIsr:
         self.defaultExtraIsrOptions = defaultExtraIsrOptions
 
         self._cache: dict = {}
-        self._cacheIsForDetector: Any | int | str | None = None
+        self._cacheIsForDetector: str | None = None
 
     def _applyConfigOverrides(self, config: Config, overrides: dict) -> None:
         """Update a config class with a dict of options.
@@ -263,7 +263,7 @@ class BestEffortIsr:
 
         if self._cacheIsForDetector != dataId["detector"]:
             self.clearCache()
-            self._cacheIsForDetector = dataId["detector"]
+            self._cacheIsForDetector = str(dataId["detector"])
 
         isrDict = {}
         # we build a cache of all the isr components which will be used to save
