@@ -576,24 +576,35 @@ class ConsDbClient:
             return Table(rows=[])
         return Table(rows=result["data"], names=result["columns"])
 
-    def schema(self, instrument: str, table: str) -> dict[str, tuple[str, str]]:
-        """Retrieve the schema of a fixed metadata table in ConsDB.
+    def schema(self, instrument: str | None = None, table: str | None = None) -> dict[str, tuple[str, str]] | list[str]:
+        """Retrieve information about ConsDB.
+
+        If ``instrument`` and ``table`` are given, return the schema of a
+        fixed metadata table in ConsDB.
+
+        If only ``instrument`` is given, return the names of all tables
+        for that instrument.
+
+        If no arguments are given, return the names of all instruments.
 
         Parameters
         ----------
-        instrument : `str`
+        instrument : `str`, optional
             Name of the instrument (e.g. ``LATISS``).
-        table : `str`
+        table : `str`, optional
             Name of the table to insert into.
 
         Returns
         -------
-        column_dict : `dict` [ `str`, `tuple` [ `str`, `str` ] ]
-            Dict of columns.  Values are tuples containing a data type string
+        info : `list` [ `str` ] or `dict` [ `str`, `tuple` [ `str`, `str` ] ]
+            A list of instrument strings or table names, or else a dict of
+            columns with values that are tuples containing a data type string
             and a documentation string.
 
         Raises
         ------
+        ValueError
+            Raised if only ``table`` is given.
         requests.exceptions.RequestException
             Raised if any kind of connection error occurs.
         requests.exceptions.HTTPError
@@ -604,6 +615,16 @@ class ConsDbClient:
         Fixed metadata data types may use the full database vocabulary,
         unlike flexible metadata data types.
         """
-        url = _urljoin(self.url, "schema", quote(instrument), quote(table))
+        if instrument is None:
+            if table is not None:
+                raise ValueError("Must specify instrument if table is given")
+            url = _urljoin(self.url, "schema")
+        elif table is None:
+            url = _urljoin(self.url, "schema", quote(instrument))
+        else:
+            url = _urljoin(self.url, "schema", quote(instrument), quote(table))
         result = self._handle_get(url)
-        return {key: tuple(value) for key, value in result.items()}
+        if instrument is not None and table is not None:
+            return {key: tuple(value) for key, value in result.items()}
+        else:
+            return result
