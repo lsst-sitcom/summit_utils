@@ -466,7 +466,7 @@ def fillDataId(
 
 
 def _assureDict(
-    dataId: Mapping | dafButler.dimensions.DataCoordinate | dafButler.DimensionRecord
+    dataId: Mapping | dafButler.dimensions.DataCoordinate | dafButler.DimensionRecord,
 ) -> dict[str, Any]:
     """Turn any data-identifier-like object into a dict.
 
