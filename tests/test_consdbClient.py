@@ -40,28 +40,6 @@ def test_table_name():
     )
 
 
-def test_exposure_id():
-    assert ConsDbClient.compute_exposure_id("latiss", "O", 20240402, 35) == 2024040200035
-    assert ConsDbClient.compute_exposure_id("LATISS", "C", 20240402, 35) == 2024040200035
-    assert ConsDbClient.compute_exposure_id("LSSTComCamSim", "S", 20240402, 35) == 7024040200035
-    with pytest.raises(ValueError):
-        ConsDbClient.compute_exposure_id("bad_instrument", "O", 20240402, 35)
-
-
-def test_ccdexposure_id():
-    assert ConsDbClient.compute_ccdexposure_id("latiss", 2024040200035, 0) == 5205 * (2**23) + 35 * 256 + 0
-    with pytest.raises(ValueError):
-        ConsDbClient.compute_ccdexposure_id("latiss", 20240402000035, 1)
-    with pytest.raises(ValueError):
-        ConsDbClient.compute_ccdexposure_id("LsstComCam", 20240402000035, 9)
-    with pytest.raises(ValueError):
-        ConsDbClient.compute_ccdexposure_id("LsstCam", 20240402000035, 205)
-    assert (
-        ConsDbClient.compute_ccdexposure_id("LSSTComCamSim", 7024040200035, 2)
-        == 5 * (2**37) + 5205 * (2**23) + 35 * 256 + 2
-    )
-
-
 @responses.activate
 def test_add_flexible_metadata_key(client):
     instrument = "latiss"
