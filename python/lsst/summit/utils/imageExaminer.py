@@ -593,8 +593,8 @@ class ImageExaminer:
         # but it can return a numpy array if imData is a 2D array
         # or higher. If imData is a 2D array, vmin and vmax will
         # be arrays, which is not what LogNorm expects.
-        vmin = np.percentile(imData, 10).item()
-        vmax = np.percentile(imData, 99.9).item()
+        vmin = np.percentile(imData, 10)
+        vmax = np.percentile(imData, 99.9)
         ax.imshow(
             imData, norm=LogNorm(vmin=vmin, vmax=vmax), origin="lower", cmap="gray_r", interpolation="bicubic"
         )

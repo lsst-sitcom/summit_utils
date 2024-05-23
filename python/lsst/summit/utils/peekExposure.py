@@ -339,7 +339,7 @@ class PeekTask(pipeBase.Task):
             exposure.setMaskedImage(binned)
 
         if self.config.doInstallPsf:
-            self.installPsf.runa(exposure=exposure)
+            self.installPsf.run(exposure=exposure)
 
         self.background.run(exposure)
 

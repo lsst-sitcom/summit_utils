@@ -439,16 +439,16 @@ def fillDataId(butler: dafButler.direct_butler.DirectButler, dataId: dafButler.D
     here, and might speed up in future with butler improvements.
     """
     # ensure it's a dict to deal with records etc
-    dictDataId = _assureDict(dataId)
+    dataId = _assureDict(dataId)
 
     # this removes extraneous keys that would trip up the registry call
     # using _rewrite_data_id is perhaps ever so slightly slower than popping
     # the bad keys, or making a minimal dataId by hand, but is more
     # reliable/general, so we choose that over the other approach here
-    filteredDataId, _ = butler._rewrite_data_id(dictDataId, butler.get_dataset_type("raw"))
+    dataId, _ = butler._rewrite_data_id(dataId, butler.get_dataset_type("raw"))
 
     # now expand and turn back to a dict
-    dataId = butler.registry.expandDataId(filteredDataId, detector=0).mapping  # this call is VERY slow
+    dataId = butler.registry.expandDataId(dataId, detector=0).mapping  # this call is VERY slow
     dataId = _assureDict(dataId)
 
     missingExpId = getExpId(dataId) is None
@@ -566,11 +566,11 @@ def getDayObsSeqNumFromExposureId(butler: dafButler.Butler, dataId: Mapping[str,
     expRecords = butler.registry.queryDimensionRecords(
         "exposure", where=where, bind={"expId": expId}, datasets="raw"
     )
-    filteredExpRecords = set(expRecords)
-    if not filteredExpRecords:
+    expRecords = set(expRecords)
+    if not expRecords:
         raise LookupError(f"No exposure records found for {dataId}")
-    assert len(filteredExpRecords) == 1, f"Found {len(filteredExpRecords)} exposure records for {dataId}"
-    record = filteredExpRecords.pop()
+    assert len(expRecords) == 1, f"Found {len(expRecords)} exposure records for {dataId}"
+    record = expRecords.pop()
     return {"day_obs": record.day_obs, "seq_num": record.seq_num}
 
 
