@@ -42,6 +42,7 @@ import lsst.afw.math as afwMath
 import lsst.daf.base as dafBase
 import lsst.daf.butler as dafButler
 import lsst.geom as geom
+import lsst.obs.lsst.translators
 import lsst.pipe.base as pipeBase
 import lsst.utils.packages as packageUtils
 from lsst.afw.coord import Weather
@@ -1152,3 +1153,45 @@ def bboxToMatplotlibRectanle(bbox: geom.Box2I | geom.Box2D) -> matplotlib.patche
     ll = bbox.minX, bbox.minY
     width, height = bbox.getDimensions()
     return Rectangle(ll, width, height)
+
+
+def computeExposureId(instrument: str, controller: str, dayObs: int, seqNum) -> int:
+    instrument = instrument.lower()
+    if instrument == "latiss":
+        return lsst.obs.lsst.translators.LatissTranslator.compute_exposure_id(dayObs, seqNum, controller)
+    elif instrument == "lsstcomcam":
+        return lsst.obs.lsst.translators.LsstComCamTranslator.compute_exposure_id(dayObs, seqNum, controller)
+    elif instrument == "lsstcomcamsim":
+        return lsst.obs.lsst.translators.LsstComCamSimTranslator.compute_exposure_id(
+            dayObs, seqNum, controller
+        )
+    elif instrument == "lsstcam":
+        return lsst.obs.lsst.translators.LsstCamTranslator.compute_exposure_id(dayObs, seqNum, controller)
+    else:
+        raise ValueError("Unknown instrument {instrument}")
+
+
+def computeCcdExposureId(instrument: str, exposureId: int, detector: int) -> int:
+    instrument = instrument.lower()
+    if instrument == "latiss":
+        if detector != 0:
+            raise ValueError("Invalid detector {detector} for LATISS")
+        return lsst.obs.lsst.translators.LatissTranslator.compute_detector_exposure_id(exposureId, detector)
+    elif instrument == "lsstcomcam":
+        if detector < 0 or detector >= 9:
+            raise ValueError("Invalid detector {detector} for LSSTComCam")
+        return lsst.obs.lsst.translators.LsstComCamTranslator.compute_detector_exposure_id(
+            exposureId, detector
+        )
+    elif instrument == "lsstcomcamsim":
+        if detector < 0 or detector >= 9:
+            raise ValueError("Invalid detector {detector} for LSSTComCamSim")
+        return lsst.obs.lsst.translators.LsstComCamSimTranslator.compute_detector_exposure_id(
+            exposureId, detector
+        )
+    elif instrument == "lsstcam":
+        if detector < 0 or detector >= 205:
+            raise ValueError("Invalid detector {detector} for LSSTCam")
+        return lsst.obs.lsst.translators.LsstCamTranslator.compute_detector_exposure_id(exposureId, detector)
+    else:
+        raise ValueError("Unknown instrument {instrument}")

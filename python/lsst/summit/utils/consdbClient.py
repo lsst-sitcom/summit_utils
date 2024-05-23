@@ -165,58 +165,6 @@ class ConsDbClient:
         return response
 
     @staticmethod
-    def compute_exposure_id(instrument: str, controller: str, day_obs: int, seq_num) -> int:
-        instrument = instrument.lower()
-        if instrument == "latiss":
-            from lsst.obs.lsst.translators import LatissTranslator
-
-            return LatissTranslator.compute_exposure_id(day_obs, seq_num, controller)
-        elif instrument == "lsstcomcam":
-            from lsst.obs.lsst.translators import LsstComCamTranslator
-
-            return LsstComCamTranslator.compute_exposure_id(day_obs, seq_num, controller)
-        elif instrument == "lsstcomcamsim":
-            from lsst.obs.lsst.translators import LsstComCamSimTranslator
-
-            return LsstComCamSimTranslator.compute_exposure_id(day_obs, seq_num, controller)
-        elif instrument == "lsstcam":
-            from lsst.obs.lsst.translators import LsstCamTranslator
-
-            return LsstCamTranslator.compute_exposure_id(day_obs, seq_num, controller)
-        else:
-            raise ValueError("Unknown instrument {instrument}")
-
-    @staticmethod
-    def compute_ccdexposure_id(instrument: str, exposure_id: int, detector: int) -> int:
-        instrument = instrument.lower()
-        if instrument == "latiss":
-            if detector != 0:
-                raise ValueError("Invalid detector {detector} for LATISS")
-            from lsst.obs.lsst.translators import LatissTranslator
-
-            return LatissTranslator.compute_detector_exposure_id(exposure_id, detector)
-        elif instrument == "lsstcomcam":
-            if detector < 0 or detector >= 9:
-                raise ValueError("Invalid detector {detector} for LSSTComCam")
-            from lsst.obs.lsst.translators import LsstComCamTranslator
-
-            return LsstComCamTranslator.compute_detector_exposure_id(exposure_id, detector)
-        elif instrument == "lsstcomcamsim":
-            if detector < 0 or detector >= 9:
-                raise ValueError("Invalid detector {detector} for LSSTComCamSim")
-            from lsst.obs.lsst.translators import LsstComCamSimTranslator
-
-            return LsstComCamSimTranslator.compute_detector_exposure_id(exposure_id, detector)
-        elif instrument == "lsstcam":
-            if detector < 0 or detector >= 205:
-                raise ValueError("Invalid detector {detector} for LSSTCam")
-            from lsst.obs.lsst.translators import LsstCamTranslator
-
-            return LsstCamTranslator.compute_detector_exposure_id(exposure_id, detector)
-        else:
-            raise ValueError("Unknown instrument {instrument}")
-
-    @staticmethod
     def compute_flexible_metadata_table_name(instrument: str, obs_type: str) -> str:
         """Compute the name of a flexible metadata table.
 
