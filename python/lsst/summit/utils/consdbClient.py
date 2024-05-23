@@ -373,6 +373,44 @@ class ConsDbClient:
         )
         return self._handle_get(url, {"k": keys} if keys else None)
 
+    def get_all_metadata(
+        self, instrument: str, obs_type: str, obs_id: int, flex: bool = False
+    ) -> dict[str, Any]:
+        """Get all metadata for an observation.
+
+        Parameters
+        ----------
+        instrument : `str`
+            Name of the instrument (e.g. ``LATISS``).
+        obs_type : `str`
+            Name of the observation type (e.g. ``Exposure``).
+        obs_id : `int`
+            Unique observation id.
+        flex : `bool`
+            Include flexible metadata.
+
+        Returns
+        -------
+        result_dict : `dict` [ `str`, `Any` ]
+            Dictionary of key/value pairs for the observation.
+
+        Raises
+        ------
+        requests.exceptions.RequestException
+            Raised if any kind of connection error occurs.
+        requests.exceptions.HTTPError
+            Raised if a non-successful status is returned.
+        """
+        url = _urljoin(
+            self.url,
+            "query",
+            quote(instrument),
+            quote(obs_type),
+            "obs",
+            quote(str(obs_id)),
+        )
+        return self._handle_get(url, {"flex": "1"} if flex else None)
+
     def insert_flexible_metadata(
         self,
         instrument: str,
@@ -576,7 +614,9 @@ class ConsDbClient:
             return Table(rows=[])
         return Table(rows=result["data"], names=result["columns"])
 
-    def schema(self, instrument: str | None = None, table: str | None = None) -> dict[str, tuple[str, str]] | list[str]:
+    def schema(
+        self, instrument: str | None = None, table: str | None = None
+    ) -> dict[str, tuple[str, str]] | list[str]:
         """Retrieve information about ConsDB.
 
         If ``instrument`` and ``table`` are given, return the schema of a
@@ -625,6 +665,6 @@ class ConsDbClient:
             url = _urljoin(self.url, "schema", quote(instrument), quote(table))
         result = self._handle_get(url)
         if instrument is not None and table is not None:
-            return {key: tuple(value) for key, value in result.items()}
+            return {key: (str(value[0]), str(value[1])) for key, value in result.items()}
         else:
-            return result
+            return [str(value) for value in result]
