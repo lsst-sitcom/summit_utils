@@ -385,9 +385,7 @@ def getExpIdFromDayObsSeqNum(butler: dafButler.Butler, dataId: dict) -> dict:
     return {"exposure": expRecord.id}
 
 
-def updateDataIdOrDataCord(
-    dataId: dafButler.DataId, **updateKwargs: Any
-) -> Mapping[str, Any]:
+def updateDataIdOrDataCord(dataId: dafButler.DataId, **updateKwargs: Any) -> Mapping[str, Any]:
     """Add key, value pairs to a dataId or data coordinate.
 
     Parameters
@@ -413,9 +411,7 @@ def updateDataIdOrDataCord(
     return newId
 
 
-def fillDataId(
-    butler: dafButler.direct_butler.DirectButler, dataId: dafButler.DataId
-) -> Mapping[str, Any]:
+def fillDataId(butler: dafButler.direct_butler.DirectButler, dataId: dafButler.DataId) -> Mapping[str, Any]:
     """Given a dataId, fill it with values for all available dimensions.
 
     Parameters
