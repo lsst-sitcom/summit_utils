@@ -434,7 +434,7 @@ def fillDataId(butler: dafButler.direct_butler.DirectButler, dataId: dafButler.D
     here, and might speed up in future with butler improvements.
     """
     # ensure it's a dict to deal with records etc
-    dictDataId: Mapping[str, Any] = _assureDict(dataId)
+    dictDataId = _assureDict(dataId)
 
     # this removes extraneous keys that would trip up the registry call
     # using _rewrite_data_id is perhaps ever so slightly slower than popping
