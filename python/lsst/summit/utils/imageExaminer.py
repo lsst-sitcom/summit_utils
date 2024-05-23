@@ -456,7 +456,7 @@ class ImageExaminer:
 
         ax.plot(distances, values, "x", label="Radial average")
         if not fitFailed:
-            fitline = gauss(np.array(distances), *pars)
+            fitline = gauss(distances, *pars)  # type: ignore
             ax.plot(distances, fitline, label="Gaussian fit")
 
         ax.set_ylabel("Flux (ADU)")
@@ -596,7 +596,11 @@ class ImageExaminer:
         vmin = np.percentile(imData, 10)
         vmax = np.percentile(imData, 99.9)
         ax.imshow(
-            imData, norm=LogNorm(vmin=vmin, vmax=vmax), origin="lower", cmap="gray_r", interpolation="bicubic"
+            imData,
+            norm=LogNorm(vmin=vmin, vmax=vmax),   # type: ignore
+            origin="lower",
+            cmap="gray_r",
+            interpolation="bicubic"
         )
         ax.tick_params(which="major", direction="in", top=True, right=True, labelsize=8)
 
