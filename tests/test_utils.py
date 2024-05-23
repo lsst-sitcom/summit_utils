@@ -42,6 +42,8 @@ from lsst.obs.base.makeRawVisitInfoViaObsInfo import MakeRawVisitInfoViaObsInfo
 from lsst.obs.lsst import Latiss
 from lsst.obs.lsst.translators.latiss import AUXTEL_LOCATION
 from lsst.summit.utils.utils import (
+    computeCcdExposureId,
+    computeExposureId,
     fluxesFromFootprints,
     getAirmassSeeingCorrection,
     getCurrentDayObs_datetime,
@@ -299,6 +301,28 @@ class ImageBasedTestCase(lsst.utils.tests.TestCase):
         oldImageArray = copy.deepcopy(image.array)
         fluxes = fluxesFromFootprints(footprintSet, image, subtractImageMedian=True)
         np.testing.assert_array_equal(image.array, oldImageArray)
+
+
+class IdTestCase(lsst.utils.tests.TestCase):
+    def test_exposure_id(self):
+        self.assertEqual(computeExposureId("latiss", "O", 20240402, 35), 2024040200035)
+        self.assertEqual(computeExposureId("LATISS", "C", 20240402, 35), 2024040200035)
+        self.assertEqual(computeExposureId("LSSTComCamSim", "S", 20240402, 35), 7024040200035)
+        with self.assertRaises(ValueError):
+            computeExposureId("bad_instrument", "O", 20240402, 35)
+
+    def test_ccdexposure_id(self):
+        self.assertEqual(computeCcdExposureId("latiss", 2024040200035, 0), 5205 * (2**23) + 35 * 256 + 0)
+        with self.assertRaises(ValueError):
+            computeCcdExposureId("latiss", 20240402000035, 1)
+        with self.assertRaises(ValueError):
+            computeCcdExposureId("LsstComCam", 20240402000035, 9)
+        with self.assertRaises(ValueError):
+            computeCcdExposureId("LsstCam", 20240402000035, 205)
+        self.assertEqual(
+            computeCcdExposureId("LSSTComCamSim", 7024040200035, 2),
+            5 * (2**37) + 5205 * (2**23) + 35 * 256 + 2,
+        )
 
 
 class TestMemory(lsst.utils.tests.MemoryTestCase):

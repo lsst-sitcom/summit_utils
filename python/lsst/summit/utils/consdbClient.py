@@ -186,6 +186,26 @@ class ConsDbClient:
         """
         return f"cdb_{instrument}.{obs_type}_flexdata"
 
+    @staticmethod
+    def compute_fixed_metadata_namespace(instrument: str) -> str:
+        """Compute the namespace for a fixed metadata table.
+
+        Each instrument has its own namespace in the ConsDB.
+        This function is useful when issuing SQL queries, and it avoids a
+        round-trip to the server.
+
+        Parameters
+        ----------
+        instrument : `str`
+            Name of the instrument (e.g. ``LATISS``).
+
+        Returns
+        -------
+        namespace_name : `str`
+            Name of the appropriate namespace
+        """
+        return f"cdb_{instrument}"
+
     def add_flexible_metadata_key(
         self,
         instrument: str,
@@ -193,8 +213,8 @@ class ConsDbClient:
         key: str,
         dtype: str,
         doc: str,
-        unit: str = None,
-        ucd: str = None,
+        unit: str | None = None,
+        ucd: str | None = None,
     ) -> requests.Response:
         """Add a key to a flexible metadata table.
 
@@ -300,6 +320,44 @@ class ConsDbClient:
             quote(str(obs_id)),
         )
         return self._handle_get(url, {"k": keys} if keys else None)
+
+    def get_all_metadata(
+        self, instrument: str, obs_type: str, obs_id: int, flex: bool = False
+    ) -> dict[str, Any]:
+        """Get all metadata for an observation.
+
+        Parameters
+        ----------
+        instrument : `str`
+            Name of the instrument (e.g. ``LATISS``).
+        obs_type : `str`
+            Name of the observation type (e.g. ``Exposure``).
+        obs_id : `int`
+            Unique observation id.
+        flex : `bool`
+            Include flexible metadata.
+
+        Returns
+        -------
+        result_dict : `dict` [ `str`, `Any` ]
+            Dictionary of key/value pairs for the observation.
+
+        Raises
+        ------
+        requests.exceptions.RequestException
+            Raised if any kind of connection error occurs.
+        requests.exceptions.HTTPError
+            Raised if a non-successful status is returned.
+        """
+        url = _urljoin(
+            self.url,
+            "query",
+            quote(instrument),
+            quote(obs_type),
+            "obs",
+            quote(str(obs_id)),
+        )
+        return self._handle_get(url, {"flex": "1"} if flex else None)
 
     def insert_flexible_metadata(
         self,
@@ -421,6 +479,55 @@ class ConsDbClient:
             url += "?u=1"
         return self._handle_post(url, data)
 
+    def insert_multiple(
+        self,
+        instrument: str,
+        table: str,
+        obs_dict: dict[int, dict[str, Any]],
+        *,
+        allow_update=False,
+    ) -> requests.Response:
+        """Insert values into a single ConsDB fixed metadata table.
+
+        Parameters
+        ----------
+        instrument : `str`
+            Name of the instrument (e.g. ``LATISS``).
+        table : `str`
+            Name of the table to insert into.
+        obs_dict : `dict` [ `int`, `dict` [ `str`, `Any` ] ]
+            Dictionary of observation ids, each with a dictionary of
+            column/value pairs to add for each observation.
+        allow_update : `bool`, optional
+            If ``True``, allow replacement of values of existing columns.
+
+        Returns
+        -------
+        response : `requests.Response`
+            HTTP response from the server, with 200 status for success.
+
+        Raises
+        ------
+        ValueError
+            Raised if no values are provided in ``obs_dict``.
+        requests.exceptions.RequestException
+            Raised if any kind of connection error occurs.
+        requests.exceptions.HTTPError
+            Raised if a non-successful status is returned.
+        """
+        if not obs_dict:
+            raise ValueError(f"No values to insert for {instrument} {table}")
+        data = {"table": table, "obs_dict": obs_dict}
+        url = _urljoin(
+            self.url,
+            "insert",
+            quote(instrument),
+            quote(table),
+        )
+        if allow_update:
+            url += "?u=1"
+        return self._handle_post(url, data)
+
     def query(self, query: str) -> Table:
         """Query the ConsDB database.
 
@@ -455,24 +562,37 @@ class ConsDbClient:
             return Table(rows=[])
         return Table(rows=result["data"], names=result["columns"])
 
-    def schema(self, instrument: str, table: str) -> dict[str, tuple[str, str]]:
-        """Retrieve the schema of a fixed metadata table in ConsDB.
+    def schema(
+        self, instrument: str | None = None, table: str | None = None
+    ) -> dict[str, tuple[str, str]] | list[str]:
+        """Retrieve information about ConsDB.
+
+        If ``instrument`` and ``table`` are given, return the schema of a
+        fixed metadata table in ConsDB.
+
+        If only ``instrument`` is given, return the names of all tables
+        for that instrument.
+
+        If no arguments are given, return the names of all instruments.
 
         Parameters
         ----------
-        instrument : `str`
+        instrument : `str`, optional
             Name of the instrument (e.g. ``LATISS``).
-        table : `str`
+        table : `str`, optional
             Name of the table to insert into.
 
         Returns
         -------
-        column_dict : `dict` [ `str`, `tuple` [ `str`, `str` ] ]
-            Dict of columns.  Values are tuples containing a data type string
+        info : `list` [ `str` ] or `dict` [ `str`, `tuple` [ `str`, `str` ] ]
+            A list of instrument strings or table names, or else a dict of
+            columns with values that are tuples containing a data type string
             and a documentation string.
 
         Raises
         ------
+        ValueError
+            Raised if only ``table`` is given.
         requests.exceptions.RequestException
             Raised if any kind of connection error occurs.
         requests.exceptions.HTTPError
@@ -483,6 +603,16 @@ class ConsDbClient:
         Fixed metadata data types may use the full database vocabulary,
         unlike flexible metadata data types.
         """
-        url = _urljoin(self.url, "schema", quote(instrument), quote(table))
+        if instrument is None:
+            if table is not None:
+                raise ValueError("Must specify instrument if table is given")
+            url = _urljoin(self.url, "schema")
+        elif table is None:
+            url = _urljoin(self.url, "schema", quote(instrument))
+        else:
+            url = _urljoin(self.url, "schema", quote(instrument), quote(table))
         result = self._handle_get(url)
-        return {key: tuple(value) for key, value in result.items()}
+        if instrument is not None and table is not None:
+            return {key: (str(value[0]), str(value[1])) for key, value in result.items()}
+        else:
+            return [str(value) for value in result]
