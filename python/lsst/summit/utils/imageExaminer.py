@@ -597,10 +597,10 @@ class ImageExaminer:
         vmax = np.percentile(imData, 99.9)
         ax.imshow(
             imData,
-            norm=LogNorm(vmin=vmin, vmax=vmax),   # type: ignore
+            norm=LogNorm(vmin=vmin, vmax=vmax),  # type: ignore
             origin="lower",
             cmap="gray_r",
-            interpolation="bicubic"
+            interpolation="bicubic",
         )
         ax.tick_params(which="major", direction="in", top=True, right=True, labelsize=8)
 
