@@ -263,8 +263,7 @@ class BestEffortIsr:
 
         if self._cacheIsForDetector != dataId["detector"]:
             self.clearCache()
-            assert isinstance(dataId["detector"], int)
-            self._cacheIsForDetector = dataId["detector"]
+            self._cacheIsForDetector = dataId["detector"]  # type: ignore
 
         isrDict = {}
         # we build a cache of all the isr components which will be used to save
