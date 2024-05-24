@@ -25,7 +25,6 @@ import tempfile
 import unittest
 
 import matplotlib.pyplot as plt
-from .utils import getVcr
 
 import lsst.utils.tests
 from lsst.summit.utils.efdUtils import makeEfdClient
@@ -36,6 +35,8 @@ from lsst.summit.utils.m1m3.plots.inertia_compensation_system import (
     plot_hp_measured_data,
 )
 from lsst.summit.utils.tmaUtils import TMAEventMaker
+
+from .utils import getVcr
 
 vcr = getVcr()
 

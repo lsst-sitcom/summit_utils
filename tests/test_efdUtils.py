@@ -28,7 +28,6 @@ import unittest
 import astropy
 import pandas as pd
 from astropy.time import Time
-from .utils import getVcr
 
 import lsst.utils.tests
 from lsst.summit.utils.efdUtils import (
@@ -44,6 +43,8 @@ from lsst.summit.utils.efdUtils import (
     makeEfdClient,
 )
 from lsst.summit.utils.tmaUtils import TMAEvent, TMAState
+
+from .utils import getVcr
 
 HAS_EFD_CLIENT = True
 try:
