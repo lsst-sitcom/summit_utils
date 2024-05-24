@@ -27,6 +27,7 @@ from collections.abc import Iterable, Sequence
 import astropy.units as u
 import matplotlib
 import numpy as np
+import numpy.typing as npt
 from astro_metadata_translator import ObservationInfo
 from astropy.coordinates import AltAz, SkyCoord
 from astropy.coordinates.earth import EarthLocation
@@ -124,7 +125,7 @@ def countPixels(maskedImage: afwImage.MaskedImage, maskPlane: str) -> int:
     return len(np.where(np.bitwise_and(maskedImage.mask.array, bit))[0])
 
 
-def quickSmooth(data: np.ndarray[float], sigma: float = 2) -> np.ndarray[float]:
+def quickSmooth(data: npt.NDArray[np.float_], sigma: float = 2) -> npt.NDArray[np.float_]:
     """Perform a quick smoothing of the image.
 
     Not to be used for scientific purposes, but improves the stretch and
@@ -147,7 +148,7 @@ def quickSmooth(data: np.ndarray[float], sigma: float = 2) -> np.ndarray[float]:
     return smoothData
 
 
-def argMax2d(array: np.array) -> tuple[tuple[int, int], bool, list[tuple[int, int]]]:
+def argMax2d(array: npt.NDArray[np.float_]) -> tuple[tuple[float, float], bool, list[tuple[float, float]]]:
     """Get the index of the max value of an array and whether it's unique.
 
     If its not unique, returns a list of the other locations containing the
@@ -171,11 +172,12 @@ def argMax2d(array: np.array) -> tuple[tuple[int, int], bool, list[tuple[int, in
     """
     uniqueMaximum = False
     maxCoords = np.where(array == np.max(array))
-    maxCoords = [coord for coord in zip(*maxCoords)]  # list of coords as tuples
-    if len(maxCoords) == 1:  # single unambiguous value
+    # list of coords as tuples
+    listMaxCoords = [(float(coord[0]), float(coord[1])) for coord in zip(*maxCoords)]
+    if len(listMaxCoords) == 1:  # single unambiguous value
         uniqueMaximum = True
 
-    return maxCoords[0], uniqueMaximum, maxCoords[1:]
+    return listMaxCoords[0], uniqueMaximum, listMaxCoords[1:]
 
 
 def dayObsIntToString(dayObs: int) -> str:
@@ -335,7 +337,7 @@ def fluxesFromFootprints(
     footprints: afwDetect.FootprintSet | afwDetect.Footprint | Iterable[afwDetect.Footprint],
     parentImage: afwImage.Image,
     subtractImageMedian: bool = False,
-) -> np.ndarray[float]:
+) -> npt.NDArray[np.float_]:
     """Calculate the flux from a set of footprints, given the parent image,
     optionally subtracting the whole-image median from each pixel as a very
     rough background subtraction.
@@ -1044,7 +1046,7 @@ def getCdf(data: np.ndarray, scale: int, nBinsMax: int = 300_000) -> tuple[np.nd
     return cdf, minVal, maxVal
 
 
-def getQuantiles(data: np.ndarray, nColors: int) -> np.ndarray[float]:
+def getQuantiles(data: npt.NDArray[np.float_], nColors: int) -> npt.NDArray[np.float_]:
     """Get a set of boundaries that equally distribute data into
     nColors intervals. The output can be used to make a colormap of nColors
     colors.
@@ -1088,7 +1090,7 @@ def getQuantiles(data: np.ndarray, nColors: int) -> np.ndarray[float]:
     return boundaries
 
 
-def digitizeData(data: np.ndarray, nColors: int = 256) -> np.ndarray[int]:
+def digitizeData(data: npt.NDArray[np.float_], nColors: int = 256) -> npt.NDArray[np.integer]:
     """
     Scale data into nColors using its cumulative distribution function.
 

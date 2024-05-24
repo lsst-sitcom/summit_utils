@@ -21,7 +21,7 @@
 
 import copy
 import itertools
-from collections.abc import Iterable
+from collections.abc import Iterable, Mapping
 from typing import Any
 
 from deprecated.sphinx import deprecated
@@ -138,7 +138,7 @@ def makeDefaultLatissButler(
         collections.extend(extraCollections)
     try:
         repoString = "LATISS" if not embargo else "/repo/embargo"
-        butler = dafButler.Butler(
+        butler = dafButler.Butler.from_config(
             repoString, collections=collections, writeable=writeable, instrument="LATISS"
         )
     except (FileNotFoundError, RuntimeError):
@@ -155,7 +155,9 @@ def makeDefaultLatissButler(
     version="v26.0",
     category=FutureWarning,
 )
-def datasetExists(butler: dafButler.Butler, dataProduct: str, dataId: dict, **kwargs: Any) -> bool:
+def datasetExists(
+    butler: dafButler.Butler, dataProduct: str, dataId: dafButler.DataId, **kwargs: Any
+) -> bool:
     """Collapse the tri-state behaviour of butler.datasetExists to a boolean.
 
     Parameters
@@ -164,7 +166,7 @@ def datasetExists(butler: dafButler.Butler, dataProduct: str, dataId: dict, **kw
         The butler
     dataProduct : `str`
         The type of data product to check for
-    dataId : `dict`
+    dataId : `dafButler.DataId`
         The dataId of the dataProduct to check for
 
     Returns
@@ -173,10 +175,10 @@ def datasetExists(butler: dafButler.Butler, dataProduct: str, dataId: dict, **kw
         True if the dataProduct exists for the dataProduct and can be retreived
         else False.
     """
-    return butler.exists(dataProduct, dataId, **kwargs)
+    return bool(butler.exists(dataProduct, dataId, **kwargs))
 
 
-def updateDataId(dataId: dict | dafButler.DataCoordinate, **kwargs: Any) -> dict | dafButler.DataCoordinate:
+def updateDataId(dataId: dafButler.DataId, **kwargs: Any) -> dafButler.DataId:
     """Update a DataCoordinate or dataId dict with kwargs.
 
     Provides a single interface for adding the detector key (or others) to a
@@ -184,7 +186,7 @@ def updateDataId(dataId: dict | dafButler.DataCoordinate, **kwargs: Any) -> dict
 
     Parameters
     ----------
-    dataId : `dict` or `lsst.daf.butler.DataCoordinate`
+    dataId : `dafButler.DataId`
         The dataId to update.
     kwargs : `dict`
         The keys and values to add to the dataId.
@@ -283,7 +285,7 @@ def getSeqNumsForDayObs(butler: dafButler.Butler, day_obs: int, extraWhere: str 
 
 
 def sortRecordsByDayObsThenSeqNum(
-    records: list[dafButler.DimensionRecord],
+    records: dafButler.registry.queries.DimensionRecordQueryResults | list[dafButler.DimensionRecord],
 ) -> list[dafButler.DimensionRecord]:
     """Sort a set of records by dayObs, then seqNum to get the order in which
     they were taken.
@@ -346,7 +348,7 @@ def getDaysWithData(butler: dafButler.Butler, datasetType: str = "raw") -> list[
     return sorted(set([r.day_obs for r in records]))
 
 
-def getMostRecentDataId(butler: dafButler.Butler) -> dict:
+def getMostRecentDataId(butler: dafButler.Butler) -> dict[str, Any]:
     """Get the dataId for the most recent observation.
 
     Parameters
@@ -356,7 +358,7 @@ def getMostRecentDataId(butler: dafButler.Butler) -> dict:
 
     Returns
     -------
-    dataId : `dict`
+    dataId : `dict[str, Any]`
         The dataId of the most recent exposure.
     """
     lastDay = getMostRecentDayObs(butler)
@@ -366,38 +368,38 @@ def getMostRecentDataId(butler: dafButler.Butler) -> dict:
     return dataId
 
 
-def getExpIdFromDayObsSeqNum(butler: dafButler.Butler, dataId: dict) -> dict:
+def getExpIdFromDayObsSeqNum(butler: dafButler.Butler, dataId: dafButler.DataId) -> dict[str, int]:
     """Get the exposure id for the dataId.
 
     Parameters
     ----------
     butler : `lsst.daf.butler.Butler
         The butler to query.
-    dataId : `dict`
+    dataId : `dafButler.DataId`
         The dataId for which to return the exposure id.
 
     Returns
     -------
-    dataId : `dict`
+    dataId : `dict[str, int]`
         The dataId of the most recent exposure.
     """
     expRecord = getExpRecordFromDataId(butler, dataId)
     return {"exposure": expRecord.id}
 
 
-def updateDataIdOrDataCord(dataId: dict, **updateKwargs: Any) -> dict:
+def updateDataIdOrDataCord(dataId: dafButler.DataId, **updateKwargs: Any) -> Mapping[str, Any]:
     """Add key, value pairs to a dataId or data coordinate.
 
     Parameters
     ----------
-    dataId : `dict`
+    dataId : `dafButler.DataId`
         The dataId for which to return the exposure id.
-    updateKwargs : `dict`
+    updateKwargs : `dict[str, Any]`
         The key value pairs add to the dataId or dataCoord.
 
     Returns
     -------
-    dataId : `dict`
+    dataId : `Mapping[str, Any]`
         The updated dataId.
 
     Notes
@@ -411,19 +413,19 @@ def updateDataIdOrDataCord(dataId: dict, **updateKwargs: Any) -> dict:
     return newId
 
 
-def fillDataId(butler: dafButler.Butler, dataId: dict) -> dict:
+def fillDataId(butler: dafButler.direct_butler.DirectButler, dataId: dafButler.DataId) -> Mapping[str, Any]:
     """Given a dataId, fill it with values for all available dimensions.
 
     Parameters
     ----------
     butler : `lsst.daf.butler.Butler`
         The butler.
-    dataId : `dict`
+    dataId : `dafButler.DataId`
         The dataId to fill.
 
     Returns
     -------
-    dataId : `dict`
+    dataId : `Mapping[str, Any]`
         The filled dataId.
 
     Notes
@@ -461,18 +463,20 @@ def fillDataId(butler: dafButler.Butler, dataId: dict) -> dict:
     return dataId
 
 
-def _assureDict(dataId: dict | dafButler.dimensions.DataCoordinate | dafButler.DimensionRecord) -> dict:
+def _assureDict(
+    dataId: dafButler.DataId | dafButler.DimensionRecord,
+) -> dict[str, Any]:
     """Turn any data-identifier-like object into a dict.
 
     Parameters
     ----------
-    dataId : `dict` or `lsst.daf.butler.dimensions.DataCoordinate` or
+    dataId : `dafButler.DataId` or
              `lsst.daf.butler.dimensions.DimensionRecord`
         The data identifier.
 
     Returns
     -------
-    dataId : `dict`
+    dataId : `dict[str, Any]`
         The data identifier as a dict.
     """
     if isinstance(dataId, dict):
@@ -487,14 +491,14 @@ def _assureDict(dataId: dict | dafButler.dimensions.DataCoordinate | dafButler.D
         raise RuntimeError(f"Failed to coerce {type(dataId)} to dict")
 
 
-def getExpRecordFromDataId(butler: dafButler.Butler, dataId: dict) -> dafButler.DimensionRecord:
+def getExpRecordFromDataId(butler: dafButler.Butler, dataId: dafButler.DataId) -> dafButler.DimensionRecord:
     """Get the exposure record for a given dataId.
 
     Parameters
     ----------
     butler : `lsst.daf.butler.Butler`
         The butler.
-    dataId : `dict`
+    dataId : `dafButler.DataId`
         The dataId.
 
     Returns
@@ -521,26 +525,26 @@ def getExpRecordFromDataId(butler: dafButler.Butler, dataId: dict) -> dafButler.
             "exposure", where=where, bind={"dayObs": dayObs, "seq_num": seqNum}, datasets="raw"
         )
 
-    expRecords = set(expRecords)
-    if not expRecords:
+    filteredExpRecords = set(expRecords)
+    if not filteredExpRecords:
         raise LookupError(f"No exposure records found for {dataId}")
-    assert len(expRecords) == 1, f"Found {len(expRecords)} exposure records for {dataId}"
-    return expRecords.pop()
+    assert len(filteredExpRecords) == 1, f"Found {len(filteredExpRecords)} exposure records for {dataId}"
+    return filteredExpRecords.pop()
 
 
-def getDayObsSeqNumFromExposureId(butler: dafButler.Butler, dataId: dict) -> dict[str, int]:
+def getDayObsSeqNumFromExposureId(butler: dafButler.Butler, dataId: Mapping[str, Any]) -> dict[str, int]:
     """Get the day_obs and seq_num for an exposure id.
 
     Parameters
     ----------
     butler : `lsst.daf.butler.Butler`
         The butler.
-    dataId : `dict`
+    dataId : ` Mapping[str, Any]`
         The dataId containing the exposure id.
 
     Returns
     -------
-    dataId : `dict`
+    dataId : ` dict[str, int]`
         A dict containing only the day_obs and seq_num.
     """
     if (dayObs := getDayObs(dataId)) and (seqNum := getSeqNum(dataId)):
@@ -568,8 +572,8 @@ def getDayObsSeqNumFromExposureId(butler: dafButler.Butler, dataId: dict) -> dic
 
 
 def getDatasetRefForDataId(
-    butler: dafButler.Butler, datasetType: str | dafButler.DatasetType, dataId: dict
-) -> dafButler.DatasetRef:
+    butler: dafButler.Butler, datasetType: str | dafButler.DatasetType, dataId: dict[str, Any]
+) -> dafButler.DatasetRef | None:
     """Get the datasetReference for a dataId.
 
     Parameters
@@ -578,7 +582,7 @@ def getDatasetRefForDataId(
         The butler.
     datasetType : `str` or `datasetType`
         The dataset type.
-    dataId : `dict`
+    dataId : `dict[str, Any]`
         The dataId.
 
     Returns
@@ -595,7 +599,7 @@ def getDatasetRefForDataId(
 
 
 def removeDataProduct(
-    butler: dafButler.Butler, datasetType: str | dafButler.DatasetType, dataId: dict
+    butler: dafButler.Butler, datasetType: str | dafButler.DatasetType, dataId: dict[str, Any]
 ) -> None:
     """Remove a data prodcut from the registry. Use with caution.
 
@@ -605,30 +609,32 @@ def removeDataProduct(
         The butler.
     datasetType : `str` or `datasetType`
         The dataset type.
-    dataId : `dict`
+    dataId : `dict[str, Any]`
         The dataId.
 
     """
     if datasetType == "raw":
         raise RuntimeError("I'm sorry, Dave, I'm afraid I can't do that.")
     dRef = getDatasetRefForDataId(butler, datasetType, dataId)
+    if dRef is None:
+        return
     butler.pruneDatasets([dRef], disassociate=True, unstore=True, purge=True)
     return
 
 
-def _dayobs_present(dataId: dict) -> bool:
+def _dayobs_present(dataId: Mapping[str, Any]) -> bool:
     return _get_dayobs_key(dataId) is not None
 
 
-def _seqnum_present(dataId: dict) -> bool:
+def _seqnum_present(dataId: Mapping[str, Any]) -> bool:
     return _get_seqnum_key(dataId) is not None
 
 
-def _expid_present(dataId: dict) -> bool:
+def _expid_present(dataId: Mapping[str, Any]) -> bool:
     return _get_expid_key(dataId) is not None
 
 
-def _get_dayobs_key(dataId: dict) -> str | None:
+def _get_dayobs_key(dataId: Mapping[str, Any]) -> str | None:
     """Return the key for day_obs if present, else None"""
     keys = [k for k in dataId.keys() if k.find("day_obs") != -1]
     if not keys:
@@ -636,7 +642,7 @@ def _get_dayobs_key(dataId: dict) -> str | None:
     return keys[0]
 
 
-def _get_seqnum_key(dataId: dict) -> str | None:
+def _get_seqnum_key(dataId: Mapping[str, Any]) -> str | None:
     """Return the key for seq_num if present, else None"""
     keys = [k for k in dataId.keys() if k.find("seq_num") != -1]
     if not keys:
@@ -644,7 +650,7 @@ def _get_seqnum_key(dataId: dict) -> str | None:
     return keys[0]
 
 
-def _get_expid_key(dataId: dict) -> str | None:
+def _get_expid_key(dataId: Mapping[str, Any]) -> str | None:
     """Return the key for expId if present, else None"""
     if "exposure.id" in dataId:
         return "exposure.id"
@@ -653,12 +659,12 @@ def _get_expid_key(dataId: dict) -> str | None:
     return None
 
 
-def getDayObs(dataId: dict | dafButler.DimensionRecord) -> int | None:
+def getDayObs(dataId: Mapping[str, Any] | dafButler.DimensionRecord) -> int | None:
     """Get the day_obs from a dataId.
 
     Parameters
     ----------
-    dataId : `dict` or `lsst.daf.butler.DimensionRecord`
+    dataId : `Mapping[str, Any]` or `lsst.daf.butler.DimensionRecord`
         The dataId.
 
     Returns
@@ -673,12 +679,12 @@ def getDayObs(dataId: dict | dafButler.DimensionRecord) -> int | None:
     return dataId["day_obs"] if "day_obs" in dataId else dataId["exposure.day_obs"]
 
 
-def getSeqNum(dataId: dict | dafButler.DimensionRecord) -> int | None:
+def getSeqNum(dataId: Mapping[str, Any] | dafButler.DimensionRecord) -> int | None:
     """Get the seq_num from a dataId.
 
     Parameters
     ----------
-    dataId : `dict` or `lsst.daf.butler.DimensionRecord`
+    dataId : `Mapping[str, Any]` or `lsst.daf.butler.DimensionRecord`
         The dataId.
 
     Returns
@@ -693,12 +699,12 @@ def getSeqNum(dataId: dict | dafButler.DimensionRecord) -> int | None:
     return dataId["seq_num"] if "seq_num" in dataId else dataId["exposure.seq_num"]
 
 
-def getExpId(dataId: dict | dafButler.DimensionRecord) -> int | None:
+def getExpId(dataId: Mapping[str, Any] | dafButler.DimensionRecord) -> int | None:
     """Get the expId from a dataId.
 
     Parameters
     ----------
-    dataId : `dict` or `lsst.daf.butler.DimensionRecord`
+    dataId : `Mapping[str, Any]` or `lsst.daf.butler.DimensionRecord`
         The dataId.
 
     Returns
@@ -714,13 +720,13 @@ def getExpId(dataId: dict | dafButler.DimensionRecord) -> int | None:
 
 
 def getLatissOnSkyDataIds(
-    butler: dafButler.Butler,
+    butler: dafButler.direct_butler.DirectButler,
     skipTypes: Iterable[str] = ("bias", "dark", "flat"),
     checkObject: bool = True,
     full: bool = True,
     startDate: int | None = None,
     endDate: int | None = None,
-) -> list[dict]:
+) -> list[Mapping[str, int | str | None]]:
     """Get a list of all on-sky dataIds taken.
 
     Parameters
@@ -820,10 +826,10 @@ def getExpRecord(
         bind.update({"dayObs": dayObs, "seqNum": seqNum})
 
     expRecords = butler.registry.queryDimensionRecords("exposure", where=where, bind=bind, datasets="raw")
-    expRecords = list(set(expRecords))  # must call set as this may contain many duplicates
-    if len(expRecords) != 1:
+    filteredExpRecords = list(set(expRecords))  # must call set as this may contain many duplicates
+    if len(filteredExpRecords) != 1:
         raise RuntimeError(
             f"Failed to find unique exposure record for {instrument=} with"
-            f" {expId=}, {dayObs=}, {seqNum=}, got {len(expRecords)} records"
+            f" {expId=}, {dayObs=}, {seqNum=}, got {len(filteredExpRecords)} records"
         )
-    return expRecords[0]
+    return filteredExpRecords[0]

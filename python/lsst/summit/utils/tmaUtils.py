@@ -385,11 +385,11 @@ def plotEvent(
     if event.type == TMAState.TRACKING:
         ax1, ax1p5, ax2 = fig.subplots(
             3, sharex=True, gridspec_kw={"wspace": 0, "hspace": 0, "height_ratios": [2.5, 1, 1]}
-        )
+        )  # type: ignore
     else:
         ax1, ax2 = fig.subplots(
             2, sharex=True, gridspec_kw={"wspace": 0, "hspace": 0, "height_ratios": [2.5, 1]}
-        )
+        )  # type: ignore
 
     if azimuthData is None or elevationData is None:
         azimuthData, elevationData = getAzimuthElevationDataForEvent(

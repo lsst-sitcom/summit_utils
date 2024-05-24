@@ -75,7 +75,9 @@ class QuickLookIsrTaskConnections(IsrTaskConnections):
 class QuickLookIsrTaskConfig(pipeBase.PipelineTaskConfig, pipelineConnections=QuickLookIsrTaskConnections):
     """Configuration parameters for QuickLookIsrTask."""
 
-    doRepairCosmics = pexConfig.Field(dtype=bool, doc="Interpolate over cosmic rays?", default=True)
+    doRepairCosmics: pexConfig.Field[bool] = pexConfig.Field(
+        dtype=bool, doc="Interpolate over cosmic rays?", default=True
+    )
 
 
 class QuickLookIsrTask(pipeBase.PipelineTask):
@@ -89,6 +91,7 @@ class QuickLookIsrTask(pipeBase.PipelineTask):
     """
 
     ConfigClass = QuickLookIsrTaskConfig
+    config: QuickLookIsrTaskConfig
     _DefaultName = "quickLook"
 
     def __init__(self, isrTask: IsrTask = IsrTask, **kwargs: Any):

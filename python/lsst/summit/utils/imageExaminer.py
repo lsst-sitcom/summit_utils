@@ -26,6 +26,7 @@ import matplotlib
 import matplotlib.patches as patches
 import matplotlib.pyplot as plt
 import numpy as np
+import numpy.typing as npt
 import scipy.ndimage as ndImage
 from matplotlib import cm
 from matplotlib.colors import LogNorm
@@ -44,7 +45,9 @@ from lsst.summit.utils.utils import argMax2d, countPixels, getImageStats, quickS
 SIGMATOFWHM = 2.0 * np.sqrt(2.0 * np.log(2.0))
 
 
-def gauss(x: float | np.ndarray[float], a: float, x0: float, sigma: float) -> float | np.ndarray[float]:
+def gauss(
+    x: float | npt.NDArray[np.float_], a: float, x0: float, sigma: float
+) -> float | npt.NDArray[np.float_]:
     return a * np.exp(-((x - x0) ** 2) / (2 * sigma**2))
 
 
@@ -165,7 +168,7 @@ class ImageExaminer:
 
         self.radialAverageAndFit()
 
-    def intCoords(self, coords: tuple[float | int, float | int]) -> np.ndarray[int]:
+    def intCoords(self, coords: tuple[float | int, float | int]) -> npt.NDArray[np.integer]:
         """Get integer versions of the coordinates for dereferencing arrays.
 
         Parameters are not rounded, but just cast as ints.
@@ -233,7 +236,7 @@ class ImageExaminer:
         y = self.centroid[1] + offset[0]
         self.centroid = (x, y)
 
-    def getStats(self) -> dict:
+    def getStats(self) -> pipeBase.Struct:
         """Get the image stats.
 
         Returns
@@ -308,7 +311,7 @@ class ImageExaminer:
 
         return bbox
 
-    def getStarBoxData(self) -> np.ndarray[float]:
+    def getStarBoxData(self) -> npt.NDArray[np.float_]:
         """Get the image data for the star.
 
         Calculates the maximum valid box, and uses that to return the image
@@ -325,7 +328,9 @@ class ImageExaminer:
         self.nSatPixInBox = countPixels(self.exp.maskedImage[self.starBbox], "SAT")
         return self.exp.image[bbox].array
 
-    def getMeshGrid(self, data: np.ndarray[float]) -> tuple[np.ndarray[float], np.ndarray[float]]:
+    def getMeshGrid(
+        self, data: npt.NDArray[np.float_]
+    ) -> tuple[npt.NDArray[np.float_], npt.NDArray[np.float_]]:
         """Get the meshgrid for a data array.
 
         Parameters
@@ -361,7 +366,7 @@ class ImageExaminer:
         # TODO: add option to move centroid to max pixel for radial (argmax 2d)
 
         distances: list[float] = []
-        values = []
+        values: list[float] = []
 
         # could be much faster, but the array is tiny so its fine
         for i in range(xlen):
@@ -402,8 +407,8 @@ class ImageExaminer:
         # sort distances and values in step by distance
         d = np.array([(r, v) for (r, v) in sorted(zip(self.radialDistances, self.radialValues))])
         self.radii = d[:, 0]
-        values = d[:, 1]
-        self.cumFluxes = np.cumsum(values)
+        array_values = d[:, 1]
+        self.cumFluxes = np.cumsum(array_values)
         self.cumFluxesNorm = self.cumFluxes / np.max(self.cumFluxes)
 
         self.imStats.eeRadius50 = self.getEncircledEnergyRadius(50)
@@ -451,7 +456,7 @@ class ImageExaminer:
 
         ax.plot(distances, values, "x", label="Radial average")
         if not fitFailed:
-            fitline = gauss(distances, *pars)
+            fitline = gauss(distances, *pars)  # type: ignore
             ax.plot(distances, fitline, label="Gaussian fit")
 
         ax.set_ylabel("Flux (ADU)")
@@ -584,10 +589,18 @@ class ImageExaminer:
             plotDirect = True
 
         imData = quickSmooth(self.exp.image.array, 2.5)
+        # np.percentile returns a float if imData is a 1D array,
+        # but it can return a numpy array if imData is a 2D array
+        # or higher. If imData is a 2D array, vmin and vmax will
+        # be arrays, which is not what LogNorm expects.
         vmin = np.percentile(imData, 10)
         vmax = np.percentile(imData, 99.9)
         ax.imshow(
-            imData, norm=LogNorm(vmin=vmin, vmax=vmax), origin="lower", cmap="gray_r", interpolation="bicubic"
+            imData,
+            norm=LogNorm(vmin=vmin, vmax=vmax),  # type: ignore
+            origin="lower",
+            cmap="gray_r",
+            interpolation="bicubic",
         )
         ax.tick_params(which="major", direction="in", top=True, right=True, labelsize=8)
 

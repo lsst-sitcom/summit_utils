@@ -27,6 +27,7 @@ from typing import Any
 
 import matplotlib.pyplot as plt
 import numpy as np
+import numpy.typing as npt
 from astropy.stats import sigma_clip
 from matplotlib.offsetbox import AnchoredText
 from mpl_toolkits.axes_grid1.axes_divider import make_axes_locatable
@@ -130,8 +131,8 @@ class SpectrumExaminer:
 
     def fit(self) -> None:
         def gauss(
-            x: float | np.ndarray[float], a: float, x0: float, sigma: float
-        ) -> float | np.ndarray[float]:
+            x: float | npt.NDArray[np.float_], a: float, x0: float, sigma: float
+        ) -> float | npt.NDArray[np.float_]:
             return a * np.exp(-((x - x0) ** 2) / (2 * sigma**2))
 
         data = self.spectrumData[self.goodSlice]

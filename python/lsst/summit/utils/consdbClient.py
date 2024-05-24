@@ -26,7 +26,7 @@ from typing import Any
 from urllib.parse import quote
 
 import requests
-from astropy.table import Table  # type: ignore
+from astropy.table import Table
 
 __all__ = ["ConsDbClient", "FlexibleMetadataInfo"]
 
