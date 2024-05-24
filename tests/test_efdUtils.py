@@ -28,7 +28,7 @@ import unittest
 import astropy
 import pandas as pd
 from astropy.time import Time
-from utils import getVcr
+from .utils import getVcr
 
 import lsst.utils.tests
 from lsst.summit.utils.efdUtils import (

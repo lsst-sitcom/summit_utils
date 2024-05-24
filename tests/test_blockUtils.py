@@ -28,7 +28,7 @@ import unittest
 
 import numpy as np
 import pandas as pd
-from utils import getVcr
+from .utils import getVcr
 
 import lsst.utils.tests
 from lsst.summit.utils.blockUtils import BlockParser

@@ -25,7 +25,7 @@ import tempfile
 import unittest
 
 import matplotlib.pyplot as plt
-from utils import getVcr
+from .utils import getVcr
 
 import lsst.utils.tests
 from lsst.summit.utils.efdUtils import makeEfdClient
