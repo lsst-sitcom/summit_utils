@@ -267,12 +267,12 @@ def plot(
         )
 
     if sourceCat:
-        ax.plot(
-            list(zip(sourceCat.getX(), sourceCat.getY())),
+        ax.scatter(
+            sourceCat.getX(),
+            sourceCat.getY(),
             marker="o",
-            markeredgecolor="c",
-            markerfacecolor="None",
-            linestyle="None",
+            edgecolors="c",  # cyan rings
+            c="None",  # empty cicrles (no fill)
             label="Source catalog",
         )
 
