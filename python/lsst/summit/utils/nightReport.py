@@ -22,7 +22,7 @@
 import datetime
 import logging
 import pickle
-from collections.abc import Callable, Iterable
+from collections.abc import Iterable
 from dataclasses import dataclass
 from typing import Any
 
@@ -40,7 +40,6 @@ from lsst.utils.iteration import ensure_iterable
 from .utils import getFieldNameAndTileNumber, obsInfoToDict
 
 try:  # TODO: Remove post RFC-896: add humanize to rubin-env
-    precisedelta: "Callable[[Any], str]"
     from humanize.time import precisedelta
 
     HAVE_HUMANIZE = True
@@ -48,7 +47,7 @@ except ImportError:
     # log a python warning about the lack of humanize
     logging.warning("humanize not available, install it to get better time printing")
     HAVE_HUMANIZE = False
-    precisedelta = repr
+    precisedelta = repr  # type: ignore
 
 
 __all__ = ["NightReport"]
@@ -453,7 +452,7 @@ class NightReport:
         sciEff = 100 * (timings["scienceTimeTotal"] / timings["nightLength"])
         print(f"Science shutter efficiency = {sciEff:.1f}%")
 
-    def getTimeDeltas(self) -> dict[int, float]:
+    def getTimeDeltas(self) -> dict[int, int]:
         """Returns a dict, keyed by seqNum, of the time since the end of the
         last integration. The time since does include the readout, so is always
         greater than or equal to the readout time.

@@ -1,0 +1,5 @@
+pydantic
+numpy
+matplotlib
+astro-metadata-translator
+humanize

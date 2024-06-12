@@ -72,7 +72,9 @@ class QuickLookIsrTaskConnections(IsrTaskConnections):
         self.outputExposure = exposure
 
 
-class QuickLookIsrTaskConfig(pipeBase.PipelineTaskConfig, pipelineConnections=QuickLookIsrTaskConnections):
+class QuickLookIsrTaskConfig(
+    pipeBase.PipelineTaskConfig, pipelineConnections=QuickLookIsrTaskConnections  # type: ignore
+):
     """Configuration parameters for QuickLookIsrTask."""
 
     doRepairCosmics: pexConfig.Field[bool] = pexConfig.Field(
