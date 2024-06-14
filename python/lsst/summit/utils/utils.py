@@ -1157,7 +1157,7 @@ def bboxToMatplotlibRectanle(bbox: geom.Box2I | geom.Box2D) -> matplotlib.patche
     return Rectangle(ll, width, height)
 
 
-def computeExposureId(instrument: str, controller: str, dayObs: int, seqNum) -> int:
+def computeExposureId(instrument: str, controller: str, dayObs: int, seqNum: int) -> int:
     instrument = instrument.lower()
     if instrument == "latiss":
         return lsst.obs.lsst.translators.LatissTranslator.compute_exposure_id(dayObs, seqNum, controller)
