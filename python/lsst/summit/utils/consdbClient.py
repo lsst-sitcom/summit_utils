@@ -52,6 +52,28 @@ def _urljoin(*args: str) -> str:
     return "/".join(args)
 
 
+def _check_status(r: requests.Response) -> None:
+    """Check the status of an HTTP response and raise if an error.
+
+    Adds additional response information to the raise_for_status exception.
+
+    Parameters
+    ----------
+    r : `requests.Response`
+        The response to check.
+
+    Raises
+    ------
+    requests.HTTPError
+        Raised if a non-successful status is returned.
+    """
+    try:
+        r.raise_for_status()
+    except requests.HTTPError as e:
+        e.add_note(str(e.response.json()))
+        raise e
+
+
 @dataclass
 class FlexibleMetadataInfo:
     """Description of a flexible metadata value.
@@ -120,11 +142,11 @@ class ConsDbClient:
 
         Raises
         ------
-        requests.exceptions.RequestException
+        requests.RequestException
             Raised if any kind of connection error occurs.
-        requests.exceptions.HTTPError
+        requests.HTTPError
             Raised if a non-successful status is returned.
-        requests.exceptions.JSONDecodeError
+        requests.JSONDecodeError
             Raised if the result does not decode as JSON.
 
         Returns
@@ -134,7 +156,7 @@ class ConsDbClient:
         """
         logger.debug(f"GET {url}")
         response = self.session.get(url, params=query)
-        response.raise_for_status()
+        _check_status(response)
         return response.json()
 
     def _handle_post(self, url: str, data: dict[str, Any]) -> requests.Response:
@@ -149,9 +171,9 @@ class ConsDbClient:
 
         Raises
         ------
-        requests.exceptions.RequestException
+        requests.RequestException
             Raised if any kind of connection error occurs.
-        requests.exceptions.HTTPError
+        requests.HTTPError
             Raised if a non-successful status is returned.
 
         Returns
@@ -161,7 +183,7 @@ class ConsDbClient:
         """
         logger.debug(f"POST {url}: {data}")
         response = self.session.post(url, json=data)
-        response.raise_for_status()
+        _check_status(response)
         return response
 
     @staticmethod
@@ -244,9 +266,9 @@ class ConsDbClient:
 
         Raises
         ------
-        requests.exceptions.RequestException
+        requests.RequestException
             Raised if any kind of connection error occurs.
-        requests.exceptions.HTTPError
+        requests.HTTPError
             Raised if a non-successful status is returned.
         """
         data = {"key": key, "dtype": dtype, "doc": doc}
@@ -274,9 +296,9 @@ class ConsDbClient:
 
         Raises
         ------
-        requests.exceptions.RequestException
+        requests.RequestException
             Raised if any kind of connection error occurs.
-        requests.exceptions.HTTPError
+        requests.HTTPError
             Raised if a non-successful status is returned.
         """
         url = _urljoin(self.url, "flex", quote(instrument), quote(obs_type), "schema")
@@ -306,9 +328,9 @@ class ConsDbClient:
 
         Raises
         ------
-        requests.exceptions.RequestException
+        requests.RequestException
             Raised if any kind of connection error occurs.
-        requests.exceptions.HTTPError
+        requests.HTTPError
             Raised if a non-successful status is returned.
         """
         url = _urljoin(
@@ -344,9 +366,9 @@ class ConsDbClient:
 
         Raises
         ------
-        requests.exceptions.RequestException
+        requests.RequestException
             Raised if any kind of connection error occurs.
-        requests.exceptions.HTTPError
+        requests.HTTPError
             Raised if a non-successful status is returned.
         """
         url = _urljoin(
@@ -395,9 +417,9 @@ class ConsDbClient:
         ------
         ValueError
             Raised if no values are provided in ``values`` or kwargs.
-        requests.exceptions.RequestException
+        requests.RequestException
             Raised if any kind of connection error occurs.
-        requests.exceptions.HTTPError
+        requests.HTTPError
             Raised if a non-successful status is returned.
         """
         if values:
@@ -455,9 +477,9 @@ class ConsDbClient:
         ------
         ValueError
             Raised if no values are provided in ``values`` or kwargs.
-        requests.exceptions.RequestException
+        requests.RequestException
             Raised if any kind of connection error occurs.
-        requests.exceptions.HTTPError
+        requests.HTTPError
             Raised if a non-successful status is returned.
         """
         if values:
@@ -510,9 +532,9 @@ class ConsDbClient:
         ------
         ValueError
             Raised if no values are provided in ``obs_dict``.
-        requests.exceptions.RequestException
+        requests.RequestException
             Raised if any kind of connection error occurs.
-        requests.exceptions.HTTPError
+        requests.HTTPError
             Raised if a non-successful status is returned.
         """
         if not obs_dict:
@@ -543,9 +565,9 @@ class ConsDbClient:
 
         Raises
         ------
-        requests.exceptions.RequestException
+        requests.RequestException
             Raised if any kind of connection error occurs.
-        requests.exceptions.HTTPError
+        requests.HTTPError
             Raised if a non-successful status is returned.
 
         Notes
@@ -593,9 +615,9 @@ class ConsDbClient:
         ------
         ValueError
             Raised if only ``table`` is given.
-        requests.exceptions.RequestException
+        requests.RequestException
             Raised if any kind of connection error occurs.
-        requests.exceptions.HTTPError
+        requests.HTTPError
             Raised if a non-successful status is returned.
 
         Notes
