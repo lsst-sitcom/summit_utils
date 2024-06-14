@@ -52,6 +52,28 @@ def _urljoin(*args: str) -> str:
     return "/".join(args)
 
 
+def _check_status(r: requests.Response) -> None:
+    """Check the status of an HTTP response and raise if an error.
+
+    Adds additional response information to the raise_for_status exception.
+
+    Parameters
+    ----------
+    r : `requests.Response`
+        The response to check.
+
+    Raises
+    ------
+    requests.exceptions.HTTPError
+        Raised if a non-successful status is returned.
+    """
+    try:
+        r.raise_for_status()
+    except requests.exceptions.HTTPError as e:
+        e.add_note(str(e.response.json()))
+        raise e
+
+
 @dataclass
 class FlexibleMetadataInfo:
     """Description of a flexible metadata value.
@@ -134,7 +156,7 @@ class ConsDbClient:
         """
         logger.debug(f"GET {url}")
         response = self.session.get(url, params=query)
-        response.raise_for_status()
+        _check_status(response)
         return response.json()
 
     def _handle_post(self, url: str, data: dict[str, Any]) -> requests.Response:
@@ -161,7 +183,7 @@ class ConsDbClient:
         """
         logger.debug(f"POST {url}: {data}")
         response = self.session.post(url, json=data)
-        response.raise_for_status()
+        _check_status(response)
         return response
 
     @staticmethod
