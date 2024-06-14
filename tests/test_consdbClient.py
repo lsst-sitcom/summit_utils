@@ -89,6 +89,7 @@ def test_add_flexible_metadata_key(client):
     )
     with pytest.raises(HTTPError, match="404") as e:
         client.add_flexible_metadata_key("bad_instrument", obs_type, "error", "int", "instrument error")
+    assert "Unknown instrument" in str(e.value.__notes__)
     json_data = e.value.response.json()
     assert json_data["message"] == "Unknown instrument"
     assert json_data["value"] == "bad_instrument"
