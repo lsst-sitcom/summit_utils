@@ -90,6 +90,8 @@ __all__ = [
     "digitizeData",
     "getBboxAround",
     "bboxToMatplotlibRectanle",
+    "computeExposureId",
+    "computeCcdExposureId",
 ]
 
 
