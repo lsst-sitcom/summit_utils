@@ -70,7 +70,10 @@ def _check_status(r: requests.Response) -> None:
     try:
         r.raise_for_status()
     except requests.HTTPError as e:
-        e.add_note(str(e.response.json()))
+        try:
+            e.add_note(str(e.response.json()))
+        except requests.JSONDecodeError:
+            pass
         raise e
 
 
