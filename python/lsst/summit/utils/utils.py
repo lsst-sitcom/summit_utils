@@ -621,6 +621,10 @@ def getSite() -> str:
     hostname = os.getenv("HOSTNAME", "")
     if hostname.startswith("sdfrome"):
         return "rubin-devl"
+    elif hostname == "htcondor.ls.lsst.org":
+        return "base"
+    elif hostname == "htcondor.cp.lsst.org":
+        return "summit"
 
     jenkinsHome = os.getenv("JENKINS_HOME", "")
     if jenkinsHome != "":
