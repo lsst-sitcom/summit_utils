@@ -49,6 +49,7 @@ import lsst.utils.packages as packageUtils
 from lsst.afw.coord import Weather
 from lsst.afw.detection import Footprint, FootprintSet
 from lsst.daf.butler.cli.cliLog import CliLog
+from lsst.obs.lsst import Latiss, LsstCam, LsstComCam
 from lsst.obs.lsst.translators.latiss import AUXTEL_LOCATION
 from lsst.obs.lsst.translators.lsst import FILTER_DELIMITER
 
@@ -92,6 +93,7 @@ __all__ = [
     "bboxToMatplotlibRectanle",
     "computeExposureId",
     "computeCcdExposureId",
+    "getDetectorIds",
 ]
 
 
@@ -1204,3 +1206,18 @@ def computeCcdExposureId(instrument: str, exposureId: int, detector: int) -> int
         return lsst.obs.lsst.translators.LsstCamTranslator.compute_detector_exposure_id(exposureId, detector)
     else:
         raise ValueError("Unknown instrument {instrument}")
+
+
+def getDetectorIds(instrumentName: str) -> list[int]:
+    _instrument = instrumentName.lower()
+
+    match _instrument:
+        case "lsstcam":
+            camera = LsstCam.getCamera()
+        case instrument if instrument in ("lsstcomcam", "lsstcomcamsim"):
+            camera = LsstComCam.getCamera()
+        case "latiss":
+            camera = Latiss.getCamera()
+        case _:
+            raise ValueError(f"Unsupported instrument: {instrumentName}")
+    return [detector.getId() for detector in camera]
