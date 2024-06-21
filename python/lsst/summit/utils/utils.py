@@ -49,7 +49,7 @@ import lsst.utils.packages as packageUtils
 from lsst.afw.coord import Weather
 from lsst.afw.detection import Footprint, FootprintSet
 from lsst.daf.butler.cli.cliLog import CliLog
-from lsst.obs.lsst import Latiss, LsstCam, LsstComCam
+from lsst.obs.lsst import Latiss, LsstCam, LsstComCam, LsstComCamSim
 from lsst.obs.lsst.translators.latiss import AUXTEL_LOCATION
 from lsst.obs.lsst.translators.lsst import FILTER_DELIMITER
 
@@ -1209,15 +1209,22 @@ def computeCcdExposureId(instrument: str, exposureId: int, detector: int) -> int
 
 
 def getDetectorIds(instrumentName: str) -> list[int]:
+    camera = getCameraFromInstrumentName(instrumentName)
+    return [detector.getId() for detector in camera]
+
+
+def getCameraFromInstrumentName(instrumentName: str) -> lsst.afw.cameraGeom.Camera:
     _instrument = instrumentName.lower()
 
     match _instrument:
         case "lsstcam":
             camera = LsstCam.getCamera()
-        case instrument if instrument in ("lsstcomcam", "lsstcomcamsim"):
+        case "lsstcomcam":
             camera = LsstComCam.getCamera()
+        case "lsstcomcamsim":
+            camera = LsstComCamSim.getCamera()
         case "latiss":
             camera = Latiss.getCamera()
         case _:
             raise ValueError(f"Unsupported instrument: {instrumentName}")
-    return [detector.getId() for detector in camera]
+    return camera
