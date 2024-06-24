@@ -24,7 +24,7 @@ import asyncio
 import datetime
 import logging
 import re
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Callable
 
 import astropy
 import pandas as pd
@@ -320,6 +320,8 @@ def getMostRecentRowWithDataBefore(
     topic: str,
     timeToLookBefore: astropy.Time,
     warnStaleAfterNMinutes: float | int = 60 * 12,
+    maxSearchNMinutes: float | int | None = None,
+    where: Callable[[pd.DataFrame], list[bool]] | None = None,
 ) -> pd.Series:
     """Get the most recent row of data for a topic before a given time.
 
@@ -334,6 +336,11 @@ def getMostRecentRowWithDataBefore(
     warnStaleAfterNMinutes : `float`, optional
         The number of minutes after which to consider the data stale and issue
         a warning.
+    maxSearchMinutes: `float` or None, optional
+        Maximum number of minutes to search before raising ValueError.
+    where: `Callable` or None, optional
+        A callable taking a single pd.Dataframe argument and returning a
+        boolean list indicating rows to consider.
 
     Returns
     -------
@@ -348,22 +355,28 @@ def getMostRecentRowWithDataBefore(
     """
     staleAge = datetime.timedelta(warnStaleAfterNMinutes)
 
-    firstDayPossible = getDayObsStartTime(20190101)
+    earliest = getDayObsStartTime(20190101)
 
-    if timeToLookBefore < firstDayPossible:
+    if timeToLookBefore < earliest:
         raise ValueError(f"Requested time {timeToLookBefore} is before any data was put in the EFD")
+
+    if maxSearchNMinutes is not None:
+        earliest = max(earliest, timeToLookBefore - maxSearchNMinutes * u.min)
 
     df = pd.DataFrame()
     beginTime = timeToLookBefore
-    while df.empty and beginTime > firstDayPossible:
+    while df.empty and beginTime > earliest:
         df = getEfdData(client, topic, begin=beginTime, timespan=-TIME_CHUNKING, warn=False)
         beginTime -= TIME_CHUNKING
+        if where is not None and not df.empty:
+            df = df[where(df)]
 
-    if beginTime < firstDayPossible and df.empty:  # we ran all the way back to the beginning of time
-        raise ValueError(
-            f"The entire EFD was searched backwards from {timeToLookBefore} and no data was "
-            f"found in {topic=}"
-        )
+    if beginTime < earliest and df.empty:  # search ended early
+        out = f"EFD searched backwards from {timeToLookBefore} to {earliest} and no data "
+        if where is not None:
+            out += "consistent with `where` predicate "
+        out += f"was found in {topic=}"
+        raise ValueError(out)
 
     lastRow = df.iloc[-1]
     commandTime = efdTimestampToAstropy(lastRow["private_efdStamp"])
@@ -372,7 +385,7 @@ def getMostRecentRowWithDataBefore(
     if commandAge > staleAge:
         log = logging.getLogger(__name__)
         log.warning(
-            f"Component {topic} was last set {commandAge.sec/60:.1} minutes" " before the requested time"
+            f"Component {topic} was last set {commandAge.sec/60:.1} minutes before the requested time"
         )
 
     return lastRow
