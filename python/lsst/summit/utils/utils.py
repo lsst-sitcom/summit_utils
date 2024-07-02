@@ -617,6 +617,8 @@ def getSite() -> str:
         return "base"
     elif location == "https://usdf-rsp.slac.stanford.edu":
         return "staff-rsp"
+    elif location == "https://usdf-rsp-dev.slac.stanford.edu":
+        return "staff-rsp"  # we don't care this is the dev RSP, it's basically the same env wrt paths etc
 
     # if no EXTERNAL_URL, try HOSTNAME to see if we're on the dev nodes
     # it is expected that this will be extensible to SLAC
