@@ -186,7 +186,7 @@ class SpectrumExaminer:
         axHist.set_title("Spectrum pixel histogram")
         text = f"Underflow = {underflow}"
         text += f"\nOverflow = {overflow}"
-        anchored_text = AnchoredText(text, loc="1", pad=0.5)
+        anchored_text = AnchoredText(text, loc="upper right", pad=0.5)
         axHist.add_artist(anchored_text)
 
         # peak fluxes
