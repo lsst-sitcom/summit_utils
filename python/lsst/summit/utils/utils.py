@@ -1211,11 +1211,42 @@ def computeCcdExposureId(instrument: str, exposureId: int, detector: int) -> int
 
 
 def getDetectorIds(instrumentName: str) -> list[int]:
+    """Get a list of detector IDs for a given instrument.
+
+    Parameters
+    ----------
+    instrumentName : `str`
+        The name of the instrument.
+
+    Returns
+    -------
+    detectorIds : `list` of `int`
+        The list of detector IDs.
+    """
     camera = getCameraFromInstrumentName(instrumentName)
     return [detector.getId() for detector in camera]
 
 
 def getCameraFromInstrumentName(instrumentName: str) -> lsst.afw.cameraGeom.Camera:
+    """Get the camera object given the instrument name (case insenstive).
+
+    Parameters
+    ----------
+    instrumentName : `str`
+        The name of the instrument, e.g. "LATISS" or "LSSTCam". Case
+        insenstive.
+
+    Returns
+    -------
+    camera: `lsst.afw.cameraGeom.Camera`
+        The camera object corresponding to the instrument name.
+
+    Raises
+    ------
+    ValueError
+        If the instrument name is not supported.
+    """
+
     _instrument = instrumentName.lower()
 
     match _instrument:
