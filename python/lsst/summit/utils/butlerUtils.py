@@ -269,7 +269,7 @@ def getSeqNumsForDayObs(butler: dafButler.Butler, day_obs: int, extraWhere: str 
 
     Returns
     -------
-    seq_nums : `iterable`
+    seq_nums : `list` of `int`
         The seq_nums taken on the corresponding day_obs in ascending numerical
         order.
     """
@@ -281,7 +281,7 @@ def getSeqNumsForDayObs(butler: dafButler.Butler, day_obs: int, extraWhere: str 
     records = butler.registry.queryDimensionRecords(
         "exposure", where=where, bind={"dayObs": day_obs}, datasets="raw"
     )
-    return sorted([r.seq_num for r in records])
+    return sorted(set([r.seq_num for r in records]))
 
 
 def sortRecordsByDayObsThenSeqNum(
