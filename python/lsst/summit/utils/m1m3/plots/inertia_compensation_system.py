@@ -251,8 +251,7 @@ def plot_torque_data(ax: plt.Axes, dataset: M1M3ICSAnalysis) -> None:
 
 
 def plot_stable_region(fig: plt.Figure, begin: Time, end: Time, label: str = "", color: str = "b") -> Patch:
-    """
-    Highlight a stable region on the plot with a colored span.
+    """Highlight a stable region on the plot with a colored span.
 
     Parameters
     ----------
