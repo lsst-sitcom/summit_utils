@@ -336,7 +336,7 @@ def getMostRecentRowWithDataBefore(
     warnStaleAfterNMinutes : `float`, optional
         The number of minutes after which to consider the data stale and issue
         a warning.
-    maxSearchMinutes: `float` or None, optional
+    maxSearchNMinutes: `float` or None, optional
         Maximum number of minutes to search before raising ValueError.
     where: `Callable` or None, optional
         A callable taking a single pd.Dataframe argument and returning a
