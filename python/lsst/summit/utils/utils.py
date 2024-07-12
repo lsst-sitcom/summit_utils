@@ -127,7 +127,7 @@ def countPixels(maskedImage: afwImage.MaskedImage, maskPlane: str) -> int:
     return len(np.where(np.bitwise_and(maskedImage.mask.array, bit))[0])
 
 
-def quickSmooth(data: npt.NDArray[np.float_], sigma: float = 2) -> npt.NDArray[np.float_]:
+def quickSmooth(data: npt.NDArray[np.float64], sigma: float = 2) -> npt.NDArray[np.float64]:
     """Perform a quick smoothing of the image.
 
     Not to be used for scientific purposes, but improves the stretch and
@@ -150,7 +150,7 @@ def quickSmooth(data: npt.NDArray[np.float_], sigma: float = 2) -> npt.NDArray[n
     return smoothData
 
 
-def argMax2d(array: npt.NDArray[np.float_]) -> tuple[tuple[float, float], bool, list[tuple[float, float]]]:
+def argMax2d(array: npt.NDArray[np.float64]) -> tuple[tuple[float, float], bool, list[tuple[float, float]]]:
     """Get the index of the max value of an array and whether it's unique.
 
     If its not unique, returns a list of the other locations containing the
@@ -339,7 +339,7 @@ def fluxesFromFootprints(
     footprints: afwDetect.FootprintSet | afwDetect.Footprint | Iterable[afwDetect.Footprint],
     parentImage: afwImage.Image,
     subtractImageMedian: bool = False,
-) -> npt.NDArray[np.float_]:
+) -> npt.NDArray[np.float64]:
     """Calculate the flux from a set of footprints, given the parent image,
     optionally subtracting the whole-image median from each pixel as a very
     rough background subtraction.
@@ -1052,7 +1052,7 @@ def getCdf(data: np.ndarray, scale: int, nBinsMax: int = 300_000) -> tuple[np.nd
     return cdf, minVal, maxVal
 
 
-def getQuantiles(data: npt.NDArray[np.float_], nColors: int) -> npt.NDArray[np.float_]:
+def getQuantiles(data: npt.NDArray[np.float64], nColors: int) -> npt.NDArray[np.float64]:
     """Get a set of boundaries that equally distribute data into
     nColors intervals. The output can be used to make a colormap of nColors
     colors.
@@ -1096,7 +1096,7 @@ def getQuantiles(data: npt.NDArray[np.float_], nColors: int) -> npt.NDArray[np.f
     return boundaries
 
 
-def digitizeData(data: npt.NDArray[np.float_], nColors: int = 256) -> npt.NDArray[np.integer]:
+def digitizeData(data: npt.NDArray[np.float64], nColors: int = 256) -> npt.NDArray[np.integer]:
     """
     Scale data into nColors using its cumulative distribution function.
 

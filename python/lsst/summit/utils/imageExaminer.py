@@ -47,8 +47,8 @@ SIGMATOFWHM = 2.0 * np.sqrt(2.0 * np.log(2.0))
 
 
 def gauss(
-    x: float | npt.NDArray[np.float_], a: float, x0: float, sigma: float
-) -> float | npt.NDArray[np.float_]:
+    x: float | npt.NDArray[np.float64], a: float, x0: float, sigma: float
+) -> float | npt.NDArray[np.float64]:
     return a * np.exp(-((x - x0) ** 2) / (2 * sigma**2))
 
 
@@ -312,7 +312,7 @@ class ImageExaminer:
 
         return bbox
 
-    def getStarBoxData(self) -> npt.NDArray[np.float_]:
+    def getStarBoxData(self) -> npt.NDArray[np.float64]:
         """Get the image data for the star.
 
         Calculates the maximum valid box, and uses that to return the image
@@ -330,8 +330,8 @@ class ImageExaminer:
         return self.exp.image[bbox].array
 
     def getMeshGrid(
-        self, data: npt.NDArray[np.float_]
-    ) -> tuple[npt.NDArray[np.float_], npt.NDArray[np.float_]]:
+        self, data: npt.NDArray[np.float64]
+    ) -> tuple[npt.NDArray[np.float64], npt.NDArray[np.float64]]:
         """Get the meshgrid for a data array.
 
         Parameters

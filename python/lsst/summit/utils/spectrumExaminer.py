@@ -131,8 +131,8 @@ class SpectrumExaminer:
 
     def fit(self) -> None:
         def gauss(
-            x: float | npt.NDArray[np.float_], a: float, x0: float, sigma: float
-        ) -> float | npt.NDArray[np.float_]:
+            x: float | npt.NDArray[np.float64], a: float, x0: float, sigma: float
+        ) -> float | npt.NDArray[np.float64]:
             return a * np.exp(-((x - x0) ** 2) / (2 * sigma**2))
 
         data = self.spectrumData[self.goodSlice]
