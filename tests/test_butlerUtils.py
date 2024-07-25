@@ -24,7 +24,6 @@ import datetime
 import os
 import random
 import unittest
-from collections.abc import Mapping
 from typing import Iterable
 
 import lsst.daf.butler as dafButler
@@ -94,7 +93,7 @@ class ButlerUtilsTestCase(lsst.utils.tests.TestCase):
 
         # expRecords
         self.expRecordNoDetector = getExpRecordFromDataId(self.butler, self.rawDataId)
-        self.assertIsInstance(self.expRecordNoDetector, dafButler.dimensions.DimensionRecord)
+        self.assertIsInstance(self.expRecordNoDetector, dafButler.DimensionRecord)
         self.assertFalse(hasattr(self.expRecordNoDetector, "detector"))
         self.assertFalse("detector" in self.expRecordNoDetector.dataId)
         # just a crosscheck on the above to make sure other things are correct
@@ -110,11 +109,7 @@ class ButlerUtilsTestCase(lsst.utils.tests.TestCase):
             rawDataIdNoDayObSeqNum.pop(seqNumKey)
         self.rawDataIdNoDayObSeqNum = rawDataIdNoDayObSeqNum
         self.dataCoordMinimal = self.butler.registry.expandDataId(self.rawDataIdNoDayObSeqNum, detector=0)
-        self.dataCoordFullView = self.butler.registry.expandDataId(
-            self.rawDataIdNoDayObSeqNum, detector=0
-        ).mapping
-        self.assertIsInstance(self.dataCoordMinimal, dafButler.dimensions.DataCoordinate)
-        self.assertIsInstance(self.dataCoordFullView, Mapping)
+        self.assertIsInstance(self.dataCoordMinimal, dafButler.DataCoordinate)
 
     def test_getLatissDefaultCollections(self):
         defaultCollections = getLatissDefaultCollections()
@@ -188,8 +183,6 @@ class ButlerUtilsTestCase(lsst.utils.tests.TestCase):
         dRef = getDatasetRefForDataId(self.butler, "raw", self.rawDataIdNoDayObSeqNum)
         self.assertIsInstance(dRef, DatasetRef)
         dRef = getDatasetRefForDataId(self.butler, "raw", self.dataCoordMinimal)
-        self.assertIsInstance(dRef, DatasetRef)
-        dRef = getDatasetRefForDataId(self.butler, "raw", self.dataCoordFullView)
         self.assertIsInstance(dRef, DatasetRef)
 
     def test__dayobs_present(self):
@@ -286,7 +279,7 @@ class ButlerUtilsTestCase(lsst.utils.tests.TestCase):
     def test_updateDataIdOrDataCord(self):
         updateVals = {"testKey": "testValue"}
 
-        ids = [self.rawDataId, self.expRecordNoDetector, self.dataCoordMinimal, self.dataCoordFullView]
+        ids = [self.rawDataId, self.expRecordNoDetector, self.dataCoordMinimal]
         for originalId in ids:
             testId = updateDataIdOrDataCord(originalId, **updateVals)
             for k, v in updateVals.items():
@@ -301,7 +294,7 @@ class ButlerUtilsTestCase(lsst.utils.tests.TestCase):
         self.assertTrue(_dayobs_present(fullId))
         self.assertTrue(_seqnum_present(fullId))
 
-        ids = [self.rawDataId, self.expRecordNoDetector, self.dataCoordMinimal, self.dataCoordFullView]
+        ids = [self.rawDataId, self.expRecordNoDetector, self.dataCoordMinimal]
         for dataId in ids:
             fullId = fillDataId(self.butler, dataId)
             self.assertTrue(_dayobs_present(fullId))
@@ -311,7 +304,7 @@ class ButlerUtilsTestCase(lsst.utils.tests.TestCase):
 
     def test_getExpRecordFromDataId(self):
         record = getExpRecordFromDataId(self.butler, self.rawDataId)
-        self.assertIsInstance(record, dafButler.dimensions.DimensionRecord)
+        self.assertIsInstance(record, dafButler.DimensionRecord)
         return
 
     def test_getDayObsSeqNumFromExposureId(self):
@@ -355,7 +348,6 @@ class ButlerUtilsTestCase(lsst.utils.tests.TestCase):
             self.fullId,
             self.expIdOnly,
             self.expRecordNoDetector,
-            self.dataCoordFullView,
             self.dataCoordMinimal,
             self.rawDataIdNoDayObSeqNum,
         ]:
@@ -413,10 +405,10 @@ class ButlerUtilsTestCase(lsst.utils.tests.TestCase):
         seqNum = self.dayObsSeqNumIdOnly["seq_num"]
 
         recordByExpId = getExpRecord(self.butler, "LATISS", expId=expId)
-        self.assertIsInstance(recordByExpId, dafButler.dimensions.DimensionRecord)
+        self.assertIsInstance(recordByExpId, dafButler.DimensionRecord)
 
         recordByDayObsSeqNum = getExpRecord(self.butler, "LATISS", dayObs=dayObs, seqNum=seqNum)
-        self.assertIsInstance(recordByDayObsSeqNum, dafButler.dimensions.DimensionRecord)
+        self.assertIsInstance(recordByDayObsSeqNum, dafButler.DimensionRecord)
         self.assertEqual(recordByExpId, recordByDayObsSeqNum)
 
         with self.assertRaises(ValueError):

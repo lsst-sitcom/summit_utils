@@ -178,7 +178,7 @@ def getEfdData(
     end: astropy.Time | None = None,
     timespan: astropy.TimeDelta | None = None,
     event: TMAEvent | None = None,
-    expRecord: dafButler.dimensions.DimensionRecord | None = None,
+    expRecord: dafButler.DimensionRecord | None = None,
     warn: bool = True,
 ) -> pd.DataFrame:
     """Get one or more EFD topics over a time range, synchronously.

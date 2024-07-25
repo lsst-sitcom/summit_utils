@@ -21,6 +21,7 @@
 
 __all__ = ["ImageExaminer"]
 
+from typing import cast
 
 import matplotlib
 import matplotlib.patches as patches
@@ -510,11 +511,12 @@ class ImageExaminer:
         """
         plotDirect = False
         if not ax:
-            fig, ax = plt.subplots(subplot_kw={"projection": "3d"}, figsize=(10, 10))
+            _, ax = plt.subplots(subplot_kw={"projection": "3d"}, figsize=(10, 10))
+            ax = cast(Axes3D, ax)
             plotDirect = True
 
         if useColor:
-            surf = ax.plot_surface(  # noqa: F841
+            ax.plot_surface(
                 self.xx,
                 self.yy,
                 self.data,
@@ -525,7 +527,7 @@ class ImageExaminer:
                 alpha=0.9,
             )
         else:
-            surf = ax.plot_wireframe(  # noqa: F841
+            ax.plot_wireframe(
                 self.xx,
                 self.yy,
                 self.data,

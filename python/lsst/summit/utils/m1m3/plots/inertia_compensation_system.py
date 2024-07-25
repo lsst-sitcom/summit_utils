@@ -4,6 +4,7 @@ from typing import Any, TypedDict
 import matplotlib.pyplot as plt
 import pandas as pd
 from astropy.time import Time
+from matplotlib.patches import Patch
 
 from lsst.summit.utils.type_utils import M1M3ICSAnalysis
 
@@ -249,9 +250,7 @@ def plot_torque_data(ax: plt.Axes, dataset: M1M3ICSAnalysis) -> None:
     ax.legend(ncol=2, fontsize="x-small")
 
 
-def plot_stable_region(
-    fig: plt.Figure, begin: Time, end: Time, label: str = "", color: str = "b"
-) -> plt.Polygon:
+def plot_stable_region(fig: plt.Figure, begin: Time, end: Time, label: str = "", color: str = "b") -> Patch:
     """
     Highlight a stable region on the plot with a colored span.
 
@@ -271,8 +270,8 @@ def plot_stable_region(
 
     Returns
     -------
-    polygon : `matplotlib.patches.Polygon`
-        The Polygon object representing the highlighted region.
+    patch : `matplotlib.patches.Patch`
+        The patch object representing the highlighted region.
     """
     for ax in fig.axes[1:]:
         span = ax.axvspan(begin.datetime, end.datetime, fc=color, alpha=0.1, zorder=-2, label=label)
