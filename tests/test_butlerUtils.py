@@ -93,7 +93,7 @@ class ButlerUtilsTestCase(lsst.utils.tests.TestCase):
 
         # expRecords
         self.expRecordNoDetector = getExpRecordFromDataId(self.butler, self.rawDataId)
-        self.assertIsInstance(self.expRecordNoDetector, dafButler.dimensions.DimensionRecord)
+        self.assertIsInstance(self.expRecordNoDetector, dafButler.DimensionRecord)
         self.assertFalse(hasattr(self.expRecordNoDetector, "detector"))
         self.assertFalse("detector" in self.expRecordNoDetector.dataId)
         # just a crosscheck on the above to make sure other things are correct
@@ -304,7 +304,7 @@ class ButlerUtilsTestCase(lsst.utils.tests.TestCase):
 
     def test_getExpRecordFromDataId(self):
         record = getExpRecordFromDataId(self.butler, self.rawDataId)
-        self.assertIsInstance(record, dafButler.dimensions.DimensionRecord)
+        self.assertIsInstance(record, dafButler.DimensionRecord)
         return
 
     def test_getDayObsSeqNumFromExposureId(self):
@@ -405,10 +405,10 @@ class ButlerUtilsTestCase(lsst.utils.tests.TestCase):
         seqNum = self.dayObsSeqNumIdOnly["seq_num"]
 
         recordByExpId = getExpRecord(self.butler, "LATISS", expId=expId)
-        self.assertIsInstance(recordByExpId, dafButler.dimensions.DimensionRecord)
+        self.assertIsInstance(recordByExpId, dafButler.DimensionRecord)
 
         recordByDayObsSeqNum = getExpRecord(self.butler, "LATISS", dayObs=dayObs, seqNum=seqNum)
-        self.assertIsInstance(recordByDayObsSeqNum, dafButler.dimensions.DimensionRecord)
+        self.assertIsInstance(recordByDayObsSeqNum, dafButler.DimensionRecord)
         self.assertEqual(recordByExpId, recordByDayObsSeqNum)
 
         with self.assertRaises(ValueError):
