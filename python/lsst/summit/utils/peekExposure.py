@@ -53,7 +53,7 @@ from lsst.meas.base import IdGenerator, SingleFrameMeasurementTask
 IDX_SENTINEL = -99999
 
 
-def _estimateMode(data: npt.NDArray[np.float_], frac: float = 0.5) -> float:
+def _estimateMode(data: npt.NDArray[np.float64], frac: float = 0.5) -> float:
     """Estimate the mode of a 1d distribution.
 
     Finds the smallest interval containing the fraction ``frac`` of the data,
