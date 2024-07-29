@@ -619,7 +619,8 @@ def getSite() -> str:
     # if no EXTERNAL_URL, try HOSTNAME to see if we're on the dev nodes
     # it is expected that this will be extensible to SLAC
     hostname = os.getenv("HOSTNAME", "")
-    if hostname.startswith("sdfrome"):
+    interactiveNodes = ("sdfrome", "sdfiana")
+    if hostname.startswith(interactiveNodes):
         return "rubin-devl"
     elif hostname == "htcondor.ls.lsst.org":
         return "base"
