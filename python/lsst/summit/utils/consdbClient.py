@@ -23,7 +23,7 @@ import logging
 import os
 from dataclasses import dataclass
 from typing import Any
-from urllib.parse import quote
+from urllib.parse import quote, urlparse
 
 import requests
 from astropy.table import Table
@@ -52,6 +52,27 @@ def _urljoin(*args: str) -> str:
     return "/".join(args)
 
 
+def _redact(url: str) -> str:
+    """Redact authentication information from a URL.
+
+    Parameters
+    ----------
+    url : `str`
+        A URL.
+
+    Returns
+    -------
+    safe_url : `str`
+        The URL with any password component removed.
+    """
+    parsed = urlparse(url)
+    if parsed.password:
+        parsed = parsed._replace(
+            netloc=f"{parsed.username}:***@{parsed.hostname}",
+        )
+    return parsed.geturl()
+
+
 def _check_status(r: requests.Response) -> None:
     """Check the status of an HTTP response and raise if an error.
 
@@ -67,6 +88,7 @@ def _check_status(r: requests.Response) -> None:
     requests.HTTPError
         Raised if a non-successful status is returned.
     """
+    r.url = _redact(r.url)
     try:
         r.raise_for_status()
     except requests.HTTPError as e:
