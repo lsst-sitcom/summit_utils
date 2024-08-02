@@ -49,6 +49,7 @@ import lsst.utils.packages as packageUtils
 from lsst.afw.coord import Weather
 from lsst.afw.detection import Footprint, FootprintSet
 from lsst.daf.butler.cli.cliLog import CliLog
+from lsst.obs.lsst import Latiss, LsstCam, LsstComCam, LsstComCamSim
 from lsst.obs.lsst.translators.latiss import AUXTEL_LOCATION
 from lsst.obs.lsst.translators.lsst import FILTER_DELIMITER
 
@@ -92,6 +93,7 @@ __all__ = [
     "bboxToMatplotlibRectanle",
     "computeExposureId",
     "computeCcdExposureId",
+    "getDetectorIds",
 ]
 
 
@@ -615,6 +617,8 @@ def getSite() -> str:
         return "base"
     elif location == "https://usdf-rsp.slac.stanford.edu":
         return "staff-rsp"
+    elif location == "https://usdf-rsp-dev.slac.stanford.edu":
+        return "staff-rsp"  # we don't care this is the dev RSP, it's basically the same env wrt paths etc
 
     # if no EXTERNAL_URL, try HOSTNAME to see if we're on the dev nodes
     # it is expected that this will be extensible to SLAC
@@ -1204,3 +1208,56 @@ def computeCcdExposureId(instrument: str, exposureId: int, detector: int) -> int
         return lsst.obs.lsst.translators.LsstCamTranslator.compute_detector_exposure_id(exposureId, detector)
     else:
         raise ValueError("Unknown instrument {instrument}")
+
+
+def getDetectorIds(instrumentName: str) -> list[int]:
+    """Get a list of detector IDs for a given instrument.
+
+    Parameters
+    ----------
+    instrumentName : `str`
+        The name of the instrument.
+
+    Returns
+    -------
+    detectorIds : `list` of `int`
+        The list of detector IDs.
+    """
+    camera = getCameraFromInstrumentName(instrumentName)
+    return [detector.getId() for detector in camera]
+
+
+def getCameraFromInstrumentName(instrumentName: str) -> lsst.afw.cameraGeom.Camera:
+    """Get the camera object given the instrument name (case insenstive).
+
+    Parameters
+    ----------
+    instrumentName : `str`
+        The name of the instrument, e.g. "LATISS" or "LSSTCam". Case
+        insenstive.
+
+    Returns
+    -------
+    camera: `lsst.afw.cameraGeom.Camera`
+        The camera object corresponding to the instrument name.
+
+    Raises
+    ------
+    ValueError
+        If the instrument name is not supported.
+    """
+
+    _instrument = instrumentName.lower()
+
+    match _instrument:
+        case "lsstcam":
+            camera = LsstCam.getCamera()
+        case "lsstcomcam":
+            camera = LsstComCam.getCamera()
+        case "lsstcomcamsim":
+            camera = LsstComCamSim.getCamera()
+        case "latiss":
+            camera = Latiss.getCamera()
+        case _:
+            raise ValueError(f"Unsupported instrument: {instrumentName}")
+    return camera
