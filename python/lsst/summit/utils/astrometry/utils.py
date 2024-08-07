@@ -265,7 +265,6 @@ def runCharactierizeImage(exp: afwImage.Exposure, snr: float, minPix: int) -> pi
     charConfig.doMeasurePsf = False
     charConfig.doApCorr = False
     charConfig.doDeblend = False
-    charConfig.doMaskStreaks = False
     charConfig.repair.doCosmicRay = False
 
     charConfig.detection.minPixels = minPix
