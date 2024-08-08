@@ -20,6 +20,7 @@
 # along with this program.  If not, see <https://www.gnu.org/licenses/>.
 from __future__ import annotations
 
+import json
 import logging
 import re
 import time
@@ -130,6 +131,35 @@ class BlockInfo:
             f"states: \n{newline.join([str(state) for state in self.states])}"
         )
 
+    def to_json(self) -> str:
+        data = {
+            "blockNumber": self.blockNumber,
+            "blockId": self.blockId,
+            "dayObs": self.dayObs,
+            "seqNum": self.seqNum,
+            "begin": self.begin.unix,
+            "end": self.end.unix,
+            "salIndices": self.salIndices,
+            "tickets": self.tickets,
+            "states": [state.to_json() for state in self.states],
+        }
+        return json.dumps(data)
+
+    @classmethod
+    def from_json(cls, json_str: str) -> BlockInfo:
+        data = json.loads(json_str)
+        return cls(
+            blockNumber=data["blockNumber"],
+            blockId=data["blockId"],
+            dayObs=data["dayObs"],
+            seqNum=data["seqNum"],
+            begin=Time(data["begin"], format="unix", scale="tai"),
+            end=Time(data["end"], format="unix", scale="tai"),
+            salIndices=data["salIndices"],
+            tickets=data["tickets"],
+            states=[ScriptStatePoint.from_json(state) for state in data["states"]],
+        )
+
 
 @dataclass(kw_only=True, frozen=True)
 class ScriptStatePoint:
@@ -162,6 +192,23 @@ class ScriptStatePoint:
     def __str__(self) -> str:
         reasonStr = f" - {self.reason}" if self.reason else ""
         return f"{self.state.name:>10} @ {self.time.isot}{reasonStr}"
+
+    def to_json(self) -> str:
+        data = {
+            "time": self.time.unix,
+            "state": self.state.value,
+            "reason": self.reason,
+        }
+        return json.dumps(data)
+
+    @classmethod
+    def from_json(cls, json_str: str) -> ScriptStatePoint:
+        data = json.loads(json_str)
+        return cls(
+            time=Time(data["time"], format="unix", scale="tai"),
+            state=ScriptState(data["state"]),
+            reason=data.get("reason", ""),
+        )
 
 
 class BlockParser:
@@ -440,10 +487,10 @@ class BlockParser:
         blockId = blockIds.pop()
 
         blockInfo = BlockInfo(
-            blockNumber=block,
+            blockNumber=int(block),  # it's np.int64 otherwise, and they don't json serialize
             blockId=blockId,
             dayObs=self.dayObs,
-            seqNum=seqNum,
+            seqNum=int(seqNum),  # it's np.int64 otherwise, and they don't json serialize
             begin=efdTimestampToAstropy(rows.iloc[0]["private_efdStamp"]),
             end=efdTimestampToAstropy(rows.iloc[-1]["private_efdStamp"]),
             salIndices=sorted(salIndices),
@@ -472,6 +519,7 @@ class BlockParser:
         """
         blockInfo = self.getBlockInfo(block, seqNum)
         if blockInfo is None:
+            self.log.info(f"No blockInfo found for {block=}, {seqNum=}")
             return []
         begin = blockInfo.begin
         end = blockInfo.end
