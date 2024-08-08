@@ -153,8 +153,8 @@ class BlockInfo:
             blockId=data["blockId"],
             dayObs=data["dayObs"],
             seqNum=data["seqNum"],
-            begin=Time(data["begin"], format="unix", scale="tai"),
-            end=Time(data["end"], format="unix", scale="tai"),
+            begin=Time(data["begin"], format="unix", scale="utc"),
+            end=Time(data["end"], format="unix", scale="utc"),
             salIndices=data["salIndices"],
             tickets=data["tickets"],
             states=[ScriptStatePoint.from_json(state) for state in data["states"]],
@@ -205,7 +205,7 @@ class ScriptStatePoint:
     def from_json(cls, json_str: str) -> ScriptStatePoint:
         data = json.loads(json_str)
         return cls(
-            time=Time(data["time"], format="unix", scale="tai"),
+            time=Time(data["time"], format="unix", scale="utc"),
             state=ScriptState(data["state"]),
             reason=data.get("reason", ""),
         )
