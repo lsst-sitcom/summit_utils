@@ -23,6 +23,7 @@ from __future__ import annotations
 import datetime
 import enum
 import itertools
+import json
 import logging
 import re
 from collections.abc import Iterable
@@ -41,7 +42,7 @@ from matplotlib.ticker import FuncFormatter
 
 from lsst.utils.iteration import ensure_iterable
 
-from .blockUtils import BlockParser
+from .blockUtils import BlockInfo, BlockParser
 from .efdUtils import (
     COMMAND_ALIASES,
     clipDataToEvent,
@@ -761,6 +762,39 @@ class TMAEvent:
             f"begin: {self.begin!r}\n"
             f"end: {self.end!r}\n"
             f"blockInfos: {blockInfoStr}"
+        )
+
+    def to_json(self) -> str:
+        data = {
+            "dayObs": self.dayObs,
+            "seqNum": self.seqNum,
+            "type": self.type.value,
+            "endReason": self.endReason.value,
+            "duration": self.duration,
+            "begin": self.begin.unix,
+            "end": self.end.unix,
+            "blockInfos": [blockInfo.to_json() for blockInfo in self.blockInfos],
+            "version": self.version,
+            "_startRow": self._startRow,
+            "_endRow": self._endRow,
+        }
+        return json.dumps(data)
+
+    @classmethod
+    def from_json(cls, json_str: str) -> TMAEvent:
+        data = json.loads(json_str)
+        return cls(
+            dayObs=data["dayObs"],
+            seqNum=data["seqNum"],
+            type=TMAState(data["type"]),
+            endReason=TMAState(data["endReason"]),
+            duration=data["duration"],
+            begin=Time(data["begin"], format="unix", scale="tai"),
+            end=Time(data["end"], format="unix", scale="tai"),
+            blockInfos=[BlockInfo.from_json(blockInfo) for blockInfo in data["blockInfos"]],
+            version=data.get("version", 0),
+            _startRow=data["_startRow"],
+            _endRow=data["_endRow"],
         )
 
     def associatedWith(
