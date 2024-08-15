@@ -25,8 +25,6 @@ __all__ = [
     "PeekExposureTask",
 ]
 
-from typing import Any
-
 from deprecated.sphinx import deprecated
 
 from lsst.pipe.tasks.peekExposure import PeekExposureTask as NewPeekExposureTask
@@ -39,10 +37,7 @@ from lsst.pipe.tasks.peekExposure import PeekExposureTaskConfig as NewPeekExposu
     category=FutureWarning,
 )
 class PeekExposureTaskConfig(NewPeekExposureTaskConfig):
-    """Config class for the PeekExposureTask."""
-
-    def __init__(self, *args: Any, **kwargs: Any):
-        super().__init__(*args, **kwargs)
+    """Redirect to the new class in pipe_tasks."""
 
 
 @deprecated(
@@ -51,7 +46,4 @@ class PeekExposureTaskConfig(NewPeekExposureTaskConfig):
     category=FutureWarning,
 )
 class PeekExposureTask(NewPeekExposureTask):
-    """ """
-
-    def __init__(self, config: Any, *args: Any, **kwargs: Any):
-        super().__init__(config=config, *args, **kwargs)
+    """Redirect to the new class in pipe_tasks."""
