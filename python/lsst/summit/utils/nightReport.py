@@ -736,8 +736,13 @@ class NightReport:
             objects = self.stars
         objects = ensure_iterable(objects)
 
+        if not objects:  # there's genuinely nothing now
+            self.log.info("No objects to plot")
+            return None
+
         fig = plt.figure(figsize=(16, 12))
 
+        ax = None
         for obj in objects:
             if obj in CALIB_VALUES:
                 continue
@@ -757,6 +762,11 @@ class NightReport:
             ax = self._makePolarPlot(
                 azes, zens, marker=marker, title=None, makeFig=False, color=color, objName=obj
             )
+
+        if ax is None:
+            self.log.info("Only calibs taken so far, nothing to plot")
+            return None
+
         lgnd = ax.legend(bbox_to_anchor=(1.05, 1), prop={"size": 15}, loc="upper left")
         ax.set_title("Axial coverage - azimuth (theta, deg) vs zenith angle (r, deg)", size=20)
 
