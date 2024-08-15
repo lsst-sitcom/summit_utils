@@ -29,7 +29,8 @@ from typing import Any
 
 from deprecated.sphinx import deprecated
 
-from lsst.pipe.tasks.peekExposure import PeekExposureTask, PeekExposureTaskConfig
+from lsst.pipe.tasks.peekExposure import PeekExposureTask as NewPeekExposureTask
+from lsst.pipe.tasks.peekExposure import PeekExposureTaskConfig as NewPeekExposureTaskConfig
 
 
 @deprecated(
@@ -37,7 +38,7 @@ from lsst.pipe.tasks.peekExposure import PeekExposureTask, PeekExposureTaskConfi
     version="v28.0",
     category=FutureWarning,
 )
-class PeekExposureTaskConfig(PeekExposureTaskConfig):
+class PeekExposureTaskConfig(NewPeekExposureTaskConfig):
     """Config class for the PeekExposureTask."""
 
     def __init__(self, *args: Any, **kwargs: Any):
@@ -49,7 +50,7 @@ class PeekExposureTaskConfig(PeekExposureTaskConfig):
     version="v28.0",
     category=FutureWarning,
 )
-class PeekExposureTask(PeekExposureTask):
+class PeekExposureTask(NewPeekExposureTask):
     """ """
 
     def __init__(self, config: Any, *args: Any, **kwargs: Any):
