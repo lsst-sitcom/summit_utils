@@ -43,8 +43,9 @@ from tqdm import tqdm
 import lsst.afw.display as afwDisplay
 from lsst.afw.geom import ellipses
 from lsst.daf.butler.datastore.cache_manager import DatastoreCacheManager
-from lsst.summit.utils.bestEffort import BestEffortIsr
-from lsst.summit.utils.peekExposure import PeekExposureTask
+from lsst.pipe.tasks.peekExposure import PeekExposureTask
+
+from .bestEffort import BestEffortIsr
 
 # Set logger level to higher than CRITICAL to suppress all output
 silentLogger = logging.getLogger("silentLogger")
