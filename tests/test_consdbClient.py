@@ -28,6 +28,9 @@ from lsst.summit.utils import ConsDbClient, FlexibleMetadataInfo
 
 @pytest.fixture
 def client():
+    """Initilaize client with a fake url
+    Requires mocking connection with @responses.activate decorator
+    """
     return ConsDbClient("http://example.com/consdb")
 
 
@@ -159,6 +162,23 @@ def test_schema(client):
     instrument = "latiss"
     table = "misc_table"
     assert client.schema(instrument, table) == description
+
+
+@responses.activate
+def test_clean_url(client):
+    """Use with pytest raises assert an error,
+    assert that url does not contain domain
+    """
+    obs_type = "exposure"
+    responses.post(
+        "http://example.com/consdb/flex/bad_instrument/exposure/addkey",
+        status=404,
+    )
+    with pytest.raises(HTTPError, match="404") as error:
+        client.add_flexible_metadata_key("bad_instrument", obs_type, "error", "int", "instrument error")
+
+    url = error.value.args[0].split()[-1]
+    assert "example.com" not in url
 
 
 # TODO: more POST tests
