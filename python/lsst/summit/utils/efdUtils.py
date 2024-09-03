@@ -180,6 +180,7 @@ def getEfdData(
     event: TMAEvent | None = None,
     expRecord: dafButler.DimensionRecord | None = None,
     warn: bool = True,
+    raiseIfTopicNotInSchema: bool = True,
 ) -> pd.DataFrame:
     """Get one or more EFD topics over a time range, synchronously.
 
@@ -230,6 +231,8 @@ def getEfdData(
         If ``True``, warn when no data is found. Exists so that utility code
         can disable warnings when checking for data, and therefore defaults to
         ``True``.
+    raiseIfTopicNotInSchema : `bool`, optional
+        Whether to raise an error if the topic is not in the EFD schema.
 
     Returns
     -------
@@ -263,7 +266,14 @@ def getEfdData(
     nest_asyncio.apply()
     loop = asyncio.get_event_loop()
     ret = loop.run_until_complete(
-        _getEfdData(client=client, topic=topic, begin=begin, end=end, columns=columns)
+        _getEfdData(
+            client=client,
+            topic=topic,
+            begin=begin,
+            end=end,
+            columns=columns,
+            raiseIfTopicNotInSchema=raiseIfTopicNotInSchema,
+        )
     )
     if ret.empty and warn:
         log = logging.getLogger(__name__)
@@ -280,6 +290,7 @@ async def _getEfdData(
     begin: astropy.Time,
     end: astropy.Time,
     columns: list[str] | None = None,
+    raiseIfTopicNotInSchema: bool = True,
 ) -> pd.DataFrame:
     """Get data for a topic from the EFD over the specified time range.
 
@@ -295,6 +306,8 @@ async def _getEfdData(
         The end time for the query.
     columns : `list` of `str`, optional
         The columns to query. If not specified, all columns are returned.
+    raiseIfTopicNotInSchema : `bool`, optional
+        Whether to raise an error if the topic is not in the EFD schema.
 
     Returns
     -------
@@ -308,7 +321,10 @@ async def _getEfdData(
     availableTopics = await client.get_topics()
 
     if topic not in availableTopics:
-        raise ValueError(f"Topic {topic} not in EFD schema")
+        if raiseIfTopicNotInSchema:
+            raise ValueError(f"Topic {topic} not in EFD schema")
+        else:
+            return pd.DataFrame()
 
     data = await client.select_time_series(topic, columns, begin.utc, end.utc)
 
