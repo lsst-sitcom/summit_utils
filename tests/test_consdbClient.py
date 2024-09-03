@@ -22,8 +22,8 @@
 import pytest
 import responses
 from requests import HTTPError
-
-from lsst.summit.utils import ConsDbClient, FlexibleMetadataInfo
+import logging
+from lsst.summit.utils import ConsDbClient, FlexibleMetadataInfo, clean_url
 
 
 @pytest.fixture
@@ -163,12 +163,17 @@ def test_schema(client):
     table = "misc_table"
     assert client.schema(instrument, table) == description
 
-
+    
 @responses.activate
-def test_clean_url(client):
-    """Use with pytest raises assert an error,
+def testclean_url_response(client, capsys):
+    """Test that URL is cleaned when an error is thrown from requests
+    Use with pytest raises assert an error,
     assert that url does not contain domain
     """
+    print('initial client sesh', client.session.__dict__)
+    client.session.hooks['response'] = clean_url
+    print('added hooks? client?', client.session.hooks)
+
     obs_type = "exposure"
     responses.post(
         "http://example.com/consdb/flex/bad_instrument/exposure/addkey",
@@ -179,6 +184,23 @@ def test_clean_url(client):
 
     url = error.value.args[0].split()[-1]
     assert "example.com" not in url
+
+
+def testclean_url():
+    """Test that given a response object with a url with tokens,
+    assert that the response object recieved does not have tokens
+    """
+    clean_url = 'postgresql:///exposurelog'
+    response = requests.Response(url='postgresql://usdf:v987wefVMPz@usdf-fake.slackers.stanford.edu/exposurelog')
+    new_response = clean_url(response)
+    assert new_response.url == clean_url
+
+
+def test_client(client):
+    """ Test that consdb client is initialized properly"""
+    print('natural client sesh', client.session.__dict__)
+    print('Client native hooks?', client.session.hooks)
+    assert client.session.hooks['response'] == 'clean_url'
 
 
 # TODO: more POST tests

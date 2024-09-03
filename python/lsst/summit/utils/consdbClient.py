@@ -23,7 +23,7 @@ import logging
 import os
 from dataclasses import dataclass
 from typing import Any
-from urllib.parse import quote
+from urllib.parse import quote, urlparse
 
 import requests
 from astropy.table import Table
@@ -77,6 +77,21 @@ def _check_status(r: requests.Response) -> None:
         raise e
 
 
+def clean_url(resp:requests.Response) -> requests.Response:
+    """Parse url from response and remove netloc portion. 
+    
+    Set new url in response and return response
+    
+    Parameters
+    ----------
+    resp : `requests.Response` 
+        The response that could contain a URL with tokens
+    """
+    url = urlparse(resp.url)
+    resp.url = url._replace(netloc="").geturl()
+    return resp
+
+    
 @dataclass
 class FlexibleMetadataInfo:
     """Description of a flexible metadata value.
@@ -99,7 +114,7 @@ class FlexibleMetadataInfo:
     doc: str
     unit: str | None = None
     ucd: str | None = None
-
+    
 
 class ConsDbClient:
     """A client library for accessing the Consolidated Database.
@@ -127,6 +142,8 @@ class ConsDbClient:
 
     def __init__(self, url: str | None = None):
         self.session = requests.Session()
+        self.session.hooks['response'].append(clean_url)
+        
         if url is None:
             self.url = os.environ["LSST_CONSDB_PQ_URL"]
         else:
@@ -274,6 +291,8 @@ class ConsDbClient:
         requests.HTTPError
             Raised if a non-successful status is returned.
         """
+        print('print me print me')
+        logger.info('I am a logging message')
         data = {"key": key, "dtype": dtype, "doc": doc}
         if unit is not None:
             data["unit"] = unit
