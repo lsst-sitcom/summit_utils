@@ -56,7 +56,13 @@ def hasTimebaseErrors(expRecord: dafButler.DimensionRecord, client: EfdClient, m
         `True` if the exposure has timebase errors, `False` otherwise.
     """
     log = logging.getLogger(__name__)
-    mountPosition = getEfdData(client, "lsst.sal.ATMCS.mount_AzEl_Encoders", expRecord=expRecord, warn=False)
+    mountPosition = getEfdData(
+        client,
+        "lsst.sal.ATMCS.mount_AzEl_Encoders",
+        expRecord=expRecord,
+        warn=False,
+        raiseIfTopicNotInSchema=False,
+    )
 
     if mountPosition.empty:
         log.warning(

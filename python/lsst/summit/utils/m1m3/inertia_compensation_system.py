@@ -277,6 +277,7 @@ class M1M3ICSAnalysis:
             prePadding=self.outer_pad,
             postPadding=self.outer_pad,
             warn=False,
+            raiseIfTopicNotInSchema=False,
         )
 
         self.log.debug(f"Queried {df.index.size} rows from {topic}")

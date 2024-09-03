@@ -338,6 +338,7 @@ def getMostRecentRowWithDataBefore(
     warnStaleAfterNMinutes: float | int = 60 * 12,
     maxSearchNMinutes: float | int | None = None,
     where: Callable[[pd.DataFrame], list[bool]] | None = None,
+    raiseIfTopicNotInSchema: bool = True,
 ) -> pd.Series:
     """Get the most recent row of data for a topic before a given time.
 
@@ -357,6 +358,8 @@ def getMostRecentRowWithDataBefore(
     where: `Callable` or None, optional
         A callable taking a single pd.Dataframe argument and returning a
         boolean list indicating rows to consider.
+    raiseIfTopicNotInSchema : `bool`, optional
+        Whether to raise an error if the topic is not in the EFD schema.
 
     Returns
     -------
@@ -382,7 +385,14 @@ def getMostRecentRowWithDataBefore(
     df = pd.DataFrame()
     beginTime = timeToLookBefore
     while df.empty and beginTime > earliest:
-        df = getEfdData(client, topic, begin=beginTime, timespan=-TIME_CHUNKING, warn=False)
+        df = getEfdData(
+            client,
+            topic,
+            begin=beginTime,
+            timespan=-TIME_CHUNKING,
+            warn=False,
+            raiseIfTopicNotInSchema=raiseIfTopicNotInSchema,
+        )
         beginTime -= TIME_CHUNKING
         if where is not None and not df.empty:
             df = df[where(df)]
@@ -792,6 +802,7 @@ def getCommands(
             prePadding=prePadding,
             postPadding=postPadding,
             warn=False,  # most commands will not be issue so we expect many empty queries
+            raiseIfTopicNotInSchema=False,
         )
         for time, _ in data.iterrows():
             # this is much the most simple data structure, and the chance
