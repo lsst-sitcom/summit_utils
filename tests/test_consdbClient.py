@@ -28,6 +28,9 @@ from lsst.summit.utils import ConsDbClient, FlexibleMetadataInfo
 
 @pytest.fixture
 def client():
+    """Initialize client with a fake url
+    Requires mocking connection with @responses.activate decorator
+    """
     return ConsDbClient("http://example.com/consdb")
 
 
@@ -159,6 +162,44 @@ def test_schema(client):
     instrument = "latiss"
     table = "misc_table"
     assert client.schema(instrument, table) == description
+
+
+@responses.activate
+@pytest.mark.parametrize(
+    "secret, redacted",
+    [
+        ("usdf:v987wefVMPz", "us***:v9***"),
+        ("u:v", "u***:v***"),
+        ("ulysses", "ul***"),
+        (":alberta94", "***:al***"),
+    ],
+)
+def test_clean_token_url_response(secret, redacted):
+    """Test tokens URL is cleaned when an error is thrown from requests
+    Use with pytest raises assert an error'
+    assert that url does not contain tokens
+    """
+    domain = "@usdf-fake.slackers.stanford.edu/consdb"
+    complex_client = ConsDbClient(f"https://{secret}{domain}")
+
+    obs_type = "exposure"
+    responses.post(
+        f"https://{secret}{domain}/flex/bad_instrument/exposure/addkey",
+        status=404,
+    )
+    with pytest.raises(HTTPError, match="404") as error:
+        complex_client.add_flexible_metadata_key(
+            "bad_instrument", obs_type, "error", "int", "instrument error"
+        )
+
+    url = error.value.args[0].split()[-1]
+    sanitized = f"https://{redacted}{domain}/flex/bad_instrument/exposure/addkey"
+    assert url == sanitized
+
+
+def test_client(client):
+    """Test ConsDbClient is initialized properly"""
+    assert "clean_url" in str(client.session.hooks["response"])
 
 
 # TODO: more POST tests

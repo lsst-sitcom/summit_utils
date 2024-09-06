@@ -23,7 +23,7 @@ import logging
 import os
 from dataclasses import dataclass
 from typing import Any
-from urllib.parse import quote
+from urllib.parse import quote, urlparse
 
 import requests
 from astropy.table import Table
@@ -77,6 +77,24 @@ def _check_status(r: requests.Response) -> None:
         raise e
 
 
+def clean_url(resp: requests.Response, *args, **kwargs) -> requests.Response:
+    """Parse url from response and remove netloc portion.
+
+    Set new url in response and return response
+
+    Parameters
+    ----------
+    resp : `requests.Response`
+        The response that could contain a URL with tokens
+    """
+    url = urlparse(resp.url)
+    short_user = f"{url.username[:2]}***" if url.username is not None else ""
+    short_pass = f":{url.password[:2]}***" if url.password is not None else ""
+    netloc = f"{short_user}{short_pass}@{url.hostname}"
+    resp.url = url._replace(netloc=netloc).geturl()
+    return resp
+
+
 @dataclass
 class FlexibleMetadataInfo:
     """Description of a flexible metadata value.
@@ -127,6 +145,8 @@ class ConsDbClient:
 
     def __init__(self, url: str | None = None):
         self.session = requests.Session()
+        self.session.hooks["response"].append(clean_url)
+
         if url is None:
             self.url = os.environ["LSST_CONSDB_PQ_URL"]
         else:
