@@ -195,6 +195,15 @@ def getEfdData(
 
     The results from all topics are merged into a single dataframe.
 
+    `raiseIfTopicNotInSchema` should only be set to `False` when running on the
+    summit or in utility code for topics which might have had no data taken
+    within the last <data_retention_period> (nominally 30 days). Once a topic
+    is in the schema at USDF it will always be there, and thus users there
+    never need worry about this, always using `False` will be fine. However, at
+    the summit things are a little less predictable, so something missing from
+    the schema doesn't necessarily mean a typo, and utility code shouldn't
+    raise when data has been expunged.
+
     Parameters
     ----------
     client : `lsst_efd_client.efd_helper.EfdClient`
@@ -324,6 +333,8 @@ async def _getEfdData(
         if raiseIfTopicNotInSchema:
             raise ValueError(f"Topic {topic} not in EFD schema")
         else:
+            log = logging.getLogger(__name__)
+            log.debug(f"Topic {topic} not in EFD schema, returning empty DataFrame")
             return pd.DataFrame()
 
     data = await client.select_time_series(topic, columns, begin.utc, end.utc)
