@@ -86,7 +86,8 @@ class EfdUtilsTestCase(lsst.utils.tests.TestCase):
     @vcr.use_cassette()
     def tearDown(self):
         loop = asyncio.get_event_loop()
-        loop.run_until_complete(self.client.influx_client.close())
+        if self.client.influx_client is not None:
+            loop.run_until_complete(self.client.influx_client.close())
 
     @vcr.use_cassette()
     def test_makeEfdClient(self):
@@ -194,6 +195,19 @@ class EfdUtilsTestCase(lsst.utils.tests.TestCase):
             _ = getEfdData(self.client, self.axisTopic, begin=self.dayObs)
             # good query, except the topic doesn't exist
             _ = getEfdData(self.client, "badTopic", begin=dayStart, end=dayEnd)
+
+    @vcr.use_cassette()
+    def test_raiseIfTopicNotInSchema(self):
+        dayStart = getDayObsStartTime(self.dayObs)
+        dayEnd = getDayObsEndTime(self.dayObs)
+
+        badTopic = "lsst.sal.nonExistentTopic"
+        # test this does not raise
+        _ = getEfdData(self.client, badTopic, begin=dayStart, end=dayEnd, raiseIfTopicNotInSchema=False)
+
+        with self.assertRaises(ValueError):
+            # test this does raise, as raiseIfTopicNotInSchema defaults to True
+            _ = getEfdData(self.client, badTopic, begin=dayStart, end=dayEnd)
 
     @vcr.use_cassette()
     def test_getMostRecentRowWithDataBefore(self):

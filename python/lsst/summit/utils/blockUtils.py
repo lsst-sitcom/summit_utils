@@ -204,7 +204,11 @@ class BlockParser:
         # any blocks which might span the end of the day.
         padding = 1.5 * 60 * 60
         data = getEfdData(
-            self.client, "lsst.sal.Script.logevent_state", dayObs=self.dayObs, postPadding=padding
+            self.client,
+            "lsst.sal.Script.logevent_state",
+            dayObs=self.dayObs,
+            postPadding=padding,
+            raiseIfTopicNotInSchema=False,
         )
         self.data = data
 

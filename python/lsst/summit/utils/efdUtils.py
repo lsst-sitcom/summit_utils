@@ -180,6 +180,7 @@ def getEfdData(
     event: TMAEvent | None = None,
     expRecord: dafButler.DimensionRecord | None = None,
     warn: bool = True,
+    raiseIfTopicNotInSchema: bool = True,
 ) -> pd.DataFrame:
     """Get one or more EFD topics over a time range, synchronously.
 
@@ -193,6 +194,15 @@ def getEfdData(
     begin time and use a negative timespan.
 
     The results from all topics are merged into a single dataframe.
+
+    `raiseIfTopicNotInSchema` should only be set to `False` when running on the
+    summit or in utility code for topics which might have had no data taken
+    within the last <data_retention_period> (nominally 30 days). Once a topic
+    is in the schema at USDF it will always be there, and thus users there
+    never need worry about this, always using `False` will be fine. However, at
+    the summit things are a little less predictable, so something missing from
+    the schema doesn't necessarily mean a typo, and utility code shouldn't
+    raise when data has been expunged.
 
     Parameters
     ----------
@@ -230,6 +240,8 @@ def getEfdData(
         If ``True``, warn when no data is found. Exists so that utility code
         can disable warnings when checking for data, and therefore defaults to
         ``True``.
+    raiseIfTopicNotInSchema : `bool`, optional
+        Whether to raise an error if the topic is not in the EFD schema.
 
     Returns
     -------
@@ -263,14 +275,22 @@ def getEfdData(
     nest_asyncio.apply()
     loop = asyncio.get_event_loop()
     ret = loop.run_until_complete(
-        _getEfdData(client=client, topic=topic, begin=begin, end=end, columns=columns)
+        _getEfdData(
+            client=client,
+            topic=topic,
+            begin=begin,
+            end=end,
+            columns=columns,
+            raiseIfTopicNotInSchema=raiseIfTopicNotInSchema,
+        )
     )
     if ret.empty and warn:
         log = logging.getLogger(__name__)
-        log.warning(
-            f"Topic {topic} is in the schema, but no data was returned by the query for the specified"
-            " time range"
-        )
+        msg = ""
+        if raiseIfTopicNotInSchema:
+            f"Topic {topic} is in the schema, but "
+        msg += "no data was returned by the query for the specified time range"
+        log.warning(msg)
     return ret
 
 
@@ -280,6 +300,7 @@ async def _getEfdData(
     begin: astropy.Time,
     end: astropy.Time,
     columns: list[str] | None = None,
+    raiseIfTopicNotInSchema: bool = True,
 ) -> pd.DataFrame:
     """Get data for a topic from the EFD over the specified time range.
 
@@ -295,6 +316,8 @@ async def _getEfdData(
         The end time for the query.
     columns : `list` of `str`, optional
         The columns to query. If not specified, all columns are returned.
+    raiseIfTopicNotInSchema : `bool`, optional
+        Whether to raise an error if the topic is not in the EFD schema.
 
     Returns
     -------
@@ -308,7 +331,12 @@ async def _getEfdData(
     availableTopics = await client.get_topics()
 
     if topic not in availableTopics:
-        raise ValueError(f"Topic {topic} not in EFD schema")
+        if raiseIfTopicNotInSchema:
+            raise ValueError(f"Topic {topic} not in EFD schema")
+        else:
+            log = logging.getLogger(__name__)
+            log.debug(f"Topic {topic} not in EFD schema, returning empty DataFrame")
+            return pd.DataFrame()
 
     data = await client.select_time_series(topic, columns, begin.utc, end.utc)
 
@@ -322,6 +350,7 @@ def getMostRecentRowWithDataBefore(
     warnStaleAfterNMinutes: float | int = 60 * 12,
     maxSearchNMinutes: float | int | None = None,
     where: Callable[[pd.DataFrame], list[bool]] | None = None,
+    raiseIfTopicNotInSchema: bool = True,
 ) -> pd.Series:
     """Get the most recent row of data for a topic before a given time.
 
@@ -341,6 +370,8 @@ def getMostRecentRowWithDataBefore(
     where: `Callable` or None, optional
         A callable taking a single pd.Dataframe argument and returning a
         boolean list indicating rows to consider.
+    raiseIfTopicNotInSchema : `bool`, optional
+        Whether to raise an error if the topic is not in the EFD schema.
 
     Returns
     -------
@@ -366,7 +397,14 @@ def getMostRecentRowWithDataBefore(
     df = pd.DataFrame()
     beginTime = timeToLookBefore
     while df.empty and beginTime > earliest:
-        df = getEfdData(client, topic, begin=beginTime, timespan=-TIME_CHUNKING, warn=False)
+        df = getEfdData(
+            client,
+            topic,
+            begin=beginTime,
+            timespan=-TIME_CHUNKING,
+            warn=False,
+            raiseIfTopicNotInSchema=raiseIfTopicNotInSchema,
+        )
         beginTime -= TIME_CHUNKING
         if where is not None and not df.empty:
             df = df[where(df)]
@@ -776,6 +814,7 @@ def getCommands(
             prePadding=prePadding,
             postPadding=postPadding,
             warn=False,  # most commands will not be issue so we expect many empty queries
+            raiseIfTopicNotInSchema=False,
         )
         for time, _ in data.iterrows():
             # this is much the most simple data structure, and the chance

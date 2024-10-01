@@ -182,10 +182,20 @@ def getAzimuthElevationDataForEvent(
         The elevation data for the specified event.
     """
     azimuthData = getEfdData(
-        client, "lsst.sal.MTMount.azimuth", event=event, prePadding=prePadding, postPadding=postPadding
+        client,
+        "lsst.sal.MTMount.azimuth",
+        event=event,
+        prePadding=prePadding,
+        postPadding=postPadding,
+        raiseIfTopicNotInSchema=False,
     )
     elevationData = getEfdData(
-        client, "lsst.sal.MTMount.elevation", event=event, prePadding=prePadding, postPadding=postPadding
+        client,
+        "lsst.sal.MTMount.elevation",
+        event=event,
+        prePadding=prePadding,
+        postPadding=postPadding,
+        raiseIfTopicNotInSchema=False,
     )
 
     azValues = azimuthData["actualPosition"].values
@@ -1498,7 +1508,13 @@ class TMAEventMaker:
         for component in itertools.chain(
             self._movingComponents, self._inPositionComponents, self._stateComponents
         ):
-            data[component] = getEfdData(self.client, component, dayObs=dayObs, warn=False)
+            data[component] = getEfdData(
+                self.client,
+                component,
+                dayObs=dayObs,
+                warn=False,
+                raiseIfTopicNotInSchema=False,
+            )
             self.log.debug(f"Found {len(data[component])} for {component}")
 
         if all(dataframe.empty for dataframe in data.values()):
