@@ -286,10 +286,11 @@ def getEfdData(
     )
     if ret.empty and warn:
         log = logging.getLogger(__name__)
-        log.warning(
-            f"Topic {topic} is in the schema, but no data was returned by the query for the specified"
-            " time range"
-        )
+        msg = ""
+        if raiseIfTopicNotInSchema:
+            f"Topic {topic} is in the schema, but "
+        msg += "no data was returned by the query for the specified time range"
+        log.warning(msg)
     return ret
 
 
