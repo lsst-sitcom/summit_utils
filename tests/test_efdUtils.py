@@ -86,7 +86,8 @@ class EfdUtilsTestCase(lsst.utils.tests.TestCase):
     @vcr.use_cassette()
     def tearDown(self):
         loop = asyncio.get_event_loop()
-        loop.run_until_complete(self.client.influx_client.close())
+        if self.client.influx_client is not None:
+            loop.run_until_complete(self.client.influx_client.close())
 
     @vcr.use_cassette()
     def test_makeEfdClient(self):
