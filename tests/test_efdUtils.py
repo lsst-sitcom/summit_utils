@@ -197,6 +197,19 @@ class EfdUtilsTestCase(lsst.utils.tests.TestCase):
             _ = getEfdData(self.client, "badTopic", begin=dayStart, end=dayEnd)
 
     @vcr.use_cassette()
+    def test_raiseIfTopicNotInSchema(self):
+        dayStart = getDayObsStartTime(self.dayObs)
+        dayEnd = getDayObsEndTime(self.dayObs)
+
+        badTopic = "lsst.sal.nonExistentTopic"
+        # test this does not raise
+        _ = getEfdData(self.client, badTopic, begin=dayStart, end=dayEnd, raiseIfTopicNotInSchema=False)
+
+        with self.assertRaises(ValueError):
+            # test this does raise, as raiseIfTopicNotInSchema defaults to True
+            _ = getEfdData(self.client, badTopic, begin=dayStart, end=dayEnd)
+
+    @vcr.use_cassette()
     def test_getMostRecentRowWithDataBefore(self):
         time = Time(1687845854.736784, scale="utc", format="unix")
         rowData = getMostRecentRowWithDataBefore(
