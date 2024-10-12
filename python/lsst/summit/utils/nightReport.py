@@ -711,7 +711,7 @@ class NightReport:
 
     def makeAltAzCoveragePlot(
         self, objects: Iterable[str] | None = None, withLines: bool = False, saveFig: str = ""
-    ) -> matplotlib.figure.Figure:
+    ) -> matplotlib.figure.Figure | None:
         """Make a polar plot of the azimuth and zenith angle for each object.
 
         Plots the azimuth on the theta axis, and zenith angle (not altitude!)
@@ -729,8 +729,8 @@ class NightReport:
 
         Return
         ------
-        fig : `matplotlib.figure.Figure`
-            The figure object.
+        fig : `matplotlib.figure.Figure` or `None`
+            The figure object, or `None` if nothing was plotted.
         """
         if not objects:
             objects = self.stars
