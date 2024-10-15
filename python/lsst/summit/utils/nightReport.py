@@ -611,7 +611,7 @@ class NightReport:
 
     def plotPerObjectAirMass(
         self, objects: Iterable[str] | None = None, airmassOneAtTop: bool = True, saveFig: str = ""
-    ) -> matplotlib.figure.Figure:
+    ) -> matplotlib.figure.Figure | None:
         """Plot the airmass for objects observed over the course of the night.
 
         Parameters
@@ -626,11 +626,15 @@ class NightReport:
 
         Return
         ------
-        fig : `matplotlib.figure.Figure`
-            The figure object.
+        fig : `matplotlib.figure.Figure` or `None`
+            The figure object or `None` if nothing was plotted.
         """
         if not objects:
             objects = self.stars
+
+        if not objects:  # there's genuinely nothing now
+            self.log.info("No objects to plot")
+            return None
 
         objects = ensure_iterable(objects)
 
