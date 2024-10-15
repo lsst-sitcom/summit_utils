@@ -611,7 +611,7 @@ class NightReport:
 
     def plotPerObjectAirMass(
         self, objects: Iterable[str] | None = None, airmassOneAtTop: bool = True, saveFig: str = ""
-    ) -> matplotlib.figure.Figure:
+    ) -> matplotlib.figure.Figure | None:
         """Plot the airmass for objects observed over the course of the night.
 
         Parameters
@@ -626,11 +626,15 @@ class NightReport:
 
         Return
         ------
-        fig : `matplotlib.figure.Figure`
-            The figure object.
+        fig : `matplotlib.figure.Figure` or `None`
+            The figure object or `None` if nothing was plotted.
         """
         if not objects:
             objects = self.stars
+
+        if not objects:  # there's genuinely nothing now
+            self.log.info("No objects to plot")
+            return None
 
         objects = ensure_iterable(objects)
 
@@ -711,7 +715,7 @@ class NightReport:
 
     def makeAltAzCoveragePlot(
         self, objects: Iterable[str] | None = None, withLines: bool = False, saveFig: str = ""
-    ) -> matplotlib.figure.Figure:
+    ) -> matplotlib.figure.Figure | None:
         """Make a polar plot of the azimuth and zenith angle for each object.
 
         Plots the azimuth on the theta axis, and zenith angle (not altitude!)
@@ -729,15 +733,20 @@ class NightReport:
 
         Return
         ------
-        fig : `matplotlib.figure.Figure`
-            The figure object.
+        fig : `matplotlib.figure.Figure` or `None`
+            The figure object, or `None` if nothing was plotted.
         """
         if not objects:
             objects = self.stars
         objects = ensure_iterable(objects)
 
+        if not objects:  # there's genuinely nothing now
+            self.log.info("No objects to plot")
+            return None
+
         fig = plt.figure(figsize=(16, 12))
 
+        ax = None
         for obj in objects:
             if obj in CALIB_VALUES:
                 continue
@@ -757,6 +766,11 @@ class NightReport:
             ax = self._makePolarPlot(
                 azes, zens, marker=marker, title=None, makeFig=False, color=color, objName=obj
             )
+
+        if ax is None:
+            self.log.info("Only calibs taken so far, nothing to plot")
+            return None
+
         lgnd = ax.legend(bbox_to_anchor=(1.05, 1), prop={"size": 15}, loc="upper left")
         ax.set_title("Axial coverage - azimuth (theta, deg) vs zenith angle (r, deg)", size=20)
 
