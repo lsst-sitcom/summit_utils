@@ -182,6 +182,11 @@ def makeDefaultButler(
     -------
     butler : `lsst.daf.butler.Butler`
         The butler.
+
+    Raises
+    ------
+    FileNotFoundError
+        Raised if the butler cannot be created.
     """
     SUPPORTED_SITES = [
         "summit",
