@@ -829,11 +829,10 @@ def getCommands(
                 case "astropy":
                     timeKey = Time(time)
                 case "python":
+                    assert isinstance(time, pd.Timestamp)
                     timeKey = time.to_pydatetime()
 
             if timeKey in commandTimes:
-                raise ValueError(
-                    f"There is already a command at {timeKey=} -" " make a better data structure!"
-                )
+                raise ValueError(f"There is already a command at {timeKey=} - make a better data structure!")
             commandTimes[timeKey] = command
     return commandTimes

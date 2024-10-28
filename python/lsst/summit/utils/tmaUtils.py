@@ -151,7 +151,7 @@ def getAzimuthElevationDataForEvent(
     event: TMAEvent,
     prePadding: float = 0,
     postPadding: float = 0,
-) -> tuple[pd.Dataframe, pd.Dataframe]:
+) -> tuple[pd.DataFrame, pd.DataFrame]:
     """Get the data for the az/el telemetry topics for a given TMAEvent.
 
     The error between the actual and demanded positions is calculated and added
@@ -405,6 +405,9 @@ def plotEvent(
         azimuthData, elevationData = getAzimuthElevationDataForEvent(
             client, event, prePadding=prePadding, postPadding=postPadding
         )
+
+    assert azimuthData is not None
+    assert elevationData is not None
 
     # Use the native color cycle for the lines. Because they're on different
     # axes they don't cycle by themselves
