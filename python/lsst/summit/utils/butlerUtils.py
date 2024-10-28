@@ -140,22 +140,9 @@ def makeDefaultLatissButler(
     butler : `lsst.daf.butler.Butler`
         The butler.
     """
-    # TODO: Add logging to which collections are going in
-    collections = getLatissDefaultCollections()
-    if extraCollections:
-        collections.extend(extraCollections)
-    try:
-        repoString = "LATISS" if not embargo else "/repo/embargo"
-        butler = dafButler.Butler.from_config(
-            repoString, collections=collections, writeable=writeable, instrument="LATISS"
-        )
-    except (FileNotFoundError, RuntimeError):
-        # Depending on the value of DAF_BUTLER_REPOSITORY_INDEX and whether
-        # it is present and blank, or just not set, both these exception
-        # types can be raised, see tests/test_butlerUtils.py:ButlerInitTestCase
-        # for details and tests which confirm these have not changed
-        raise FileNotFoundError  # unify exception type
-    return butler
+    return makeDefaultButler(
+        "LATISS", extraCollections=extraCollections, writeable=writeable, embargo=embargo
+    )
 
 
 def makeDefaultButler(
