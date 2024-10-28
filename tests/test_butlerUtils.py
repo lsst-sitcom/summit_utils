@@ -55,6 +55,7 @@ from lsst.summit.utils.butlerUtils import (
     getMostRecentDayObs,
     getSeqNum,
     getSeqNumsForDayObs,
+    getSite,
     makeDefaultLatissButler,
     sanitizeDayObs,
     sortRecordsByDayObsThenSeqNum,
@@ -73,6 +74,8 @@ class ButlerUtilsTestCase(lsst.utils.tests.TestCase):
 
         # butler stuff
         try:
+            if getSite() == "jenkins":
+                raise unittest.SkipTest("Skip running butler-driven tests in Jenkins.")
             self.butler = makeDefaultLatissButler()
         except FileNotFoundError:
             raise unittest.SkipTest("Skipping tests that require the LATISS butler repo.")
@@ -454,6 +457,8 @@ class ButlerInitTestCase(lsst.utils.tests.TestCase):
         """makeDefaultLatissButler unifies the mixed exception types from
         butler inits, so test all available possibilities here.
         """
+        if getSite() == "jenkins":
+            raise unittest.SkipTest("Skip running butler-driven tests in Jenkins.")
         with unittest.mock.patch.dict("os.environ"):
             if "DAF_BUTLER_REPOSITORY_INDEX" in os.environ:  # can't del unless it's already there
                 del os.environ["DAF_BUTLER_REPOSITORY_INDEX"]
