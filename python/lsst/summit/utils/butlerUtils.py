@@ -173,7 +173,8 @@ def makeDefaultButler(
     Raises
     ------
     FileNotFoundError
-        Raised if the butler cannot be created.
+        Raised if the butler cannot be created, because this is the error
+        when the DAF_BUTLER_REPOSITORY_INDEX is not set correctly.
     """
     SUPPORTED_SITES = [
         "summit",
@@ -186,7 +187,12 @@ def makeDefaultButler(
 
     site = getSite()
     if site not in SUPPORTED_SITES:
-        raise ValueError(f"Default butler creation only supported at sites: {SUPPORTED_SITES}, got {site=}")
+        # This might look like a slightly weird error to raise, but this is
+        # the same error that's raised when the DAF_BUTLER_REPOSITORY_INDEX
+        # isn't set, so it's the most appropriate error to raise here, i.e.
+        # this is what would be raised if this function was allowed to continue
+        # only this is a less confusing version of it.
+        raise FileNotFoundError(f"Default butler creation only available at: {SUPPORTED_SITES}, got {site=}")
 
     summitLike = site in ["summit", "tucson", "base"]
     if summitLike:
