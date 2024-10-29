@@ -453,10 +453,9 @@ def makeEfdClient(testing: bool | None = False) -> EfdClient:
     if testing:
         return EfdClient("usdf_efd")
 
-    try:
-        site = getSite()
-    except ValueError as e:
-        raise RuntimeError("Could not create EFD client as the site could not be determined") from e
+    site = getSite()
+    if site == "UNKNOWN":
+        raise RuntimeError("Could not create EFD client as the site could not be determined")
 
     if site == "summit":
         return EfdClient("summit_efd")
