@@ -600,11 +600,8 @@ def getSite() -> str:
         One of:
         ['tucson', 'summit', 'base', 'staff-rsp', 'rubin-devl', 'jenkins',
          'usdf-k8s']
+        If the location cannot be determined "UNKOWN" is returned.
 
-    Raises
-    ------
-    ValueError
-        Raised if location cannot be determined.
     """
     # All nublado instances guarantee that EXTERNAL_URL is set and uniquely
     # identifies it.
@@ -647,7 +644,7 @@ def getSite() -> str:
         return "usdf-k8s"
 
     # we have failed
-    raise ValueError("Location could not be determined")
+    return "UNKOWN"
 
 
 def getAltAzFromSkyPosition(
