@@ -27,12 +27,15 @@ import lsst.utils.tests
 from lsst.summit.utils import ImageExaminer
 from lsst.summit.utils.bestEffort import BestEffortIsr
 from lsst.summit.utils.butlerUtils import makeDefaultLatissButler
+from lsst.summit.utils.utils import getSite
 
 
 class ImageExaminerTestCase(lsst.utils.tests.TestCase):
     @classmethod
     def setUpClass(cls):
         try:
+            if getSite() == "jenkins":
+                raise unittest.SkipTest("Skip running butler-driven tests in Jenkins.")
             cls.butler = makeDefaultLatissButler()
         except FileNotFoundError:
             raise unittest.SkipTest("Skipping tests that require the LATISS butler repo.")

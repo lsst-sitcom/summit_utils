@@ -36,12 +36,15 @@ mpl.use("Agg")
 
 import lsst.summit.utils.butlerUtils as butlerUtils  # noqa: E402
 from lsst.summit.utils.nightReport import ColorAndMarker, NightReport  # noqa: E402
+from lsst.summit.utils.utils import getSite  # noqa: E402
 
 
 class NightReportTestCase(lsst.utils.tests.TestCase):
     @classmethod
     def setUpClass(cls):
         try:
+            if getSite() == "jenkins":
+                raise unittest.SkipTest("Skip running butler-driven tests in Jenkins.")
             cls.butler = butlerUtils.makeDefaultLatissButler()
         except FileNotFoundError:
             raise unittest.SkipTest("Skipping tests that require the LATISS butler repo.")

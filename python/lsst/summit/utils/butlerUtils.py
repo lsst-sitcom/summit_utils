@@ -21,6 +21,7 @@
 
 import copy
 import itertools
+import logging
 from collections.abc import Iterable, Mapping
 from typing import Any
 
@@ -28,9 +29,11 @@ from deprecated.sphinx import deprecated
 
 import lsst.daf.butler as dafButler
 from lsst.summit.utils.utils import getSite
+from lsst.utils.iteration import ensure_iterable
 
 __all__ = [
-    "makeDefaultLatissButler",
+    "makeDefaultLatissButler",  # deprecated
+    "makeDefaultButler",
     "updateDataId",
     "sanitizeDayObs",
     "getMostRecentDayObs",
@@ -40,7 +43,7 @@ __all__ = [
     "getDayObs",
     "getSeqNum",
     "getExpId",
-    "datasetExists",
+    "datasetExists",  # deprecated
     "sortRecordsByDayObsThenSeqNum",
     "getDaysWithData",
     "getExpIdFromDayObsSeqNum",
@@ -109,6 +112,11 @@ def _update_RECENT_DAY(day: int) -> None:
     RECENT_DAY = max(day - 1, RECENT_DAY)
 
 
+@deprecated(
+    reason="Use the more generic makeDefaultButler('LATISS'). Will be removed after v28.0.",
+    version="v27.0",
+    category=FutureWarning,
+)
 def makeDefaultLatissButler(
     *,
     extraCollections: list[str] | None = None,
@@ -132,14 +140,75 @@ def makeDefaultLatissButler(
     butler : `lsst.daf.butler.Butler`
         The butler.
     """
-    # TODO: Add logging to which collections are going in
-    collections = getLatissDefaultCollections()
-    if extraCollections:
-        collections.extend(extraCollections)
+    return makeDefaultButler(
+        "LATISS", extraCollections=extraCollections, writeable=writeable, embargo=embargo
+    )
+
+
+def makeDefaultButler(
+    instrument: str,
+    *,
+    extraCollections: list[str] | None = None,
+    writeable: bool = False,
+    embargo: bool = True,
+) -> dafButler.Butler:
+    """Create a butler for the instrument using default collections, regardless
+    of the location.
+
+    Parameters
+    ----------
+    extraCollections : `list` of `str`
+        Extra input collections to supply to the butler init.
+    writable : `bool`, optional
+        Whether to make a writable butler.
+    embargo : `bool`, optional
+        Use the embargo repo instead of the main one. Needed to access
+        embargoed data if not at a summit-like location.
+
+    Returns
+    -------
+    butler : `lsst.daf.butler.Butler`
+        The butler.
+
+    Raises
+    ------
+    FileNotFoundError
+        Raised if the butler cannot be created.
+    """
+    SUPPORTED_SITES = [
+        "summit",
+        "tucson",
+        "base",
+        "staff-rsp",
+        "rubin-devl",
+        "usdf-k8s",
+    ]
+
+    site = getSite()
+    if site not in SUPPORTED_SITES:
+        raise ValueError(f"Default butler creation only supported at sites: {SUPPORTED_SITES}, got {site=}")
+
+    summitLike = site in ["summit", "tucson", "base"]
+    if summitLike:
+        if embargo is True:
+            logger = logging.getLogger(__name__)
+            logger.debug("embargo option is irrelevant on the summit, ignoring")
+            embargo = False  # there's only one repo too, so this makes the code more simple too
+
+    baseCollection = f"{instrument}/defaults"
+    raCollection = f"{instrument}/quickLook" if summitLike else f"{instrument}/nightlyValidation"
+
+    repo = instrument if embargo is False else "embargo"
+
+    collections = [baseCollection, raCollection]
+    if extraCollections is not None:
+        assert extraCollections is not None  # just for mypy
+        extraCollectionsList = ensure_iterable(extraCollections)
+        collections.extend(extraCollectionsList)
+
     try:
-        repoString = "LATISS" if not embargo else "/repo/embargo"
         butler = dafButler.Butler.from_config(
-            repoString, collections=collections, writeable=writeable, instrument="LATISS"
+            repo, collections=collections, writeable=writeable, instrument=instrument
         )
     except (FileNotFoundError, RuntimeError):
         # Depending on the value of DAF_BUTLER_REPOSITORY_INDEX and whether

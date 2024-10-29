@@ -33,7 +33,7 @@ class BestEffortIsrTestCase(lsst.utils.tests.TestCase):
     def setUpClass(cls):
         try:
             cls.bestEffortIsr = BestEffortIsr()
-        except FileNotFoundError:
+        except (FileNotFoundError, ValueError):
             raise unittest.SkipTest("Skipping tests that require the LATISS butler repo.")
 
         # chosen as this is available in the following locations - collections:
