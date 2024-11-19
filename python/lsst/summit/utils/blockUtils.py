@@ -237,16 +237,16 @@ class BlockParser:
 
             blockMatch = re.search(blockPattern, rowStr)
             blockNumber = int(blockMatch.group(1)) if blockMatch else None
-            data.loc[index, "blockNum"] = blockNumber
+            data.at[index, "blockNum"] = blockNumber
 
             blockIdMatch = re.search(blockIdPattern, rowStr)
             blockId = blockIdMatch.group(0) if blockIdMatch else None
-            data.loc[index, "blockId"] = blockId
+            data.at[index, "blockId"] = blockId
             if blockId is not None:
                 blockDayObs = int(blockId.split("_")[2])
                 blockSeqNum = int(blockId.split("_")[3])
-                data.loc[index, "blockDayObs"] = blockDayObs
-                data.loc[index, "blockSeqNum"] = blockSeqNum
+                data.at[index, "blockDayObs"] = blockDayObs
+                data.at[index, "blockSeqNum"] = blockSeqNum
 
     def augmentData(self) -> None:
         """Parse the dataframe using vectorized methods, pulling the

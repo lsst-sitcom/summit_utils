@@ -87,6 +87,8 @@ TRACKING_RESIDUAL_TAIL_CLIP = -0.15  # seconds
 
 MOUNT_IMAGE_WARNING_LEVEL = 0.01  # this determines the colouring of the cells in the table, yellow for this
 MOUNT_IMAGE_BAD_LEVEL = 0.05  # and red for this
+HARDPOINT_FORCE_WARNING_LEVEL = 500.0  # for colouring of the cells in the table, yellow for this
+HARDPOINT_FORCE_BAD_LEVEL = 1000.0  # and red for this
 
 
 def getSlewsFromEventList(
@@ -198,10 +200,10 @@ def getAzimuthElevationDataForEvent(
         raiseIfTopicNotInSchema=False,
     )
 
-    azValues = azimuthData["actualPosition"].values
-    elValues = elevationData["actualPosition"].values
-    azDemand = azimuthData["demandPosition"].values
-    elDemand = elevationData["demandPosition"].values
+    azValues = azimuthData["actualPosition"].to_numpy()
+    elValues = elevationData["actualPosition"].to_numpy()
+    azDemand = azimuthData["demandPosition"].to_numpy()
+    elDemand = elevationData["demandPosition"].to_numpy()
 
     azError = (azValues - azDemand) * 3600
     elError = (elValues - elDemand) * 3600
@@ -210,6 +212,55 @@ def getAzimuthElevationDataForEvent(
     elevationData["elError"] = elError
 
     return azimuthData, elevationData
+
+
+def getM1M3HardpointDataForEvent(
+    client: EfdClient,
+    event: TMAEvent,
+    prePadding: float = 0,
+    postPadding: float = 0,
+) -> pd.DataFrame:
+    """Get the data for the M1M3 hardpoint telemetry for a given TMAEvent.
+    During slews, the M1M3 mirror moves in response to the accelerations. The
+    hardpoint forces need to stay within accepted limits to prevent long term
+    cracking on the mirror.
+
+    Parameters
+    ----------
+    client : `lsst_efd_client.efd_helper.EfdClient`
+        The EFD client to use.
+    event : `lsst.summit.utils.tmaUtils.TMAEvent`
+        The event to get the data for.
+    prePadding : `float`, optional
+        The amount of time to pad the event with before the start time, in
+        seconds.
+    postPadding : `float`, optional
+        The amount of time to pad the event with after the end time, in
+        seconds.
+
+    Returns
+    -------
+    hardpointData : `pd.DataFrame`
+        The hardpoint forces for the specified event.
+    """
+    hardpointData = getEfdData(
+        client,
+        "lsst.sal.MTM1M3.hardpointActuatorData",
+        event=event,
+        prePadding=prePadding,
+        postPadding=postPadding,
+        raiseIfTopicNotInSchema=False,
+    )
+
+    # Add a column with the absolute max force
+    maxForce = [
+        np.nanmax([abs(hardpointData.iloc[i][f"measuredForce{j}"]) for j in range(6)])
+        for i in range(len(hardpointData))
+    ]
+
+    hardpointData["maxForce"] = maxForce
+
+    return hardpointData
 
 
 def filterBadValues(values: list | np.ndarray, maxDelta: float = 0.1, maxConsecutiveValues: int = 3) -> int:
@@ -289,6 +340,7 @@ def plotEvent(
     commands: dict[pd.Timestamp | datetime.datetime, str] = {},
     azimuthData: pd.DataFrame | None = None,
     elevationData: pd.DataFrame | None = None,
+    hardpointData: pd.DataFrame | None = None,
     doFilterResiduals: bool = False,
     maxDelta: float = 0.1,
     metadataWriter: Callable | None = None,
@@ -298,12 +350,13 @@ def plotEvent(
     Plots the axis motion profiles for the given event, with optional padding
     at the start and end of the event. If the data is provided via the
     azimuthData and elevationData parameters, it will be used, otherwise it
-    will be queried from the EFD.
+    will be queried from the EFD.  For slews, the M1M3 hardpoint forces are
+    also plotted.  Similarly, it will query the EFD if the hardpoint forces are
+    not provided.
 
     Optionally plots any commands issued during or around the event, if these
-    are supplied. Commands are supplied as a dictionary of the command topic
-    strings, with values as astro.time.Time objects at which the command was
-    issued.
+    are supplied. Commands are supplied as a dictionary of tje times at which
+    the commands were issued, with values as command strings.
 
     Due to a problem with the way the data is uploaded to the EFD, there are
     occasional points in the tracking error plots that are very much larger
@@ -342,6 +395,9 @@ def plotEvent(
     elevationData : `pd.DataFrame`, optional
         The elevation data to plot. If not specified, it will be queried from
         the EFD.
+    hardpointData : `pd.DataFrame`, optional
+        The hardpoint forces to plot. If not specified, it will be queried from
+        the EFD.
     doFilterResiduals : 'bool', optional
         Enables filtering of unphysical data points in the tracking residuals.
     maxDelta : `float`, optional
@@ -352,8 +408,8 @@ def plotEvent(
         Should be a callable
         ``lsst.rubintv.production.utils.writeMetadataShard`` function that has
         had the path filled in with ``functools.patrial`` so that it will just
-        write out the data when called with the event's dayObs and a
-        dictionary containing the row data that should be written.
+        write out the data when called with the event's dayObs and a dictionary
+        containing the row data that should be written.
 
     Returns
     -------
@@ -391,15 +447,9 @@ def plotEvent(
         )
 
     fig.clear()
-    ax1p5 = None  # need to always be defined
-    if event.type == TMAState.TRACKING:
-        ax1, ax1p5, ax2 = fig.subplots(
-            3, sharex=True, gridspec_kw={"wspace": 0, "hspace": 0, "height_ratios": [2.5, 1, 1]}
-        )  # type: ignore
-    else:
-        ax1, ax2 = fig.subplots(
-            2, sharex=True, gridspec_kw={"wspace": 0, "hspace": 0, "height_ratios": [2.5, 1]}
-        )  # type: ignore
+    ax1, ax1p5, ax2 = fig.subplots(
+        3, sharex=True, gridspec_kw={"wspace": 0, "hspace": 0, "height_ratios": [2.5, 1, 1]}
+    )  # type: ignore
 
     if azimuthData is None or elevationData is None:
         azimuthData, elevationData = getAzimuthElevationDataForEvent(
@@ -452,9 +502,9 @@ def plotEvent(
         clippedAzimuthData = clipDataToEvent(azimuthData, event, postPadding=TRACKING_RESIDUAL_TAIL_CLIP)
         clippedElevationData = clipDataToEvent(elevationData, event, postPadding=TRACKING_RESIDUAL_TAIL_CLIP)
 
-        azError = clippedAzimuthData["azError"].values
-        elError = clippedElevationData["elError"].values
-        elVals = clippedElevationData["actualPosition"].values
+        azError = clippedAzimuthData["azError"].to_numpy()
+        elError = clippedElevationData["elError"].to_numpy()
+        elVals = clippedElevationData["actualPosition"].to_numpy()
         if doFilterResiduals:
             # Filtering out bad values
             nReplacedAz = filterBadValues(azError, maxDelta)
@@ -470,7 +520,7 @@ def plotEvent(
         image_az_rms = az_rms * np.cos(elVals[0] * np.pi / 180.0)
         image_el_rms = el_rms
         image_impact_rms = np.sqrt(image_az_rms**2 + image_el_rms**2)
-        assert ax1p5 is not None
+
         ax1p5.plot(
             clippedAzimuthData["azError"],
             label="Azimuth tracking error",
@@ -510,6 +560,52 @@ def plotEvent(
             rowData = {event.seqNum: md}
             metadataWriter(dayObs=event.dayObs, mdDict=rowData)
 
+    elif event.type == TMAState.SLEWING:
+        if hardpointData is None:
+            hardpointData = getM1M3HardpointDataForEvent(
+                client, event, prePadding=prePadding, postPadding=postPadding
+            )
+
+        # Calculate Max hardpoint force
+        maxForce = np.nanmax(hardpointData["maxForce"].to_numpy())
+
+        for hp_index in range(6):
+            ax1p5.plot(
+                hardpointData[f"measuredForce{hp_index}"],
+                label=f"HP_{hp_index}",
+                c=lineColors[colorCounter % nColors],
+            )
+            colorCounter += 1
+        ax1p5.axhline(500.0, ls="-.", color="goldenrod")
+        ax1p5.axhline(-500.0, ls="-.", color="goldenrod")
+        ax1p5.axhline(1000.0, ls="-.", color="red")
+        ax1p5.axhline(-1000.0, ls="-.", color="red")
+        ax1p5.yaxis.set_major_formatter(FuncFormatter(tickFormatter))
+        ax1p5.set_ylabel("HP force (N)")
+        ax1p5.set_xticks([])  # remove x tick labels on the hidden upper x-axis
+        if maxForce > 2000.0:
+            ax1p5.set_ylim(-4000.0, 4000.0)
+            ax1p5.set_yticks([-2000, 0.0, 2000])
+        elif maxForce > 1000.0:
+            ax1p5.set_ylim(-2000.0, 2000.0)
+            ax1p5.set_yticks([-1000, 0.0, 1000])
+        else:
+            ax1p5.set_ylim(-1000.0, 1000.0)
+            ax1p5.set_yticks([-500, 0.0, 500])
+        ax1p5.legend()
+        ax1p5.text(0.1, 0.9, f"Max HP force = {maxForce:.1f} N", transform=ax1p5.transAxes)
+
+        if metadataWriter is not None:
+            md = {"HP Max force": f"{maxForce:.2f}"}
+            flagKey = "_HP Max force"
+            if maxForce > HARDPOINT_FORCE_BAD_LEVEL:
+                md.update({flagKey: "bad"})
+            elif maxForce > HARDPOINT_FORCE_WARNING_LEVEL:
+                md.update({flagKey: "warning"})
+
+            rowData = {event.seqNum: md}
+            metadataWriter(dayObs=event.dayObs, mdDict=rowData)
+
     if prePadding or postPadding:
         # note the conversion to utc because the x-axis from the dataframe
         # already got automagically converted when plotting before, so this is
@@ -519,9 +615,8 @@ def plotEvent(
         # extend lines down across lower plot, but do not re-add label
         ax2_twin.axvline(event.begin.utc.datetime, c="k", ls="--", alpha=0.5)
         ax2_twin.axvline(event.end.utc.datetime, c="k", ls="--", alpha=0.5)
-        if ax1p5:
-            ax1p5.axvline(event.begin.utc.datetime, c="k", ls="--", alpha=0.5)
-            ax1p5.axvline(event.end.utc.datetime, c="k", ls="--", alpha=0.5)
+        ax1p5.axvline(event.begin.utc.datetime, c="k", ls="--", alpha=0.5)
+        ax1p5.axvline(event.end.utc.datetime, c="k", ls="--", alpha=0.5)
 
     for commandTime, command in commands.items():
         plotTime = getPlotTime(commandTime)
@@ -530,8 +625,7 @@ def plotEvent(
         )
         # extend lines down across lower plot, but do not re-add label
         ax2_twin.axvline(plotTime, c=lineColors[colorCounter % nColors], ls="--", alpha=0.75)
-        if ax1p5:
-            ax1p5.axvline(plotTime, c=lineColors[colorCounter % nColors], ls="--", alpha=0.75)
+        ax1p5.axvline(plotTime, c=lineColors[colorCounter % nColors], ls="--", alpha=0.75)
         colorCounter += 1
 
     # combine the legends and put inside the plot
@@ -1579,6 +1673,7 @@ class TMAEventMaker:
 
         tmaStates = {}
         for rowNum, row in data.iterrows():
+            assert isinstance(rowNum, int)
             tma.apply(row)
             tmaStates[rowNum] = tma.state
 
