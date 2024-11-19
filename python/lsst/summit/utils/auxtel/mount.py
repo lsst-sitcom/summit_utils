@@ -78,7 +78,7 @@ def hasTimebaseErrors(expRecord: dafButler.DimensionRecord, client: EfdClient, m
         )
         return False
 
-    diff = np.diff(cRIOtimestamps.values)
+    diff = np.diff(cRIOtimestamps.to_numpy())
     if np.min(diff) < 0:
         raise ValueError("cRIO timestamps are not monotonically increasing - time is running backwards!")
 

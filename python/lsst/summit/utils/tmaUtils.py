@@ -200,10 +200,10 @@ def getAzimuthElevationDataForEvent(
         raiseIfTopicNotInSchema=False,
     )
 
-    azValues = azimuthData["actualPosition"].values
-    elValues = elevationData["actualPosition"].values
-    azDemand = azimuthData["demandPosition"].values
-    elDemand = elevationData["demandPosition"].values
+    azValues = azimuthData["actualPosition"].to_numpy()
+    elValues = elevationData["actualPosition"].to_numpy()
+    azDemand = azimuthData["demandPosition"].to_numpy()
+    elDemand = elevationData["demandPosition"].to_numpy()
 
     azError = (azValues - azDemand) * 3600
     elError = (elValues - elDemand) * 3600
@@ -502,9 +502,9 @@ def plotEvent(
         clippedAzimuthData = clipDataToEvent(azimuthData, event, postPadding=TRACKING_RESIDUAL_TAIL_CLIP)
         clippedElevationData = clipDataToEvent(elevationData, event, postPadding=TRACKING_RESIDUAL_TAIL_CLIP)
 
-        azError = clippedAzimuthData["azError"].values
-        elError = clippedElevationData["elError"].values
-        elVals = clippedElevationData["actualPosition"].values
+        azError = clippedAzimuthData["azError"].to_numpy()
+        elError = clippedElevationData["elError"].to_numpy()
+        elVals = clippedElevationData["actualPosition"].to_numpy()
         if doFilterResiduals:
             # Filtering out bad values
             nReplacedAz = filterBadValues(azError, maxDelta)
@@ -567,7 +567,7 @@ def plotEvent(
             )
 
         # Calculate Max hardpoint force
-        maxForce = np.nanmax(hardpointData["maxForce"].values)
+        maxForce = np.nanmax(hardpointData["maxForce"].to_numpy())
 
         for hp_index in range(6):
             ax1p5.plot(
@@ -1673,6 +1673,7 @@ class TMAEventMaker:
 
         tmaStates = {}
         for rowNum, row in data.iterrows():
+            assert isinstance(rowNum, int)
             tma.apply(row)
             tmaStates[rowNum] = tma.state
 
