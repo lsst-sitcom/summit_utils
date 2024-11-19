@@ -597,7 +597,7 @@ def plotEvent(
 
         if metadataWriter is not None:
             md = {"HP Max force": f"{maxForce:.2f}"}
-            flagKey = "_Max HP Force"
+            flagKey = "_HP Max force"
             if maxForce > HARDPOINT_FORCE_BAD_LEVEL:
                 md.update({flagKey: "bad"})
             elif maxForce > HARDPOINT_FORCE_WARNING_LEVEL:
