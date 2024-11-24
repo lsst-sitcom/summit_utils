@@ -31,6 +31,7 @@ import astropy.time
 import astropy.units as u
 import numpy as np
 from astro_metadata_translator import makeObservationInfo
+from astropy.coordinates import HeliocentricEclipticIAU76, SkyCoord
 
 import lsst.afw.detection as afwDetect
 import lsst.afw.geom as afwGeom
@@ -42,6 +43,7 @@ from lsst.obs.base.makeRawVisitInfoViaObsInfo import MakeRawVisitInfoViaObsInfo
 from lsst.obs.lsst import Latiss
 from lsst.obs.lsst.translators.latiss import AUXTEL_LOCATION
 from lsst.summit.utils.utils import (
+    calcEclipticCoords,
     computeCcdExposureId,
     computeExposureId,
     fluxesFromFootprints,
@@ -323,6 +325,17 @@ class IdTestCase(lsst.utils.tests.TestCase):
             computeCcdExposureId("LSSTComCamSim", 7024040200035, 2),
             5 * (2**37) + 5205 * (2**23) + 35 * 256 + 2,
         )
+
+    def test_calcEclipticCoords(self):
+        ras = [0, 1, 45, 90, 180, 270, 359.9]
+        decs = [-90, -80, -45, -1, 0, 1, 45, 90]
+
+        for ra, dec in itertools.product(ras, decs):
+            p = SkyCoord(ra=ra * u.deg, dec=dec * u.deg, distance=1 * u.au, frame="hcrs")
+            eclCoords = p.transform_to(HeliocentricEclipticIAU76)
+            _lambda, beta = calcEclipticCoords(ra, dec)
+            self.assertAlmostEqual(eclCoords.lat.deg, beta, 6)
+            self.assertAlmostEqual(eclCoords.lon.deg, _lambda, 6)
 
 
 class TestMemory(lsst.utils.tests.MemoryTestCase):
