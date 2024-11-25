@@ -490,13 +490,6 @@ def plotEvent(
     ax2_twin.set_ylabel("Elevation torque (Nm)")
     ax2.set_xlabel("Time (UTC)")  # yes, it really is UTC, matplotlib converts this automatically!
 
-    # put the ticks at an angle, and right align with the tick marks
-    ax2.set_xticks(ax2.get_xticks())  # needed to supress a user warning
-    xlabels = ax2.get_xticks()
-    ax2.set_xticklabels(xlabels, rotation=40, ha="right")
-    ax2.xaxis.set_major_locator(mdates.AutoDateLocator())
-    ax2.xaxis.set_major_formatter(mdates.DateFormatter("%H:%M:%S"))
-
     if event.type == TMAState.TRACKING:
         # returns a copy
         clippedAzimuthData = clipDataToEvent(azimuthData, event, postPadding=TRACKING_RESIDUAL_TAIL_CLIP)
@@ -652,6 +645,15 @@ def plotEvent(
         f" End reason: {event.endReason.name}"
     )
     ax1_twin.set_title(title)
+
+    # Moving this block to the end recovers the time ticks and ticklabels.
+    # put the ticks at an angle, and right align with the tick marks
+    ax2.set_xticks(ax2.get_xticks())  # needed to supress a user warning
+    xlabels = ax2.get_xticks()
+    ax2.set_xticklabels(xlabels, rotation=40, ha="right")
+    ax2.xaxis.set_major_locator(mdates.AutoDateLocator())
+    ax2.xaxis.set_major_formatter(mdates.DateFormatter("%H:%M:%S"))
+
     return fig
 
 
