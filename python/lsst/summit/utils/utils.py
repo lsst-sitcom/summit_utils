@@ -29,8 +29,7 @@ import matplotlib
 import numpy as np
 import numpy.typing as npt
 from astro_metadata_translator import ObservationInfo
-from astropy.coordinates import AltAz, SkyCoord
-from astropy.coordinates.earth import EarthLocation
+from astropy.coordinates import AltAz, EarthLocation, SkyCoord, get_sun
 from astropy.time import Time
 from dateutil.tz import gettz
 from matplotlib.patches import Rectangle
@@ -51,7 +50,7 @@ from lsst.afw.detection import Footprint, FootprintSet
 from lsst.daf.butler.cli.cliLog import CliLog
 from lsst.obs.lsst import Latiss, LsstCam, LsstComCam, LsstComCamSim
 from lsst.obs.lsst.translators.latiss import AUXTEL_LOCATION
-from lsst.obs.lsst.translators.lsst import FILTER_DELIMITER
+from lsst.obs.lsst.translators.lsst import FILTER_DELIMITER, SIMONYI_LOCATION
 
 from .astrometry.utils import genericCameraHeaderToWcs
 
@@ -94,6 +93,7 @@ __all__ = [
     "computeExposureId",
     "computeCcdExposureId",
     "getDetectorIds",
+    "getSunAngle",
 ]
 
 
@@ -1309,3 +1309,17 @@ def calcEclipticCoords(ra: float, dec: float) -> tuple[float, float]:
         lambda_ += np.pi * 2
 
     return (np.rad2deg(lambda_), np.rad2deg(beta))
+
+
+def getSunAngle() -> float:
+    """Get the angle of the sun to the horizon. Positive numbers means the
+    sun is above the horizon, negative means it is below.
+
+    Returns
+    -------
+    sun_alt : `float`
+        The angle of the sun to the horizon, in degrees.
+    """
+    now = Time.now()
+    sun_altaz = get_sun(now).transform_to(AltAz(obstime=now, location=SIMONYI_LOCATION))
+    return sun_altaz.alt.deg
