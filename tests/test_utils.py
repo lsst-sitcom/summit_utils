@@ -32,6 +32,7 @@ import astropy.units as u
 import numpy as np
 from astro_metadata_translator import makeObservationInfo
 from astropy.coordinates import HeliocentricEclipticIAU76, SkyCoord
+from astropy.time import Time
 
 import lsst.afw.detection as afwDetect
 import lsst.afw.geom as afwGeom
@@ -56,6 +57,7 @@ from lsst.summit.utils.utils import (
     getExpPositionOffset,
     getFieldNameAndTileNumber,
     getQuantiles,
+    getSunAngle,
     quickSmooth,
 )
 
@@ -243,6 +245,19 @@ class MiscUtilsTestCase(lsst.utils.tests.TestCase):
         self.assertIsInstance(dateStr, str)
         self.assertEqual(len(dateStr), 10)
         self.assertRegex(dateStr, r"\d{4}-\d{2}-\d{2}")
+
+    def test_getSunAngle(self):
+        """Just a basic sanity check on the range."""
+        testTime = Time("2021-09-15T16:00:00", format="isot", scale="utc")
+        sunAngle = getSunAngle(testTime)
+        self.assertIsInstance(sunAngle, float)
+        self.assertLess(sunAngle, 90.01)
+        self.assertGreater(sunAngle, -90.01)
+
+        sunAngle = getSunAngle()
+        self.assertIsInstance(sunAngle, float)
+        self.assertLess(sunAngle, 90.01)
+        self.assertGreater(sunAngle, -90.01)
 
 
 class QuantileTestCase(lsst.utils.tests.TestCase):
