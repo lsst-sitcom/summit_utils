@@ -1258,3 +1258,54 @@ def getCameraFromInstrumentName(instrumentName: str) -> lsst.afw.cameraGeom.Came
         case _:
             raise ValueError(f"Unsupported instrument: {instrumentName}")
     return camera
+
+
+def calcEclipticCoords(ra: float, dec: float) -> tuple[float, float]:
+    """Get the ecliptic coordinates of the specified ra and dec.
+
+    Transform J2000 (ra, dec), both in degrees, to
+    IAU1976 Ecliptic coordinates (also returning degrees).
+
+    Matches the results of:
+
+      from astropy.coordinates import SkyCoord, HeliocentricEclipticIAU76
+      import astropy.units as u
+
+      p = SkyCoord(ra=ra0*u.deg, dec=dec0*u.deg, distance=1*u.au, frame='hcrs')
+      ecl = p.transform_to(HeliocentricEclipticIAU76)
+      print(ecl.lon.value, ecl.lat.value)
+
+    except that it's fast.
+
+    Parameters
+    ----------
+    ra : `float`
+        The right ascension, in degrees.
+    dec : `float`
+        The declination, in degrees.
+
+    Returns
+    -------
+    lambda : `float`
+        The ecliptic longitude in degrees.
+    beta : `float`
+        The ecliptic latitude in degrees.
+    """
+
+    ra, dec = np.deg2rad(ra), np.deg2rad(dec)
+
+    # IAU 1976 obliquity
+    epsilon = np.deg2rad(23.43929111111111)
+    cos_eps, sin_eps = np.cos(epsilon), np.sin(epsilon)
+
+    sra, cra = np.sin(ra), np.cos(ra)
+    sdec, cdec = np.sin(dec), np.cos(dec)
+
+    lambda_ = np.arctan2((sra * cos_eps + sdec / cdec * sin_eps), cra)
+    beta = np.arcsin(sdec * cos_eps - cdec * sin_eps * sra)
+
+    # normalize
+    if lambda_ < 0:
+        lambda_ += np.pi * 2
+
+    return (np.rad2deg(lambda_), np.rad2deg(beta))
