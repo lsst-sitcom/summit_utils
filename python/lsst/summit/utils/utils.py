@@ -1404,15 +1404,18 @@ def getImageArray(
     return imageData
 
 
-def getSunAngle() -> float:
-    """Get the angle of the sun to the horizon. Positive numbers means the
-    sun is above the horizon, negative means it is below.
+def getSunAngle(time: Time | None = None) -> float:
+    """Get the angle of the sun to the horizon at the specified time.
+
+    If no time is specified, the current time is used. Positive numbers means
+    the sun is above the horizon, negative means it is below.
 
     Returns
     -------
     sun_alt : `float`
         The angle of the sun to the horizon, in degrees.
     """
-    now = Time.now()
-    sun_altaz = get_sun(now).transform_to(AltAz(obstime=now, location=SIMONYI_LOCATION))
+    if time is None:
+        time = Time.now()
+    sun_altaz = get_sun(time).transform_to(AltAz(obstime=time, location=SIMONYI_LOCATION))
     return sun_altaz.alt.deg
