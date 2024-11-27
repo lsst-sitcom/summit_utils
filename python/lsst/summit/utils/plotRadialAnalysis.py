@@ -6,13 +6,13 @@ from matplotlib.gridspec import GridSpec
 from scipy.optimize import curve_fit  # type: ignore
 
 
-def gaussianWithCentroid(
+def gaussian2dFitFunction(
     xy: tuple[np.ndarray, np.ndarray],
     peak: float,
     fwhm: float,
     x0: float,
     y0: float,
-    baseLine: float = 0.0,
+    baseline: float = 0.0,
 ) -> np.ndarray:
     """Gaussian distribution with centroid
 
@@ -24,42 +24,10 @@ def gaussianWithCentroid(
         Values of the intesity peak.
     fwhm: `float`
         Full Width at Half Maximum fo the distribution.
-    x0, y0: `float`
-        Center coordinates of the distribution.
-    baseLine: `float`, optional
-        Offset to apply. Default 0.
-
-    Returns
-    -------
-    pdf: `np.ndarray`
-        Probability density function of the distribution.
-    """
-    x, y = xy
-    sigma = fwhm / (2 * np.sqrt(2 * np.log(2)))
-    return baseLine + peak * np.exp(-((x - x0) ** 2 + (y - y0) ** 2) / (2 * sigma**2))
-
-
-def moffatWithCentroid(
-    xy: tuple[np.ndarray, np.ndarray],
-    peak: float,
-    alpha: float,
-    beta: float,
-    x0: float,
-    y0: float,
-    baseLine: float,
-) -> np.ndarray:
-    """Moffat distribution with centroid
-
-    Parameters
-    ----------
-    xy: `np.ndarray`
-        Points coordinates.
-    peak: `float`
-        Values of the intesity peak.
-    alpha, beta: `float`
-        Scale parameters.
-    x0, y0: `float`
-        Center coordinates of the distribution.
+    x0: `float`
+        The x position of the 2d Guassian function.
+    y0: `float`
+        The y position of the 2d Guassian function.
     baseline: `float`, optional
         Offset to apply. Default 0.
 
@@ -69,32 +37,70 @@ def moffatWithCentroid(
         Probability density function of the distribution.
     """
     x, y = xy
-    return baseLine + peak * (1 + (((x - x0) ** 2 + (y - y0) ** 2)) / alpha**2) ** (-beta)
+    sigma = fwhm / (2 * np.sqrt(2 * np.log(2)))
+    return baseline + peak * np.exp(-((x - x0) ** 2 + (y - y0) ** 2) / (2 * sigma**2))
+
+
+def moffat2dFitFunction(
+    xy: tuple[np.ndarray, np.ndarray],
+    peak: float,
+    alpha: float,
+    beta: float,
+    x0: float,
+    y0: float,
+    baseline: float,
+) -> np.ndarray:
+    """Moffat distribution with centroid
+
+    Parameters
+    ----------
+    xy: `np.ndarray`
+        Points coordinates.
+    peak: `float`
+        Values of the intesity peak.
+    alpha: `float`
+        The alpha parameter for the Moffat distribution.
+    beta: `float`
+        The beta parameter for the Moffat distribution.
+    x0: `float`
+        x coordinate of the distribution.
+    y0: `float`
+        y coordinate of the distribution.
+    baseline: `float`, optional
+        Offset to apply. Default 0.
+
+    Returns
+    -------
+    pdf: `np.ndarray`
+        Probability density function of the distribution.
+    """
+    x, y = xy
+    return baseline + peak * (1 + (((x - x0) ** 2 + (y - y0) ** 2)) / alpha**2) ** (-beta)
 
 
 def makeRadialPlot(
-    axPlt: matplotlib.axes.Axes,
-    axBkg: matplotlib.axes.Axes,
-    axCtr: matplotlib.axes.Axes,
+    axPlot: matplotlib.axes.Axes,
+    axBackground: matplotlib.axes.Axes,
+    axContour: matplotlib.axes.Axes,
     data: np.ndarray,
     levels: np.ndarray | Iterator[float] | None = None,
 ):
-    """Make a plot of radial analysis
+    """Make a radial analysis plot.
 
     Create a plot with three layers:
         - Background image with the star cutout
         - The contour level of the star
-        - The radial profile with Gaussia and Moffat fit
+        - The radial profile with Gaussian and Moffat fit
     The value of FWHM and Encircled Energy Radius (EE) at the
     50% and 80% are reported for both the fit methods.
 
     Parameters
     ----------
-    axPlt: `matplotlib.axes.Axes`
+    axPlot: `matplotlib.axes.Axes`
         Axes used for the radial plot.
-    axBkg: `matplotlib.axes.Axes`
+    axBackground: `matplotlib.axes.Axes`
         Axes used for the background image.
-    axCtr: `matplotlib.axes.Axes`
+    axContour: `matplotlib.axes.Axes`
         Axes used for the contours on the image.
     data: `np.ndarray`
         2D array containing the star cutout
@@ -109,8 +115,8 @@ def makeRadialPlot(
 
     # Initial guess for Gaussian fitting
     initialGuess = [np.max(radialValues), 10, data.shape[1] / 2, data.shape[0] / 2, np.median(radialValues)]
-    gParams, _ = curve_fit(gaussianWithCentroid, xy, radialValues, p0=initialGuess)
-    gPeakFit, gFwhmFit, gX0Fit, gY0Fit, gBaselineFit = gParams
+    gParams, _ = curve_fit(gaussian2dFitFunction, xy, radialValues, p0=initialGuess)
+    _, gFwhmFit, gX0Fit, gY0Fit, gBaselineFit = gParams
 
     # Initial guess for Moffat fitting
     initialGuess = [
@@ -121,8 +127,8 @@ def makeRadialPlot(
         data.shape[0] / 2,
         np.median(radialValues),
     ]
-    mParams, _ = curve_fit(moffatWithCentroid, xy, radialValues, p0=initialGuess)
-    mPeak, mAlphaFit, mBetaFit, mX0Fit, mY0Fit, mBaselineFit = mParams
+    mParams, _ = curve_fit(moffat2dFitFunction, xy, radialValues, p0=initialGuess)
+    _, mAlphaFit, mBetaFit, mX0Fit, mY0Fit, mBaselineFit = mParams
     mFwhmFit = 0.2 * np.abs(2.0 * mAlphaFit * np.sqrt(2 ** (1 / mBetaFit) - 1.0))
 
     # Compute the curve of growth (cumulative energy)
@@ -148,30 +154,30 @@ def makeRadialPlot(
 
     x = 0.2 * mSortedRadii
     yScatter = mSortedValues + mBaselineFit  # added back the backgroud.
-    gYFit = gaussianWithCentroid(xy, *gParams)[gSortedIndices]
-    mYFit = moffatWithCentroid(xy, *mParams)[mSortedIndices]
+    gYFit = gaussian2dFitFunction(xy, *gParams)[gSortedIndices]
+    mYFit = moffat2dFitFunction(xy, *mParams)[mSortedIndices]
     extent = (x.min(), x.max(), yScatter.min(), yScatter.max())
 
     # setting the layer zorder
-    axPlt.set(zorder=3, facecolor=(1, 1, 1, 0))
-    axCtr.set(zorder=2, facecolor=(1, 1, 1, 0))
-    axBkg.set(zorder=1)
+    axPlot.set(zorder=3, facecolor=(1, 1, 1, 0))
+    axContour.set(zorder=2, facecolor=(1, 1, 1, 0))
+    axBackground.set(zorder=1)
 
     # put the backgroud cutout image
-    axBkg.imshow(
+    axBackground.imshow(
         data,
         cmap="gray",
         origin="lower",
         extent=extent,
-        aspect="auto",
+        aspect="auto",  # XXX equal?
     )
 
     # Contour plot function
     levels = levels if levels is not None else np.linspace(1.5 * np.std(data), data.max(), 5)
-    axCtr.contour(xGrid, yGrid, data, cmap="spring", levels=levels, alpha=0.7)
+    axContour.contour(xGrid, yGrid, data, cmap="spring", levels=levels, alpha=0.7)
 
     # Radial profile plot
-    axPlt.scatter(
+    axPlot.scatter(
         x,
         yScatter,
         marker="o",
@@ -180,14 +186,14 @@ def makeRadialPlot(
         edgecolor="cyan",
         label="Data",
     )
-    axPlt.plot(
+    axPlot.plot(
         x,
         gYFit,
         ls="-",
         color="r",
         label="Gaussian Fit",
     )
-    axPlt.plot(
+    axPlot.plot(
         x,
         mYFit,
         ls="-",
@@ -198,33 +204,34 @@ def makeRadialPlot(
     # Text with FWHM and EE50|80
     gText = (f"GFWHM: {gFwhmFit*0.2:.3f}\nGEE50|80: {gEE50Diameter*0.2:.3f}|{gEE80Diameter*0.2:.3f}",)
     mText = (f"MFWHM: {mFwhmFit:.3f}\nMEE50|80: {mEE50Diamater*0.2:.3f}|{mEE80Diamater*0.2:.3f}",)
-    axPlt.text(0.5, 0.9, *gText, color="r", fontsize="small", transform=axPlt.transAxes)
-    axPlt.text(0.5, 0.8, *mText, color="y", fontsize="small", transform=axPlt.transAxes)
+    axPlot.text(0.5, 0.9, *gText, color="r", fontsize="small", transform=axPlot.transAxes)
+    axPlot.text(0.5, 0.8, *mText, color="y", fontsize="small", transform=axPlot.transAxes)
 
 
 def makePsfRadialPanel(
     cutOuts: list[np.ndarray],
-    detType: str = "LSSTComCam",
+    instrument: str = "LSSTComCam",
     fig: matplotlib.figure.Figure | None = None,
     figSize: tuple[int, int] = (10, 10),
     maxCol: int = 3,
     **kwargs,
 ) -> matplotlib.figure.Figure:
-    """Make a per-detector psf radial analysis.
+    """Make a per-detector PSF radial analysis.
 
-    Each subplots shows for a detector a psf cutout, a radial analysis and the
+    Each subplot shows for a detector a PSF cutout, a radial analysis and the
     morphology contour.
 
     Parameters
     ----------
-    cutOuts : `Iterator` of `np.ndarray`
-        An iterator containing the 2D array of the star cutOuts.
-    detType: `str`
+    cutOuts : `list` of `np.ndarray`
+        An list containing the 2D array of the star cutOuts.
+    instrument: `str`, optional
         Detector type. Default 'LSSTComCam'.
-    fig: `matplotlib.figure.Figure` or `None`, optional
-        If provided, use this figure.  Default None.
+    fig: `matplotlib.figure.Figure` or ``None``, optional
+        If provided, use this figure.  Default ``None``.
     figSize: `tuple` of `float`, optional
-        Figure size in inches.  Default (11, 12).
+        Figure size in inches.  Default (10, 10), but ignored if a `fig` is
+        supplied.
     maxCol: `int`, optional
         Maximum number of columns to use while creating the subplots grid.
         Default 3.
@@ -266,7 +273,7 @@ def makePsfRadialPanel(
         axsBkg.append(fig.add_subplot(gs[i // nCols, i % nCols], xticks=[], yticks=[]))
         axsCtr.append(fig.add_subplot(gs[i // nCols, i % nCols], xticks=[], yticks=[]))
 
-    for axPlt, axBkg, axCtr, cutOut in zip(axsPlt, axsBkg, axsCtr, cutOuts):
-        makeRadialPlot(axPlt, axBkg, axCtr, cutOut)
+    for axPlot, axBackground, axContour, cutOut in zip(axsPlt, axsBkg, axsCtr, cutOuts):
+        makeRadialPlot(axPlot, axBackground, axContour, cutOut)
 
     return fig
