@@ -27,10 +27,12 @@ import logging
 import time
 from dataclasses import dataclass
 from typing import TYPE_CHECKING
+from zoneinfo import ZoneInfo
 
 import matplotlib.dates as mdates
 import matplotlib.pyplot as plt
 import numpy as np
+from matplotlib.dates import num2date
 from matplotlib.ticker import FuncFormatter
 
 from lsst.summit.utils.tmaUtils import filterBadValues
@@ -152,6 +154,16 @@ def plotMountErrors(
 
     if figure is None:
         figure = plt.figure(figsize=(12, 8))
+
+    utc = ZoneInfo("UTC")
+    chile_tz = ZoneInfo("America/Santiago")
+
+    # Function to convert UTC to Chilean time
+    def offset_time_aware(utc_time):
+        # Ensure the time is timezone-aware in UTC
+        if utc_time.tzinfo is None:
+            utc_time = utc.localize(utc_time)
+        return utc_time.astimezone(chile_tz)
 
     [[ax1, ax4], [ax2, ax5], [ax3, ax6]] = figure.subplots(
         3,
@@ -304,7 +316,28 @@ def plotMountErrors(
 
     ax1.set_title("Azimuth and Elevation")
     ax4.set_title("Rotator")
-    figure.suptitle(title, fontsize=14, y=0.95)
+    figure.suptitle(title, fontsize=14, y=1.01)  # Adjust y to move the title up
+
+    # Create the upper axis for Chilean time
+    ax1_twiny = ax1.twiny()
+    ax1_twiny.set_xlim(ax1.get_xlim())  # Set the limits of the upper axis to match the lower axis
+    utcTicks = ax1.get_xticks()  # Use the same ticks as the lower UTC axis
+    utcTickLabels = [num2date(tick, tz=utc) for tick in utcTicks]
+    chileTickLabels = [offset_time_aware(label) for label in utcTickLabels]
+    # Set the same tick positions but with Chilean time labels
+    ax1_twiny.set_xticks(utcTicks)
+    ax1_twiny.set_xticklabels([tick.strftime("%H:%M:%S") for tick in chileTickLabels])
+    ax1_twiny.set_xlabel("Time (Chilean Time)")
+
+    ax4_twiny = ax4.twiny()
+    ax4_twiny.set_xlim(ax4.get_xlim())  # Set the limits of the upper axis to match the lower axis
+    utcTicks = ax4.get_xticks()  # Use the same ticks as the lower UTC axis
+    utcTickLabels = [num2date(tick, tz=utc) for tick in utcTicks]
+    chileTickLabels = [offset_time_aware(label) for label in utcTickLabels]
+    # Set the same tick positions but with Chilean time labels
+    ax4_twiny.set_xticks(utcTicks)
+    ax4_twiny.set_xticklabels([tick.strftime("%H:%M:%S") for tick in chileTickLabels])
+    ax4_twiny.set_xlabel("Time (Chilean Time)")
 
     # Add exposure start and end:
     for ax in axs:
