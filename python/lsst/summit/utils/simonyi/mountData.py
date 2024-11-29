@@ -83,12 +83,12 @@ def getAzElRotDataForPeriod(
         postPadding=postPadding,
     )
 
-    azValues = azimuthData["actualPosition"].values
-    elValues = elevationData["actualPosition"].values
-    rotValues = rotationData["actualPosition"].values
-    azDemand = azimuthData["demandPosition"].values
-    elDemand = elevationData["demandPosition"].values
-    rotDemand = rotationData["demandPosition"].values
+    azValues = azimuthData["actualPosition"].to_numpy()
+    elValues = elevationData["actualPosition"].to_numpy()
+    rotValues = rotationData["actualPosition"].to_numpy()
+    azDemand = azimuthData["demandPosition"].to_numpy()
+    elDemand = elevationData["demandPosition"].to_numpy()
+    rotDemand = rotationData["demandPosition"].to_numpy()
 
     azError = (azValues - azDemand) * 3600
     elError = (elValues - elDemand) * 3600
