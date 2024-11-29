@@ -317,7 +317,8 @@ def plotMountErrors(
 
     ax1.set_title("Azimuth and Elevation")
     ax4.set_title("Rotator")
-    figure.suptitle(title, fontsize=14, y=1.01)  # Adjust y to move the title up
+    figure.subplots_adjust(top=0.85)  # Adjust the top margin to make room for the suptitle
+    figure.suptitle(title, fontsize=14, y=1.04)  # Adjust y to move the title up
 
     # Create the upper axis for Chilean time
     ax1_twiny = ax1.twiny()
@@ -328,6 +329,7 @@ def plotMountErrors(
     # Set the same tick positions but with Chilean time labels
     ax1_twiny.set_xticks(utcTicks)
     ax1_twiny.set_xticklabels([tick.strftime("%H:%M:%S") for tick in chileTickLabels])
+    ax1_twiny.tick_params(axis="x", rotation=45)
     ax1_twiny.set_xlabel("Time (Chilean Time)")
 
     ax4_twiny = ax4.twiny()
@@ -338,6 +340,7 @@ def plotMountErrors(
     # Set the same tick positions but with Chilean time labels
     ax4_twiny.set_xticks(utcTicks)
     ax4_twiny.set_xticklabels([tick.strftime("%H:%M:%S") for tick in chileTickLabels])
+    ax4_twiny.tick_params(axis="x", rotation=45)
     ax4_twiny.set_xlabel("Time (Chilean Time)")
 
     # Add exposure start and end:
@@ -348,6 +351,6 @@ def plotMountErrors(
             ax.axvline(expRecord.timespan.end.utc.datetime, ls="--", color="red")
 
     if saveFilename:
-        figure.savefig(saveFilename)
+        figure.savefig(saveFilename, bbox_inches="tight")
 
     return figure
