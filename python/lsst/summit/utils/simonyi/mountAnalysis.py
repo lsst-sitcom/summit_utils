@@ -24,9 +24,8 @@ from __future__ import annotations
 __all__ = ["calculateMountErrors", "plotMountErrors"]
 
 import logging
-import time
 from dataclasses import dataclass
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Literal
 from zoneinfo import ZoneInfo
 
 import matplotlib.dates as mdates
@@ -42,6 +41,7 @@ from .mountData import getAzElRotDataForExposure
 
 if TYPE_CHECKING:
     from lsst_efd_client import EfdClient
+    from matplotlib.figure import Figure
 
     from lsst.daf.butler import DimensionRecord
 
@@ -84,13 +84,12 @@ def calculateMountErrors(
     client: EfdClient,
     maxDelta=0.1,
     doFilterResiduals=True,
-) -> tuple[MountErrors, MountData] | False:
+) -> tuple[MountErrors, MountData] | Literal[False]:
     """Queries EFD for a given exposure and calculates the RMS errors in the
     axes during the exposure, optionally plotting and saving the data.
     """
     logger = logging.getLogger(__name__)
 
-    start = time.time()
     imgType = expRecord.observation_type.upper()
     if imgType in NON_TRACKING_IMAGE_TYPES:
         logger.info(f"Skipping mount torques for non-tracking image type {imgType} for {expRecord.id}")
@@ -100,9 +99,11 @@ def calculateMountErrors(
 
     elevation = 90 - expRecord.zenith_angle
 
-    azError = mountData.azimuthData["azError"].values
-    elError = mountData.elevationData["elError"].values
-    rotError = mountData.rotationData["rotError"].values
+    azError = mountData.azimuthData["azError"].to_numpy()
+    elError = mountData.elevationData["elError"].to_numpy()
+    rotError = mountData.rotationData["rotError"].to_numpy()
+    nReplacedAz = 0
+    nReplacedEl = 0
     if doFilterResiduals:
         # Filtering out bad values
         nReplacedAz = filterBadValues(azError, maxDelta)
@@ -118,10 +119,6 @@ def calculateMountErrors(
     imageElRms = elRms
     imageRotRms = rotRms * COMCAM_ANGLE_TO_EDGE_OF_FIELD_ARCSEC * np.pi / 180.0 / 3600.0
     imageImpactRms = np.sqrt(imageAzRms**2 + imageElRms**2 + imageRotRms**2)
-
-    end = time.time()
-    elapsed = end - start
-    logger.info(f"Elapsed time for EFD queries = {elapsed}")
 
     mountErrors = MountErrors(
         azRms=azRms,
@@ -144,7 +141,7 @@ def plotMountErrors(
     mountErrors: MountErrors,
     figure=None,
     saveFilename: str = "",
-):
+) -> Figure:
     imageImpactRms = mountErrors.imageImpactRms
     expRecord = mountData.expRecord
     if expRecord is not None:
@@ -342,10 +339,11 @@ def plotMountErrors(
     # Add exposure start and end:
     for ax in axs:
         if expRecord is not None:
-            ax.axvline(mountData.expRecord.timespan.begin.utc.datetime, ls="--", color="green")
-            ax.axvline(mountData.expRecord.timespan.end.utc.datetime, ls="--", color="red")
+            # assert expRecord is not None, "expRecord is None"
+            ax.axvline(expRecord.timespan.begin.utc.datetime, ls="--", color="green")
+            ax.axvline(expRecord.timespan.end.utc.datetime, ls="--", color="red")
 
     if saveFilename:
-        plt.savefig(saveFilename)
+        figure.savefig(saveFilename)
 
     return figure
