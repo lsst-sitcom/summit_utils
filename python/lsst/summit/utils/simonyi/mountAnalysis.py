@@ -25,7 +25,7 @@ __all__ = ["calculateMountErrors", "plotMountErrors"]
 
 import logging
 from dataclasses import dataclass
-from typing import TYPE_CHECKING, Literal
+from typing import TYPE_CHECKING
 from zoneinfo import ZoneInfo
 
 import matplotlib.dates as mdates
@@ -84,7 +84,7 @@ def calculateMountErrors(
     client: EfdClient,
     maxDelta=0.1,
     doFilterResiduals=True,
-) -> tuple[MountErrors, MountData] | Literal[False]:
+) -> tuple[MountErrors, MountData] | tuple[None, None]:
     """Queries EFD for a given exposure and calculates the RMS errors in the
     axes during the exposure, optionally plotting and saving the data.
     """
@@ -93,7 +93,7 @@ def calculateMountErrors(
     imgType = expRecord.observation_type.upper()
     if imgType in NON_TRACKING_IMAGE_TYPES:
         logger.info(f"Skipping mount torques for non-tracking image type {imgType} for {expRecord.id}")
-        return False
+        return None, None
 
     mountData = getAzElRotDataForExposure(client, expRecord)
 
