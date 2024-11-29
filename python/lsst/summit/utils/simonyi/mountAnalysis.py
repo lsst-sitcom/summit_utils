@@ -82,7 +82,7 @@ def calculateMountErrors(
     client: EfdClient,
     maxDelta=0.1,
     doFilterResiduals=True,
-):
+) -> tuple[MountErrors, MountData] | False:
     """Queries EFD for a given exposure and calculates the RMS errors in the
     axes during the exposure, optionally plotting and saving the data.
     """
@@ -92,11 +92,6 @@ def calculateMountErrors(
     imgType = expRecord.observation_type.upper()
     if imgType in NON_TRACKING_IMAGE_TYPES:
         logger.info(f"Skipping mount torques for non-tracking image type {imgType} for {expRecord.id}")
-        return False
-
-    exptime = expRecord.exposure_time
-    if exptime < 1.99:
-        logger.info("Skipping sub 2s expsoure")
         return False
 
     mountData = getAzElRotDataForExposure(client, expRecord)
@@ -165,6 +160,10 @@ def plotMountErrors(
         sharey=False,
         gridspec_kw={"wspace": 0.25, "hspace": 0, "height_ratios": [2.5, 1, 1], "width_ratios": [1.5, 1]},
     )
+    # [ax1, ax4] = [azimuth, rotator]
+    # [ax2, ax5] = [azError, rotError]
+    # [ax3, ax6] = [azTorque, rotTorque]
+
     # Use the native color cycle for the lines. Because they're on
     # different axes they don't cycle by themselves
     axs = [ax1, ax2, ax3, ax4, ax5, ax6]
@@ -265,7 +264,7 @@ def plotMountErrors(
     ax5.axhline(-0.1, ls="-.", color="black")
     ax5.yaxis.set_major_formatter(FuncFormatter(tickFormatter))
     ax5.set_ylabel("Tracking error (arcsec)")
-    ax5.set_xticks([])  # remove x tick labels on the hidden upper x-axis
+    ax5.tick_params(labelbottom=False)  # Hide x-axis tick labels without removing ticks
     ax5.set_ylim(-0.5, 0.5)
     ax5.set_yticks([-0.4, -0.2, 0.0, 0.2, 0.4])
     ax5.yaxis.tick_right()
@@ -289,7 +288,7 @@ def plotMountErrors(
 
     ax1_twin.yaxis.set_major_formatter(FuncFormatter(tickFormatter))
     ax1_twin.set_ylabel("Elevation (degrees)")
-    ax1.set_xticks([])  # remove x tick labels on the hidden upper x-axis
+    ax1.tick_params(labelbottom=False)  # Hide x-axis tick labels without removing ticks
     # combine the legends and put inside the plot
     handles1a, labels1a = ax1.get_legend_handles_labels()
     handles1b, labels1b = ax1_twin.get_legend_handles_labels()
