@@ -151,6 +151,10 @@ def plotMountErrors(
 
     if figure is None:
         figure = plt.figure(figsize=(12, 8))
+    else:
+        figure.clear()
+        ax = figure.gca()
+        ax.clear()
 
     utc = ZoneInfo("UTC")
     chile_tz = ZoneInfo("America/Santiago")
