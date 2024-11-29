@@ -21,6 +21,7 @@
 
 from __future__ import annotations
 
+from dataclasses import dataclass
 from typing import TYPE_CHECKING
 
 from ..efdUtils import getEfdData
@@ -33,9 +34,22 @@ if TYPE_CHECKING:
     from lsst.daf.butler import DimensionRecord
 
 
+@dataclass
+class MountData:
+    begin: Time
+    end: Time
+    azimuthData: DataFrame
+    elevationData: DataFrame
+    rotationData: DataFrame
+    rotationTorques: DataFrame
+    includedPrePadding: float
+    includedPostPadding: float
+    expRecord: DimensionRecord | None
+
+
 def getAzElRotDataForPeriod(
     client: EfdClient, begin: Time, end: Time, prePadding: float = 0, postPadding: float = 0
-) -> tuple[DataFrame, DataFrame, DataFrame, DataFrame]:
+) -> MountData:
     azimuthData = getEfdData(
         client,
         "lsst.sal.MTMount.azimuth",
@@ -84,12 +98,18 @@ def getAzElRotDataForPeriod(
     elevationData["elError"] = elError
     rotationData["rotError"] = rotError
 
-    return azimuthData, elevationData, rotationData, rotationTorques
+    mountData = MountData(
+        begin, end, azimuthData, elevationData, rotationData, rotationTorques, prePadding, postPadding, None
+    )
+    return mountData
 
 
 def getAzElRotDataForExposure(
     client: EfdClient, expRecord: DimensionRecord, prePadding: float = 0, postPadding: float = 0
-) -> tuple[DataFrame, DataFrame, DataFrame, DataFrame]:
+) -> MountData:
+
     begin = expRecord.timespan.begin
     end = expRecord.timespan.end
-    return getAzElRotDataForPeriod(client, begin, end, prePadding, postPadding)
+    mountData = getAzElRotDataForPeriod(client, begin, end, prePadding, postPadding)
+    mountData.expRecord = expRecord
+    return mountData
