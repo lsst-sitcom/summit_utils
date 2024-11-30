@@ -58,6 +58,9 @@ LSSTCAM_ANGLE_TO_EDGE_OF_FIELD_ARCSEC = 8500.0
 MOUNT_IMAGE_WARNING_LEVEL = 0.05
 MOUNT_IMAGE_BAD_LEVEL = 0.10  # and red for this
 
+N_REPLACED_WARNING_LEVEL = 999999  # fill these values in once you've spoken to Craig and Brian
+N_REPLACED_BAD_LEVEL = 999999  # fill these values in once you've spoken to Craig and Brian
+
 
 @dataclass
 class MountErrors:
