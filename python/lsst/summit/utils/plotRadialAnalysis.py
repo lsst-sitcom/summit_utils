@@ -1,7 +1,11 @@
-from collections.abc import Iterator
+from collections.abc import Iterable
+
+import lsst
 
 import matplotlib
+import matplotlib.pyplot as plt
 import numpy as np
+import pandas
 from matplotlib.gridspec import GridSpec
 from scipy.optimize import curve_fit  # type: ignore
 
@@ -78,35 +82,30 @@ def moffat2dFitFunction(
     return baseline + peak * (1 + (((x - x0) ** 2 + (y - y0) ** 2)) / alpha**2) ** (-beta)
 
 
-def makeRadialPlot(
-    axPlot: matplotlib.axes.Axes,
-    axBackground: matplotlib.axes.Axes,
-    axContour: matplotlib.axes.Axes,
-    data: np.ndarray,
-    levels: np.ndarray | Iterator[float] | None = None,
-):
-    """Make a radial analysis plot.
-
-    Create a plot with three layers:
-        - Background image with the star cutout
-        - The contour level of the star
-        - The radial profile with Gaussian and Moffat fit
-    The value of FWHM and Encircled Energy Radius (EE) at the
-    50% and 80% are reported for both the fit methods.
+def doRadialAnalysis(data: np.ndarray):
+    """Perform the radial analysis on a star cutout
 
     Parameters
     ----------
-    axPlot: `matplotlib.axes.Axes`
-        Axes used for the radial plot.
-    axBackground: `matplotlib.axes.Axes`
-        Axes used for the background image.
-    axContour: `matplotlib.axes.Axes`
-        Axes used for the contours on the image.
     data: `np.ndarray`
         2D array containing the star cutout
-    levels: `np.ndarray` or `Iterator` of `float` or `None`, optional
-        The levels value for the contours.
-        If None, is set to `np.linspace(1.5*np.std(data), data.max(), 5)`
+
+    Returns
+    -------
+    x: `np.ndarray`
+        1d array with the radial from the centroid.
+    y: `np.ndarray`
+        1d array with the intensity value.
+    gYFit: `np.ndarray`
+        Gaussian Fit.
+    mYFit: `np.ndarray`
+        Moffat Fit.
+    gStat: `list` of `float`
+        A list containing the gaussian fit values of
+        FWHM and Encircled Energ Fraction Radii (EE) at 50% and 80%
+    mStat: `list` of `float`
+        A list containing the moffat fit values of
+        FWHM and Encircled Energ Fraction Radii (EE) at 50% and 80%
     """
     # Create meshgrid for fitting with x and y positions
     xGrid, yGrid = np.meshgrid(np.arange(data.shape[1]), np.arange(data.shape[0]))
@@ -149,73 +148,149 @@ def makeRadialPlot(
     gEE80Diameter = 2 * gSortedRadii[np.searchsorted(gCumulativeEnergy, 0.8 * gCumulativeEnergy[-1])]
 
     # Determine 50% and 80% encircled energy diameters from Moffat
-    mEE50Diamater = 2 * mSortedRadii[np.searchsorted(mCumulativeEnergy, 0.5 * mCumulativeEnergy[-1])]
-    mEE80Diamater = 2 * mSortedRadii[np.searchsorted(mCumulativeEnergy, 0.8 * mCumulativeEnergy[-1])]
+    mEE50Diameter = 2 * mSortedRadii[np.searchsorted(mCumulativeEnergy, 0.5 * mCumulativeEnergy[-1])]
+    mEE80Diameter = 2 * mSortedRadii[np.searchsorted(mCumulativeEnergy, 0.8 * mCumulativeEnergy[-1])]
 
     x = 0.2 * mSortedRadii
     yScatter = mSortedValues + mBaselineFit  # added back the backgroud.
     gYFit = gaussian2dFitFunction(xy, *gParams)[gSortedIndices]
     mYFit = moffat2dFitFunction(xy, *mParams)[mSortedIndices]
-    extent = (x.min(), x.max(), yScatter.min(), yScatter.max())
 
-    # setting the layer zorder
-    axPlot.set(zorder=3, facecolor=(1, 1, 1, 0))
-    axContour.set(zorder=2, facecolor=(1, 1, 1, 0))
-    axBackground.set(zorder=1)
-
-    # put the backgroud cutout image
-    axBackground.imshow(
-        data,
-        cmap="gray",
-        origin="lower",
-        extent=extent,
-        aspect="auto",  # XXX equal?
-    )
-
-    # Contour plot function
-    levels = levels if levels is not None else np.linspace(1.5 * np.std(data), data.max(), 5)
-    axContour.contour(xGrid, yGrid, data, cmap="spring", levels=levels, alpha=0.7)
-
-    # Radial profile plot
-    axPlot.scatter(
+    return (
         x,
         yScatter,
-        marker="o",
-        s=5,
-        facecolor="none",
-        edgecolor="cyan",
-        label="Data",
-    )
-    axPlot.plot(
-        x,
         gYFit,
-        ls="-",
-        color="r",
-        label="Gaussian Fit",
-    )
-    axPlot.plot(
-        x,
         mYFit,
-        ls="-",
-        color="y",
-        label="Moffat Fit",
+        [gFwhmFit, gEE50Diameter, gEE80Diameter],
+        [mFwhmFit, mEE50Diameter, mEE80Diameter],
     )
 
-    # Text with FWHM and EE50|80
-    gText = (f"GFWHM: {gFwhmFit*0.2:.3f}\nGEE50|80: {gEE50Diameter*0.2:.3f}|{gEE80Diameter*0.2:.3f}",)
-    mText = (f"MFWHM: {mFwhmFit:.3f}\nMEE50|80: {mEE50Diamater*0.2:.3f}|{mEE80Diamater*0.2:.3f}",)
-    axPlot.text(0.5, 0.9, *gText, color="r", fontsize="small", transform=axPlot.transAxes)
-    axPlot.text(0.5, 0.8, *mText, color="y", fontsize="small", transform=axPlot.transAxes)
+
+def makeLayerPlot(
+    axDict: dict[str, matplotlib.axes.Axes],
+    data: np.ndarray,
+    levels: np.ndarray | Iterable[float] | None = None,
+):
+    """Make per axes layer plot.
+
+    Create a plot with three possible layers:
+        - Background image with the star cutout
+        - The contour level of the star
+        - The radial profile with Gaussian and Moffat fit
+    The value of Full Width at Half Maximum (FWHM) and Encircled Energy Radii (EE)
+    at 50% and 80% are reported if the 'radial' layer has been chosen.
+
+    Parameters
+    ----------
+    axDict: `dict` of `matplotlib.axes.Axes`
+        A Dictionary containing the axes layer to use
+    data: `np.ndarray`
+        2D array containing the star cutout
+    levels: `np.ndarray` or `Iterable` of `float` or `None`, optional
+        The levels value for the contour layer.
+        If None, is set to `np.linspace(1.5*np.std(data), data.max(), 5)`
+    """
+
+    # setting the right z-order
+    for lay, ax in axDict.items():
+        if lay == "background":
+            ax.set(zorder=1)
+        elif lay == "contour":
+            ax.set(zorder=2, facecolor=(1, 1, 1, 0))
+        elif lay == "radial":
+            ax.set(zorder=3, facecolor=(1, 1, 1, 0))
+
+    # plot the background layer if present
+    if "background" in axDict:
+        # extent = (x.min(), x.max(), yScatter.min(), yScatter.max())
+        axDict["background"].imshow(
+            data,
+            cmap="gray",
+            origin="lower",
+            # extent=extent,
+            # aspect="auto",  # XXX equal?
+        )
+
+    # plot the contour layer if present
+    if "contour" in axDict:
+        xGrid, yGrid = np.meshgrid(np.arange(data.shape[1]), np.arange(data.shape[0]))
+        levels = levels if levels is not None else np.linspace(1.5 * np.std(data), data.max(), 5)
+        axDict["contour"].contour(xGrid, yGrid, data, cmap="spring", levels=levels, alpha=0.7)
+
+    # plot the radial analysis layer if present
+    if "radial" in axDict:
+        (
+            x,
+            yScatter,
+            gYFit,
+            mYFit,
+            [gFwhmFit, gEE50Diameter, gEE80Diameter],
+            [mFwhmFit, mEE50Diameter, mEE80Diameter],
+        ) = doRadialAnalysis(data)
+
+        axDict["radial"].scatter(
+            x,
+            yScatter,
+            marker="o",
+            s=5,
+            facecolor="none",
+            edgecolor="cyan",
+            label="Data",
+        )
+        axDict["radial"].plot(
+            x,
+            gYFit,
+            ls="-",
+            color="r",
+            label="Gaussian Fit",
+        )
+        axDict["radial"].plot(
+            x,
+            mYFit,
+            ls="-",
+            color="y",
+            label="Moffat Fit",
+        )
+
+        # Text with FWHM and EE50|80
+        gText = (
+            f"FWHM: {gFwhmFit*0.2:.3f}  " f"EE50: {gEE50Diameter*0.2:.3f}  " f"EE80: {gEE80Diameter*0.2:.3f}"
+        )
+
+        mText = (
+            f"FWHM: {mFwhmFit*0.2:.3f}  " f"EE50: {mEE50Diameter*0.2:.3f}  " f"EE80: {mEE80Diameter*0.2:.3f}"
+        )
+
+        axDict["radial"].text(
+            0.15,
+            0.9,
+            gText,
+            color="r",
+            fontsize=9,
+            fontweight="heavy",
+            transform=axDict["radial"].transAxes,
+        )
+
+        axDict["radial"].text(
+            0.15,
+            0.85,
+            mText,
+            color="y",
+            fontsize=9,
+            fontweight="heavy",
+            transform=axDict["radial"].transAxes,
+        )
 
 
-def makePsfRadialPanel(
-    cutOuts: list[np.ndarray],
+def makePsfPanel(
+    cutOuts: dict[int, np.ndarray],
+    detNameDict: dict[int, str],
     instrument: str = "LSSTComCam",
+    layers: list[str] | str = "both",
     fig: matplotlib.figure.Figure | None = None,
-    figSize: tuple[int, int] = (10, 10),
-    maxCol: int = 3,
+    figSize: tuple[int, int] = (16, 12),
     **kwargs,
-) -> matplotlib.figure.Figure:
+) -> tuple[matplotlib.figure.Figure, matplotlib.axes.Axes]:
     """Make a per-detector PSF radial analysis.
 
     Each subplot shows for a detector a PSF cutout, a radial analysis and the
@@ -223,18 +298,21 @@ def makePsfRadialPanel(
 
     Parameters
     ----------
-    cutOuts : `list` of `np.ndarray`
-        An list containing the 2D array of the star cutOuts.
+    cutOuts: `dict[int, np.ndarray]`
+        A dictionary containing the 2D array of the star cutOuts.
+    detNameList: `dict[int, str]`
+        A dictionary containing the detector names.
     instrument: `str`, optional
         Detector type. Default 'LSSTComCam'.
+    layers: `str` or `list` of `str`, optional
+        List of layers to be displayed between 'background', 'radial', 'contour'.
+        It is possible to pass also the string 'both' as a shortcut for
+        ['background', 'radial', 'contour']. Default 'both'.
     fig: `matplotlib.figure.Figure` or ``None``, optional
         If provided, use this figure.  Default ``None``.
     figSize: `tuple` of `float`, optional
         Figure size in inches.  Default (10, 10), but ignored if a `fig` is
         supplied.
-    maxCol: `int`, optional
-        Maximum number of columns to use while creating the subplots grid.
-        Default 3.
     **kwargs:
         Additional keyword arguments passed to matplotlib Figure constructor.
 
@@ -242,38 +320,240 @@ def makePsfRadialPanel(
     -------
     fig: `matplotlib.figure.Figure`
         The figure.
+    axLegend: `matplotlib.axes.Axes`
+        The Axe to use for additional information aside the figure.
     """
 
     # generating figure if None
+    # maybe is better to remove the figsize form user and
+    # find a wise way to understand the w/h ratio automatically.
     if fig is None:
         fig = matplotlib.figure.Figure(figSize=figSize, **kwargs)
 
-    # creating the gridspec grid
-    if len(cutOuts) < maxCol:
-        nRows = 1
-        nCols = len(cutOuts)
-    else:
-        nRows = len(cutOuts) // maxCol + 1 if len(cutOuts) % maxCol != 0 else len(cutOuts) // maxCol
-        nCols = maxCol
+    # creating the intrument layout
+    match instrument:
+        case "LSSTComCam":
+            maxCol = 3
+            if len(cutOuts) < maxCol:
+                nRows = 1
+                nCols = len(cutOuts)
+            else:
+                nRows = len(cutOuts) // maxCol + 1 if len(cutOuts) % maxCol != 0 else len(cutOuts) // maxCol
+                nCols = maxCol
+        case _:
+            print("So far only the LSSTComCam layout has been implemented. That layout will be used")
+            maxCol = 3
+            if len(cutOuts) < maxCol:
+                nRows = 1
+                nCols = len(cutOuts)
+            else:
+                nRows = len(cutOuts) // maxCol + 1 if len(cutOuts) % maxCol != 0 else len(cutOuts) // maxCol
+                nCols = maxCol
 
     gs = GridSpec(
         nrows=nRows,
-        ncols=nCols,
+        ncols=nCols + 1,  # adding a colum for legend and statistc
         figure=fig,
-        width_ratios=[1.0] * nCols,
+        width_ratios=[1.0] * nCols + [0.05],
         height_ratios=[1.0] * nRows,
     )
 
-    # generate the three axes layers
-    axsPlt = []
-    axsBkg = []
-    axsCtr = []
-    for i in range(len(cutOuts)):
-        axsPlt.append(fig.add_subplot(gs[i // nCols, i % nCols], xticks=[], yticks=[]))
-        axsBkg.append(fig.add_subplot(gs[i // nCols, i % nCols], xticks=[], yticks=[]))
-        axsCtr.append(fig.add_subplot(gs[i // nCols, i % nCols], xticks=[], yticks=[]))
+    axLegend = fig.add_subplot(gs[:, -1])  # axe for title, legend and statistic
+    axLegend.axis("off")
 
-    for axPlot, axBackground, axContour, cutOut in zip(axsPlt, axsBkg, axsCtr, cutOuts):
-        makeRadialPlot(axPlot, axBackground, axContour, cutOut)
+    # checking the layers parameter
+    axs: dict[str, list] = dict()
+    if layers == "both":
+        for layer in ["background", "radial", "contour"]:
+            axs[layer] = []
+
+    elif (
+        isinstance(layers, list)
+        and "both" not in layers
+        and all([el in ["background", "radial", "contour"] for el in layers])
+    ):
+        for layer in layers:
+            axs[layer] = []
+    else:
+        raise ValueError("List of layers not valid.")
+
+    # generate the axes layers
+    # !!Very hardcode for ComCam!!
+    # !!a wise method to swetup the axes layout for each insturment is needed!!
+    for i in range(len(cutOuts)):
+        for axType, axList in axs.items():
+            if axType == "radial":  # keep ticks for radial plots
+                axList.append(fig.add_subplot(gs[(gs.nrows-1) - i // nCols, i % nCols]))
+            else:
+                axList.append(
+                    fig.add_subplot(
+                        gs[(gs.nrows-1) - i // nCols, i % nCols],
+                        xticks=[],
+                        yticks=[],
+                        aspect="equal",
+                    )
+                )
+    for ax, title in zip(axs[list(axs.keys())[0]], detNameDict.values()):
+        ax.set(title=title)
+
+    for i, cutOut in enumerate(cutOuts.values()):
+        makeLayerPlot({key: axs[key][i] for key in axs.keys()}, cutOut)
+
+    # put fit legend if radial layer is request
+    if "radial" in list(axs.keys()):
+
+        # set legend
+        gLabel = "Gaussian Fit"
+        mLabel = "Moffat Fit"
+        fitLabel = "Full Width at Half Maximum (FWHM)\nEncircled Energy Radius (EE)\nUnit: arcsecond"
+        axLegend.axis("off")
+        axLegend.text(
+            0.1,
+            0.95,
+            gLabel,
+            fontsize=20,
+            fontweight="bold",
+            ha="left",
+            va="center",
+            c="r",
+        )
+        axLegend.text(
+            0.1,
+            0.92,
+            mLabel,
+            fontsize=20,
+            fontweight="bold",
+            ha="left",
+            va="center",
+            c="y",
+        )
+        axLegend.text(
+            0.1,
+            0.87,
+            fitLabel,
+            fontsize=15,
+            fontweight="medium",
+            ha="left",
+            va="center",
+            c="black",
+        )
+
+        # sharing the axis limits
+        axToShareX = np.argmax([ax.get_xlim()[1] for ax in axs["radial"]])
+        # axToShareY = np.argmax([ax.get_ylim()[1] for ax in axs["radial"]])
+
+        for ax in axs["radial"]:
+            ax.sharex(axs["radial"][axToShareX])
+            # ax.sharey(axs["radial"][axToShareY])
+
+        # put shared x and y labels
+        for i, ax in enumerate(axs["radial"]):
+            if i <= maxCol: # hardcoded for ComCam!
+                ax.set(xlabel="r, arcsec")
+            if i % maxCol == 0:
+                ax.set(ylabel="counts")
+
+    return fig, axLegend
+
+
+def generateCutout(
+    img: lsst.afw.image._exposure.ExposureF, center: np.ndarray | list[float] | tuple[float, float], pad: int = 10
+) -> np.ndarray:
+    """Generate the cutout around a center position
+
+    Parameters
+    ----------
+    img: `lsst.afw.image._exposure.ExposureF`
+        The image from extract the cutouts
+    center: `np.ndarray` or `list` of `float` or `tuple` of `float`
+        The coordinates of the cutout center
+    pad: `int`, optional
+        Padding around the center, default 10.
+
+    Returns
+    -------
+    cutout: `np.ndarray`
+        The square cutout around the center position.
+    """
+    xlim = (center[0] - pad, center[0] + pad)
+    ylim = (center[1] - pad, center[1] + pad)
+    cutout = img.image.array[int(ylim[0]) : int(ylim[1]), int(xlim[0]) : int(xlim[1])]
+    return cutout
+
+
+def findNearestStarToTarget(tab: pandas.DataFrame, target: np.ndarray | list[float] | tuple[float, float]) -> np.ndarray:
+    """Find the nearest star w.r.t to a target coordinates
+    N.B. The seacrh is done in PIXEL coordinates.
+
+    Parameters
+    ----------
+    tab: `pandas.DataFrame`
+        pandas.DataFram with the in focus stars positions.
+    target: `np.ndarray` or `list` of `float` or `tuple` of `float`
+        The target coordinates.
+    """
+    tab["center_sep"] = np.sqrt(
+        (tab["slot_Centroid_x"] - target[0]) ** 2 + (tab["slot_Centroid_y"] - target[1]) ** 2
+    )
+    most_close = tab.sort_values(by=["center_sep"]).iloc[0].name
+    nearest = tab.loc[most_close, ["slot_Centroid_x", "slot_Centroid_y"]].values
+    return nearest
+
+# change list in dictionary with det_num key
+def makePanel(
+    imgDict: dict[int, lsst.afw.image._exposure.ExposureF],
+    sourceTableDict: dict[int, pandas.DataFrame],
+    **kwargs,
+) -> matplotlib.figure.Figure:
+    """Create the panel with the in focus stars.
+    See the documentation of `makePsfPanel` for more information.
+
+    Parameters
+    ----------
+    imageDict: `dict[int, lsst.afw.image._exposure.ExposureF]`
+        A dictionary containing the images from whose extract the cutouts.
+    sourceTableDict: `dict[int, pandas.DataFrame]`
+        A dictionary containing the source dataframe for each images.
+    **kwargs:
+        Parameters for the `makePsfPanel` method.
+
+    Returns
+    -------
+    fig: `matplotlib.figure.Figure`
+        The figure.
+    """
+    # can still be hardcoded? (ComCam and LSSTCam have the same detector size?)
+    center = (2036.0, 2000.0)
+
+    # check the key sorting in the dictionary
+    imgDict = {detNum: imgDict[detNum] for detNum in sorted(list(imgDict.keys()))}
+    sourceTableDict = {
+        detNum: sourceTableDict[detNum] for detNum in sorted(list(sourceTableDict.keys()))
+    }
+    candidates = {
+        detNum: findNearestStarToTarget(tab, center) for detNum, tab in sourceTableDict.items()
+    }
+    # for (detNum, img), candidate in zip(imgDict.items(), candidates.values):
+    #     print(detNum, img, candidate)
+    cutouts = {
+        detNum: generateCutout(img, candidate) for (detNum, img), candidate in zip(imgDict.items(), candidates.values())
+    }
+    detName = {
+        detNum: img.getInfo().getDetector().getName() for detNum, img in imgDict.items()
+    }
+
+    fig, axLegend = makePsfPanel(cutouts, detName, **kwargs)
+    fig.suptitle("INFOCUS INSPECTION", fontsize=25)
+    visitText = f"visit: {imgDict[0].getInfo().getVisitInfo().id}"
+    axLegend.text(
+        0.1,
+        0.98,
+        visitText,
+        fontsize=20,
+        fontweight="bold",
+        ha="left",
+        va="center",
+        c="black",
+    )
 
     return fig
