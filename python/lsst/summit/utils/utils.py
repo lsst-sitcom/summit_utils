@@ -86,7 +86,8 @@ __all__ = [
     "obsInfoToDict",
     "getFieldNameAndTileNumber",
     "getAirmassSeeingCorrection",
-    "getFilterSeeingCorrection",
+    "getFilterSeeingCorrection",  # deprecated
+    "getBandpassSeeingCorrection",
     "getCdf",
     "getQuantiles",
     "digitizeData",
