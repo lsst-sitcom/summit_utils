@@ -42,18 +42,19 @@ from lsst.obs.base import createInitialSkyWcsFromBoresight
 from lsst.obs.base.makeRawVisitInfoViaObsInfo import MakeRawVisitInfoViaObsInfo
 from lsst.obs.lsst import Latiss
 from lsst.obs.lsst.translators.latiss import AUXTEL_LOCATION
+from lsst.summit.utils.utils import getFilterSeeingCorrection  # deprecated
 from lsst.summit.utils.utils import (
     calcEclipticCoords,
     computeCcdExposureId,
     computeExposureId,
     fluxesFromFootprints,
     getAirmassSeeingCorrection,
+    getBandpassSeeingCorrection,
     getCurrentDayObs_datetime,
     getCurrentDayObs_humanStr,
     getCurrentDayObs_int,
     getExpPositionOffset,
     getFieldNameAndTileNumber,
-    getFilterSeeingCorrection,
     getQuantiles,
     quickSmooth,
 )
@@ -189,7 +190,24 @@ class MiscUtilsTestCase(lsst.utils.tests.TestCase):
 
     def test_getFilterSeeingCorrection(self):
         for filterName in ("SDSSg_65mm", "SDSSr_65mm", "SDSSi_65mm"):
-            correction = getFilterSeeingCorrection(filterName)
+            with self.assertWarns(FutureWarning):
+                correction = getFilterSeeingCorrection(filterName)
+            self.assertGreater(correction, 0.5)
+            self.assertLess(correction, 1.5)
+
+    def test_getBandpassSeeingCorrection(self):
+        for filterName in (
+            "SDSSg_65mm",
+            "SDSSr_65mm",
+            "SDSSi_65mm",
+            "u_02",
+            "g_01",
+            "r_03",
+            "i_06",
+            "z_03",
+            "y_04",
+        ):
+            correction = getBandpassSeeingCorrection(filterName)
             self.assertGreater(correction, 0.5)
             self.assertLess(correction, 1.5)
 
