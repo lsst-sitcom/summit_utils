@@ -36,6 +36,7 @@ import matplotlib.dates as mdates
 import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
+from scipy.optimize import minimize
 from astropy.time import Time
 from matplotlib.ticker import FuncFormatter
 
@@ -153,6 +154,7 @@ def getAzimuthElevationDataForEvent(
     event: TMAEvent,
     prePadding: float = 0,
     postPadding: float = 0,
+    maxDeltaT: float = 1.0E-3,
 ) -> tuple[pd.DataFrame, pd.DataFrame]:
     """Get the data for the az/el telemetry topics for a given TMAEvent.
 
@@ -175,6 +177,9 @@ def getAzimuthElevationDataForEvent(
     postPadding : `float`, optional
         The amount of time to pad the event with after the end time, in
         seconds.
+    maxDeltaT : `float`, optional
+        The maximum allowed time adjustment to bring the median error to
+        zero, in seconds.
 
     Returns
     -------
@@ -183,6 +188,17 @@ def getAzimuthElevationDataForEvent(
     elevationData : `pd.DataFrame`
         The elevation data for the specified event.
     """
+
+    def calcDeltaT(params, args):
+        # This calculates the deltaT needed
+        # to make the median(error) = 0
+        [values, valTimes, demand, demTimes] = args
+        [deltaT] = params
+        demandInterp = np.interp(valTimes, demTimes + deltaT, demand)
+        error = (values - demandInterp) * 3600
+        value = abs(np.median(error))
+        return value
+
     azimuthData = getEfdData(
         client,
         "lsst.sal.MTMount.azimuth",
@@ -200,13 +216,34 @@ def getAzimuthElevationDataForEvent(
         raiseIfTopicNotInSchema=False,
     )
 
-    azValues = azimuthData["actualPosition"].to_numpy()
-    elValues = elevationData["actualPosition"].to_numpy()
-    azDemand = azimuthData["demandPosition"].to_numpy()
-    elDemand = elevationData["demandPosition"].to_numpy()
 
-    azError = (azValues - azDemand) * 3600
-    elError = (elValues - elDemand) * 3600
+    azValues = azimuthData["actualPosition"].to_numpy()
+    azValTimes = azimuthData["actualPositionTimestamp"].to_numpy()
+    azDemand = azimuthData["demandPosition"].to_numpy()    
+    azDemTimes = azimuthData["demandPositionTimestamp"].to_numpy()
+    elValues = elevationData["actualPosition"].to_numpy()
+    elValTimes = elevationData["actualPositionTimestamp"].to_numpy()
+    elDemand = elevationData["demandPosition"].to_numpy()    
+    elDemTimes = elevationData["demandPositionTimestamp"].to_numpy()
+
+    # Calculate the deltaT needed to drive the median(error) to zero
+    args = [azValues, azValTimes, azDemand, azDemTimes]
+    x0 = [0.0]
+    result = minimize(calcDeltaT, x0, args=args, method='Powell',
+                      bounds=[(-maxDeltaT, maxDeltaT)])
+    deltaTAz = result.x[0]
+    
+    args = [elValues, elValTimes, elDemand, elDemTimes]
+    x0 = [0.0]
+    result = minimize(calcDeltaT, x0, args=args, method='Powell',
+                      bounds=[(-maxDeltaT, maxDeltaT)])
+    deltaTEl = result.x[0]
+
+    azDemandInterp = np.interp(azValTimes, azDemTimes + deltaTAz, azDemand)
+    elDemandInterp = np.interp(elValTimes, elDemTimes + deltaTEl, elDemand)
+
+    azError = (azValues - azDemandInterp) * 3600
+    elError = (elValues - elDemandInterp) * 3600
 
     azimuthData["azError"] = azError
     elevationData["elError"] = elError
