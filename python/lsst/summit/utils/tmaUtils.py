@@ -216,14 +216,13 @@ def getAzimuthElevationDataForEvent(
         raiseIfTopicNotInSchema=False,
     )
 
-
     azValues = azimuthData["actualPosition"].to_numpy()
     azValTimes = azimuthData["actualPositionTimestamp"].to_numpy()
-    azDemand = azimuthData["demandPosition"].to_numpy()    
+    azDemand = azimuthData["demandPosition"].to_numpy()
     azDemTimes = azimuthData["demandPositionTimestamp"].to_numpy()
     elValues = elevationData["actualPosition"].to_numpy()
     elValTimes = elevationData["actualPositionTimestamp"].to_numpy()
-    elDemand = elevationData["demandPosition"].to_numpy()    
+    elDemand = elevationData["demandPosition"].to_numpy()
     elDemTimes = elevationData["demandPositionTimestamp"].to_numpy()
 
     # Calculate the deltaT needed to drive the median(error) to zero
@@ -232,7 +231,7 @@ def getAzimuthElevationDataForEvent(
     result = minimize(calcDeltaT, x0, args=args, method='Powell',
                       bounds=[(-maxDeltaT, maxDeltaT)])
     deltaTAz = result.x[0]
-    
+
     args = [elValues, elValTimes, elDemand, elDemTimes]
     x0 = [0.0]
     result = minimize(calcDeltaT, x0, args=args, method='Powell',
@@ -249,7 +248,6 @@ def getAzimuthElevationDataForEvent(
     elevationData["elError"] = elError
 
     return azimuthData, elevationData
-
 
 def getM1M3HardpointDataForEvent(
     client: EfdClient,
