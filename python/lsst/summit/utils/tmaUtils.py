@@ -36,10 +36,9 @@ import matplotlib.dates as mdates
 import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
-from scipy.optimize import minimize
 from astropy.time import Time
 from matplotlib.ticker import FuncFormatter
-
+from scipy.optimize import minimize
 from lsst.utils.iteration import ensure_iterable
 
 from .blockUtils import BlockParser
@@ -248,6 +247,7 @@ def getAzimuthElevationDataForEvent(
     elevationData["elError"] = elError
 
     return azimuthData, elevationData
+
 
 def getM1M3HardpointDataForEvent(
     client: EfdClient,
