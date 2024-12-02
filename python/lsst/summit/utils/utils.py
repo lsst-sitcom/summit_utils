@@ -33,6 +33,7 @@ from astropy.coordinates import AltAz, SkyCoord
 from astropy.coordinates.earth import EarthLocation
 from astropy.time import Time
 from dateutil.tz import gettz
+from deprecated.sphinx import deprecated
 from matplotlib.patches import Rectangle
 from scipy.ndimage import gaussian_filter
 
@@ -975,6 +976,11 @@ def getAirmassSeeingCorrection(airmass: float) -> float:
     return airmass ** (-0.6)
 
 
+@deprecated(
+    reason=". Will be removed after v28.0.",
+    version="v27.0",
+    category=FutureWarning,
+)
 def getFilterSeeingCorrection(filterName: str) -> float:
     """Get the correction factor for seeing due to a filter.
 
@@ -992,17 +998,49 @@ def getFilterSeeingCorrection(filterName: str) -> float:
     ------
         ValueError raised for unknown filters.
     """
+    return getBandpassSeeingCorrection(filterName)
+
+
+def getBandpassSeeingCorrection(filterName: str) -> float:
+    """Get the correction factor for seeing due to a filter.
+
+    Parameters
+    ----------
+    filterName : `str`
+        The name of the filter, e.g. 'SDSSg_65mm'.
+
+    Returns
+    -------
+    correctionFactor : `float`
+        The correction factor to apply to the seeing.
+
+    Raises
+    ------
+        ValueError raised for unknown filters.
+    """
     match filterName:
-        case "SDSSg_65mm":
+        case "SDSSg_65mm":  # LATISS
             return (474.41 / 500.0) ** 0.2
-        case "SDSSr_65mm":
+        case "SDSSr_65mm":  # LATISS
             return (628.47 / 500.0) ** 0.2
-        case "SDSSi_65mm":
+        case "SDSSi_65mm":  # LATISS
             return (769.51 / 500.0) ** 0.2
-        case "SDSSz_65mm":
+        case "SDSSz_65mm":  # LATISS
             return (871.45 / 500.0) ** 0.2
-        case "SDSSy_65mm":
+        case "SDSSy_65mm":  # LATISS
             return (986.8 / 500.0) ** 0.2
+        case "u_02":  # ComCam
+            return (370.697 / 500.0) ** 0.2
+        case "g_01":  # ComCam
+            return (476.359 / 500.0) ** 0.2
+        case "r_03":  # ComCam
+            return (619.383 / 500.0) ** 0.2
+        case "i_06":  # ComCam
+            return (754.502 / 500.0) ** 0.2
+        case "z_03":  # ComCam
+            return (866.976 / 500.0) ** 0.2
+        case "y_04":  # ComCam
+            return (972.713 / 500.0) ** 0.2
         case _:
             raise ValueError(f"Unknown filter name: {filterName}")
 
