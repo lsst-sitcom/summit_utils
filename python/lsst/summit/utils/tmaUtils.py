@@ -39,6 +39,7 @@ import pandas as pd
 from astropy.time import Time
 from matplotlib.ticker import FuncFormatter
 from scipy.optimize import minimize
+
 from lsst.utils.iteration import ensure_iterable
 
 from .blockUtils import BlockParser
