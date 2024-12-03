@@ -154,7 +154,7 @@ def getAzimuthElevationDataForEvent(
     event: TMAEvent,
     prePadding: float = 0,
     postPadding: float = 0,
-    maxDeltaT: float = 1.0E-3,
+    maxDeltaT: float = 1.0e-3,
 ) -> tuple[pd.DataFrame, pd.DataFrame]:
     """Get the data for the az/el telemetry topics for a given TMAEvent.
 
@@ -228,14 +228,12 @@ def getAzimuthElevationDataForEvent(
     # Calculate the deltaT needed to drive the median(error) to zero
     args = [azValues, azValTimes, azDemand, azDemTimes]
     x0 = [0.0]
-    result = minimize(calcDeltaT, x0, args=args, method='Powell',
-                      bounds=[(-maxDeltaT, maxDeltaT)])
+    result = minimize(calcDeltaT, x0, args=args, method="Powell", bounds=[(-maxDeltaT, maxDeltaT)])
     deltaTAz = result.x[0]
 
     args = [elValues, elValTimes, elDemand, elDemTimes]
     x0 = [0.0]
-    result = minimize(calcDeltaT, x0, args=args, method='Powell',
-                      bounds=[(-maxDeltaT, maxDeltaT)])
+    result = minimize(calcDeltaT, x0, args=args, method="Powell", bounds=[(-maxDeltaT, maxDeltaT)])
     deltaTEl = result.x[0]
 
     azDemandInterp = np.interp(azValTimes, azDemTimes + deltaTAz, azDemand)
