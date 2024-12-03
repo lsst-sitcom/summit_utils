@@ -1,13 +1,12 @@
 from collections.abc import Iterable
 
-import lsst
-
 import matplotlib
-import matplotlib.pyplot as plt
 import numpy as np
 import pandas
 from matplotlib.gridspec import GridSpec
 from scipy.optimize import curve_fit  # type: ignore
+
+import lsst
 
 
 def gaussian2dFitFunction(
@@ -177,7 +176,7 @@ def makeLayerPlot(
         - Background image with the star cutout
         - The contour level of the star
         - The radial profile with Gaussian and Moffat fit
-    The value of Full Width at Half Maximum (FWHM) and Encircled Energy Radii (EE)
+    The value of FWHM and Encircled Energy Radii (EE)
     at 50% and 80% are reported if the 'radial' layer has been chosen.
 
     Parameters
@@ -305,7 +304,7 @@ def makePsfPanel(
     instrument: `str`, optional
         Detector type. Default 'LSSTComCam'.
     layers: `str` or `list` of `str`, optional
-        List of layers to be displayed between 'background', 'radial', 'contour'.
+        List of layers to be displayed ('background', 'radial', 'contour').
         It is possible to pass also the string 'both' as a shortcut for
         ['background', 'radial', 'contour']. Default 'both'.
     fig: `matplotlib.figure.Figure` or ``None``, optional
@@ -383,11 +382,11 @@ def makePsfPanel(
     for i in range(len(cutOuts)):
         for axType, axList in axs.items():
             if axType == "radial":  # keep ticks for radial plots
-                axList.append(fig.add_subplot(gs[(gs.nrows-1) - i // nCols, i % nCols]))
+                axList.append(fig.add_subplot(gs[(gs.nrows - 1) - i // nCols, i % nCols]))
             else:
                 axList.append(
                     fig.add_subplot(
-                        gs[(gs.nrows-1) - i // nCols, i % nCols],
+                        gs[(gs.nrows - 1) - i // nCols, i % nCols],
                         xticks=[],
                         yticks=[],
                         aspect="equal",
@@ -448,7 +447,7 @@ def makePsfPanel(
 
         # put shared x and y labels
         for i, ax in enumerate(axs["radial"]):
-            if i <= maxCol: # hardcoded for ComCam!
+            if i <= maxCol:  # hardcoded for ComCam!
                 ax.set(xlabel="r, arcsec")
             if i % maxCol == 0:
                 ax.set(ylabel="counts")
@@ -457,7 +456,9 @@ def makePsfPanel(
 
 
 def generateCutout(
-    img: lsst.afw.image._exposure.ExposureF, center: np.ndarray | list[float] | tuple[float, float], pad: int = 10
+    img: lsst.afw.image._exposure.ExposureF,
+    center: np.ndarray | list[float] | tuple[float, float],
+    pad: int = 10,
 ) -> np.ndarray:
     """Generate the cutout around a center position
 
@@ -481,7 +482,9 @@ def generateCutout(
     return cutout
 
 
-def findNearestStarToTarget(tab: pandas.DataFrame, target: np.ndarray | list[float] | tuple[float, float]) -> np.ndarray:
+def findNearestStarToTarget(
+    tab: pandas.DataFrame, target: np.ndarray | list[float] | tuple[float, float]
+) -> np.ndarray:
     """Find the nearest star w.r.t to a target coordinates
     N.B. The seacrh is done in PIXEL coordinates.
 
@@ -498,6 +501,7 @@ def findNearestStarToTarget(tab: pandas.DataFrame, target: np.ndarray | list[flo
     most_close = tab.sort_values(by=["center_sep"]).iloc[0].name
     nearest = tab.loc[most_close, ["slot_Centroid_x", "slot_Centroid_y"]].values
     return nearest
+
 
 # change list in dictionary with det_num key
 def makePanel(
@@ -527,20 +531,13 @@ def makePanel(
 
     # check the key sorting in the dictionary
     imgDict = {detNum: imgDict[detNum] for detNum in sorted(list(imgDict.keys()))}
-    sourceTableDict = {
-        detNum: sourceTableDict[detNum] for detNum in sorted(list(sourceTableDict.keys()))
-    }
-    candidates = {
-        detNum: findNearestStarToTarget(tab, center) for detNum, tab in sourceTableDict.items()
-    }
-    # for (detNum, img), candidate in zip(imgDict.items(), candidates.values):
-    #     print(detNum, img, candidate)
+    sourceTableDict = {detNum: sourceTableDict[detNum] for detNum in sorted(list(sourceTableDict.keys()))}
+    candidates = {detNum: findNearestStarToTarget(tab, center) for detNum, tab in sourceTableDict.items()}
     cutouts = {
-        detNum: generateCutout(img, candidate) for (detNum, img), candidate in zip(imgDict.items(), candidates.values())
+        detNum: generateCutout(img, candidate)
+        for (detNum, img), candidate in zip(imgDict.items(), candidates.values())
     }
-    detName = {
-        detNum: img.getInfo().getDetector().getName() for detNum, img in imgDict.items()
-    }
+    detName = {detNum: img.getInfo().getDetector().getName() for detNum, img in imgDict.items()}
 
     fig, axLegend = makePsfPanel(cutouts, detName, **kwargs)
     fig.suptitle("INFOCUS INSPECTION", fontsize=25)
