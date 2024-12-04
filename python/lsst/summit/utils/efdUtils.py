@@ -832,6 +832,8 @@ def getCommands(
                     timeKey = time.to_pydatetime()
 
             if timeKey in commandTimes:
-                raise ValueError(f"There is already a command at {timeKey=} - make a better data structure!")
+                msg = f"There is already a command at {timeKey=} - make a better data structure!"
+                msg += f"Colliding commands = {commandTimes[timeKey]} and {command}"
+                raise ValueError(msg)
             commandTimes[timeKey] = command
     return commandTimes
