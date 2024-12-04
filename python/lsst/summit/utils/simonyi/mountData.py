@@ -23,7 +23,8 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from typing import TYPE_CHECKING
-
+import numpy as np
+from scipy.optimize import minimize
 from ..efdUtils import getEfdData
 
 if TYPE_CHECKING:
@@ -48,8 +49,19 @@ class MountData:
 
 
 def getAzElRotDataForPeriod(
-    client: EfdClient, begin: Time, end: Time, prePadding: float = 0, postPadding: float = 0
+        client: EfdClient, begin: Time, end: Time, prePadding: float = 0, postPadding: float = 0,
+        maxDeltaT: float = 1.0e-3,
 ) -> MountData:
+    def calcDeltaT(params, args):
+        # This calculates the deltaT needed
+        # to make the median(error) = 0
+        [values, valTimes, demand, demTimes] = args
+        [deltaT] = params
+        demandInterp = np.interp(valTimes, demTimes + deltaT, demand)
+        error = (values - demandInterp) * 3600
+        value = abs(np.median(error))
+        return value
+
     azimuthData = getEfdData(
         client,
         "lsst.sal.MTMount.azimuth",
@@ -84,15 +96,33 @@ def getAzElRotDataForPeriod(
     )
 
     azValues = azimuthData["actualPosition"].to_numpy()
+    azValTimes = azimuthData["actualPositionTimestamp"].to_numpy()
+    azDemand = azimuthData["demandPosition"].to_numpy()    
+    azDemTimes = azimuthData["demandPositionTimestamp"].to_numpy()
     elValues = elevationData["actualPosition"].to_numpy()
-    rotValues = rotationData["actualPosition"].to_numpy()
-    azDemand = azimuthData["demandPosition"].to_numpy()
-    elDemand = elevationData["demandPosition"].to_numpy()
+    elValTimes = elevationData["actualPositionTimestamp"].to_numpy()
+    elDemand = elevationData["demandPosition"].to_numpy()    
+    elDemTimes = elevationData["demandPositionTimestamp"].to_numpy()
+    rotValues = rotationData["actualPosition"].to_numpy()    
     rotDemand = rotationData["demandPosition"].to_numpy()
 
-    azError = (azValues - azDemand) * 3600
-    elError = (elValues - elDemand) * 3600
-    rotError = (rotValues - rotDemand) * 3600
+    # Calculate the deltaT needed to drive the median(error) to zero
+    args = [azValues, azValTimes, azDemand, azDemTimes]
+    x0 = [0.0]
+    result = minimize(calcDeltaT, x0, args=args, method="Powell", bounds=[(-maxDeltaT, maxDeltaT)])
+    deltaTAz = result.x[0]
+
+    args = [elValues, elValTimes, elDemand, elDemTimes]
+    x0 = [0.0]
+    result = minimize(calcDeltaT, x0, args=args, method="Powell", bounds=[(-maxDeltaT, maxDeltaT)])
+    deltaTEl = result.x[0]
+
+    azDemandInterp = np.interp(azValTimes, azDemTimes + deltaTAz, azDemand)
+    elDemandInterp = np.interp(elValTimes, elDemTimes + deltaTEl, elDemand)
+
+    azError = (azValues - azDemandInterp) * 3600
+    elError = (elValues - elDemandInterp) * 3600
+    rotError = (rotValues - rotDemand) * 3600    
 
     azimuthData["azError"] = azError
     elevationData["elError"] = elError
