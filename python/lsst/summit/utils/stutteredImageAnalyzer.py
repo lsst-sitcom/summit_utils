@@ -1,6 +1,7 @@
 import numpy as np
 import pandas as pd
 import matplotlib.pyplot as plt
+import logging
 
 import galsim
 
@@ -97,6 +98,7 @@ class StutteredImageAnalyzer:
 
     def __init__(self):
         """Initialize stuttered image analyzer."""
+        self.log = logging.getLogger(type(self).__name__)
 
     def subtract_background(self, exp, method="median"):
         """Subtract the background from the image in-place.
@@ -415,13 +417,11 @@ class StutteredImageAnalyzer:
                             )
                             stuttered_object_catalog.append(stuttered_object)
 
-                            # print(stuttered_object)
-
                             if do_plot:
                                 centroid_x.append(moments.moments_centroid.x + x_min - 1)
                                 centroid_y.append(moments.moments_centroid.y + y_min - 1)
                         else:
-                            print("Total source intensity is negative. Skipping.")
+                            self.log.debug(f"Total intensity of source {i}, strip {strip},  is negative. Skipping.")
 
                         if do_plot_all:
                             plt.figure()
@@ -435,7 +435,7 @@ class StutteredImageAnalyzer:
                             plt.show()
 
                     except RuntimeError:
-                        # print('Failed to fit image')
+                        self.log.debug(f'Failed to fit image of source {i}, strip {strip}.')
                         if do_plot_all:
                             plt.figure()
                             plt.imshow(footprint)
