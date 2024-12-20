@@ -7,7 +7,7 @@ import galsim
 
 from scipy.ndimage import gaussian_filter
 from scipy.signal import find_peaks as find_peaks_scipy
-from photutls.detection import find_peaks
+from photutils.detection import find_peaks
 
 import lsst.afw.math as afwMath
 
