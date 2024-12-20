@@ -6,7 +6,8 @@ import logging
 import galsim
 
 from scipy.ndimage import gaussian_filter
-from scipy.signal import find_peaks
+from scipy.signal import find_peaks as find_peaks_scipy
+from photutls.detection import find_peaks
 
 import lsst.afw.math as afwMath
 
@@ -144,7 +145,7 @@ class StutteredImageAnalyzer:
             strip.image.array -= background
         return backgrounds
 
-    def detect_sources(
+    def detect_sources_1d(
         self,
         exp,
         threshold=100,
@@ -156,7 +157,7 @@ class StutteredImageAnalyzer:
         min_distance=50,
         min_height=5,
     ):
-        """Detect all sources in the image.
+        """Detect all sources in the image by squishing them down into a 1D array.
 
         Find mean x positions of all sources that are above a given
         threshold. Uses scipy method of find_peaks.
@@ -187,7 +188,7 @@ class StutteredImageAnalyzer:
             filtered_x_profile = gaussian_filter(x_profile, sigma=sigma)
 
             # detect sources in the image half
-            peak_locations, peak_information = find_peaks(
+            peak_locations, peak_information = find_peaks_scipy(
                 filtered_x_profile,
                 height=min_height,
                 distance=min_distance,
@@ -232,6 +233,71 @@ class StutteredImageAnalyzer:
                     origin="lower",
                 )
                 plt.plot(peak_locations, np.ones_like(peak_locations) * strip_height * n_strips / 2, "bx")
+        return sources
+    
+    def detect_sources_2d(
+        self,
+        exp,
+        threshold=100,
+        do_plot=True,
+        do_background_subtract=True,
+        sigma=3,
+        box_size=50,
+    ):
+        """Detect all sources in the image by adding the strips together and detecting the source.
+
+        Find mean x and y positions of all sources that are above a given
+        threshold. Uses scipy method of find_peaks.
+
+        Parameters
+        ----------
+        exp : `lsst.afw.image.Exposure`
+            The exposure, probably with background subtracted, although this is
+            not essential.
+
+        Returns
+        -------
+        sources : `pandas dataframe`
+            Pandas dataframe with x and y location within single strip and
+            column saying which half it's in.
+        """
+        strip_height, n_strips, strip_exp_time = get_stutter_properties(exp)
+        sources = []
+
+        for image_half in range(2):
+            # sum the image 
+            for strip_num in range(n_strips):
+                strip = get_strip(exp, strip_num, strip_height)
+                if strip_num == 0:
+                    total_exp_strip = strip.image.array
+                else:
+                    total_exp_strip += strip.image.array
+                    
+            filtered_strip = gaussian_filter(total_exp_strip, sigma=sigma)
+
+            # detect sources in the image half
+            peaks = find_peaks(filtered_strip, threshold=threshold, box_size=box_size)
+
+            half_sources = pd.DataFrame(
+                data={
+                    "x_peak": peaks["x_peak"],
+                    "y_peak": peaks["y_peak"],
+                    "peak_value": peaks["peak_value"],
+                    "image_half": np.zeros(len(peaks)) + image_half,
+                }
+            )
+            if image_half == 0:
+                sources = half_sources
+            else:
+                sources = pd.concat([sources, half_sources], ignore_index=True)
+            if do_plot:
+                # plot the strip and the found peaks
+                plt.figure(figsize=(10, 5))
+                plt.imshow(total_exp_strip)
+                plt.plot(peaks["x_peak"], peaks["y_peak"], "x")
+                plt.xlim(left=0)
+                plt.yscale("log")
+
         return sources
 
     def find_mean_y_position(
@@ -464,6 +530,7 @@ class StutteredImageAnalyzer:
         flux_threshold=3,
         min_object_number=5,
         y_threshold=5,
+        detect_2d = True,
     ):
         """Fully analyze a stuttered image
 
@@ -493,10 +560,13 @@ class StutteredImageAnalyzer:
             plt.plot(backgrounds)
             plt.show()
 
-        sources = self.detect_sources(exp, threshold=threshold, do_plot=do_plot)
-        sources = self.find_mean_y_position(
-            exp, sources, n_strips, strip_height, sigma=sigma, do_plot=do_plot, y_threshold=y_threshold
-        )
+        if detect_2d:
+            sources = self.detect_sources_2d(exp, threshold=threshold, do_plot=do_plot)
+        else:
+            sources = self.detect_sources_1d(exp, threshold=threshold, do_plot=do_plot)
+            sources = self.find_mean_y_position(
+                exp, sources, n_strips, strip_height, sigma=sigma, do_plot=do_plot, y_threshold=y_threshold
+            )
 
         stuttered_object_catalog = self.catalog_all_sources(
             exp, sources, n_strips, strip_height, do_plot_all=do_plot_all
