@@ -435,7 +435,7 @@ class StutteredImageAnalyzer:
                             plt.show()
 
                     except RuntimeError:
-                        self.log.debug(f'Failed to fit image of source {i}, strip {strip}.')
+                        self.log.debug(f'Failed to fit image of source {source}, strip {strip}.')
                         if do_plot_all:
                             plt.figure()
                             plt.imshow(footprint)
