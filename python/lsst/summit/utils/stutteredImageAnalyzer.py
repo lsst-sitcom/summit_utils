@@ -425,6 +425,7 @@ class StutteredImageAnalyzer:
 
                         if do_plot_all:
                             plt.figure()
+                            plt.title(f'source {source}, strip {strip}')
                             plt.imshow(footprint)
                             plt.plot(
                                 moments.moments_centroid.x - 1,
