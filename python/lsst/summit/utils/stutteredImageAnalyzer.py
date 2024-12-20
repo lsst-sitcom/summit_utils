@@ -421,7 +421,7 @@ class StutteredImageAnalyzer:
                                 centroid_x.append(moments.moments_centroid.x + x_min - 1)
                                 centroid_y.append(moments.moments_centroid.y + y_min - 1)
                         else:
-                            self.log.debug(f"Total intensity of source {i}, strip {strip},  is negative. Skipping.")
+                            self.log.debug(f"Total intensity of source {source}, strip {strip},  is negative. Skipping.")
 
                         if do_plot_all:
                             plt.figure()
