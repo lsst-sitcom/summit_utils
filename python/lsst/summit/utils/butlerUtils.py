@@ -204,6 +204,11 @@ def makeDefaultButler(
     baseCollection = f"{instrument}/defaults"
     raCollection = f"{instrument}/quickLook" if summitLike else f"{instrument}/nightlyValidation"
 
+    # XXX Need to fix the collection names on the summit - remove this block
+    # once that's done
+    if site == "summit" and instrument == "LATISS":
+        raCollection = "LATISS/runs/quickLook"
+
     repo = instrument if embargo is False else "embargo"
 
     collections = [baseCollection, raCollection]
