@@ -296,7 +296,6 @@ class StutteredImageAnalyzer:
                 plt.imshow(total_exp_strip)
                 plt.plot(peaks["x_peak"], peaks["y_peak"], "x")
                 plt.xlim(left=0)
-                plt.yscale("log")
 
         return sources
 
