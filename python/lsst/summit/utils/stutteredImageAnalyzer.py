@@ -266,12 +266,20 @@ class StutteredImageAnalyzer:
 
         for image_half in range(2):
             # sum the image 
-            for strip_num in range(n_strips):
-                strip = get_strip(exp, strip_num, strip_height)
-                if strip_num == 0:
-                    total_exp_strip = strip.image.array
-                else:
-                    total_exp_strip += strip.image.array
+            if image_half == 1:
+                for strip_num in range(n_strips):
+                    strip = get_strip(exp, strip_num + n_strips, strip_height)
+                    if strip_num == 0:
+                        total_exp_strip = strip.image.array[::-1]
+                    else:
+                        total_exp_strip += strip.image.array[::-1]
+            else:
+                for strip_num in range(n_strips):
+                    strip = get_strip(exp, strip_num, strip_height)
+                    if strip_num == 0:
+                        total_exp_strip = strip.image.array
+                    else:
+                        total_exp_strip += strip.image.array
                     
             filtered_strip = gaussian_filter(total_exp_strip, sigma=sigma)
 
