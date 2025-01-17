@@ -304,6 +304,7 @@ class StutteredImageAnalyzer:
                 plt.imshow(np.arcsinh(10 * total_exp_strip)/10)
                 plt.plot(peaks["x_peak"], peaks["y_peak"], "x")
                 plt.xlim(left=0)
+                plt.show()
 
         return sources
 
@@ -653,7 +654,7 @@ class StutteredImageAnalyzer:
         for index in sources.index:
             # Filter out sources with flux outside threshold.
             fluxes = [
-                object.fitted_flux for object in stuttered_object_catalog if object.source_number == index
+                spot.fitted_flux for spot in stuttered_object_catalog if spot.source_number == index
             ]
 
             if len(fluxes) > 1:
@@ -663,14 +664,14 @@ class StutteredImageAnalyzer:
                 # add object to the catalog only if flux is within threshold
                 # or it's the first object in the strip and too bright
                 source_objects = [
-                    object
-                    for object in stuttered_object_catalog
+                    spot
+                    for spot in stuttered_object_catalog
                     if (
                         (
-                            (object.source_number == index)
-                            and (np.abs(object.fitted_flux - mean_flux) <= flux_threshold * std_flux)
+                            (spot.source_number == index)
+                            and (np.abs(spot.fitted_flux - mean_flux) <= flux_threshold * std_flux)
                         )
-                        or ((object.fitted_flux == fluxes[-1]) and (fluxes[-1] > mean_flux))
+                        or ((spot.fitted_flux == fluxes[-1]) and (fluxes[-1] > mean_flux))
                     )
                 ]
 
@@ -678,8 +679,8 @@ class StutteredImageAnalyzer:
                 # where 0 is the final stutter, or the highest strip number
                 first_strip = source_objects[-1].strip
 
-                for object in source_objects:
-                    object.stutter_number = first_strip - object.strip
+                for spot in source_objects:
+                    spot.stutter_number = first_strip - spot.strip
 
                 if len(source_objects) >= min_object_number:
                     # only add objects if there are enough of them
@@ -689,7 +690,7 @@ class StutteredImageAnalyzer:
 
         # flatten list
         filtered_stuttered_object_catalog = [
-            object for source_list in filtered_stuttered_object_catalog for object in source_list
+            spot for source_list in filtered_stuttered_object_catalog for spot in source_list
         ]
 
         return filtered_stuttered_object_catalog
@@ -711,30 +712,30 @@ class StutteredImageAnalyzer:
         """
 
         # set mean_flux, std_flux, and differential flux
-        fluxes = [object.fitted_flux for object in object_list]
+        fluxes = [spot.fitted_flux for spot in object_list]
         mean_flux = mean(fluxes)
         std_flux = stdev(fluxes)
 
-        x_pos = [object.fitted_centroid_x for object in object_list]
+        x_pos = [spot.fitted_centroid_x for spot in object_list]
         mean_x = mean(x_pos)
         std_x = stdev(x_pos)
 
-        y_pos = [object.fitted_centroid_y_in_strip for object in object_list]
+        y_pos = [spot.fitted_centroid_y_in_strip for spot in object_list]
         mean_y = mean(y_pos)
         std_y = stdev(y_pos)
 
-        for object in object_list:
-            object.mean_flux = mean_flux
-            object.std_flux = std_flux
-            object.differential_flux = object.fitted_flux / mean_flux
+        for spot in object_list:
+            spot.mean_flux = mean_flux
+            spot.std_flux = std_flux
+            spot.differential_flux = spot.fitted_flux / mean_flux
 
-            object.fitted_mean_x = mean_x
-            object.fitted_std_x = std_x
-            object.differential_centroid_x = object.fitted_centroid_x - mean_x
+            spot.fitted_mean_x = mean_x
+            spot.fitted_std_x = std_x
+            spot.differential_centroid_x = spot.fitted_centroid_x - mean_x
 
-            object.fitted_mean_y = mean_y
-            object.fitted_std_y = std_y
-            object.differential_centroid_y = object.fitted_centroid_y_in_strip - mean_y
+            spot.fitted_mean_y = mean_y
+            spot.fitted_std_y = std_y
+            spot.differential_centroid_y = spot.fitted_centroid_y_in_strip - mean_y
 
         return object_list
 
