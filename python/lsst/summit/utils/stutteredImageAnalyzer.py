@@ -292,7 +292,7 @@ class StutteredImageAnalyzer:
                 sources = pd.concat([sources, half_sources], ignore_index=True)
             if do_plot:
                 # plot the strip and the found peaks
-                plt.figure(figsize=(10, 5))
+                plt.figure(figsize=(20, 20))
                 plt.imshow(total_exp_strip)
                 plt.plot(peaks["x_peak"], peaks["y_peak"], "x")
                 plt.xlim(left=0)
@@ -648,7 +648,7 @@ class StutteredImageAnalyzer:
                 object.fitted_flux for object in stuttered_object_catalog if object.source_number == index
             ]
 
-            if len(fluxes) > 0:
+            if len(fluxes) > 1:
                 mean_flux = mean(fluxes)
                 std_flux = stdev(fluxes)
 
