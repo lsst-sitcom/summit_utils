@@ -293,7 +293,7 @@ class StutteredImageAnalyzer:
             if do_plot:
                 # plot the strip and the found peaks
                 plt.figure(figsize=(20, 20))
-                plt.imshow(total_exp_strip)
+                plt.imshow(np.arcsinh(10 * total_exp_strip)/10)
                 plt.plot(peaks["x_peak"], peaks["y_peak"], "x")
                 plt.xlim(left=0)
 
