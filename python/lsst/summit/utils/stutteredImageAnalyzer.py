@@ -397,6 +397,7 @@ class StutteredImageAnalyzer:
         do_background_subtract=True,
         max_mom2_iter=400,
         fwhm=20,
+        box_size=None
     ):
         """Make a catalog of all sources in the image
 
@@ -436,24 +437,26 @@ class StutteredImageAnalyzer:
                 # flip the direction of the second half of the image
                 half_section = half_section[::-1]
             for index, source in sources.loc[sources.image_half == image_half].iterrows():
-                x_min = int(source.x_peak - strip_height / 2)
-                x_max = int(source.x_peak + strip_height / 2)
+                if box_size == None:
+                    box_size = strip_height
+                x_min = int(source.x_peak - box_size / 2)
+                x_max = int(source.x_peak + box_size / 2)
                 for strip in range(n_strips):
                     if strip == 0:
-                        y_max = int(source.y_peak + strip_height / 2)
-                        if source.y_peak < strip_height / 2:
+                        y_max = int(source.y_peak + box_size / 2)
+                        if source.y_peak < box_size / 2:
                             y_min = 0
                         else:
-                            y_min = int(source.y_peak - strip_height / 2)
+                            y_min = int(source.y_peak - box_size / 2)
                     elif strip == n_strips:
-                        y_min = int((strip_height * strip) + source.y_peak - strip_height / 2)
-                        if source.y_peak > strip_height / 2:
+                        y_min = int((strip_height * strip) + source.y_peak - box_size / 2)
+                        if (strip_height - source.y_peak) < box_size / 2:
                             y_max = int(strip_height * strip - 1)
                         else:
-                            y_max = int((strip_height * strip) + source.y_peak + strip_height / 2)
+                            y_max = int((strip_height * strip) + source.y_peak + box_size / 2)
                     else:
-                        y_min = int((strip_height * strip) + source.y_peak - strip_height / 2)
-                        y_max = int((strip_height * strip) + source.y_peak + strip_height / 2)
+                        y_min = int((strip_height * strip) + source.y_peak - box_size / 2)
+                        y_max = int((strip_height * strip) + source.y_peak + box_size / 2)
 
                     footprint = half_section[y_min:y_max, x_min:x_max]
 
@@ -476,7 +479,7 @@ class StutteredImageAnalyzer:
                                 moments.moments_amp,
                                 moments.moments_centroid.x + x_min - 1,
                                 moments.moments_centroid.y + y_min - 1,
-                                moments.moments_centroid.y - 1 + source.y_peak - strip_height / 2,
+                                moments.moments_centroid.y - 1 + source.y_peak - box_size / 2,
                                 moments.moments_sigma,
                                 moments.moments_rho4,
                                 moments,
@@ -530,6 +533,8 @@ class StutteredImageAnalyzer:
         flux_threshold=3,
         min_object_number=5,
         y_threshold=5,
+        box_size = 20,
+        box_size_galsim = 50,
         detect_2d = True,
     ):
         """Fully analyze a stuttered image
@@ -561,7 +566,7 @@ class StutteredImageAnalyzer:
             plt.show()
 
         if detect_2d:
-            sources = self.detect_sources_2d(exp, threshold=threshold, do_plot=do_plot)
+            sources = self.detect_sources_2d(exp, threshold=threshold, box_size = box_size, do_plot=do_plot)
         else:
             sources = self.detect_sources_1d(exp, threshold=threshold, do_plot=do_plot)
             sources = self.find_mean_y_position(
@@ -569,7 +574,7 @@ class StutteredImageAnalyzer:
             )
 
         stuttered_object_catalog = self.catalog_all_sources(
-            exp, sources, n_strips, strip_height, do_plot_all=do_plot_all
+            exp, sources, n_strips, strip_height, do_plot_all=do_plot_all, box_size=box_size_galsim
         )
 
         filtered_stuttered_object_catalog = self.filter_objects(
