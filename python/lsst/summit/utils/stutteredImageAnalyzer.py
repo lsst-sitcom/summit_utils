@@ -445,7 +445,7 @@ class StutteredImageAnalyzer:
                 # flip the direction of the second half of the image
                 half_section = half_section[::-1]
             for index, source in sources.loc[sources.image_half == image_half].iterrows():
-                if box_size == None:
+                if box_size is None:
                     box_size = strip_height
                 x_min = int(source.x_peak - box_size / 2)
                 x_max = int(source.x_peak + box_size / 2)
@@ -678,19 +678,14 @@ class StutteredImageAnalyzer:
                     if (
                         (
                             (spot.source_number == index)
-                            and ((spot.fitted_flux / mean_flux) <= flux_threshold)
-                            and ((spot.fitted_flux / mean_flux) >= 1/flux_threshold)
-                        )
-                        or (
-                            (spot.source_number == index)
                             and ((spot.fitted_flux / median_flux) <= flux_threshold)
                             and ((spot.fitted_flux / median_flux) >= 1/flux_threshold)
                         )
-                        or (
-                            (spot.source_number == index)
-                            and (spot.fitted_flux == fluxes[-1])
-                            and (fluxes[-1] > mean_flux)
-                        )
+                        # or (
+                        #     (spot.source_number == index)
+                        #     and (spot.fitted_flux == fluxes[-1])
+                        #     and (fluxes[-1] > mean_flux)
+                        # )
                     )
                 ]
 
