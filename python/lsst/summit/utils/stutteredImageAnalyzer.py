@@ -676,7 +676,8 @@ class StutteredImageAnalyzer:
                     if (
                         (
                             (spot.source_number == index)
-                            and (np.abs(spot.fitted_flux - mean_flux) <= flux_threshold * std_flux)
+                            and (spot.fitted_flux / mean_flux) <= flux_threshold)
+                            and (spot.fitted_flux / mean_flux) >= flux_threshold)
                         )
                         or ((spot.fitted_flux == fluxes[-1]) and (fluxes[-1] > mean_flux))
                     )
