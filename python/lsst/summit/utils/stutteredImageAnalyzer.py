@@ -660,10 +660,12 @@ class StutteredImageAnalyzer:
             if len(fluxes) > 1:
                 mean_flux = mean(fluxes)
                 std_flux = stdev(fluxes)
+                median_flux = np.median(fluxes)
 
                 print("index:", index)
                 print("object number", len(fluxes))
                 print("mean_flux:", mean_flux)
+                print("median_flux:", median_flux)
                 print("std_flux:", std_flux)
                 print("max flux", np.max(fluxes))
                 print("min flux", np.min(fluxes))
@@ -679,21 +681,31 @@ class StutteredImageAnalyzer:
                             and ((spot.fitted_flux / mean_flux) <= flux_threshold)
                             and ((spot.fitted_flux / mean_flux) >= flux_threshold)
                         )
-                        or ((spot.fitted_flux == fluxes[-1]) and (fluxes[-1] > mean_flux))
+                        or (
+                            (spot.source_number == index)
+                            and ((spot.fitted_flux / median_flux) <= flux_threshold)
+                            and ((spot.fitted_flux / median_flux) >= flux_threshold)
+                        )
+                        or (
+                            (spot.source_number == index)
+                            and (spot.fitted_flux == fluxes[-1])
+                            and (fluxes[-1] > mean_flux)
+                        )
                     )
                 ]
 
                 print("source_object_length", len(source_objects))
-
-                # convert the strips in this list to stutter number,
-                # where 0 is the final stutter, or the highest strip number
-                first_strip = source_objects[-1].strip
-
-                for spot in source_objects:
-                    spot.stutter_number = first_strip - spot.strip
-
+                
                 if len(source_objects) >= min_object_number:
                     # only add objects if there are enough of them
+
+                    # convert the strips in this list to stutter number,
+                    # where 0 is the final stutter, or the highest strip number
+                    first_strip = source_objects[-1].strip
+
+                    for spot in source_objects:
+                        spot.stutter_number = first_strip - spot.strip
+
                     source_objects = self.calculate_source_variation(source_objects)
 
                     filtered_stuttered_object_catalog.append(source_objects)
