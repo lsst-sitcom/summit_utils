@@ -729,6 +729,8 @@ class StutteredImageAnalyzer:
         """
 
         # set mean_flux, std_flux, and differential flux
+        image_half = object_list[0].image_half
+        
         fluxes = [spot.fitted_flux for spot in object_list]
         mean_flux = mean(fluxes)
         std_flux = stdev(fluxes)
@@ -752,8 +754,12 @@ class StutteredImageAnalyzer:
 
             spot.fitted_mean_y = mean_y
             spot.fitted_std_y = std_y
-            spot.differential_centroid_y = spot.fitted_centroid_y_in_strip - mean_y
-
+            
+            if image_half == 0:
+                spot.differential_centroid_y = spot.fitted_centroid_y_in_strip - mean_y
+            else:
+                spot.differential_centroid_y = mean_y - spot.fitted_centroid_y_in_strip
+                
         return object_list
 
 
