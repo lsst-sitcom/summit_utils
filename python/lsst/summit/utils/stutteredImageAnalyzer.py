@@ -679,12 +679,12 @@ class StutteredImageAnalyzer:
                         (
                             (spot.source_number == index)
                             and ((spot.fitted_flux / mean_flux) <= flux_threshold)
-                            and ((spot.fitted_flux / mean_flux) >= flux_threshold)
+                            and ((spot.fitted_flux / mean_flux) >= 1/flux_threshold)
                         )
                         or (
                             (spot.source_number == index)
                             and ((spot.fitted_flux / median_flux) <= flux_threshold)
-                            and ((spot.fitted_flux / median_flux) >= flux_threshold)
+                            and ((spot.fitted_flux / median_flux) >= 1/flux_threshold)
                         )
                         or (
                             (spot.source_number == index)
