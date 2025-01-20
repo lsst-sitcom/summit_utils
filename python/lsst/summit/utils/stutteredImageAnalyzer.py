@@ -660,7 +660,14 @@ class StutteredImageAnalyzer:
             if len(fluxes) > 1:
                 mean_flux = mean(fluxes)
                 std_flux = stdev(fluxes)
-
+                
+                print('index:', index)
+                print('object number', len(fluxes))
+                print('mean_flux:', mean_flux)
+                print('std_flux:', std_flux)
+                print('max flux', np.max(fluxes))
+                print('min flux', np.min(fluxes))
+                
                 # add object to the catalog only if flux is within threshold
                 # or it's the first object in the strip and too bright
                 source_objects = [
@@ -674,6 +681,8 @@ class StutteredImageAnalyzer:
                         or ((spot.fitted_flux == fluxes[-1]) and (fluxes[-1] > mean_flux))
                     )
                 ]
+                
+                print('source_object_length', len(source_objects))
 
                 # convert the strips in this list to stutter number,
                 # where 0 is the final stutter, or the highest strip number
@@ -687,6 +696,7 @@ class StutteredImageAnalyzer:
                     source_objects = self.calculate_source_variation(source_objects)
 
                     filtered_stuttered_object_catalog.append(source_objects)
+                    
 
         # flatten list
         filtered_stuttered_object_catalog = [
