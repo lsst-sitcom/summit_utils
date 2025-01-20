@@ -754,11 +754,13 @@ class StutteredImageAnalyzer:
 
             spot.fitted_mean_y = mean_y
             spot.fitted_std_y = std_y
-            
+            spot.differential_centroid_y = spot.fitted_centroid_y_in_strip - mean_y
+            '''
             if image_half == 0:
                 spot.differential_centroid_y = spot.fitted_centroid_y_in_strip - mean_y
             else:
                 spot.differential_centroid_y = mean_y - spot.fitted_centroid_y_in_strip
+            '''
                 
         return object_list
 
