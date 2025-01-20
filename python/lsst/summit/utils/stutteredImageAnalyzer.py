@@ -234,7 +234,7 @@ class StutteredImageAnalyzer:
                 )
                 plt.plot(peak_locations, np.ones_like(peak_locations) * strip_height * n_strips / 2, "bx")
         return sources
-    
+
     def detect_sources_2d(
         self,
         exp,
@@ -265,7 +265,7 @@ class StutteredImageAnalyzer:
         sources = []
 
         for image_half in range(2):
-            # sum the image 
+            # sum the image
             if image_half == 1:
                 for strip_num in range(n_strips):
                     strip = get_strip(exp, strip_num + n_strips, strip_height)
@@ -280,7 +280,7 @@ class StutteredImageAnalyzer:
                         total_exp_strip = strip.image.array
                     else:
                         total_exp_strip += strip.image.array
-                    
+
             filtered_strip = gaussian_filter(total_exp_strip, sigma=sigma)
 
             # detect sources in the image half
@@ -301,7 +301,7 @@ class StutteredImageAnalyzer:
             if do_plot:
                 # plot the strip and the found peaks
                 plt.figure(figsize=(20, 20))
-                plt.imshow(np.arcsinh(10 * total_exp_strip)/10)
+                plt.imshow(np.arcsinh(10 * total_exp_strip) / 10)
                 plt.plot(peaks["x_peak"], peaks["y_peak"], "x")
                 plt.xlim(left=0)
                 plt.show()
@@ -405,7 +405,7 @@ class StutteredImageAnalyzer:
         do_background_subtract=True,
         max_mom2_iter=400,
         fwhm=20,
-        box_size=None
+        box_size=None,
     ):
         """Make a catalog of all sources in the image
 
@@ -498,11 +498,13 @@ class StutteredImageAnalyzer:
                                 centroid_x.append(moments.moments_centroid.x + x_min - 1)
                                 centroid_y.append(moments.moments_centroid.y + y_min - 1)
                         else:
-                            self.log.debug(f"Total intensity of source {source}, strip {strip},  is negative. Skipping.")
+                            self.log.debug(
+                                f"Total intensity of source {source}, strip {strip},  is negative. Skipping."
+                            )
 
                         if do_plot_all:
                             plt.figure()
-                            plt.title(f'source {source}, strip {strip}')
+                            plt.title(f"source {source}, strip {strip}")
                             plt.imshow(footprint)
                             plt.plot(
                                 moments.moments_centroid.x - 1,
@@ -513,7 +515,7 @@ class StutteredImageAnalyzer:
                             plt.show()
 
                     except RuntimeError:
-                        self.log.debug(f'Failed to fit image of source {source}, strip {strip}.')
+                        self.log.debug(f"Failed to fit image of source {source}, strip {strip}.")
                         if do_plot_all:
                             plt.figure()
                             plt.imshow(footprint)
@@ -541,9 +543,9 @@ class StutteredImageAnalyzer:
         flux_threshold=3,
         min_object_number=5,
         y_threshold=5,
-        box_size = 20,
-        box_size_galsim = 50,
-        detect_2d = True,
+        box_size=20,
+        box_size_galsim=50,
+        detect_2d=True,
     ):
         """Fully analyze a stuttered image
 
@@ -574,7 +576,7 @@ class StutteredImageAnalyzer:
             plt.show()
 
         if detect_2d:
-            sources = self.detect_sources_2d(exp, threshold=threshold, box_size = box_size, do_plot=do_plot)
+            sources = self.detect_sources_2d(exp, threshold=threshold, box_size=box_size, do_plot=do_plot)
         else:
             sources = self.detect_sources_1d(exp, threshold=threshold, do_plot=do_plot)
             sources = self.find_mean_y_position(
@@ -653,21 +655,19 @@ class StutteredImageAnalyzer:
 
         for index in sources.index:
             # Filter out sources with flux outside threshold.
-            fluxes = [
-                spot.fitted_flux for spot in stuttered_object_catalog if spot.source_number == index
-            ]
+            fluxes = [spot.fitted_flux for spot in stuttered_object_catalog if spot.source_number == index]
 
             if len(fluxes) > 1:
                 mean_flux = mean(fluxes)
                 std_flux = stdev(fluxes)
-                
-                print('index:', index)
-                print('object number', len(fluxes))
-                print('mean_flux:', mean_flux)
-                print('std_flux:', std_flux)
-                print('max flux', np.max(fluxes))
-                print('min flux', np.min(fluxes))
-                
+
+                print("index:", index)
+                print("object number", len(fluxes))
+                print("mean_flux:", mean_flux)
+                print("std_flux:", std_flux)
+                print("max flux", np.max(fluxes))
+                print("min flux", np.min(fluxes))
+
                 # add object to the catalog only if flux is within threshold
                 # or it's the first object in the strip and too bright
                 source_objects = [
@@ -676,14 +676,14 @@ class StutteredImageAnalyzer:
                     if (
                         (
                             (spot.source_number == index)
-                            and (spot.fitted_flux / mean_flux) <= flux_threshold)
-                            and (spot.fitted_flux / mean_flux) >= flux_threshold)
+                            and ((spot.fitted_flux / mean_flux) <= flux_threshold)
+                            and ((spot.fitted_flux / mean_flux) >= flux_threshold)
                         )
                         or ((spot.fitted_flux == fluxes[-1]) and (fluxes[-1] > mean_flux))
                     )
                 ]
-                
-                print('source_object_length', len(source_objects))
+
+                print("source_object_length", len(source_objects))
 
                 # convert the strips in this list to stutter number,
                 # where 0 is the final stutter, or the highest strip number
@@ -697,7 +697,6 @@ class StutteredImageAnalyzer:
                     source_objects = self.calculate_source_variation(source_objects)
 
                     filtered_stuttered_object_catalog.append(source_objects)
-                    
 
         # flatten list
         filtered_stuttered_object_catalog = [
