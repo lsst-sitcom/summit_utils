@@ -313,8 +313,8 @@ class SpectrumExaminer:
 
         if section == 2:
             lines.append("------- Rate stats ---------")
-            lines.append(f"Star max pixel    = {self.starPeakFlux/exptime:,.0f} ADU/s")
-            lines.append(f"Spectrum contiuum = {self.continuumFlux98/exptime:,.1f} ADU/s")
+            lines.append(f"Star max pixel    = {self.starPeakFlux / exptime:,.0f} ADU/s")
+            lines.append(f"Spectrum contiuum = {self.continuumFlux98 / exptime:,.1f} ADU/s")
             lines.extend(["", ""])  # section break
             return "\n".join([line for line in lines])
 

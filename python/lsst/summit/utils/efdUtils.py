@@ -423,7 +423,7 @@ def getMostRecentRowWithDataBefore(
     if commandAge > staleAge:
         log = logging.getLogger(__name__)
         log.warning(
-            f"Component {topic} was last set {commandAge.sec/60:.1} minutes before the requested time"
+            f"Component {topic} was last set {commandAge.sec / 60:.1} minutes before the requested time"
         )
 
     return lastRow

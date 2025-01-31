@@ -307,7 +307,7 @@ class CommandLineSolver:
         t1 = time.time()
 
         if result.returncode == 0:
-            print(f"Fitting code ran in {(t1-t0):.2f} seconds")
+            print(f"Fitting code ran in {(t1 - t0):.2f} seconds")
             # output template is /tmpdirname/fitstempname + various suffixes
             # for each obj
             basename = os.path.basename(fitsFile).removesuffix(".fits")

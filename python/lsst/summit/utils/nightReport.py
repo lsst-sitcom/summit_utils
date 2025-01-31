@@ -272,7 +272,7 @@ class NightReport:
             self.log.info(f"Loading {len(obsInfosToLoad)} obsInfo(s)")
         for i, seqNum in enumerate(obsInfosToLoad):
             if (i + 1) % 200 == 0:
-                self.log.info(f"Loaded {i+1} obsInfos")
+                self.log.info(f"Loaded {i + 1} obsInfos")
             obsInfo, metadata = self.getObsInfoAndMetadataForSeqNum(seqNum)
             obsInfoDict = obsInfoToDict(obsInfo)
             records[seqNum].update(obsInfoDict)

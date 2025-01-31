@@ -319,7 +319,7 @@ def plot_hp_measured_data(
     line_list: list[plt.Line2D] = []
     for hp in range(dataset.number_of_hardpoints):
         topic = dataset.measured_forces_topics[hp]
-        line = plot_hp_data(ax_hp, dataset.df[topic], f"HP{hp+1}")
+        line = plot_hp_data(ax_hp, dataset.df[topic], f"HP{hp + 1}")
         line_list.append(line)
 
     slew_begin = Time(dataset.event.begin, scale="utc")

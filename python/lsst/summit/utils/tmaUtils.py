@@ -141,10 +141,10 @@ def getTorqueMaxima(table: pd.DataFrame) -> None:
         col = f"Largest {axis} torque"
         maxPos = np.argmax(table[col])
         maxVal = table[col].iloc[maxPos]
-        print(f"Max positive {axis:9} torque during seqNum {maxPos:>4}: {maxVal/1000:>7.1f}kNm")
+        print(f"Max positive {axis:9} torque during seqNum {maxPos:>4}: {maxVal / 1000:>7.1f}kNm")
         minPos = np.argmin(table[col])
         minVal = table[col].iloc[minPos]
-        print(f"Max negative {axis:9} torque during seqNum {minPos:>4}: {minVal/1000:>7.1f}kNm")
+        print(f"Max negative {axis:9} torque during seqNum {minPos:>4}: {minVal / 1000:>7.1f}kNm")
     return None
 
 
