@@ -192,10 +192,10 @@ class BlockParser:
 
         t0 = time.time()
         self.getDataForDayObs()
-        self.log.debug(f"Getting data took {(time.time()-t0):.2f} seconds")
+        self.log.debug(f"Getting data took {(time.time() - t0):.2f} seconds")
         t0 = time.time()
         self.augmentData()
-        self.log.debug(f"Parsing data took {(time.time()-t0):.5f} seconds")
+        self.log.debug(f"Parsing data took {(time.time() - t0):.5f} seconds")
 
     def getDataForDayObs(self) -> None:
         """Retrieve the data for the specified dayObs from the EFD."""
