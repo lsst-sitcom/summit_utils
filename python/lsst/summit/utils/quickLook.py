@@ -31,8 +31,8 @@ import lsst.ip.isr as ipIsr
 import lsst.pex.config as pexConfig
 import lsst.pipe.base as pipeBase
 import lsst.pipe.base.connectionTypes as cT
-from lsst.ip.isr import IsrTask
-from lsst.ip.isr.isrTask import IsrTaskConnections
+from lsst.ip.isr import IsrTaskLSST
+from lsst.ip.isr.isrTaskLSST import IsrTaskLSSTConnections
 from lsst.meas.algorithms.installGaussianPsf import InstallGaussianPsfTask
 from lsst.pipe.tasks.characterizeImage import CharacterizeImageTask
 from lsst.utils import getPackageDir
@@ -40,7 +40,7 @@ from lsst.utils import getPackageDir
 __all__ = ["QuickLookIsrTask", "QuickLookIsrTaskConfig"]
 
 
-class QuickLookIsrTaskConnections(IsrTaskConnections):
+class QuickLookIsrTaskConnections(IsrTaskLSSTConnections):
     """Copy isrTask's connections, changing prereq min values to zero.
 
     Copy all the connections directly for IsrTask, keeping ccdExposure as
@@ -51,7 +51,9 @@ class QuickLookIsrTaskConnections(IsrTaskConnections):
     def __init__(self, *, config: Any = None):
         # programatically clone all of the connections from isrTask
         # setting minimum values to zero for everything except the ccdExposure
-        super().__init__(config=IsrTask.ConfigClass())  # need a dummy config, isn't used other than for ctor
+        super().__init__(
+            config=IsrTaskLSST.ConfigClass()
+        )  # need a dummy config, isn't used other than for ctor
         for name, connection in self.allConnections.items():
             if hasattr(connection, "minimum"):
                 setattr(
@@ -96,13 +98,13 @@ class QuickLookIsrTask(pipeBase.PipelineTask):
     config: QuickLookIsrTaskConfig
     _DefaultName = "quickLook"
 
-    def __init__(self, isrTask: IsrTask = IsrTask, **kwargs: Any):
+    def __init__(self, isrTask: IsrTaskLSST = IsrTaskLSST, **kwargs: Any):
         super().__init__(**kwargs)
         # Pass in IsrTask so that we can modify it slightly for unit tests.
         # Note that this is not an instance of the IsrTask class, but the class
         # itself, which is then instantiated later on, in the run() method,
         # with the dynamically generated config.
-        self.isrTask = IsrTask
+        self.isrTask = IsrTaskLSST
 
     def run(
         self,
@@ -120,7 +122,7 @@ class QuickLookIsrTask(pipeBase.PipelineTask):
         newBFKernel: ipIsr.BrighterFatterKernel | None = None,
         ptc: ipIsr.PhotonTransferCurveDataset | None = None,
         crosstalkSources: list | None = None,
-        isrBaseConfig: ipIsr.IsrTaskConfig | None = None,
+        isrBaseConfig: ipIsr.IsrTaskLSSTConfig | None = None,
         filterTransmission: afwImage.TransmissionCurve | None = None,
         opticsTransmission: afwImage.TransmissionCurve | None = None,
         strayLightData: Any | None = None,
@@ -170,7 +172,7 @@ class QuickLookIsrTask(pipeBase.PipelineTask):
             and read noise.
         crosstalkSources : `list`, optional
             List of possible crosstalk sources.
-        isrBaseConfig : `lsst.ip.isr.IsrTaskConfig`, optional
+        isrBaseConfig : `lsst.ip.isr.IsrTaskLSSTConfig`, optional
             An isrTask config to act as the base configuration. Options which
             involve applying a calibration product are ignored, but this allows
             for the configuration of e.g. the number of overscan columns.
@@ -205,7 +207,7 @@ class QuickLookIsrTask(pipeBase.PipelineTask):
                 The ISRed and cosmic-ray-repaired exposure.
         """
         if not isrBaseConfig:
-            isrConfig = IsrTask.ConfigClass()
+            isrConfig = IsrTaskLSST.ConfigClass()
             packageDir = getPackageDir("summit_utils")
             isrConfig.load(os.path.join(packageDir, "config", "quickLookIsr.py"))
         else:
@@ -214,12 +216,10 @@ class QuickLookIsrTask(pipeBase.PipelineTask):
         isrConfig.doBias = False
         isrConfig.doDark = False
         isrConfig.doFlat = False
-        isrConfig.doFringe = False
         isrConfig.doDefect = False
         isrConfig.doLinearize = False
         isrConfig.doCrosstalk = False
         isrConfig.doBrighterFatter = False
-        isrConfig.usePtcGains = False
 
         if bias:
             isrConfig.doBias = True
@@ -232,10 +232,6 @@ class QuickLookIsrTask(pipeBase.PipelineTask):
         if flat:
             isrConfig.doFlat = True
             self.log.info("Running with flat correction")
-
-        if fringes:
-            isrConfig.doFringe = True
-            self.log.info("Running with fringe correction")
 
         if defects:
             isrConfig.doDefect = True
@@ -260,11 +256,6 @@ class QuickLookIsrTask(pipeBase.PipelineTask):
             isrConfig.doBrighterFatter = True
             self.log.info("Running with brighter-fatter correction")
 
-        if ptc:
-            isrConfig.usePtcGains = True
-            self.log.info("Running with ptc correction")
-
-        isrConfig.doWrite = False
         isrTask = self.isrTask(config=isrConfig)
 
         if fringes:
