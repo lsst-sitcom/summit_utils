@@ -24,6 +24,8 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import TYPE_CHECKING
 
+import numpy as np
+
 from ..efdUtils import getEfdData
 
 if TYPE_CHECKING:
@@ -83,12 +85,12 @@ def getAzElRotDataForPeriod(
         postPadding=postPadding,
     )
 
-    azValues = azimuthData["actualPosition"].to_numpy()
-    elValues = elevationData["actualPosition"].to_numpy()
-    rotValues = rotationData["actualPosition"].to_numpy()
-    azDemand = azimuthData["demandPosition"].to_numpy()
-    elDemand = elevationData["demandPosition"].to_numpy()
-    rotDemand = rotationData["demandPosition"].to_numpy()
+    azValues = np.asarray(azimuthData["actualPosition"])
+    elValues = np.asarray(elevationData["actualPosition"])
+    rotValues = np.asarray(rotationData["actualPosition"])
+    azDemand = np.asarray(azimuthData["demandPosition"])
+    elDemand = np.asarray(elevationData["demandPosition"])
+    rotDemand = np.asarray(rotationData["demandPosition"])
 
     azError = (azValues - azDemand) * 3600
     elError = (elValues - elDemand) * 3600
