@@ -2090,7 +2090,7 @@ class TMAEventMaker:
         # command start to many log messages so define once here
         logStart = f"Specified time {time.isot} falls on {dayObs=}"
 
-        events = self.getEvents(dayObs)
+        events = self.getEvents(dayObs, addBlockInfo=False)
         if len(events) == 0:
             self.log.warning(f"There are no events found for {dayObs}")
             return None
