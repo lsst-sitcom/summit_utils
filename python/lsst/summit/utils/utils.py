@@ -729,9 +729,7 @@ def getAltAzFromSkyPosition(
             pressure=pressure, temperature=temperature, relative_humidity=relativeHumidity, obswl=wavelength
         )
 
-    # must go via astropy.Time because dafBase.dateTime.DateTime contains
-    # the timezone, but going straight to visitInfo.date.toPython() loses this.
-    obsTime = Time(visitInfo.date.toPython(), scale="tai")
+    obsTime = visitInfo.date.toAstropy()
     altAz = AltAz(obstime=obsTime, location=earthLocation, **refractionKwargs)
 
     obsAltAz = skyLocation.transform_to(altAz)
