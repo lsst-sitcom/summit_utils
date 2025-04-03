@@ -95,7 +95,7 @@ def writeNewTmaEventTestTruthValues():
     Note: if you have cause to update values with this function, make sure to
     update the version number on the TMAEvent class.
     """
-    dayObs = 20230531  # obviously must match the day in the test class
+    dayObs = 20241210  # obviously must match the day in the test class
 
     eventMaker = TMAEventMaker()
     events = eventMaker.getEvents(dayObs)
@@ -225,7 +225,7 @@ class TMAEventMakerTestCase(lsst.utils.tests.TestCase):
         except RuntimeError:
             raise unittest.SkipTest("Could not instantiate an EFD client")
 
-        cls.dayObs = 20230531
+        cls.dayObs = 20241210
         cls.dayObsWithBlockInfo = 20230615
         # get a sample expRecord here to test expRecordToTimespan
         cls.tmaEventMaker = TMAEventMaker(cls.client)
@@ -242,7 +242,7 @@ class TMAEventMakerTestCase(lsst.utils.tests.TestCase):
     def test_events(self):
         data = self.sampleData
         self.assertIsInstance(data, pd.DataFrame)
-        self.assertEqual(len(data), 993)
+        self.assertEqual(len(data), 800)
 
     @vcr.use_cassette()
     def test_rowDataForValues(self):
@@ -301,13 +301,13 @@ class TMAEventMakerTestCase(lsst.utils.tests.TestCase):
         eventMaker = self.tmaEventMaker
         events = eventMaker.getEvents(self.dayObs)
         self.assertIsInstance(events, list)
-        self.assertEqual(len(events), 200)
+        self.assertEqual(len(events), 320)
         self.assertIsInstance(events[0], TMAEvent)
 
         slews = [e for e in events if e.type == TMAState.SLEWING]
         tracks = [e for e in events if e.type == TMAState.TRACKING]
-        self.assertEqual(len(slews), 157)
-        self.assertEqual(len(tracks), 43)
+        self.assertEqual(len(slews), 172)
+        self.assertEqual(len(tracks), 148)
 
         seqNums, startRows, endRows, types, endReasons = getTmaEventTestTruthValues()
         for eventNum, event in enumerate(events):
@@ -509,7 +509,7 @@ class TMAEventMakerTestCase(lsst.utils.tests.TestCase):
     def test_plottingAndCommands(self):
         eventMaker = self.tmaEventMaker
         events = eventMaker.getEvents(self.dayObs)
-        event = events[28]  # this one has commands, and we'll check that later
+        event = events[10]  # this one has commands, and we'll check that later
 
         # check we _can_ plot without a figure, and then stop doing that
         plotEvent(self.client, event)
