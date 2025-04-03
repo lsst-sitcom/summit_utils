@@ -593,45 +593,46 @@ def plotEvent(
                 client, event, prePadding=prePadding, postPadding=postPadding
             )
 
-        # Calculate Max hardpoint force
-        maxForce = np.nanmax(hardpointData["maxForce"].to_numpy())
+        if not hardpointData.empty:
+            # Calculate Max hardpoint force
+            maxForce = np.nanmax(hardpointData["maxForce"].to_numpy())
 
-        for hp_index in range(6):
-            ax1p5.plot(
-                hardpointData[f"measuredForce{hp_index}"],
-                label=f"HP_{hp_index}",
-                c=lineColors[colorCounter % nColors],
-            )
-            colorCounter += 1
-        ax1p5.axhline(500.0, ls="-.", color="goldenrod")
-        ax1p5.axhline(-500.0, ls="-.", color="goldenrod")
-        ax1p5.axhline(1000.0, ls="-.", color="red")
-        ax1p5.axhline(-1000.0, ls="-.", color="red")
-        ax1p5.yaxis.set_major_formatter(FuncFormatter(tickFormatter))
-        ax1p5.set_ylabel("HP force (N)")
-        ax1p5.set_xticks([])  # remove x tick labels on the hidden upper x-axis
-        if maxForce > 2000.0:
-            ax1p5.set_ylim(-4000.0, 4000.0)
-            ax1p5.set_yticks([-2000, 0.0, 2000])
-        elif maxForce > 1000.0:
-            ax1p5.set_ylim(-2000.0, 2000.0)
-            ax1p5.set_yticks([-1000, 0.0, 1000])
-        else:
-            ax1p5.set_ylim(-1000.0, 1000.0)
-            ax1p5.set_yticks([-500, 0.0, 500])
-        ax1p5.legend()
-        ax1p5.text(0.1, 0.9, f"Max HP force = {maxForce:.1f} N", transform=ax1p5.transAxes)
+            for hp_index in range(6):
+                ax1p5.plot(
+                    hardpointData[f"measuredForce{hp_index}"],
+                    label=f"HP_{hp_index}",
+                    c=lineColors[colorCounter % nColors],
+                )
+                colorCounter += 1
+            ax1p5.axhline(500.0, ls="-.", color="goldenrod")
+            ax1p5.axhline(-500.0, ls="-.", color="goldenrod")
+            ax1p5.axhline(1000.0, ls="-.", color="red")
+            ax1p5.axhline(-1000.0, ls="-.", color="red")
+            ax1p5.yaxis.set_major_formatter(FuncFormatter(tickFormatter))
+            ax1p5.set_ylabel("HP force (N)")
+            ax1p5.set_xticks([])  # remove x tick labels on the hidden upper x-axis
+            if maxForce > 2000.0:
+                ax1p5.set_ylim(-4000.0, 4000.0)
+                ax1p5.set_yticks([-2000, 0.0, 2000])
+            elif maxForce > 1000.0:
+                ax1p5.set_ylim(-2000.0, 2000.0)
+                ax1p5.set_yticks([-1000, 0.0, 1000])
+            else:
+                ax1p5.set_ylim(-1000.0, 1000.0)
+                ax1p5.set_yticks([-500, 0.0, 500])
+            ax1p5.legend()
+            ax1p5.text(0.1, 0.9, f"Max HP force = {maxForce:.1f} N", transform=ax1p5.transAxes)
 
-        if metadataWriter is not None:
-            md = {"HP Max force": f"{maxForce:.2f}"}
-            flagKey = "_HP Max force"
-            if maxForce > HARDPOINT_FORCE_BAD_LEVEL:
-                md.update({flagKey: "bad"})
-            elif maxForce > HARDPOINT_FORCE_WARNING_LEVEL:
-                md.update({flagKey: "warning"})
+            if metadataWriter is not None:
+                md = {"HP Max force": f"{maxForce:.2f}"}
+                flagKey = "_HP Max force"
+                if maxForce > HARDPOINT_FORCE_BAD_LEVEL:
+                    md.update({flagKey: "bad"})
+                elif maxForce > HARDPOINT_FORCE_WARNING_LEVEL:
+                    md.update({flagKey: "warning"})
 
-            rowData = {event.seqNum: md}
-            metadataWriter(dayObs=event.dayObs, mdDict=rowData)
+                rowData = {event.seqNum: md}
+                metadataWriter(dayObs=event.dayObs, mdDict=rowData)
 
     if prePadding or postPadding:
         # note the conversion to utc because the x-axis from the dataframe
