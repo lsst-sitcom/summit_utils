@@ -216,14 +216,14 @@ def getAzimuthElevationDataForEvent(
         raiseIfTopicNotInSchema=False,
     )
 
-    azValues = azimuthData["actualPosition"].to_numpy()
-    azValTimes = azimuthData["actualPositionTimestamp"].to_numpy()
-    azDemand = azimuthData["demandPosition"].to_numpy()
-    azDemTimes = azimuthData["demandPositionTimestamp"].to_numpy()
-    elValues = elevationData["actualPosition"].to_numpy()
-    elValTimes = elevationData["actualPositionTimestamp"].to_numpy()
-    elDemand = elevationData["demandPosition"].to_numpy()
-    elDemTimes = elevationData["demandPositionTimestamp"].to_numpy()
+    azValues = np.asarray(azimuthData["actualPosition"])
+    azValTimes = np.asarray(azimuthData["actualPositionTimestamp"])
+    azDemand = np.asarray(azimuthData["demandPosition"])
+    azDemTimes = np.asarray(azimuthData["demandPositionTimestamp"])
+    elValues = np.asarray(elevationData["actualPosition"])
+    elValTimes = np.asarray(elevationData["actualPositionTimestamp"])
+    elDemand = np.asarray(elevationData["demandPosition"])
+    elDemTimes = np.asarray(elevationData["demandPositionTimestamp"])
 
     # Calculate the deltaT needed to drive the median(error) to zero
     args = [azValues, azValTimes, azDemand, azDemTimes]
