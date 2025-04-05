@@ -42,6 +42,7 @@ import lsst.geom as geom
 import lsst.pipe.base as pipeBase
 from lsst.pipe.tasks.quickFrameMeasurement import QuickFrameMeasurementTask, QuickFrameMeasurementTaskConfig
 from lsst.summit.utils.utils import argMax2d, countPixels, getImageStats, quickSmooth
+from lsst.utils.plotting.figures import make_figure
 
 SIGMATOFWHM = 2.0 * np.sqrt(2.0 * np.log(2.0))
 
@@ -707,7 +708,7 @@ class ImageExaminer:
             The figure object.
         """
         figsize = 6
-        fig = plt.figure(figsize=(figsize * 3, figsize * 2))
+        fig = make_figure(figsize=(figsize * 3, figsize * 2))
 
         ax1 = fig.add_subplot(331)
         ax2 = fig.add_subplot(332)
@@ -728,6 +729,8 @@ class ImageExaminer:
         axSlices = ax7
         axRadial = ax8
         axCoG = ax9  # noqa F841 - overwritten
+        axStats1.axis("off")
+        axStats2.axis("off")
 
         self.plotFullExp(axExp)
         self.plotStar(axStar)
@@ -737,7 +740,8 @@ class ImageExaminer:
         self.plotRadialAverage(axRadial)
 
         # overwrite three axes with this one spanning 3 rows
-        axStats = plt.subplot2grid((3, 3), (0, 2), rowspan=2)
+        gs = fig.add_gridspec(3, 3)
+        axStats = fig.add_subplot(gs[0:2, 2])  # Spans rows 0-1 in column 2
 
         lines = []
         lines.append("     ---- Astro ----")
@@ -750,7 +754,7 @@ class ImageExaminer:
 
         self.plotCurveOfGrowth(axCoG)
 
-        plt.tight_layout()
+        fig.tight_layout()
         if self.savePlots:
             print(f"Plot saved to {self.savePlots}")
             fig.savefig(self.savePlots)

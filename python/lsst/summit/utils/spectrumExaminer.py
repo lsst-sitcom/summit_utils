@@ -40,6 +40,7 @@ from lsst.geom import Box2I
 from lsst.obs.lsst.translators.lsst import FILTER_DELIMITER
 from lsst.pipe.tasks.quickFrameMeasurement import QuickFrameMeasurementTask, QuickFrameMeasurementTaskConfig
 from lsst.summit.utils.utils import getImageStats
+from lsst.utils.plotting.figures import make_figure
 
 
 class SpectrumExaminer:
@@ -55,7 +56,7 @@ class SpectrumExaminer:
         self,
         exp: afwImage.Exposure,
         display: afwDisplay.Display = None,
-        debug: bool | None = False,
+        debug: bool = False,
         savePlotAs: str | None = None,
         **kwargs: Any,
     ):
@@ -64,6 +65,7 @@ class SpectrumExaminer:
         self.display = display
         self.debug = debug
         self.savePlotAs = savePlotAs
+        self.fig = make_figure(figsize=(10, 10))
 
         qfmTaskConfig = QuickFrameMeasurementTaskConfig()
         self.qfmTask = QuickFrameMeasurementTask(config=qfmTaskConfig)
@@ -161,10 +163,9 @@ class SpectrumExaminer:
         self.parameters = parameters
 
     def plot(self) -> None:
-        fig = plt.figure(figsize=(10, 10))
-
         # spectrum
-        ax0 = plt.subplot2grid((4, 4), (0, 0), colspan=3)
+        gs = self.fig.add_gridspec(4, 4)
+        ax0 = self.fig.add_subplot(gs[0, 0:3])
         ax0.tick_params(axis="x", top=True, bottom=False, labeltop=True, labelbottom=False)
         d = self.spectrumData[self.goodSlice].T
         vmin = np.percentile(d, 1)
@@ -172,10 +173,10 @@ class SpectrumExaminer:
         pos = ax0.imshow(self.spectrumData[self.goodSlice].T, vmin=vmin, vmax=vmax, origin="lower")
         div = make_axes_locatable(ax0)
         cax = div.append_axes("bottom", size="7%", pad="8%")
-        fig.colorbar(pos, cax=cax, orientation="horizontal", label="Counts")
+        self.fig.colorbar(pos, cax=cax, orientation="horizontal", label="Counts")
 
         # spectrum histogram
-        axHist = plt.subplot2grid((4, 4), (0, 3))
+        axHist = self.fig.add_subplot(gs[0, 3])
         data = self.spectrumData
         histMax = np.nanpercentile(data, 99.99)
         histMin = np.nanpercentile(data, 0.001)
@@ -190,7 +191,7 @@ class SpectrumExaminer:
         axHist.add_artist(anchored_text)
 
         # peak fluxes
-        ax1 = plt.subplot2grid((4, 4), (1, 0), colspan=3)
+        ax1 = self.fig.add_subplot(gs[1, 0:3])
         ax1.plot(self.ridgeLineValues[self.goodSlice], label="Raw peak value")
         ax1.plot(self.parameters[:, 0], label="Fitted amplitude")
         ax1.axhline(self.continuumFlux98, ls="dashed", color="g")
@@ -205,7 +206,7 @@ class SpectrumExaminer:
         ax1.set_title("Ridgeline plot")
 
         # FWHM
-        ax2 = plt.subplot2grid((4, 4), (2, 0), colspan=3)
+        ax2 = self.fig.add_subplot(gs[2, 0:3])
         ax2.plot(self.parameters[:, 2] * 2.355, label="FWHM (pix)")
         fwhmValues = self.parameters[:, 2] * 2.355
         amplitudes = self.parameters[:, 0]
@@ -228,7 +229,7 @@ class SpectrumExaminer:
         ax2.set_title("Spectrum FWHM")
 
         # row fluxes
-        ax3 = plt.subplot2grid((4, 4), (3, 0), colspan=3)
+        ax3 = self.fig.add_subplot(gs[3, 0:3])
         ax3.plot(self.rowSums[self.goodSlice], label="Sum across row")
         ax3.set_ylabel("Total row flux (ADU)")
         ax3.set_xlabel("Spectrum position (pixels)")
@@ -237,7 +238,7 @@ class SpectrumExaminer:
 
         # textbox top
         #         ax4 = plt.subplot2grid((4, 4), (1, 3))
-        ax4 = plt.subplot2grid((4, 4), (1, 3), rowspan=2)
+        ax4 = self.fig.add_subplot(gs[1:3, 3])
         text = "short text"
         text = self.generateStatsTextboxContent(0)
         text += self.generateStatsTextboxContent(1)
@@ -254,7 +255,7 @@ class SpectrumExaminer:
 
         # textbox middle
         if self.debug:
-            ax5 = plt.subplot2grid((4, 4), (2, 3))
+            ax5 = self.fig.add_subplot(gs[2, 3])
             text = self.generateStatsTextboxContent(-1)
             stats_text = AnchoredText(
                 text,
@@ -265,11 +266,10 @@ class SpectrumExaminer:
             ax5.add_artist(stats_text)
             ax5.axis("off")
 
-        plt.tight_layout()
-        plt.show()
+        self.fig.tight_layout()
 
         if self.savePlotAs:
-            fig.savefig(self.savePlotAs)
+            self.fig.savefig(self.savePlotAs)
 
     def init(self) -> None:
         pass
