@@ -202,7 +202,7 @@ def makeDefaultButler(
             embargo = False  # there's only one repo too, so this makes the code more simple too
 
     baseCollection = f"{instrument}/defaults"
-    raCollection = f"{instrument}/quickLook" if summitLike else f"{instrument}/nightlyValidation"
+    raCollection = f"{instrument}/runs/quickLook" if summitLike else f"{instrument}/runs/nightlyValidation"
 
     repo = instrument if embargo is False else "embargo"
 
