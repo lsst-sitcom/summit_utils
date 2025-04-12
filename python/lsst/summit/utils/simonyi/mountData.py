@@ -48,6 +48,16 @@ class MountData:
     includedPostPadding: float
     expRecord: DimensionRecord | None
 
+    @property
+    def empty(self) -> bool:
+        """Return True if the data is empty."""
+        return (
+            self.azimuthData.empty
+            and self.elevationData.empty
+            and self.rotationData.empty
+            and self.rotationTorques.empty
+        )
+
 
 def getAzElRotDataForPeriod(
     client: EfdClient, begin: Time, end: Time, prePadding: float = 0, postPadding: float = 0
