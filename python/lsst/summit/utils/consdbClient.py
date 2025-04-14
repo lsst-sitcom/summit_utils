@@ -602,10 +602,18 @@ class ConsDbClient:
         url = _urljoin(self.url, "query")
         data = {"query": query}
         result = self._handle_post(url, data).json()
-        if "columns" not in result:
-            # No result rows
+
+        columns = result.get("columns", [])
+        if not columns:
+            # No result columns
             return Table(rows=[])
-        return Table(rows=result["data"], names=result["columns"])
+
+        rows = result.get("data", [])
+        if not rows:
+            # No result rows
+            return Table(names=columns)
+
+        return Table(rows=rows, names=columns)
 
     def schema(
         self, instrument: str | None = None, table: str | None = None
