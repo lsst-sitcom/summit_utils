@@ -134,6 +134,8 @@ class ConsDbClient:
         Base URL of the Web service, defaults to the value of environment
         variable ``LSST_CONSDB_PQ_URL`` (the location of the publish/query
         service).
+    token : `str`, optional
+        Authentication token for the RSP. The token must begin with "gt-".
 
     Notes
     -----
@@ -143,9 +145,15 @@ class ConsDbClient:
     It enforces the return of query results as Astropy Tables.
     """
 
-    def __init__(self, url: str | None = None):
+    def __init__(self, url: str | None = None, token: str | None = None):
         self.session = requests.Session()
         self.session.hooks["response"].append(clean_url)
+
+        if token is not None:
+            if not token.startswith("gt-"):
+                raise ValueError("token must start with `gt-`.")
+
+            self.session.headers.update({"Authorization": f"Bearer {token}"})
 
         if url is None:
             self.url = os.environ["LSST_CONSDB_PQ_URL"]
