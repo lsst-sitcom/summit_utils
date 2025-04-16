@@ -1,4 +1,5 @@
 from collections.abc import Iterable
+from pathlib import Path
 
 import matplotlib
 import numpy as np
@@ -125,7 +126,7 @@ def doRadialAnalysis(data: np.ndarray, fitModel: str):
                 data.shape[0] / 2,
                 np.median(radialValues),
             ]
-            Params, _ = curve_fit(moffat2dFitFunction, xy, radialValues, p0=initialGuess)
+            Params, _ = curve_fit(moffat2dFitFunction, xy, radialValues, p0=initialGuess, maxfev=10000)
             _, AlphaFit, BetaFit, X0Fit, Y0Fit, BaselineFit = Params
             FwhmFit = np.abs(2.0 * AlphaFit * np.sqrt(2 ** (1 / BetaFit) - 1.0))
         case "Gauss":
@@ -137,7 +138,7 @@ def doRadialAnalysis(data: np.ndarray, fitModel: str):
                 data.shape[0] / 2,
                 np.median(radialValues),
             ]
-            Params, _ = curve_fit(gaussian2dFitFunction, xy, radialValues, p0=initialGuess)
+            Params, _ = curve_fit(gaussian2dFitFunction, xy, radialValues, p0=initialGuess, maxfev=10000)
             _, FwhmFit, X0Fit, Y0Fit, BaselineFit = Params
         case _:
             raise ValueError(f"The model {fitModel} is not among the available ones (Gauss, Moffat)")
@@ -267,7 +268,10 @@ def createFigWithInstrumentLayout(
     add_cbar: bool = False,
 ) -> matplotlib.figure.Figure:
     """Create a figure with the requested instrument layout"""
-    with open("instrumentLayout.yaml") as file:
+    
+    basePath = Path(__file__).resolve().parent
+    layoutPath = basePath / "instrumentLayout.yaml"
+    with open(layoutPath) as file:
         layout = yaml.safe_load(file)[inst]
 
     if add_cbar:
@@ -343,7 +347,6 @@ def makePsfPanel(
         #         va="top",
         #         zorder=5,
         #     )
-
         fwhm, ee50, ee80 = makeLayerPlot(axsDict[detName], cutout, fitModel, layers, levels)
         fwhmDict[detName] = fwhm
         ee50Dict[detName] = ee50
@@ -449,8 +452,8 @@ def findNearestStarToTarget(
         xCol = "slot_Centroid_x"
         yCol = "slot_Centroid_y"
     else:
-        xCol = "x"
-        yCol = "y"
+        xCol = "slot_Centroid_x" # "x"
+        yCol = "slot_Centroid_y" # "y"
 
     tab["center_sep"] = np.sqrt((tab[xCol] - target[0]) ** 2 + (tab[yCol] - target[1]) ** 2)
     most_close = tab.sort_values(by=["center_sep"]).iloc[0].name
@@ -489,10 +492,21 @@ def makePanel(
     # can still be hardcoded? (ComCam and LSSTCam have the same detector size?)
     center = (2036.0, 2000.0)
 
+    # interesct the detNum for images and tables
+    imgDetName = {*list(imgDict.keys())}
+    srcDetName = {*list(sourceTableDict.keys())}
+    commonDetName = imgDetName.intersection(srcDetName)
+
+    # filter commoDetName to keep only srcTable with non zero rows
+    filterDetName = []
+    for detName in commonDetName:
+        if sourceTableDict[detName].shape[0] > 0:
+            filterDetName.append(detName)
+    
     candidates = {
-        detName: findNearestStarToTarget(tab, center, instrument) for detName, tab in sourceTableDict.items()
+        detName: findNearestStarToTarget(sourceTableDict[detName], center, instrument) for detName in filterDetName
     }
-    cutouts = {detName: generateCutout(imgDict[detName], candidates[detName]) for detName in imgDict.keys()}
+    cutouts = {detName: generateCutout(imgDict[detName], candidates[detName]) for detName in filterDetName}
 
     fig = makePsfPanel(cutouts, instrument, **kwargs)
     fig.suptitle(f"visit: {imgDict[list(imgDict.keys())[0]].getInfo().getVisitInfo().id}", fontsize=25)
