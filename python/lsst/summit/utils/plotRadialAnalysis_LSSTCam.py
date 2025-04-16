@@ -180,7 +180,7 @@ def makeLayerPlot(
     fitModel: str,
     layers: list[str] | str = "both",
     levels: np.ndarray | Iterable[float] | None = None,
-) -> None | tuple[float]:
+) -> tuple[float, float, float]:
     """Make per axes layer plot.
 
     Create a plot with three possible layers:
@@ -204,8 +204,7 @@ def makeLayerPlot(
 
     Returns
     -------
-    If radial is a selected layer than returns the Fwhm EE50 and EE80
-    for plotting purposes. Returns None otherwise.
+    Returns the Fwhm EE50 and EE80
     """
 
     (
@@ -266,7 +265,7 @@ def createFigWithInstrumentLayout(
     fig: matplotlib.figure.Figure,
     inst: str,
     add_cbar: bool = False,
-) -> matplotlib.figure.Figure:
+) -> dict[str, matplotlib.axes.Axes]:
     """Create a figure with the requested instrument layout"""
     
     basePath = Path(__file__).resolve().parent
@@ -294,7 +293,7 @@ def makePsfPanel(
     fitModel: str = "Moffat",
     levels: np.ndarray | Iterable[float] | None = None,
     **kwargs,
-) -> tuple[matplotlib.figure.Figure, matplotlib.axes.Axes]:
+) -> matplotlib.figure.Figure:
     """Make a per-detector PSF radial analysis.
 
     Each subplot shows for a detector a PSF cutout, a radial analysis and the
