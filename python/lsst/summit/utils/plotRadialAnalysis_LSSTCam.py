@@ -1,5 +1,4 @@
 from collections.abc import Iterable
-from pathlib import Path
 
 import matplotlib
 import numpy as np
@@ -9,7 +8,7 @@ from scipy.optimize import curve_fit  # type: ignore
 import lsst
 from lsst.utils.plotting.figures import make_figure
 from lsst.summit.utils.utils import getCameraFromInstrumentName
-from lsst.afw.cameraGeom import FIELD_ANGLE, PIXELS
+from lsst.afw.cameraGeom import FIELD_ANGLE
 
 
 def gaussian2dFitFunction(
