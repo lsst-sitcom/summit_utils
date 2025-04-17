@@ -4,11 +4,12 @@ from pathlib import Path
 import matplotlib
 import numpy as np
 import pandas
-import yaml
 from scipy.optimize import curve_fit  # type: ignore
 
 import lsst
 from lsst.utils.plotting.figures import make_figure
+from lsst.summit.utils.utils import getCameraFromInstrumentName
+from lsst.afw.cameraGeom import FIELD_ANGLE, PIXELS
 
 
 def gaussian2dFitFunction(
@@ -254,41 +255,149 @@ def makeLayerPlot(
             label=f"{fitModel} Fit",
         )
 
-        # add hline at zero level
-        axRad.axhline(0, ls="--", color="silver", lw=1)
         axRad.set(zorder=3, facecolor=(1, 1, 1, 0), xticks=[], yticks=[])
 
     return FwhmFit, EE50Diameter, EE80Diameter
 
 
+def compactLayout(rectDict: dict[str, list[float]]) -> dict[str, list[float]]:
+    """Compact the layout of the rectangles to fit in a smaller area.
+    This function rescales the rectangles to fit within a specified area
+    while maintaining their aspect ratios.
+
+    Parameters
+    ----------
+    rectDict: `dict`
+        Dictionary with the detector boxes.
+
+    Returns
+    -------
+    `dict`
+        Dictionary with the rescaled rectangles.
+    """
+
+    margin = 0.02
+
+    lefts = [r[0] for r in rectDict.values()]
+    bottoms = [r[1] for r in rectDict.values()]
+
+    min_left = min(lefts)
+    max_left = max(lefts)
+    min_bottom = min(bottoms)
+    max_bottom = max(bottoms)
+
+    range_x = max_left - min_left if max_left != min_left else 1
+    range_y = max_bottom - min_bottom if max_bottom != min_bottom else 1
+
+    scale_x = (1 - 2 * margin) / range_x
+    scale_y = (1 - 2 * margin) / range_y
+
+    newRectDict = {}
+    for name, (left, bottom, width, height) in rectDict.items():
+        new_left = (left - min_left) * scale_x + margin
+        new_bottom = (bottom - min_bottom) * scale_y + margin
+        newRectDict[name] = [new_left, new_bottom, width, height]
+
+    return newRectDict
+
+
+def computeColorbarRect(rectDict: dict[str, list[float]]) -> list[float]:
+    """Compute the colorbar rectangle based on the detector rectangles
+
+    Parameters
+    ----------
+    rectDict: `dict`
+        Dictionary with the detector boxes.
+
+    Returns
+    -------
+    `list`
+        The box in which the colorbar will be drawn.
+    """
+
+    width = 0.015
+    padding = 0.01
+
+    rects = list(rectDict.values())
+
+    min_bottom = min(r[1] for r in rects)
+    max_top = max(r[1] + r[3] for r in rects)
+    max_right = max(r[0] + r[2] for r in rects)
+
+    height = max_top - min_bottom
+    left = max_right + padding
+    bottom = min_bottom
+
+    return [left, bottom, width, height]
+
+
 def createFigWithInstrumentLayout(
     fig: matplotlib.figure.Figure,
-    inst: str,
-    add_cbar: bool = False,
+    instrument: str,
+    onlyS11: bool = False,
 ) -> dict[str, matplotlib.axes.Axes]:
-    """Create a figure with the requested instrument layout"""
+    """Create a figure with the requested instrument layout
 
-    basePath = Path(__file__).resolve().parent
-    layoutPath = basePath / "instrumentLayout.yaml"
-    with open(layoutPath) as file:
-        layout = yaml.safe_load(file)[inst]
+    Parameters
+    ----------
+    fig: `matplotlib.figure.Figure`
+        The figure to use
+    instrument: `str`
+        The instrument name.
+    onlyS11: `bool`, optional
+        If True, only S11 detectors are shown. Default False.
 
-    if add_cbar:
-        layout = [el + ["cbar"] for el in layout]
+    Returns
+    -------
+    axsDict: `dict[str, matplotlib.axes.Axes]`
+        A dictionary with the detector names as keys and the axes as values.
+    """
 
-    axsDict = fig.subplot_mosaic(
-        layout,
-        subplot_kw={"xticks": [], "yticks": [], "aspect": "equal"},
-        per_subplot_kw={"cbar": {"aspect": "auto"}},
-        width_ratios=[1] * (len(layout[0]) - 1) + [0.15],
-        gridspec_kw={"hspace": 0.0, "wspace": 0.05},
-    )
+    camera = getCameraFromInstrumentName(instrument)
+    detectors = [detector.getId() for detector in camera]
+
+    rectDict = {}
+    for name in detectors:
+        detector = camera.get(name)
+        detName = detector.getName()
+
+        # Get the corners of the detector in FIELD_ANGLE
+        corners = detector.getCorners(FIELD_ANGLE)
+        corners_deg = np.rad2deg(corners)  # Convert corners to degrees
+
+        # turn the cornsers coords in (letf, bottom, width, height)
+        detRect = [
+            corners_deg[:, 0].min(),
+            corners_deg[:, 1].min(),
+            corners_deg[:, 0].max() - corners_deg[:, 0].min(),
+            corners_deg[:, 1].max() - corners_deg[:, 1].min(),
+        ]
+
+        if onlyS11 and "S11" not in detName:
+            continue
+        rectDict[detName] = detRect
+
+    if onlyS11:
+        rectDict = compactLayout(rectDict)
+
+    axsDict = {}
+    for detName, rect in rectDict.items():
+        # Create an axes for each detector
+        ax = fig.add_axes(rect)
+        ax.set(xticks=[], yticks=[])
+        axsDict[detName] = ax
+
+    cbraRect = computeColorbarRect(rectDict)
+    cbarAx = fig.add_axes(cbraRect)
+    axsDict["cbar"] = cbarAx
+
     return axsDict
 
 
 def makePsfPanel(
     cutouts: dict[str, np.ndarray],
     instrument: str = "LSSTComCam",
+    onlyS11: bool = False,
     layers: list[str] | str = "both",
     fitModel: str = "Moffat",
     levels: np.ndarray | Iterable[float] | None = None,
@@ -306,6 +415,8 @@ def makePsfPanel(
         the 2D array of the star cutouts.
     instrument: `str`, optional
         Detector type. Default 'LSSTComCam'.
+    onlyS11: `bool`, optional
+        If True, only S11 detectors are shown. Default False.
     layers: `str` or `list` of `str`, optional
         List of layers to be displayed ('background', 'radial', 'contour').
         It is possible to pass also the string 'both' as a shortcut for
@@ -326,7 +437,7 @@ def makePsfPanel(
     """
 
     fig = make_figure(**kwargs)
-    axsDict = createFigWithInstrumentLayout(fig, instrument, add_cbar=True)
+    axsDict = createFigWithInstrumentLayout(fig, instrument, onlyS11=onlyS11)
 
     if layers == "both":
         layers = ["background", "radial", "contours"]
@@ -335,17 +446,6 @@ def makePsfPanel(
     ee50Dict = {}
     ee80Dict = {}
     for detName, cutout in cutouts.items():
-        #     axsDict[detName].text(
-        #         0.525,
-        #         0.95,
-        #         detName,
-        #         color="silver",
-        #         fontsize=15,
-        #         transform=axsDict[detName].transAxes,
-        #         ha="right",
-        #         va="top",
-        #         zorder=5,
-        #     )
         fwhm, ee50, ee80 = makeLayerPlot(axsDict[detName], cutout, fitModel, layers, levels)
         fwhmDict[detName] = fwhm
         ee50Dict[detName] = ee50
@@ -363,7 +463,7 @@ def makePsfPanel(
         val = (fwhmDict[detName] - min(fwhmDict.values())) / (max(fwhmDict.values()) - min(fwhmDict.values()))
         color = cmap(val)
         axText.patch.set(lw=7, ec=color)
-        for name, spine in axText.spines.items():
+        for _, spine in axText.spines.items():
             spine.set_color(color)
 
         # Text with FWHM and EE50|80
@@ -377,7 +477,7 @@ def makePsfPanel(
             0.95,
             *text,
             color=color,
-            fontsize=10,
+            fontsize=15,
             fontweight="bold",
             transform=axText.transAxes,
             ha="right",
@@ -394,8 +494,8 @@ def makePsfPanel(
         ),
         cax=axsDict["cbar"],
     )
-    cbar.ax.set_ylabel(ylabel='FWHM"', fontsize=20)
-    cbar.ax.tick_params(labelsize=16)
+    cbar.ax.set_ylabel(ylabel='FWHM"', fontsize=30)
+    cbar.ax.tick_params(labelsize=30)
 
     return fig
 
@@ -450,7 +550,7 @@ def findNearestStarToTarget(
     if instrument == "LSSTComCam":
         xCol = "slot_Centroid_x"
         yCol = "slot_Centroid_y"
-    else:
+    else:  # for now just work with src file that has the same column.
         xCol = "slot_Centroid_x"  # "x"
         yCol = "slot_Centroid_y"  # "y"
 
@@ -465,6 +565,7 @@ def makePanel(
     imgDict: dict[str, lsst.afw.image._exposure.ExposureF],
     sourceTableDict: dict[str, pandas.DataFrame],
     instrument: str,
+    onlyS11: bool = False,
     **kwargs,
 ) -> matplotlib.figure.Figure:
     """Create the panel with the in focus stars.
@@ -480,6 +581,8 @@ def makePanel(
         the source dataframe for each images.
     instrument: `str`
         Instrument name.
+    onlyS11: `bool`, optional
+        If True, only S11 detectors are shown. Default False.
     **kwargs:
         Parameters for the `makePsfPanel` method.
 
@@ -508,6 +611,5 @@ def makePanel(
     }
     cutouts = {detName: generateCutout(imgDict[detName], candidates[detName]) for detName in filterDetName}
 
-    fig = makePsfPanel(cutouts, instrument, **kwargs)
-    fig.suptitle(f"visit: {imgDict[list(imgDict.keys())[0]].getInfo().getVisitInfo().id}", fontsize=25)
+    fig = makePsfPanel(cutouts, instrument, onlyS11=onlyS11, **kwargs)
     return fig
