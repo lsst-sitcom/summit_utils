@@ -6,9 +6,9 @@ import pandas
 from scipy.optimize import curve_fit  # type: ignore
 
 import lsst
-from lsst.utils.plotting.figures import make_figure
-from lsst.summit.utils.utils import getCameraFromInstrumentName
 from lsst.afw.cameraGeom import FIELD_ANGLE
+from lsst.summit.utils.utils import getCameraFromInstrumentName
+from lsst.utils.plotting.figures import make_figure
 
 
 def gaussian2dFitFunction(
