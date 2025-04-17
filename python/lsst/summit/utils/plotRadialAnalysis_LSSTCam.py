@@ -214,7 +214,7 @@ def makeLayerPlot(
         [FwhmFit, EE50Diameter, EE80Diameter],
     ) = doRadialAnalysis(data, fitModel)
 
-    # get figure and axes position on figure 
+    # get figure and axes position on figure
     # to create multiple axes on that position
     fig = ax.get_figure()
     bbox = ax.get_position()
@@ -267,7 +267,7 @@ def createFigWithInstrumentLayout(
     add_cbar: bool = False,
 ) -> dict[str, matplotlib.axes.Axes]:
     """Create a figure with the requested instrument layout"""
-    
+
     basePath = Path(__file__).resolve().parent
     layoutPath = basePath / "instrumentLayout.yaml"
     with open(layoutPath) as file:
@@ -302,7 +302,7 @@ def makePsfPanel(
     Parameters
     ----------
     cutouts: `dict[str, np.ndarray]`
-        A detector's name key dictionary containing 
+        A detector's name key dictionary containing
         the 2D array of the star cutouts.
     instrument: `str`, optional
         Detector type. Default 'LSSTComCam'.
@@ -442,8 +442,8 @@ def findNearestStarToTarget(
     target: `np.ndarray` or `list` of `float` or `tuple` of `float`
         The target coordinates.
     instrument: `str`
-        Instrument name. 
-        Now needed to manage column name incosisntency 
+        Instrument name.
+        Now needed to manage column name incosisntency
         between ComCam and LSSTCam.
     """
 
@@ -451,8 +451,8 @@ def findNearestStarToTarget(
         xCol = "slot_Centroid_x"
         yCol = "slot_Centroid_y"
     else:
-        xCol = "slot_Centroid_x" # "x"
-        yCol = "slot_Centroid_y" # "y"
+        xCol = "slot_Centroid_x"  # "x"
+        yCol = "slot_Centroid_y"  # "y"
 
     tab["center_sep"] = np.sqrt((tab[xCol] - target[0]) ** 2 + (tab[yCol] - target[1]) ** 2)
     most_close = tab.sort_values(by=["center_sep"]).iloc[0].name
@@ -473,10 +473,10 @@ def makePanel(
     Parameters
     ----------
     imageDict: `dict[str, lsst.afw.image._exposure.ExposureF]`
-        A detector's name key dictionary containing 
+        A detector's name key dictionary containing
         the images from whose extract the cutouts.
     sourceTableDict: `dict[str, pandas.DataFrame]`
-        A detector's name key dictionary containing 
+        A detector's name key dictionary containing
         the source dataframe for each images.
     instrument: `str`
         Instrument name.
@@ -501,9 +501,10 @@ def makePanel(
     for detName in commonDetName:
         if sourceTableDict[detName].shape[0] > 0:
             filterDetName.append(detName)
-    
+
     candidates = {
-        detName: findNearestStarToTarget(sourceTableDict[detName], center, instrument) for detName in filterDetName
+        detName: findNearestStarToTarget(sourceTableDict[detName], center, instrument)
+        for detName in filterDetName
     }
     cutouts = {detName: generateCutout(imgDict[detName], candidates[detName]) for detName in filterDetName}
 
