@@ -21,6 +21,7 @@
 from __future__ import annotations
 
 import logging
+from typing import TYPE_CHECKING
 
 import astropy.visualization as vis
 import matplotlib
@@ -35,6 +36,9 @@ import lsst.afw.image as afwImage
 import lsst.afw.table as afwTable
 import lsst.geom as geom
 from lsst.summit.utils import getQuantiles
+
+if TYPE_CHECKING:
+    from lsst.afw.image import Exposure
 
 
 def drawCompass(
@@ -322,3 +326,184 @@ def plot(
         plt.savefig(savePlotAs)
 
     return figure
+
+
+def _computeMtf(image: np.ndarray, midtonesBalance: float) -> np.ndarray:
+    """
+    Compute the midtones transfer function (MTF) for an image.
+
+    Parameters
+    ----------
+    image : `np.ndarray`
+        Input image normalized to [0, 1].
+    midtonesBalance : `float`
+        Balance parameter controlling midtones emphasis.
+
+    Returns
+    -------
+    image : `np.ndarray`
+        Image after applying the MTF, with NaNs replaced by fallback values.
+    """
+    M = np.full(image.shape, midtonesBalance)
+    maskHalf = image == 0.5
+    maskZero = image == 0
+    maskOne = image == 1
+    fallback = (maskHalf * 0.5) * (1 - maskZero) + maskOne
+    result = (M - 1) * image / ((2 * M - 1) * image - M)
+    nanMask = np.isnan(result)
+    result[nanMask] = fallback[nanMask]
+    return result
+
+
+def _applyClip(image: np.ndarray, clipLow: float, clipHigh: float) -> np.ndarray:
+    """
+    Linearly clip and scale image values between clipLow and clipHigh.
+
+    Parameters
+    ----------
+    image : `np.ndarray`
+        Input image normalized to [0, 1].
+    clipLow : `float`
+        Lower clipping threshold.
+    clipHigh : `float`
+        Upper clipping threshold.
+
+    Returns
+    -------
+    clipped : `np.ndarray`
+        Clipped and scaled image, with values in [0, 1].
+    """
+    belowLow = image < clipLow
+    aboveHigh = image > clipHigh
+    scaled = (image - clipLow) / (clipHigh - clipLow)
+    return np.clip(scaled * (~belowLow) + aboveHigh, 0.0, 1.0)
+
+
+def _applyExpansion(image: np.ndarray, outMin: float, outMax: float) -> np.ndarray:
+    """
+    Expand image dynamic range from [outMin, outMax] to [0, 1].
+
+    Parameters
+    ----------
+    image : `np.ndarray`
+        Input image after MTF.
+    outMin : `float`
+        Minimum output value (usually 0.0).
+    outMax : `float`
+        Maximum output value (usually 1.0).
+
+    Returns
+    -------
+    expanded : `np.ndarray`
+        Expanded image in [0, 1].
+    """
+    return (image - outMin) / (outMax - outMin)
+
+
+def _applyDisplayFunction(
+    image: np.ndarray, midtonesBalance: float, clipLow: float, clipHigh: float, outMin: float, outMax: float
+) -> np.ndarray:
+    """
+    Apply the full display function: clip, MTF, then expansion.
+
+    Parameters
+    ----------
+    image : `np.ndarray`
+        Input image normalized to [0, 1].
+    midtonesBalance : `float`
+        Midtones balance parameter.
+    clipLow : `float`
+        Lower clipping threshold.
+    clipHigh : `float`
+        Upper clipping threshold.
+    outMin : `float`
+        Minimum output of expansion.
+    outMax : `float`
+        Maximum output of expansion.
+
+    Returns
+    -------
+    np.ndarray
+        Stretched image ready for display.
+    """
+    clipped = _applyClip(image, clipLow, clipHigh)
+    mtf = _computeMtf(clipped, midtonesBalance)
+    return _applyExpansion(mtf, outMin, outMax)
+
+
+def _computeDisplayParameters(data: np.ndarray) -> tuple[float, float, float, float, float]:
+    """
+    Compute parameters for display function based on data statistics.
+
+    Parameters
+    ----------
+    data : `np.ndarray`
+        Normalized image data array.
+
+    Returns
+    -------
+    tuple[float, float, float, float, float]
+        midtonesBalance, clipLow, clipHigh, outMin, outMax
+    """
+    median = np.median(data)
+    deviations = np.abs(data.ravel() - median)
+    madn = 1.4826 * np.median(np.sort(deviations))
+    targetBackground = 0.25
+    clippingFactor = -2.8
+
+    aboveHalf = median > 0.5
+
+    if not aboveHalf and madn != 0:
+        clipLow = min(1.0, max(0.0, median + clippingFactor * madn))
+    else:
+        clipLow = 0.0
+
+    if aboveHalf and madn != 0:
+        clipHigh = min(1.0, max(0.0, median - clippingFactor * madn))
+    else:
+        clipHigh = 1.0
+
+    if median <= 0.5:
+        midtonesBalance = (
+            (targetBackground - 1)
+            * (median - clipLow)
+            / ((2 * targetBackground - 1) * (median - clipLow) - targetBackground)
+        )
+    else:
+        midtonesBalance = (
+            (clipHigh - median - 1)
+            * targetBackground
+            / (2 * (clipHigh - median - 1) * targetBackground - (clipHigh - median))
+        )
+
+    return midtonesBalance, clipLow, clipHigh, 0.0, 1.0
+
+
+def stretchDataPixInsight(exposure: Exposure) -> np.ndarray:
+    """
+    Normalize and stretch image data from an Exposure object using PixInsight
+    display function.
+
+    Parameters
+    ----------
+    exposure : `lsst.afw.image.Exposure`
+        The exposure containing image data array as `.image.array`.
+
+    Returns
+    -------
+    stretched : `np.ndarray`
+        The stretched image array.
+    """
+    data = exposure.image.array
+
+    pedestal = np.min(data)
+    if pedestal >= 0.0:
+        norm = np.max(data)
+        normalized = data / norm
+    else:
+        norm = np.max(data - pedestal)
+        normalized = (data - pedestal) / norm
+
+    midtonesBalance, clipLow, clipHigh, outMin, outMax = _computeDisplayParameters(normalized)
+    stretched = _applyDisplayFunction(normalized, midtonesBalance, clipLow, clipHigh, outMin, outMax)
+    return stretched
