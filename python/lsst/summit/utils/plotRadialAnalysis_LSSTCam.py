@@ -517,7 +517,7 @@ def makePsfPanel(
 
 
 def generateCutout(
-    img: Exposure,
+    exp: Exposure,
     center: np.ndarray | list[float] | tuple[float, float],
     pad: float = 10,
 ) -> np.ndarray:
@@ -525,7 +525,7 @@ def generateCutout(
 
     Parameters
     ----------
-    img: `lsst.afw.image.Exposure`
+    exp: `lsst.afw.image.Exposure`
         The image from extract the cutouts
     center: `np.ndarray` or `list` of `float` or `tuple` of `float`
         The coordinates of the cutout center
@@ -539,7 +539,7 @@ def generateCutout(
     """
     xlim = (center[0] - pad, center[0] + pad)
     ylim = (center[1] - pad, center[1] + pad)
-    cutout = img.image.array[int(ylim[0]) : int(ylim[1]), int(xlim[0]) : int(xlim[1])]
+    cutout = exp.image.array[int(ylim[0]) : int(ylim[1]), int(xlim[0]) : int(xlim[1])]
     return cutout
 
 
@@ -578,7 +578,7 @@ def findNearestStarToTarget(
 
 # change list in dictionary with det_num key
 def makePanel(
-    imgDict: dict[str, Exposure],
+    expDict: dict[str, Exposure],
     sourceTableDict: dict[str, pandas.DataFrame],
     instrument: str,
     onlyS11: bool = False,
@@ -611,9 +611,9 @@ def makePanel(
     center = (2036.0, 2000.0)
 
     # interesct the detNum for images and tables
-    imgDetName = {*list(imgDict.keys())}
+    expDetName = {*list(expDict.keys())}
     srcDetName = {*list(sourceTableDict.keys())}
-    commonDetName = imgDetName.intersection(srcDetName)
+    commonDetName = expDetName.intersection(srcDetName)
 
     # filter commoDetName to keep only srcTable with non zero rows
     filterDetName = []
@@ -625,7 +625,7 @@ def makePanel(
         detName: findNearestStarToTarget(sourceTableDict[detName], center, instrument)
         for detName in filterDetName
     }
-    cutouts = {detName: generateCutout(imgDict[detName], candidates[detName]) for detName in filterDetName}
+    cutouts = {detName: generateCutout(expDict[detName], candidates[detName]) for detName in filterDetName}
 
     fig = makePsfPanel(cutouts, instrument, onlyS11=onlyS11, **kwargs)
     return fig
