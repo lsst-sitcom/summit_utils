@@ -96,6 +96,7 @@ __all__ = [
     "computeExposureId",
     "computeCcdExposureId",
     "getDetectorIds",
+    "getImageArray",
 ]
 
 
@@ -1346,3 +1347,40 @@ def calcEclipticCoords(ra: float, dec: float) -> tuple[float, float]:
         lambda_ += np.pi * 2
 
     return (np.rad2deg(lambda_), np.rad2deg(beta))
+
+
+def getImageArray(
+    inputData: np.ndarray | afwImage.Exposure | afwImage.Image | afwImage.MaskedImage,
+) -> np.ndarray:
+    """Get the image data from anything image-like.
+
+    Parameters
+    ----------
+    inputData : `numpy.ndarray`, `lsst.afw.image.Exposure`,
+        `lsst.afw.image.Image`, or `lsst.afw.image.MaskedImage`
+        The input data.
+    Returns
+    -------
+    imageData : `numpy.ndarray`
+        The image data.
+    Raises
+    ------
+    TypeError
+        If the input data is not a numpy array, lsst.afw.image.Exposure,
+        lsst.afw.image.Image, or lsst.afw.image.MaskedImage.
+    """
+    match inputData:
+        case np.ndarray():
+            imageData = inputData
+        case afwImage.MaskedImage():
+            imageData = inputData.image.array
+        case afwImage.Image():
+            imageData = inputData.array
+        case afwImage.Exposure():
+            imageData = inputData.image.array
+        case _:
+            raise TypeError(
+                "This function accepts numpy array, lsst.afw.image.Exposure components."
+                f" Got {type(inputData)}"
+            )
+    return imageData

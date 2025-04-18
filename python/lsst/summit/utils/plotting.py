@@ -21,7 +21,6 @@
 from __future__ import annotations
 
 import logging
-from typing import TYPE_CHECKING
 
 import astropy.visualization as vis
 import matplotlib
@@ -35,10 +34,7 @@ import lsst.afw.geom as afwGeom
 import lsst.afw.image as afwImage
 import lsst.afw.table as afwTable
 import lsst.geom as geom
-from lsst.summit.utils import getQuantiles
-
-if TYPE_CHECKING:
-    from lsst.afw.image import Exposure
+from lsst.summit.utils.utils import getImageArray, getQuantiles
 
 
 def drawCompass(
@@ -203,20 +199,7 @@ def plot(
     if not logger:
         logger = logging.getLogger(__name__)
 
-    match inputData:
-        case np.ndarray():
-            imageData = inputData
-        case afwImage.MaskedImage():
-            imageData = inputData.image.array
-        case afwImage.Image():
-            imageData = inputData.array
-        case afwImage.Exposure():
-            imageData = inputData.image.array
-        case _:
-            raise TypeError(
-                "This function accepts numpy array, lsst.afw.image.Exposure components."
-                f" Got {type(inputData)}"
-            )
+    imageData = getImageArray(inputData)
 
     if np.isnan(imageData).all():
         im = ax.imshow(imageData, origin="lower", aspect="equal")
@@ -479,22 +462,29 @@ def _computeDisplayParameters(data: np.ndarray) -> tuple[float, float, float, fl
     return midtonesBalance, clipLow, clipHigh, 0.0, 1.0
 
 
-def stretchDataPixInsight(exposure: Exposure) -> np.ndarray:
+def stretchDataPixInsight(
+    imageLike: np.ndarray | afwImage.Exposure | afwImage.Image | afwImage.MaskedImage,
+) -> np.ndarray:
     """
     Normalize and stretch image data from an Exposure object using PixInsight
     display function.
 
+    This is following:
+        https://pixinsight.com/doc/docs/XISF-1.0-spec/XISF-1.0-spec.html
+        #__XISF_Data_Objects_:_XISF_Image_:_Display_Function__
+
     Parameters
     ----------
-    exposure : `lsst.afw.image.Exposure`
-        The exposure containing image data array as `.image.array`.
+    imageLike : `numpy.ndarray`, `lsst.afw.image.Exposure`,
+        `lsst.afw.image.Image`, or `lsst.afw.image.MaskedImage`
+        The image-like object containg the data to be stretched.
 
     Returns
     -------
     stretched : `np.ndarray`
         The stretched image array.
     """
-    data = exposure.image.array
+    data = getImageArray(imageLike)
 
     pedestal = np.min(data)
     if pedestal >= 0.0:
