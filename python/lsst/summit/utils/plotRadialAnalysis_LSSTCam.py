@@ -126,9 +126,9 @@ def doRadialAnalysis(data: np.ndarray, fitModel: str):
                 data.shape[0] / 2,
                 np.median(radialValues),
             ]
-            Params, _ = curve_fit(moffat2dFitFunction, xy, radialValues, p0=initialGuess, maxfev=10000)
-            _, AlphaFit, BetaFit, X0Fit, Y0Fit, BaselineFit = Params
-            FwhmFit = np.abs(2.0 * AlphaFit * np.sqrt(2 ** (1 / BetaFit) - 1.0))
+            params, _ = curve_fit(moffat2dFitFunction, xy, radialValues, p0=initialGuess, maxfev=10000)
+            _, alphaFit, betaFit, x0Fit, y0Fit, baselineFit = params
+            fwhmFit = np.abs(2.0 * alphaFit * np.sqrt(2 ** (1 / betaFit) - 1.0))
         case "Gauss":
             # Initial guess for Gaussian fitting
             initialGuess = [
@@ -138,39 +138,39 @@ def doRadialAnalysis(data: np.ndarray, fitModel: str):
                 data.shape[0] / 2,
                 np.median(radialValues),
             ]
-            Params, _ = curve_fit(gaussian2dFitFunction, xy, radialValues, p0=initialGuess, maxfev=10000)
-            _, FwhmFit, X0Fit, Y0Fit, BaselineFit = Params
+            params, _ = curve_fit(gaussian2dFitFunction, xy, radialValues, p0=initialGuess, maxfev=10000)
+            _, fwhmFit, x0Fit, y0Fit, baselineFit = params
         case _:
             raise ValueError(f"The model {fitModel} is not among the available ones (Gauss, Moffat)")
 
     # Compute the curve of growth (cumulative energy)
-    Radii = np.sqrt((xGrid - X0Fit) ** 2 + (yGrid - Y0Fit) ** 2).ravel()
+    radii = np.sqrt((xGrid - x0Fit) ** 2 + (yGrid - y0Fit) ** 2).ravel()
 
-    SortedIndices = np.argsort(Radii)
-    SortedRadii = Radii[SortedIndices]
-    SortedValues = radialValues[SortedIndices] - BaselineFit
-    CumulativeEnergy = np.cumsum(SortedValues)
+    sortedIndices = np.argsort(radii)
+    sortedradii = radii[sortedIndices]
+    sortedValues = radialValues[sortedIndices] - baselineFit
+    cumulativeEnergy = np.cumsum(sortedValues)
 
     # Determine 50% and 80% encircled energy diameters
-    EE50Diameter = 2 * SortedRadii[np.searchsorted(CumulativeEnergy, 0.5 * CumulativeEnergy[-1])]
-    EE80Diameter = 2 * SortedRadii[np.searchsorted(CumulativeEnergy, 0.8 * CumulativeEnergy[-1])]
+    eE50Diameter = 2 * sortedradii[np.searchsorted(cumulativeEnergy, 0.5 * cumulativeEnergy[-1])]
+    eE80Diameter = 2 * sortedradii[np.searchsorted(cumulativeEnergy, 0.8 * cumulativeEnergy[-1])]
 
-    x = 0.2 * SortedRadii
-    yScatter = SortedValues + BaselineFit  # added back the backgroud.
+    x = 0.2 * sortedradii
+    yScatter = sortedValues + baselineFit  # added back the backgroud.
 
     match fitModel:
         case "Moffat":
-            YFit = moffat2dFitFunction(xy, *Params)[SortedIndices]
+            yFit = moffat2dFitFunction(xy, *params)[sortedIndices]
         case "Gauss":
-            YFit = gaussian2dFitFunction(xy, *Params)[SortedIndices]
+            yFit = gaussian2dFitFunction(xy, *params)[sortedIndices]
         case _:
             raise ValueError(f"The model {fitModel} is not among the available ones (Gauss, Moffat)")
 
     return (
         x,
         yScatter,
-        YFit,
-        [FwhmFit, EE50Diameter, EE80Diameter],
+        yFit,
+        [fwhmFit, eE50Diameter, eE80Diameter],
     )
 
 
@@ -214,8 +214,8 @@ def makeLayerPlot(
     (
         x,
         yScatter,
-        YFit,
-        [FwhmFit, EE50Diameter, EE80Diameter],
+        yFit,
+        [fwhmFit, eE50Diameter, eE80Diameter],
     ) = doRadialAnalysis(data, fitModel)
 
     # get figure and axes position on figure
@@ -255,7 +255,7 @@ def makeLayerPlot(
 
         axRad.plot(
             x,
-            YFit,
+            yFit,
             ls="-",
             color="y",
             label=f"{fitModel} Fit",
@@ -263,7 +263,7 @@ def makeLayerPlot(
 
         axRad.set(zorder=3, facecolor=(1, 1, 1, 0), xticks=[], yticks=[])
 
-    return FwhmFit, EE50Diameter, EE80Diameter
+    return fwhmFit, eE50Diameter, eE80Diameter
 
 
 def compactifyLayout(
