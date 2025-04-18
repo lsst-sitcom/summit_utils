@@ -218,16 +218,19 @@ def makeLayerPlot(
     # to create multiple axes on that position
     fig = ax.get_figure()
     bbox = ax.get_position()
+    bboxArray: tuple[float, float, float, float] = bbox.bounds
+
+    assert fig is not None
 
     # plot the background layer if present
     if "background" in layers:
-        axBkg = fig.add_axes(bbox, frameon=False)
+        axBkg = fig.add_axes(bboxArray, frameon=False)
         axBkg.imshow(data, cmap="gray", origin="lower", zorder=1)
         axBkg.set(zorder=1, xticks=[], yticks=[])
 
     # plot the contour layer if present
     if "contour" in layers:
-        axCtr = fig.add_axes(bbox, frameon=False)
+        axCtr = fig.add_axes(bboxArray, frameon=False)
         xGrid, yGrid = np.meshgrid(np.arange(data.shape[1]), np.arange(data.shape[0]))
         levels = levels if levels is not None else np.linspace(1.5 * np.std(data), data.max(), 5)
         axCtr.contour(xGrid, yGrid, data, cmap="spring", levels=levels, alpha=0.7)
@@ -235,7 +238,7 @@ def makeLayerPlot(
 
     # plot the radial analysis layer if present
     if "radial" in layers:
-        axRad = fig.add_axes(bbox, frameon=False)
+        axRad = fig.add_axes(bboxArray, frameon=False)
         axRad.scatter(
             x,
             yScatter,
@@ -259,7 +262,9 @@ def makeLayerPlot(
     return FwhmFit, EE50Diameter, EE80Diameter
 
 
-def compactLayout(rectDict: dict[str, list[float]]) -> dict[str, list[float]]:
+def compactLayout(
+    rectDict: dict[str, tuple[float, float, float, float]]
+) -> dict[str, tuple[float, float, float, float]]:
     """Compact the layout of the rectangles to fit in a smaller area.
     This function rescales the rectangles to fit within a specified area
     while maintaining their aspect ratios.
@@ -291,16 +296,18 @@ def compactLayout(rectDict: dict[str, list[float]]) -> dict[str, list[float]]:
     scale_x = (1 - 2 * margin) / range_x
     scale_y = (1 - 2 * margin) / range_y
 
-    newRectDict = {}
+    newRectDict: dict[str, tuple[float, float, float, float]] = {}
     for name, (left, bottom, width, height) in rectDict.items():
         new_left = (left - min_left) * scale_x + margin
         new_bottom = (bottom - min_bottom) * scale_y + margin
-        newRectDict[name] = [new_left, new_bottom, width, height]
+        newRectDict[name] = (new_left, new_bottom, width, height)
 
     return newRectDict
 
 
-def computeColorbarRect(rectDict: dict[str, list[float]]) -> list[float]:
+def computeColorbarRect(
+    rectDict: dict[str, tuple[float, float, float, float]]
+) -> tuple[float, float, float, float]:
     """Compute the colorbar rectangle based on the detector rectangles
 
     Parameters
@@ -327,7 +334,7 @@ def computeColorbarRect(rectDict: dict[str, list[float]]) -> list[float]:
     left = max_right + padding
     bottom = min_bottom
 
-    return [left, bottom, width, height]
+    return (left, bottom, width, height)
 
 
 def createFigWithInstrumentLayout(
@@ -355,7 +362,7 @@ def createFigWithInstrumentLayout(
     camera = getCameraFromInstrumentName(instrument)
     detectors = [detector.getId() for detector in camera]
 
-    rectDict = {}
+    rectDict: dict[str, tuple[float, float, float, float]] = {}
     for name in detectors:
         detector = camera.get(name)
         detName = detector.getName()
@@ -365,12 +372,12 @@ def createFigWithInstrumentLayout(
         corners_deg = np.rad2deg(corners)  # Convert corners to degrees
 
         # turn the cornsers coords in (letf, bottom, width, height)
-        detRect = [
+        detRect = (
             corners_deg[:, 0].min(),
             corners_deg[:, 1].min(),
             corners_deg[:, 0].max() - corners_deg[:, 0].min(),
             corners_deg[:, 1].max() - corners_deg[:, 1].min(),
-        ]
+        )
 
         if onlyS11 and "S11" not in detName:
             continue
@@ -453,7 +460,9 @@ def makePsfPanel(
     cmap = matplotlib.colormaps["RdYlGn_r"]
     for detName in cutouts.keys():
         bbox = axsDict[detName].get_position()
-        axText = fig.add_axes(bbox, frameon=True)
+        bboxArray = bbox.bounds
+
+        axText = fig.add_axes(bboxArray, frameon=True)
         axText.set(zorder=4, facecolor=(1, 1, 1, 0), xticks=[], yticks=[])
 
         if detName == "cbar":
