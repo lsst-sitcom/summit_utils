@@ -641,7 +641,9 @@ def makePanel(
     srcRefs = butler.query_datasets("single_visit_psf_star", where=f"exposure={visit}")
 
     # grab the instrument name from one of the imgRefs
-    camera = getCameraFromInstrumentName(imgRefs[0].dataId["instrument"])
+    instrument = imgRefs[0].dataId["instrument"]
+    assert isinstance(instrument, str), f"Instrument name {instrument} is not a string"
+    camera = getCameraFromInstrumentName(instrument)
     instrumentName = camera.getName()
 
     # if only S11 then keep only the S11 detectors
