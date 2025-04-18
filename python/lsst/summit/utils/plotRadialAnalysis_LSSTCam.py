@@ -23,7 +23,7 @@ def gaussian2dFitFunction(
 
     Parameters
     ----------
-    xy: `np.ndarray`
+    xy: `tuple` of `np.ndarray`
         Points coordinates.
     peak: `float`
         Values of the intesity peak.
@@ -33,7 +33,7 @@ def gaussian2dFitFunction(
         The x position of the 2d Guassian function.
     y0: `float`
         The y position of the 2d Guassian function.
-    baseline: `float`, optional
+    baseline: `float`
         Offset to apply. Default 0.
 
     Returns
@@ -59,7 +59,7 @@ def moffat2dFitFunction(
 
     Parameters
     ----------
-    xy: `np.ndarray`
+    xy: `tuple` of `np.ndarray`
         Points coordinates.
     peak: `float`
         Values of the intesity peak.
@@ -71,7 +71,7 @@ def moffat2dFitFunction(
         x coordinate of the distribution.
     y0: `float`
         y coordinate of the distribution.
-    baseline: `float`, optional
+    baseline: `float`
         Offset to apply. Default 0.
 
     Returns
@@ -198,6 +198,8 @@ def makeLayerPlot(
         2D array containing the star cutout
     fitModel: `str`
         Model used for the fit ('Moffat' or 'Gauss')
+    layers: list[str] | str = "both",
+        List of layers to be displayed ('background', 'radial', 'contour').
     levels: `np.ndarray` or `Iterable` of `float` or `None`, optional
         The levels value for the contour layer.
         If None, is set to `np.linspace(1.5*np.std(data), data.max(), 5)`
@@ -276,7 +278,7 @@ def compactifyLayout(
 
     Returns
     -------
-    `dict`
+    rectDict: `dict`
         Dictionary with the rescaled rectangles.
     """
 
@@ -317,7 +319,7 @@ def computeColorbarRect(
 
     Returns
     -------
-    `list`
+    `tuple`
         The box in which the colorbar will be drawn.
     """
 
@@ -511,7 +513,7 @@ def makePsfPanel(
 def generateCutout(
     img: lsst.afw.image._exposure.ExposureF,
     center: np.ndarray | list[float] | tuple[float, float],
-    pad: int = 10,
+    pad: float = 10,
 ) -> np.ndarray:
     """Generate the cutout around a center position
 
@@ -546,7 +548,7 @@ def findNearestStarToTarget(
     Parameters
     ----------
     tab: `pandas.DataFrame`
-        pandas.DataFram with the in focus stars positions.
+        pandas.DataFrame with the in focus stars positions.
     target: `np.ndarray` or `list` of `float` or `tuple` of `float`
         The target coordinates.
     instrument: `str`
