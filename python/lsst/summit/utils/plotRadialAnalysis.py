@@ -29,11 +29,15 @@ import numpy as np
 import pandas
 from scipy.optimize import curve_fit  # type: ignore
 
-from lsst.afw.cameraGeom import FIELD_ANGLE
+from lsst.daf.butler import Butler
+from lsst.daf.butler import DatasetRef
+from lsst.geom import Extent2I, Point2I, Box2I
+from lsst.afw.cameraGeom import FIELD_ANGLE, Detector
 from lsst.summit.utils.utils import getCameraFromInstrumentName
 from lsst.utils.plotting.figures import make_figure
 
 if TYPE_CHECKING:
+    from astropy.table.table import Table
     from lsst.afw.image import Exposure
 
 
@@ -125,16 +129,17 @@ def doRadialAnalysis(data: np.ndarray, fitModel: str):
         1d array with the radial from the centroid.
     y: `np.ndarray`
         1d array with the intensity value.
-    gYFit: `np.ndarray`
-        Gaussian Fit.
-    mYFit: `np.ndarray`
-        Moffat Fit.
-    gStat: `list` of `float`
-        A list containing the gaussian fit values of
-        FWHM and Encircled Energ Fraction Radii (EE) at 50% and 80%
-    mStat: `list` of `float`
-        A list containing the moffat fit values of
-        FWHM and Encircled Energ Fraction Radii (EE) at 50% and 80%
+    yScatter: `np.ndarray`
+        The flattened radial distribution of the start intensity.
+        Usefull for plotting purpose.
+    yFit: `np.ndarray`
+        The fitted radial distribution.
+    fwhmFit: `float`
+        The Full Width at Half Maximum of the fitted distribution.
+    eE50Diameter: `float`
+        The Encircled Energy diameter at 50%.
+    eE80Diameter: `float`
+        The Encircled Energy diameter at 80%.
     """
     # Create meshgrid for fitting with x and y positions
     xGrid, yGrid = np.meshgrid(np.arange(data.shape[1]), np.arange(data.shape[0]))
@@ -196,7 +201,9 @@ def doRadialAnalysis(data: np.ndarray, fitModel: str):
         x,
         yScatter,
         yFit,
-        [fwhmFit, eE50Diameter, eE80Diameter],
+        fwhmFit, 
+        eE50Diameter, 
+        eE80Diameter,
     )
 
 
@@ -241,7 +248,9 @@ def makeLayerPlot(
         x,
         yScatter,
         yFit,
-        [fwhmFit, eE50Diameter, eE80Diameter],
+        fwhmFit, 
+        eE50Diameter, 
+        eE80Diameter,
     ) = doRadialAnalysis(data, fitModel)
 
     # get figure and axes position on figure
@@ -536,52 +545,114 @@ def makePsfPanel(
 
     return fig
 
+# def generateCutout(
+    # exp: Exposure,
+    # center: np.ndarray | list[float] | tuple[float, float],
+    # pad: float = 10,
+# ) -> np.ndarray:
+    # """Generate the cutout around a center position
+# 
+    # Parameters
+    # ----------
+    # exp: `lsst.afw.image.Exposure`
+        # The image from extract the cutouts
+    # center: `np.ndarray` or `list` of `float` or `tuple` of `float`
+        # The coordinates of the cutout center
+    # pad: `int`, optional
+        # Padding around the center, default 10.
+# 
+    # Returns
+    # -------
+    # cutout: `np.ndarray`
+        # The square cutout around the center position.
+    # """
+    # xlim = (center[0] - pad, center[0] + pad)
+    # ylim = (center[1] - pad, center[1] + pad)
+    # cutout = exp.image.array[int(ylim[0]) : int(ylim[1]), int(xlim[0]) : int(xlim[1])]
+    # return cutout
 
 def generateCutout(
-    exp: Exposure,
-    center: np.ndarray | list[float] | tuple[float, float],
-    pad: float = 10,
+    butler: Butler,
+    imgRef: DatasetRef,
+    detector: Detector,
+    target: np.ndarray | list[float] | tuple[float, float],
 ) -> np.ndarray:
-    """Generate the cutout around a center position
+    """Generate the cutout around a target position
 
     Parameters
     ----------
-    exp: `lsst.afw.image.Exposure`
-        The image from extract the cutouts
-    center: `np.ndarray` or `list` of `float` or `tuple` of `float`
+    butler: `lsst.daf.butler.Butler`
+        The butler to use to get the image
+    imgRef: `lsst.daf.butler.DatasetRef`
+        The dataset reference to use to get the image
+    detector: `lsst.afw.cameraGeom.Detector`
+        The detector to use to get calculate the region of interest
+    target: `np.ndarray` or `list` of `float` or `tuple` of `float`
         The coordinates of the cutout center
-    pad: `int`, optional
-        Padding around the center, default 10.
 
     Returns
     -------
     cutout: `np.ndarray`
         The square cutout around the center position.
     """
-    xlim = (center[0] - pad, center[0] + pad)
-    ylim = (center[1] - pad, center[1] + pad)
-    cutout = exp.image.array[int(ylim[0]) : int(ylim[1]), int(xlim[0]) : int(xlim[1])]
+
+    pad = 20
+    detBbox = detector.getBBox()
+    start = Point2I(target[0] - (pad // 2), target[1] - (pad // 2))
+    dim = Extent2I(pad, pad)
+    roiBbox = detBbox.clippedTo(Box2I(start, dim))
+    cutout = butler.get(imgRef, parameters={"bbox": roiBbox}).image.array
+    
     return cutout
 
+# def findNearestStarToTarget(
+    # tab: pandas.DataFrame,
+    # target: np.ndarray | list[float] | tuple[float, float],
+    # instrument: str,
+# ) -> np.ndarray:
+    # """Find the nearest star w.r.t to a target coordinates
+    # N.B. The seacrh is done in PIXEL coordinates.
+# 
+    # Parameters
+    # ----------
+    # tab: `pandas.DataFrame`
+        # pandas.DataFrame with the in focus stars positions.
+    # target: `np.ndarray` or `list` of `float` or `tuple` of `float`
+        # The target coordinates.
+    # instrument: `str`
+        # Instrument name.
+        # Now needed to manage column name incosisntency
+        # between ComCam and LSSTCam.
+    # """
+# 
+    # if instrument == "LSSTComCam":
+        # xCol = "slot_Centroid_x"
+        # yCol = "slot_Centroid_y"
+    # else:  # for now just work with src file that has the same column.
+        # xCol = "slot_Centroid_x"  # "x"
+        # yCol = "slot_Centroid_y"  # "y"
+# 
+    # tab["center_sep"] = np.sqrt((tab[xCol] - target[0]) ** 2 + (tab[yCol] - target[1]) ** 2)
+    # most_close = tab.sort_values(by=["center_sep"]).iloc[0].name
+    # nearest = tab.loc[most_close, [xCol, yCol]].values
+    # return nearest
 
-def findNearestStarToTarget(
+def findNearestStarToCenter(
     tab: pandas.DataFrame,
-    target: np.ndarray | list[float] | tuple[float, float],
+    detector: Detector,
     instrument: str,
 ) -> np.ndarray:
-    """Find the nearest star w.r.t to a target coordinates
+    """Find the nearest star w.r.t to the detector center
     N.B. The seacrh is done in PIXEL coordinates.
 
     Parameters
     ----------
     tab: `pandas.DataFrame`
         pandas.DataFrame with the in focus stars positions.
-    target: `np.ndarray` or `list` of `float` or `tuple` of `float`
-        The target coordinates.
+    detector: `lsst.afw.cameraGeom.Detector`
+        The detector realted to the sourceTable's positions.
     instrument: `str`
         Instrument name.
-        Now needed to manage column name incosisntency
-        between ComCam and LSSTCam.
     """
 
     if instrument == "LSSTComCam":
@@ -590,6 +661,8 @@ def findNearestStarToTarget(
     else:  # for now just work with src file that has the same column.
         xCol = "slot_Centroid_x"  # "x"
         yCol = "slot_Centroid_y"  # "y"
+    
+    target = (detector.getBBox().centerX, detector.getBBox().centerY)
 
     tab["center_sep"] = np.sqrt((tab[xCol] - target[0]) ** 2 + (tab[yCol] - target[1]) ** 2)
     most_close = tab.sort_values(by=["center_sep"]).iloc[0].name
@@ -598,10 +671,63 @@ def findNearestStarToTarget(
 
 
 # change list in dictionary with det_num key
+# def makePanel(
+    # expDict: dict[str, Exposure],
+    # sourceTableDict: dict[str, pandas.DataFrame],
+    # instrument: str,
+    # onlyS11: bool = False,
+    # **kwargs,
+# ) -> matplotlib.figure.Figure:
+    # """Create the panel with the in focus stars.
+    # See the documentation of `makePsfPanel` for more information.
+# 
+    # Parameters
+    # ----------
+    # imageDict: `dict[str, lsst.afw.image.Exposure]`
+        # A detector's name key dictionary containing
+        # the images from whose extract the cutouts.
+    # sourceTableDict: `dict[str, pandas.DataFrame]`
+        # A detector's name key dictionary containing
+        # the source dataframe for each images.
+    # instrument: `str`
+        # Instrument name.
+    # onlyS11: `bool`, optional
+        # If True, only S11 detectors are shown. Default False.
+    # **kwargs:
+        # Parameters for the `makePsfPanel` method.
+# 
+    # Returns
+    # -------
+    # fig: `matplotlib.figure.Figure`
+        # The figure.
+    # """
+    # can still be hardcoded? (ComCam and LSSTCam have the same detector size?)
+    # center = (2036.0, 2000.0)
+# 
+    # interesct the detNum for images and tables
+    # expDetName = {*list(expDict.keys())}
+    # srcDetName = {*list(sourceTableDict.keys())}
+    # commonDetName = expDetName.intersection(srcDetName)
+# 
+    # filter commoDetName to keep only srcTable with non zero rows
+    # filterDetName = []
+    # for detName in commonDetName:
+        # if sourceTableDict[detName].shape[0] > 0:
+            # filterDetName.append(detName)
+# 
+    # candidates = {
+        # detName: findNearestStarToTarget(sourceTableDict[detName], center, instrument)
+        # for detName in filterDetName
+    # }
+    # cutouts = {detName: generateCutout(expDict[detName], candidates[detName]) for detName in filterDetName}
+# 
+    # fig = makePsfPanel(cutouts, instrument, onlyS11=onlyS11, **kwargs)
+    # return fig
+
+
 def makePanel(
-    expDict: dict[str, Exposure],
-    sourceTableDict: dict[str, pandas.DataFrame],
-    instrument: str,
+    butler: Butler,
+    visit: int,
     onlyS11: bool = False,
     **kwargs,
 ) -> matplotlib.figure.Figure:
@@ -610,14 +736,12 @@ def makePanel(
 
     Parameters
     ----------
-    imageDict: `dict[str, lsst.afw.image.Exposure]`
-        A detector's name key dictionary containing
-        the images from whose extract the cutouts.
-    sourceTableDict: `dict[str, pandas.DataFrame]`
-        A detector's name key dictionary containing
-        the source dataframe for each images.
-    instrument: `str`
-        Instrument name.
+    butler: `lsst.daf.butler.Butler`
+        The butler to use to get the image and the source table
+    imgRefs: `lsst.daf.butler.DatasetRef`
+        The dataset reference to use to get the image
+    srcRefs: `lsst.daf.butler.DatasetRef`
+        The dataset reference to use to get the source table
     onlyS11: `bool`, optional
         If True, only S11 detectors are shown. Default False.
     **kwargs:
@@ -628,13 +752,36 @@ def makePanel(
     fig: `matplotlib.figure.Figure`
         The figure.
     """
-    # can still be hardcoded? (ComCam and LSSTCam have the same detector size?)
-    center = (2036.0, 2000.0)
+
+    # retrieve the image and source table dataset references
+    imgRefs = butler.query_datasets("post_isr_image", where=f"exposure={visit}")
+    srcRefs = butler.query_datasets("single_visit_psf_star", where=f"exposure={visit}")
+
+    # grab the instrument name from one of the imgRefs
+    camera = getCameraFromInstrumentName(imgRefs[0].dataId["instrument"])
+    instrumentName = camera.getName()
+
+    # if only S11 then keep only the S11 detectors
+    if onlyS11:
+        imgRefs = [dr for dr in imgRefs if "S11" in camera[dr.dataId["detector"]].getName()]
+        srcRefs = [dr for dr in srcRefs if "S11" in camera[dr.dataId["detector"]].getName()]
+
+    # retrieve the detector object for each detector
+    detNameDict = {detector.getName(): detector for detector in camera}
 
     # interesct the detNum for images and tables
-    expDetName = {*list(expDict.keys())}
-    srcDetName = {*list(sourceTableDict.keys())}
-    commonDetName = expDetName.intersection(srcDetName)
+    imgDetName = {camera[dr.dataId["detector"]].getName() for dr in imgRefs}
+    srcDetName = {camera[dr.dataId["detector"]].getName() for dr in srcRefs}
+    commonDetName = imgDetName.intersection(srcDetName)
+    
+
+    # first retrieve the srcTable datasets from butler
+    filterColumn = "calib_psf_used"
+    sourceTableDict = {
+        camera[dr.dataId["detector"]].getName(): butler.get(dr).to_pandas() for dr in srcRefs 
+        if camera[dr.dataId["detector"]].getName() in commonDetName
+        }
+    sourceTableDict = {detName: tab[tab[filterColumn] == True] for detName, tab in sourceTableDict.items()}
 
     # filter commoDetName to keep only srcTable with non zero rows
     filterDetName = []
@@ -642,11 +789,24 @@ def makePanel(
         if sourceTableDict[detName].shape[0] > 0:
             filterDetName.append(detName)
 
+    # find the most center star in the srcTables
     candidates = {
-        detName: findNearestStarToTarget(sourceTableDict[detName], center, instrument)
+        detName: findNearestStarToCenter(sourceTableDict[detName], detNameDict[detName], instrumentName)
         for detName in filterDetName
     }
-    cutouts = {detName: generateCutout(expDict[detName], candidates[detName]) for detName in filterDetName}
 
-    fig = makePsfPanel(cutouts, instrument, onlyS11=onlyS11, **kwargs)
+    # filter the imgRefs
+    filterImgRefDict = {}
+    for imgRef in imgRefs:
+        detName = camera[imgRef.dataId["detector"]].getName()
+        if detName in filterDetName:
+            filterImgRefDict[detName] = imgRef
+    
+    # generate the cutouts
+    cutouts = {
+        detName: generateCutout(butler, filterImgRefDict[detName], detNameDict[detName], candidates[detName]) 
+        for detName in filterDetName
+        }
+
+    fig = makePsfPanel(cutouts, instrumentName, onlyS11=onlyS11, **kwargs)
     return fig
