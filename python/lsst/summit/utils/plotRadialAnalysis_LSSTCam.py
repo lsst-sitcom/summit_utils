@@ -178,7 +178,7 @@ def makeLayerPlot(
     ax: matplotlib.axes.Axes,
     data: np.ndarray,
     fitModel: str,
-    layers: list[str] | str = "both",
+    layers: list[str] | str = "all",
     levels: np.ndarray | Iterable[float] | None = None,
 ) -> tuple[float, float, float]:
     """Make per axes layer plot.
@@ -198,7 +198,7 @@ def makeLayerPlot(
         2D array containing the star cutout
     fitModel: `str`
         Model used for the fit ('Moffat' or 'Gauss')
-    layers: list[str] | str = "both",
+    layers: list[str] | str = "all",
         List of layers to be displayed ('background', 'radial', 'contour').
     levels: `np.ndarray` or `Iterable` of `float` or `None`, optional
         The levels value for the contour layer.
@@ -208,6 +208,8 @@ def makeLayerPlot(
     -------
     Returns the Fwhm EE50 and EE80
     """
+    if layers == "all":
+        layers = ["background", "radial", "contours"]
 
     (
         x,
@@ -406,7 +408,7 @@ def makePsfPanel(
     cutouts: dict[str, np.ndarray],
     instrument: str = "LSSTComCam",
     onlyS11: bool = False,
-    layers: list[str] | str = "both",
+    layers: list[str] | str = "all",
     fitModel: str = "Moffat",
     levels: np.ndarray | Iterable[float] | None = None,
     **kwargs,
@@ -427,8 +429,8 @@ def makePsfPanel(
         If True, only S11 detectors are shown. Default False.
     layers: `str` or `list` of `str`, optional
         List of layers to be displayed ('background', 'radial', 'contour').
-        It is possible to pass also the string 'both' as a shortcut for
-        ['background', 'radial', 'contour']. Default 'both'.
+        It is possible to pass also the string 'all' as a shortcut for
+        ['background', 'radial', 'contour']. Default 'all'.
     fitModel: `str`, optional
         Model used for the radial fit ('Moffat' or 'Gauss').
         Default 'Moffat'.
@@ -443,11 +445,10 @@ def makePsfPanel(
     fig: `matplotlib.figure.Figure`
         The figure.
     """
-
     fig = make_figure(**kwargs)
     axsDict = createFigWithInstrumentLayout(fig, instrument, onlyS11=onlyS11)
 
-    if layers == "both":
+    if layers == "all":
         layers = ["background", "radial", "contours"]
 
     fwhmDict = {}
