@@ -540,33 +540,6 @@ def makePsfPanel(
     return fig
 
 
-# def generateCutout(
-# exp: Exposure,
-# center: np.ndarray | list[float] | tuple[float, float],
-# pad: float = 10,
-# ) -> np.ndarray:
-# """Generate the cutout around a center position
-#
-# Parameters
-# ----------
-# exp: `lsst.afw.image.Exposure`
-# The image from extract the cutouts
-# center: `np.ndarray` or `list` of `float` or `tuple` of `float`
-# The coordinates of the cutout center
-# pad: `int`, optional
-# Padding around the center, default 10.
-#
-# Returns
-# -------
-# cutout: `np.ndarray`
-# The square cutout around the center position.
-# """
-# xlim = (center[0] - pad, center[0] + pad)
-# ylim = (center[1] - pad, center[1] + pad)
-# cutout = exp.image.array[int(ylim[0]) : int(ylim[1]), int(xlim[0]) : int(xlim[1])]
-# return cutout
-
-
 def generateCutout(
     butler: Butler,
     imgRef: DatasetRef,
@@ -602,39 +575,6 @@ def generateCutout(
     return cutout
 
 
-# def findNearestStarToTarget(
-# tab: pandas.DataFrame,
-# target: np.ndarray | list[float] | tuple[float, float],
-# instrument: str,
-# ) -> np.ndarray:
-# """Find the nearest star w.r.t to a target coordinates
-# N.B. The seacrh is done in PIXEL coordinates.
-#
-# Parameters
-# ----------
-# tab: `pandas.DataFrame`
-# pandas.DataFrame with the in focus stars positions.
-# target: `np.ndarray` or `list` of `float` or `tuple` of `float`
-# The target coordinates.
-# instrument: `str`
-# Instrument name.
-# Now needed to manage column name incosisntency
-# between ComCam and LSSTCam.
-# """
-#
-# if instrument == "LSSTComCam":
-# xCol = "slot_Centroid_x"
-# yCol = "slot_Centroid_y"
-# else:  # for now just work with src file that has the same column.
-# xCol = "slot_Centroid_x"  # "x"
-# yCol = "slot_Centroid_y"  # "y"
-#
-# tab["center_sep"] = np.sqrt((tab[xCol] - target[0]) ** 2 + (tab[yCol] - target[1]) ** 2)
-# most_close = tab.sort_values(by=["center_sep"]).iloc[0].name
-# nearest = tab.loc[most_close, [xCol, yCol]].values
-# return nearest
-
-
 def findNearestStarToCenter(
     tab: pandas.DataFrame,
     detector: Detector,
@@ -666,61 +606,6 @@ def findNearestStarToCenter(
     most_close = tab.sort_values(by=["center_sep"]).iloc[0].name
     nearest = tab.loc[most_close, [xCol, yCol]].values
     return nearest
-
-
-# change list in dictionary with det_num key
-# def makePanel(
-# expDict: dict[str, Exposure],
-# sourceTableDict: dict[str, pandas.DataFrame],
-# instrument: str,
-# onlyS11: bool = False,
-# **kwargs,
-# ) -> matplotlib.figure.Figure:
-# """Create the panel with the in focus stars.
-# See the documentation of `makePsfPanel` for more information.
-#
-# Parameters
-# ----------
-# imageDict: `dict[str, lsst.afw.image.Exposure]`
-# A detector's name key dictionary containing
-# the images from whose extract the cutouts.
-# sourceTableDict: `dict[str, pandas.DataFrame]`
-# A detector's name key dictionary containing
-# the source dataframe for each images.
-# instrument: `str`
-# Instrument name.
-# onlyS11: `bool`, optional
-# If True, only S11 detectors are shown. Default False.
-# **kwargs:
-# Parameters for the `makePsfPanel` method.
-#
-# Returns
-# -------
-# fig: `matplotlib.figure.Figure`
-# The figure.
-# """
-# can still be hardcoded? (ComCam and LSSTCam have the same detector size?)
-# center = (2036.0, 2000.0)
-#
-# interesct the detNum for images and tables
-# expDetName = {*list(expDict.keys())}
-# srcDetName = {*list(sourceTableDict.keys())}
-# commonDetName = expDetName.intersection(srcDetName)
-#
-# filter commoDetName to keep only srcTable with non zero rows
-# filterDetName = []
-# for detName in commonDetName:
-# if sourceTableDict[detName].shape[0] > 0:
-# filterDetName.append(detName)
-#
-# candidates = {
-# detName: findNearestStarToTarget(sourceTableDict[detName], center, instrument)
-# for detName in filterDetName
-# }
-# cutouts = {detName: generateCutout(expDict[detName], candidates[detName]) for detName in filterDetName}
-#
-# fig = makePsfPanel(cutouts, instrument, onlyS11=onlyS11, **kwargs)
-# return fig
 
 
 def makePanel(
