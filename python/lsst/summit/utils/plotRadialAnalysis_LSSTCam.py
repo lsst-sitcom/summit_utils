@@ -262,7 +262,7 @@ def makeLayerPlot(
     return FwhmFit, EE50Diameter, EE80Diameter
 
 
-def compactLayout(
+def compactifyLayout(
     rectDict: dict[str, tuple[float, float, float, float]]
 ) -> dict[str, tuple[float, float, float, float]]:
     """Compact the layout of the rectangles to fit in a smaller area.
@@ -384,7 +384,7 @@ def createFigWithInstrumentLayout(
         rectDict[detName] = detRect
 
     if onlyS11:
-        rectDict = compactLayout(rectDict)
+        rectDict = compactifyLayout(rectDict)
 
     axsDict = {}
     for detName, rect in rectDict.items():
