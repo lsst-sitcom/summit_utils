@@ -1,14 +1,19 @@
+from __future__ import annotations
+
 from collections.abc import Iterable
+from typing import TYPE_CHECKING
 
 import matplotlib
 import numpy as np
 import pandas
 from scipy.optimize import curve_fit  # type: ignore
 
-import lsst
 from lsst.afw.cameraGeom import FIELD_ANGLE
 from lsst.summit.utils.utils import getCameraFromInstrumentName
 from lsst.utils.plotting.figures import make_figure
+
+if TYPE_CHECKING:
+    from lsst.afw.image import Exposure
 
 
 def gaussian2dFitFunction(
@@ -512,7 +517,7 @@ def makePsfPanel(
 
 
 def generateCutout(
-    img: lsst.afw.image._exposure.ExposureF,
+    img: Exposure,
     center: np.ndarray | list[float] | tuple[float, float],
     pad: float = 10,
 ) -> np.ndarray:
@@ -520,7 +525,7 @@ def generateCutout(
 
     Parameters
     ----------
-    img: `lsst.afw.image._exposure.ExposureF`
+    img: `lsst.afw.image.Exposure`
         The image from extract the cutouts
     center: `np.ndarray` or `list` of `float` or `tuple` of `float`
         The coordinates of the cutout center
@@ -573,7 +578,7 @@ def findNearestStarToTarget(
 
 # change list in dictionary with det_num key
 def makePanel(
-    imgDict: dict[str, lsst.afw.image._exposure.ExposureF],
+    imgDict: dict[str, Exposure],
     sourceTableDict: dict[str, pandas.DataFrame],
     instrument: str,
     onlyS11: bool = False,
@@ -584,7 +589,7 @@ def makePanel(
 
     Parameters
     ----------
-    imageDict: `dict[str, lsst.afw.image._exposure.ExposureF]`
+    imageDict: `dict[str, lsst.afw.image.Exposure]`
         A detector's name key dictionary containing
         the images from whose extract the cutouts.
     sourceTableDict: `dict[str, pandas.DataFrame]`
