@@ -779,7 +779,7 @@ def makePanel(
         for dr in srcRefs
         if camera[dr.dataId["detector"]].getName() in commonDetName
     }
-    sourceTableDict = {detName: tab[tab[filterColumn] == True] for detName, tab in sourceTableDict.items()}
+    sourceTableDict = {detName: tab[tab[filterColumn]] for detName, tab in sourceTableDict.items()}
 
     # filter commoDetName to keep only srcTable with non zero rows
     filterDetName = []
