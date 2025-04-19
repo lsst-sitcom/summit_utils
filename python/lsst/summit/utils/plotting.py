@@ -165,7 +165,7 @@ def plot(
         Add compass to the plot? Defaults to True.
     stretch : `str', optional
         Changes mapping of colors for the image. Avaliable options:
-        ccs, log, power, asinh, linear, sqrt, pixInsight. Defaults to linear.
+        ccs, log, power, asinh, linear, sqrt, midtone. Defaults to linear.
     percentile : `float', optional
         Parameter for astropy.visualization.PercentileInterval.
         Sets lower and upper limits for a stretch. This parameter
@@ -220,8 +220,8 @@ def plot(
                 norm = vis.ImageNormalize(imageData, interval=interval, stretch=vis.LinearStretch())
             case "sqrt":
                 norm = vis.ImageNormalize(imageData, interval=interval, stretch=vis.SqrtStretch())
-            case "pixInsight":
-                imageData = stretchDataPixInsight(imageData)
+            case "midtone":
+                imageData = stretchDataMidTone(imageData)
                 # no interval in this norm as imageData is now [0, 1] aready
                 norm = vis.ImageNormalize(imageData, stretch=vis.LinearStretch())
             case _:
@@ -232,7 +232,7 @@ def plot(
 
         im = ax.imshow(imageData, cmap=cmap, origin="lower", norm=norm, aspect="equal", interpolation="auto")
 
-        if stretch != "pixInsight":
+        if stretch != "midtone":
             div = make_axes_locatable(ax)
             cax = div.append_axes("right", size="5%", pad=0.05)
             figure.colorbar(im, cax=cax)
@@ -468,12 +468,12 @@ def _computeDisplayParameters(data: np.ndarray) -> tuple[float, float, float, fl
     return midtonesBalance, clipLow, clipHigh, 0.0, 1.0
 
 
-def stretchDataPixInsight(
+def stretchDataMidTone(
     imageLike: np.ndarray | afwImage.Exposure | afwImage.Image | afwImage.MaskedImage,
 ) -> np.ndarray:
     """
-    Normalize and stretch image data from an Exposure object using PixInsight
-    display function.
+    Normalize and stretch image data from an Exposure object using the Midtone
+    Transfer Function (MTF).
 
     This is following:
         https://pixinsight.com/doc/docs/XISF-1.0-spec/XISF-1.0-spec.html
