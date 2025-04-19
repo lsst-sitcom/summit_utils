@@ -222,7 +222,8 @@ def plot(
                 norm = vis.ImageNormalize(imageData, interval=interval, stretch=vis.SqrtStretch())
             case "pixInsight":
                 imageData = stretchDataPixInsight(imageData)
-                norm = None
+                # no interval in this norm as imageData is now [0, 1] aready
+                norm = vis.ImageNormalize(imageData, stretch=vis.LinearStretch())
             case _:
                 raise ValueError(
                     f"Invalid value for stretch : {stretch}. "
@@ -338,7 +339,7 @@ def _computeMtf(image: np.ndarray, midtonesBalance: float) -> np.ndarray:
     maskOne = image == 1
     fallback = (maskHalf * 0.5) * (1 - maskZero) + maskOne
     result = (M - 1) * image / ((2 * M - 1) * image - M)
-    nanMask = np.isnan(result)
+    nanMask = ~np.isfinite(result)
     result[nanMask] = fallback[nanMask]
     return result
 
