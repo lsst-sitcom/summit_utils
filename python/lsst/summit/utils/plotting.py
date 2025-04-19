@@ -165,7 +165,7 @@ def plot(
         Add compass to the plot? Defaults to True.
     stretch : `str', optional
         Changes mapping of colors for the image. Avaliable options:
-        ccs, log, power, asinh, linear, sqrt. Defaults to linear.
+        ccs, log, power, asinh, linear, sqrt, pixInsight. Defaults to linear.
     percentile : `float', optional
         Parameter for astropy.visualization.PercentileInterval.
         Sets lower and upper limits for a stretch. This parameter
@@ -220,6 +220,9 @@ def plot(
                 norm = vis.ImageNormalize(imageData, interval=interval, stretch=vis.LinearStretch())
             case "sqrt":
                 norm = vis.ImageNormalize(imageData, interval=interval, stretch=vis.SqrtStretch())
+            case "pixInsight":
+                imageData = stretchDataPixInsight(imageData)
+                norm = None
             case _:
                 raise ValueError(
                     f"Invalid value for stretch : {stretch}. "
@@ -227,9 +230,11 @@ def plot(
                 )
 
         im = ax.imshow(imageData, cmap=cmap, origin="lower", norm=norm, aspect="equal")
-        div = make_axes_locatable(ax)
-        cax = div.append_axes("right", size="5%", pad=0.05)
-        figure.colorbar(im, cax=cax)
+
+        if stretch != "pixInsight":
+            div = make_axes_locatable(ax)
+            cax = div.append_axes("right", size="5%", pad=0.05)
+            figure.colorbar(im, cax=cax)
 
     if showCompass:
         try:
