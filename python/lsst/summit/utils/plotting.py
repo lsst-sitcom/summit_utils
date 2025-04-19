@@ -34,7 +34,7 @@ import lsst.afw.geom as afwGeom
 import lsst.afw.image as afwImage
 import lsst.afw.table as afwTable
 import lsst.geom as geom
-from lsst.summit.utils import getQuantiles
+from lsst.summit.utils.utils import getImageArray, getQuantiles
 
 
 def drawCompass(
@@ -165,7 +165,7 @@ def plot(
         Add compass to the plot? Defaults to True.
     stretch : `str', optional
         Changes mapping of colors for the image. Avaliable options:
-        ccs, log, power, asinh, linear, sqrt. Defaults to linear.
+        ccs, log, power, asinh, linear, sqrt, pixInsight. Defaults to linear.
     percentile : `float', optional
         Parameter for astropy.visualization.PercentileInterval.
         Sets lower and upper limits for a stretch. This parameter
@@ -199,20 +199,7 @@ def plot(
     if not logger:
         logger = logging.getLogger(__name__)
 
-    match inputData:
-        case np.ndarray():
-            imageData = inputData
-        case afwImage.MaskedImage():
-            imageData = inputData.image.array
-        case afwImage.Image():
-            imageData = inputData.array
-        case afwImage.Exposure():
-            imageData = inputData.image.array
-        case _:
-            raise TypeError(
-                "This function accepts numpy array, lsst.afw.image.Exposure components."
-                f" Got {type(inputData)}"
-            )
+    imageData = getImageArray(inputData)
 
     if np.isnan(imageData).all():
         im = ax.imshow(imageData, origin="lower", aspect="equal")
@@ -233,16 +220,22 @@ def plot(
                 norm = vis.ImageNormalize(imageData, interval=interval, stretch=vis.LinearStretch())
             case "sqrt":
                 norm = vis.ImageNormalize(imageData, interval=interval, stretch=vis.SqrtStretch())
+            case "pixInsight":
+                imageData = stretchDataPixInsight(imageData)
+                # no interval in this norm as imageData is now [0, 1] aready
+                norm = vis.ImageNormalize(imageData, stretch=vis.LinearStretch())
             case _:
                 raise ValueError(
                     f"Invalid value for stretch : {stretch}. "
                     "Accepted options are: ccs, asinh, power, log, linear, sqrt."
                 )
 
-        im = ax.imshow(imageData, cmap=cmap, origin="lower", norm=norm, aspect="equal")
-        div = make_axes_locatable(ax)
-        cax = div.append_axes("right", size="5%", pad=0.05)
-        figure.colorbar(im, cax=cax)
+        im = ax.imshow(imageData, cmap=cmap, origin="lower", norm=norm, aspect="equal", interpolation="auto")
+
+        if stretch != "pixInsight":
+            div = make_axes_locatable(ax)
+            cax = div.append_axes("right", size="5%", pad=0.05)
+            figure.colorbar(im, cax=cax)
 
     if showCompass:
         try:
@@ -322,3 +315,191 @@ def plot(
         plt.savefig(savePlotAs)
 
     return figure
+
+
+def _computeMtf(image: np.ndarray, midtonesBalance: float) -> np.ndarray:
+    """
+    Compute the midtones transfer function (MTF) for an image.
+
+    Parameters
+    ----------
+    image : `np.ndarray`
+        Input image normalized to [0, 1].
+    midtonesBalance : `float`
+        Balance parameter controlling midtones emphasis.
+
+    Returns
+    -------
+    image : `np.ndarray`
+        Image after applying the MTF, with NaNs replaced by fallback values.
+    """
+    M = np.full(image.shape, midtonesBalance)
+    maskHalf = image == 0.5
+    maskZero = image == 0
+    maskOne = image == 1
+    fallback = (maskHalf * 0.5) * (1 - maskZero) + maskOne
+    result = (M - 1) * image / ((2 * M - 1) * image - M)
+    nanMask = ~np.isfinite(result)
+    result[nanMask] = fallback[nanMask]
+    return result
+
+
+def _applyClip(image: np.ndarray, clipLow: float, clipHigh: float) -> np.ndarray:
+    """
+    Linearly clip and scale image values between clipLow and clipHigh.
+
+    Parameters
+    ----------
+    image : `np.ndarray`
+        Input image normalized to [0, 1].
+    clipLow : `float`
+        Lower clipping threshold.
+    clipHigh : `float`
+        Upper clipping threshold.
+
+    Returns
+    -------
+    clipped : `np.ndarray`
+        Clipped and scaled image, with values in [0, 1].
+    """
+    belowLow = image < clipLow
+    aboveHigh = image > clipHigh
+    scaled = (image - clipLow) / (clipHigh - clipLow)
+    return np.clip(scaled * (~belowLow) + aboveHigh, 0.0, 1.0)
+
+
+def _applyExpansion(image: np.ndarray, outMin: float, outMax: float) -> np.ndarray:
+    """
+    Expand image dynamic range from [outMin, outMax] to [0, 1].
+
+    Parameters
+    ----------
+    image : `np.ndarray`
+        Input image after MTF.
+    outMin : `float`
+        Minimum output value (usually 0.0).
+    outMax : `float`
+        Maximum output value (usually 1.0).
+
+    Returns
+    -------
+    expanded : `np.ndarray`
+        Expanded image in [0, 1].
+    """
+    return (image - outMin) / (outMax - outMin)
+
+
+def _applyDisplayFunction(
+    image: np.ndarray, midtonesBalance: float, clipLow: float, clipHigh: float, outMin: float, outMax: float
+) -> np.ndarray:
+    """
+    Apply the full display function: clip, MTF, then expansion.
+
+    Parameters
+    ----------
+    image : `np.ndarray`
+        Input image normalized to [0, 1].
+    midtonesBalance : `float`
+        Midtones balance parameter.
+    clipLow : `float`
+        Lower clipping threshold.
+    clipHigh : `float`
+        Upper clipping threshold.
+    outMin : `float`
+        Minimum output of expansion.
+    outMax : `float`
+        Maximum output of expansion.
+
+    Returns
+    -------
+    np.ndarray
+        Stretched image ready for display.
+    """
+    clipped = _applyClip(image, clipLow, clipHigh)
+    mtf = _computeMtf(clipped, midtonesBalance)
+    return _applyExpansion(mtf, outMin, outMax)
+
+
+def _computeDisplayParameters(data: np.ndarray) -> tuple[float, float, float, float, float]:
+    """
+    Compute parameters for display function based on data statistics.
+
+    Parameters
+    ----------
+    data : `np.ndarray`
+        Normalized image data array.
+
+    Returns
+    -------
+    tuple[float, float, float, float, float]
+        midtonesBalance, clipLow, clipHigh, outMin, outMax
+    """
+    median = np.median(data)
+    deviations = np.abs(data.ravel() - median)
+    madn = 1.4826 * np.median(np.sort(deviations))
+    targetBackground = 0.25
+    clippingFactor = -2.8
+
+    aboveHalf = median > 0.5
+
+    if not aboveHalf and madn != 0:
+        clipLow = min(1.0, max(0.0, median + clippingFactor * madn))
+    else:
+        clipLow = 0.0
+
+    if aboveHalf and madn != 0:
+        clipHigh = min(1.0, max(0.0, median - clippingFactor * madn))
+    else:
+        clipHigh = 1.0
+
+    if median <= 0.5:
+        midtonesBalance = (
+            (targetBackground - 1)
+            * (median - clipLow)
+            / ((2 * targetBackground - 1) * (median - clipLow) - targetBackground)
+        )
+    else:
+        midtonesBalance = (
+            (clipHigh - median - 1)
+            * targetBackground
+            / (2 * (clipHigh - median - 1) * targetBackground - (clipHigh - median))
+        )
+
+    return midtonesBalance, clipLow, clipHigh, 0.0, 1.0
+
+
+def stretchDataPixInsight(
+    imageLike: np.ndarray | afwImage.Exposure | afwImage.Image | afwImage.MaskedImage,
+) -> np.ndarray:
+    """
+    Normalize and stretch image data from an Exposure object using PixInsight
+    display function.
+
+    This is following:
+        https://pixinsight.com/doc/docs/XISF-1.0-spec/XISF-1.0-spec.html
+        #__XISF_Data_Objects_:_XISF_Image_:_Display_Function__
+
+    Parameters
+    ----------
+    imageLike : `numpy.ndarray`, `lsst.afw.image.Exposure`,
+        `lsst.afw.image.Image`, or `lsst.afw.image.MaskedImage`
+        The image-like object containg the data to be stretched.
+
+    Returns
+    -------
+    stretched : `np.ndarray`
+        The stretched image array.
+    """
+    data = getImageArray(imageLike)
+
+    pedestal = np.min(data)
+    if pedestal >= 0.0:
+        norm = np.max(data)
+        normalized = data / norm
+    else:
+        norm = np.max(data - pedestal)
+        normalized = (data - pedestal) / norm
+
+    midtonesBalance, clipLow, clipHigh, outMin, outMax = _computeDisplayParameters(normalized)
+    stretched = _applyDisplayFunction(normalized, midtonesBalance, clipLow, clipHigh, outMin, outMax)
+    return stretched
