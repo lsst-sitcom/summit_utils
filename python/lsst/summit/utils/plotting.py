@@ -230,7 +230,7 @@ def plot(
                     "Accepted options are: ccs, asinh, power, log, linear, sqrt."
                 )
 
-        im = ax.imshow(imageData, cmap=cmap, origin="lower", norm=norm, aspect="equal")
+        im = ax.imshow(imageData, cmap=cmap, origin="lower", norm=norm, aspect="equal", interpolation="auto")
 
         if stretch != "pixInsight":
             div = make_axes_locatable(ax)
