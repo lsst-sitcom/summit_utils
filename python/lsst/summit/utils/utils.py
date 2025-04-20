@@ -18,11 +18,13 @@
 #
 # You should have received a copy of the GNU General Public License
 # along with this program.  If not, see <https://www.gnu.org/licenses/>.
+from __future__ import annotations
 
 import datetime
 import logging
 import os
 from collections.abc import Iterable, Sequence
+from typing import TYPE_CHECKING
 
 import astropy.units as u
 import matplotlib
@@ -55,6 +57,9 @@ from lsst.obs.lsst.translators.latiss import AUXTEL_LOCATION
 from lsst.obs.lsst.translators.lsst import FILTER_DELIMITER
 
 from .astrometry.utils import genericCameraHeaderToWcs
+
+if TYPE_CHECKING:
+    from lsst.afw.cameraGeom import Camera
 
 __all__ = [
     "SIGMATOFWHM",
@@ -1275,7 +1280,7 @@ def getDetectorIds(instrumentName: str) -> list[int]:
     return [detector.getId() for detector in camera]
 
 
-def getCameraFromInstrumentName(instrumentName: str) -> lsst.afw.cameraGeom.Camera:
+def getCameraFromInstrumentName(instrumentName: str) -> Camera:
     """Get the camera object given the instrument name (case insenstive).
 
     Parameters
