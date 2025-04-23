@@ -1041,6 +1041,18 @@ def getBandpassSeeingCorrection(filterName: str) -> float:
             return (866.976 / 500.0) ** 0.2
         case "y_04":  # ComCam
             return (972.713 / 500.0) ** 0.2
+        case "u_24":  # LSSTCam
+            return (365.1397 / 500.0) ** 0.2
+        case "g_6":  # LSSTCam
+            return (475.6104 / 500.0) ** 0.2
+        case "r_57":  # LSSTCam
+            return (618.6055 / 500.0) ** 0.2
+        case "i_39":  # LSSTCam
+            return (753.5490 / 500.0) ** 0.2
+        case "z_20":  # LSSTCam
+            return (868.0935 / 500.0) ** 0.2
+        case "y_10":  # LSSTCam
+            return (972.5979 / 500.0) ** 0.2
         case _:
             raise ValueError(f"Unknown filter name: {filterName}")
 
