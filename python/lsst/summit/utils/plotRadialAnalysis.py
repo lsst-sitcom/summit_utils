@@ -204,6 +204,9 @@ def doRadialAnalysis(data: np.ndarray, fitModel: str):
 def makeLayerPlot(
     ax: matplotlib.axes.Axes,
     data: np.ndarray,
+    e1: float,
+    e2: float,
+    e: float,
     fitModel: str,
     layers: list[str] | str = "all",
     levels: np.ndarray | Iterable[float] | None = None,
@@ -226,7 +229,7 @@ def makeLayerPlot(
     fitModel: `str`
         Model used for the fit ('Moffat' or 'Gauss')
     layers: list[str] | str = "all",
-        List of layers to be displayed ('background', 'radial', 'contour').
+        List of layers to be displayed ('background', 'radial', 'contour', 'ellipticity').
     levels: `np.ndarray` or `Iterable` of `float` or `None`, optional
         The levels value for the contour layer.
         If None, is set to `np.linspace(1.5*np.std(data), data.max(), 5)`
@@ -236,7 +239,7 @@ def makeLayerPlot(
     Returns the Fwhm EE50 and EE80
     """
     if layers == "all":
-        layers = ["background", "radial", "contours"]
+        layers = ["background", "radial", "contours", "ellipticity"]
 
     (
         x,
@@ -292,6 +295,35 @@ def makeLayerPlot(
 
         axRad.set(zorder=3, facecolor=(1, 1, 1, 0), xticks=[], yticks=[])
 
+    if "ellipticity" in layers:
+        axEll = fig.add_axes(bboxArray, frameon=False)
+        axEll.set(zorder=4, facecolor=(1, 1, 1, 0), xticks=[], yticks=[])
+
+        quiverScale = 1
+        eU = e * np.cos(0.5 * np.arctan2(e2, e1))
+        eV = e * np.sin(0.5 * np.arctan2(e2, e1))
+        peak = np.argmax(data)
+        centerY, centerX = np.unravel_index(peak, data.shape)
+        
+        # better to use the background axes limits
+        if "background" in layers:
+            axEll.set(xlim=axBkg.get_xlim(), ylim=axBkg.get_ylim())
+        else: # otherwise use the cutout limits
+            axEll.set(xlim=(0, data.shape[1]), ylim=(0, data.shape[0]))
+        
+        axEll.quiver(
+        centerX,
+        centerY,
+        eU,
+        eV,
+        headlength=0,
+        headaxislength=0,
+        scale=quiverScale,
+        pivot="mid",
+        color="fuchsia",
+        width=0.015
+    )
+        
     return fwhmFit, eE50Diameter, eE80Diameter
 
 
@@ -478,19 +510,19 @@ def makePsfPanel(
     axsDict = createFigWithInstrumentLayout(fig, instrument, onlyS11=onlyS11)
 
     if layers == "all":
-        layers = ["background", "radial", "contours"]
+        layers = ["background", "radial", "contours", "ellipticity"]
 
     fwhmDict = {}
     ee50Dict = {}
     ee80Dict = {}
-    for detName, cutout in cutouts.items():
-        fwhm, ee50, ee80 = makeLayerPlot(axsDict[detName], cutout, fitModel, layers, levels)
+    for detName, (cutout, (e1, e2, e)) in cutouts.items():
+        fwhm, ee50, ee80 = makeLayerPlot(axsDict[detName], cutout, e1, e2, e, fitModel, layers, levels)
         fwhmDict[detName] = fwhm
         ee50Dict[detName] = ee50
         ee80Dict[detName] = ee80
 
     cmap = matplotlib.colormaps["RdYlGn_r"]
-    for detName in cutouts.keys():
+    for detName, (_, (e1, e2, _)) in cutouts.items():
         bbox = axsDict[detName].get_position()
         bboxArray = bbox.bounds
 
@@ -508,21 +540,35 @@ def makePsfPanel(
 
         # Text with FWHM and EE50|80
         text = (
-            f'{detName} FWHM: {fwhmDict[detName] * 0.2:.3f}"\n'
-            f'EE50|80: {ee50Dict[detName] * 0.2:.3f}"|'
-            f'{ee80Dict[detName] * 0.2:.3f}"',
+            f'FWHM: {fwhmDict[detName] * 0.2:.2f}" '
+            # f'EE50|80: {ee50Dict[detName] * 0.2:.2f}"|'
+            f'EE80: {ee80Dict[detName] * 0.2:.2f}"\n'
+            # f'{ee80Dict[detName] * 0.2:.2f}"\n'
+            f'E1|2: {e1:.2f}|{e2:.2f}'
         )
         axText.text(
+            0.97,
             0.95,
-            0.95,
-            *text,
+            text,
             color=color,
-            fontsize=15,
+            fontsize=12,
             fontweight="bold",
             transform=axText.transAxes,
             ha="right",
             va="top",
         )
+
+        axText.text(
+            0.3,
+            0.1,
+            detName,
+            color="silver",
+            fontsize=11,
+            fontweight="bold",
+            transform=axText.transAxes,
+            ha="right",
+            va="top",
+        )       
 
     # set colorbar
     cbar = fig.colorbar(
@@ -605,7 +651,17 @@ def findNearestStarToCenter(
     tab["center_sep"] = np.sqrt((tab[xCol] - target[0]) ** 2 + (tab[yCol] - target[1]) ** 2)
     most_close = tab.sort_values(by=["center_sep"]).iloc[0].name
     nearest = tab.loc[most_close, [xCol, yCol]].values
-    return nearest
+
+    # from makeTableFromSourceCatalogs on lsst.summit_extrax.plotting
+    iXX = tab.loc[most_close, "slot_Shape_xx"] * (0.2) ** 2
+    iYY = tab.loc[most_close, "slot_Shape_yy"] * (0.2) ** 2
+    iXY = tab.loc[most_close, "slot_Shape_xy"] * (0.2) ** 2
+    T = iXX + iYY
+    e1 = (iXX - iYY) / T
+    e2 = 2 * iXY / T
+    e = np.hypot(e1, e2)
+
+    return nearest, (e1, e2, e)
 
 
 def makePanel(
@@ -689,9 +745,9 @@ def makePanel(
 
     # generate the cutouts
     cutouts = {
-        detName: generateCutout(butler, filterImgRefDict[detName], detNameDict[detName], candidates[detName])
+        detName: [generateCutout(butler, filterImgRefDict[detName], detNameDict[detName], candidates[detName][0]), candidates[detName][1]]
         for detName in filterDetName
     }
-
+    
     fig = makePsfPanel(cutouts, instrumentName, onlyS11=onlyS11, **kwargs)
     return fig
