@@ -229,7 +229,8 @@ def makeLayerPlot(
     fitModel: `str`
         Model used for the fit ('Moffat' or 'Gauss')
     layers: list[str] | str = "all",
-        List of layers to be displayed ('background', 'radial', 'contour', 'ellipticity').
+        List of layers to be displayed
+        ('background', 'radial', 'contour', 'ellipticity').
     levels: `np.ndarray` or `Iterable` of `float` or `None`, optional
         The levels value for the contour layer.
         If None, is set to `np.linspace(1.5*np.std(data), data.max(), 5)`
@@ -304,26 +305,26 @@ def makeLayerPlot(
         eV = e * np.sin(0.5 * np.arctan2(e2, e1))
         peak = np.argmax(data)
         centerY, centerX = np.unravel_index(peak, data.shape)
-        
+
         # better to use the background axes limits
         if "background" in layers:
             axEll.set(xlim=axBkg.get_xlim(), ylim=axBkg.get_ylim())
-        else: # otherwise use the cutout limits
+        else:  # otherwise use the cutout limits
             axEll.set(xlim=(0, data.shape[1]), ylim=(0, data.shape[0]))
-        
+
         axEll.quiver(
-        centerX,
-        centerY,
-        eU,
-        eV,
-        headlength=0,
-        headaxislength=0,
-        scale=quiverScale,
-        pivot="mid",
-        color="fuchsia",
-        width=0.015
-    )
-        
+            centerX,
+            centerY,
+            eU,
+            eV,
+            headlength=0,
+            headaxislength=0,
+            scale=quiverScale,
+            pivot="mid",
+            color="fuchsia",
+            width=0.015,
+        )
+
     return fwhmFit, eE50Diameter, eE80Diameter
 
 
@@ -466,7 +467,9 @@ def createFigWithInstrumentLayout(
 
 
 def makePsfPanel(
-    cutouts: dict[str, np.ndarray],
+    # cutouts: dict[str, np.ndarray],
+    # cutouts: dict[str, list[np.ndarray, tuple[float, float, float]]],
+    cutouts: dict[str, tuple[np.ndarray, tuple[float, float, float]]],
     instrument: str = "LSSTComCam",
     onlyS11: bool = False,
     layers: list[str] | str = "all",
@@ -544,7 +547,7 @@ def makePsfPanel(
             # f'EE50|80: {ee50Dict[detName] * 0.2:.2f}"|'
             f'EE80: {ee80Dict[detName] * 0.2:.2f}"\n'
             # f'{ee80Dict[detName] * 0.2:.2f}"\n'
-            f'E1|2: {e1:.2f}|{e2:.2f}'
+            f"E1|2: {e1:.2f}|{e2:.2f}"
         )
         axText.text(
             0.97,
@@ -568,7 +571,7 @@ def makePsfPanel(
             transform=axText.transAxes,
             ha="right",
             va="top",
-        )       
+        )
 
     # set colorbar
     cbar = fig.colorbar(
@@ -625,7 +628,7 @@ def findNearestStarToCenter(
     tab: pandas.DataFrame,
     detector: Detector,
     instrument: str,
-) -> np.ndarray:
+) -> tuple[np.ndarray, tuple[float, float, float]]:
     """Find the nearest star w.r.t to the detector center
     N.B. The seacrh is done in PIXEL coordinates.
 
@@ -637,6 +640,13 @@ def findNearestStarToCenter(
         The detector realted to the sourceTable's positions.
     instrument: `str`
         Instrument name.
+
+    Returns
+    -------
+    `np.ndarray`
+        The x and y coordinates of the nearest star.
+    `tuple`
+        The ellipticity parameters (e1, e2, e).
     """
 
     if instrument == "LSSTComCam":
@@ -745,9 +755,12 @@ def makePanel(
 
     # generate the cutouts
     cutouts = {
-        detName: [generateCutout(butler, filterImgRefDict[detName], detNameDict[detName], candidates[detName][0]), candidates[detName][1]]
+        detName: (
+            generateCutout(butler, filterImgRefDict[detName], detNameDict[detName], candidates[detName][0]),
+            candidates[detName][1],
+        )
         for detName in filterDetName
     }
-    
+
     fig = makePsfPanel(cutouts, instrumentName, onlyS11=onlyS11, **kwargs)
     return fig
