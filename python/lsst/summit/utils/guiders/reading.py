@@ -19,6 +19,38 @@
 # You should have received a copy of the GNU General Public License
 # along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
+__all__ = [
+    "read_guider_data"
+]
 
-def test():
-    print("Hey Aaron 🙂")
+
+import numpy as np
+from astropy.io import fits
+from lsst.resources import ResourcePath
+
+def read_guider_data(filename):
+    rp = ResourcePath(filename)
+    
+    with rp.open(mode="rb") as f:
+        
+        hdu_list = fits.open(f)
+        
+        N_frames = hdu_list[0].header['N_STAMPS']
+        x, y = hdu_list[0].header['ROIROWS'], hdu_list[0].header['ROICOLS']
+
+        imgs = np.zeros((N_frames, x, y))
+        timestamps = np.zeros(N_frames)
+
+        if (len(hdu_list) - 1)/2 == N_frames:  ## if has rawstamps
+            for i, j in zip(range(N_frames), range(2, len(hdu_list), 2)):
+                imgs[i, :, :] = hdu_list[j].data
+                timestamps[i] = hdu_list[j].header['STMPTMJD']
+
+        elif len(hdu_list)-1 == N_frames:     ## if no rawstamps
+            for i, j in zip(range(N_frames), range(1, len(hdu_list))):
+                imgs[i, :, :] = hdu_list[j].data
+                timestamps[i] = hdu_list[j].header['STMPTMJD']
+    
+    grand_hdr = hdu_list[0].header
+
+    return imgs, timestamps, grand_hdr
