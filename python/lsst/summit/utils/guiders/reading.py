@@ -21,161 +21,157 @@
 
 __all__ = [
     "read_guider_data",
-    "readGuiderData"
+    "readGuiderData",
+    "get_guider_stamps",
 ]
 
 import numpy as np
-from astropy.io import fits
-from lsst.resources import ResourcePath
-
 import matplotlib.pyplot as plt
 from astropy.time import Time
 import astropy.units as u
 
+from astropy.io import fits
+from lsst.resources import ResourcePath
+
 from lsst.obs.lsst import LsstCam
 from lsst.daf.butler import Butler
-from lsst.summit.utils.guiders.transformation import amp_to_ccdview
+from lsst.afw import cameraGeom
+from lsst.summit.utils.utils import getSite
+# Get the site and the camera object
+site = getSite()
+camera = LsstCam.getCamera()
 
-# TODO: Grab this information from a yaml file
-guiderDetMap = {
-    "R00_SG0": (189, 3),
-    "R00_SG1": (190, 2),
-    "R04_SG0": (193, 0),
-    "R04_SG1": (194, 3),
-    "R40_SG0": (197, 2),
-    "R40_SG1": (198, 1),
-    "R44_SG0": (201, 1),
-    "R44_SG1": (202, 0),
-}
+from lsst.meas.algorithms.stamps import Stamp,Stamps
+from lsst.afw.image import MaskedImageF
 
-guiderDetMap = {
-    "R00_SG0": (189, 3),
-    "R00_SG1": (190, 2),
-    "R04_SG0": (193, 0),
-    "R04_SG1": (194, 3),
-    "R40_SG0": (197, 2),
-    "R40_SG1": (198, 1),
-    "R44_SG0": (201, 1),
-    "R44_SG1": (202, 0),
-}
+from lsst.summit.utils.guiders.transformation import mk_roi_bboxes, convert_roi
+
+# Todo: put in summit utils guiders
+#from utils import get_guider_stamps
 
 class readGuiderData:
-    """
-    Butler class to read the guide data.
-
-    The data is read from the LSSTCam butler, and the header information
-    is extracted from the raw metadata. The data is in raw format and amplifier
-    orientation. The data is then converted to the CCD coordinate system
-    (DM view) using the amp_to_ccdview function.
+    """Class to read and unpack the Guider data from Butler.
+       Plot an animated gif of the CCD guider stamp.
     
-    Parameters
-    ----------
-    seqNum : int
-        The sequence number of the observation.
-    dayObs : int
-        The day of the observation in YYYYMMDD format.
-    raft : str
-        The raft name (e.g. "R00").
-    ccd : str
-        The CCD name (e.g. "SG0").
-    butler : Butler, optional
-        The butler object to use for reading the data. If None, a new
-        butler object is created.
-
-    Example
-    -------
-    seqNum, dayObs, raft, ccd = 591, 20250425, "R40", "SG1"
-
-    # Instantiate the readGuiderData class
-    reader = readGuiderData(seqNum, dayObs, raft, ccd)
-
-    print("Header information used here")
-    reader.print_header_info()
-
-    print("Timestamp is based on the GDR Start Time and offset by the stamp index")
-    reader.timestamp
-
-    print("Read data for a given stamp. Array in CCD coordinates orientation.")
-    reader.read(0)
+    Works in the summit and usdf environments.
     
-    print("Plot Example")
-    reader.plot_stamp_ccd(stampNum=20)        
+    Key Attributes:
+        dataset (dict): Dictionary of guider data
+        guiders (dict): Dictionary of guider detector information
+    
+    Example:
+        # Example usage
+        seqNum, dayObs = 591, 20250425
+    
+        # Load the data from the butler
+        reader = readGuiderData(seqNum, dayObs, view='dvcs', verbose=True)
+        reader.load()
+    
+        # reader makes a dictionary of the guider data
+        # with the keys being the guider names 
+        # and the values being the stamps object
+        # the stamps orientation are defined by view, default 'dvcs'
+        print(10*'-----')
+        print("Guider names: ", reader.getGuiderNames())
+        print("Guider ids: ", reader.getGuiderIds())
+        print("Data orientation: ", reader.view)
+        print(10*'-----')
+        print("Guider data: ", reader.dataset)
+        print(10*'-----')
     """
-    def __init__(self, seqNum, dayObs, raft='R00', ccd='SG1', butler=None):
+    def __init__(self, seqNum, dayObs, verbose=False,
+                 butler=None, view='dvcs', collections=['LSSTCam/raw/guider']):
+        
+        # data id
         self.butler = butler
-
-        # Data Id information
         self.dayObs = dayObs
         self.seqNum = seqNum
-        self.ccd = ccd
+        self.dataId = {'instrument': 'LSSTCam', 'day_obs': self.dayObs, 'seq_num': self.seqNum}
 
         # exposure
         self.expId = dayObs * 100000 + seqNum        
 
-        # Query the detector number and segment number
-        self.key = f"{raft}_{ccd}"
-        self.det = guiderDetMap[self.key][0]
-        self.seg = guiderDetMap[self.key][1]
-        self.ampName = f"C{self.seg:02d}"
-
         # Define camera objects
         self.camera = LsstCam.getCamera()
-        self.detector = self.camera[self.det]
 
         self.FREQ = 5 # Hz
         self.DELAY = 20/1000 # seconds
 
-        # Initialize the attributes
-        # Butler, header information, timestamp
-        self.initialize()
+        self.view = view
+        self.dataset = None
+        self.verbose = verbose
+        self.guiders = {}
 
-    def initialize(self):
+        # Butler
+        self.initialize_butler(collections)
+
+    def load(self):
+        # Initialize the attributes
+        self.init_guiders()
+        
+        # Load the data
+        self.load_data()
+        self.get_header_info(self.dataset[self.detnames[0]])
+
+        # verbose
+        if self.verbose:
+            self.print_header_info()
+
+    def initialize_butler(self, collections=None):
+        if site=="summit":  
+            repo = "LSSTCam"
+        elif site=="usdf":
+            repo = "/repo/embargo"
+        else:
+            raise ValueError(f"Unknown butler repo for {site}")
+        
         if self.butler is None:
             # Initialize butler
-            self.butler = Butler("LSSTCam", collections=["LSSTCam/raw/guider"], instrument="LSSTCam")
+            self.butler = Butler(repo, collections=["LSSTCam/raw/guider"]+collections, instrument="LSSTCam")
+        pass
+    
+    def init_guiders(self):
+        """Load the guider detector information.
+        """
+        self.guiders = {}
+        for detector in self.camera:
+            if detector.getType()== cameraGeom.DetectorType.GUIDER :
+                detName = detector.getName()
+                self.guiders[detName] = detector.getId()
+                        
+        self.detnames = list(self.guiders.keys())
+        self.nGuiders = len(self.guiders)
+        pass
+
+    
+    def load_data(self):
+        """Load the data from the butler for all guider detectors.
+
+        Args:
+            butler (Butler): butler object
+            dayObs (int): day of observation
+            seqNum (int): sequence number
+            view (str): view type ('roi', 'dvcs', 'ccd')
+        """
+        datas = {}
+        dataId = self.dataId.copy()
+        for detName, idet in self.guiders.items():
+            det = self.camera[idet]
+            if self.view == 'roi':
+                dataId['detector'] = idet
+                datas[detName] = self.butler.get('guider_raw', dataId)
             
-        # Initialize the attributes
-        self.load_raw_exposure()
-        # returns the raw (butler image object)
+            elif self.view == 'dvcs':
+                datas[detName] = get_guider_stamps(idet,self.seqNum,self.dayObs,butler=self.butler,view='dvcs')
+            
+            elif self.view == 'ccd':
+                datas[detName] = get_guider_stamps(idet,self.seqNum,self.dayObs,butler=self.butler,view='ccd')
 
-        self.get_header_info(self.raw)
-        # returns the header information
-
-        self.get_timestamp()
-        # returns the timestamp
+        self.dataset = datas
+        #self.nStamps = max([len(data) for data in datas.values()])
         pass
 
-    def load_raw_exposure(self):
-        """
-        Load the raw exposure from the butler.
-        This is a list of image exposure objects.        
-        """
-        self.raw = self.butler.get("guider_raw", exposure=self.expId, detector=self.det)
-        pass
-    
-    def get_header_info(self, raw):
-        """
-        Get the header information from the raw exposure.        
-        """
-        m = raw.metadata.toDict()
-        self.roiCol    = m['ROICOL']
-        self.roiRow    = m['ROIROW']
-        self.roiCols   = m['ROICOLS']
-        self.roiRows   = m['ROIROWS']
-        self.roiUnder  = m.get('ROIUNDER', m.get('ROIUNDRC', 6))
-        self.nStamps   = m['N_STAMPS']
-        self.start_time= m['GDSSTART']   # ISO‐formatted string
-        self.FREQ      = 5  # 5 Hz
-        pass
-    
-    # TODO: add a function to get the timestamp from the header
     def get_timestamp(self):
-        """
-        Get the timestamp from the header information.
-        The timestamp is based on the GDS start time and the stamp index.
-
-        TODO: add a function to get the timestamp from the header
-        """
         # 1) stamp indices
         self.stamp = np.arange(self.nStamps, dtype=float)
 
@@ -188,134 +184,69 @@ class readGuiderData:
         self.timestamp = t0 + self.stamp * dt
         return self.timestamp
     
-    def read_stamp(self, stamp):
-        """
-        Read the Guider data from Butler and return on Amplifier orientation.
-
-        Returns:
-            array: roi coordinates image array
-        """
-        # Unpack the data
-        roiarr = self.raw[stamp].stamp_im.image.array
-        return roiarr
-
-    def read(self, stamp):
-        """
-        Read the Guider data from Butler and return ROI image flipped to be in CCD coordinate orientation
-
-        Returns:
-            array: ccd pixel coordinates image array
-        """
-        # Unpack the data
-        roiarr = self.read_stamp(stamp)
-        ccdarr = amp_to_ccdview(roiarr,self.detector,self.ampName)
-        return ccdarr
+    def get_header_info(self, raw):
+        m = raw.metadata.toDict()
+        self.roiCol    = m['ROICOL']
+        self.roiRow    = m['ROIROW']
+        self.roiCols   = m['ROICOLS']
+        self.roiRows   = m['ROIROWS']
+        self.roiUnder  = m.get('ROIUNDER', m.get('ROIUNDRC', 6))
+        self.nStamps   = m['N_STAMPS']
+        self.start_time= m['GDSSTART']
+        self.FREQ      = 5  # 5 Hz
+        pass
 
     def print_header_info(self):
-        print(f"Guider Data: {self.key}, expId: {self.expId}")
+        print(f"Data Id: {self.dataId}")
         print(f"ROI Row: {self.roiRow}, ROI Col: {self.roiCol}, ROI Rows: {self.roiRows}, ROI Cols: {self.roiCols}")
         print(f"Number of Stamps: {self.nStamps}")
-        print(f"Start Time: {self.start_time}")
+        print(f"Acq. Start Time: {self.start_time}")
         pass
+
+    def read(self, stamp, detname):
+        """
+        Read the Guider data from Butler and return image array.
+        Orientation is defined by the view setting.
+        Args:
+            stamp (int): stamp number
+            detname (str): detector name
+        Returns:
+            array: image array
+        """
+        # Unpack the data
+        stamps = self.dataset[detname]
+
+        if stamp >= len(stamps):
+            return np.zeros((self.roiRows, self.roiCols), dtype=np.float32)
+
+        roiarr = stamps[stamp].stamp_im.image.array
+        return roiarr
     
-    def plot_stamp_ccd(self, stampNum=0, axs=None, plo = 10.0, phi = 99.0):
+    def read_stacked(self, detname):
         """
-        Plot the stamp in CCD coordinates.
-        Parameters
-        ----------
-        stampNum : int
-            Index of the stamp to plot.
-        axs : matplotlib.axes.Axes
-            The axes in which to draw.
-        plo, phi : float
-            Percentiles for display stretch.
+        Read the Guider data from Butler and return image array.
+        Orientation is defined by the view setting.
+        Args:
+            detname (str): detector name
+        Returns:
+            array: image array
         """
-        if axs is None:
-            axs = plt.gca()
-            plt.title(f"{self.expId}")
-        key = self.key
-        key+= f": # {stampNum}"
-
-        img = self.read(stampNum)
-        bias = np.median(img)
-        img_isr = img - bias
-        lo,hi = np.nanpercentile(img_isr,[plo,phi])
+        # Unpack the data
+        stamps = self.dataset[detname]
+        roiarr = []
+        for stamp in stamps:
+            roiarr.append(stamp.stamp_im.image.array)
+        return np.median(roiarr, axis=0)
     
-        im = axs.imshow(img_isr,origin='lower',cmap='Greys',vmin=lo,vmax=hi,animated=True)
-        axs.text(0.05, 0.9, key, fontsize=6, color="w")
-        axs.set_yticklabels([])
-        axs.set_xticklabels([])
-        axs.set_xticks([])
-        axs.set_xticks([], minor=True)
-        axs.set_yticks([])
-        axs.set_yticks([], minor=True)
-        return im
+    def getGuiderNames(self):
+        """Get the names of the guider detectors.
+        """
+        return list(self.guiders.keys())
     
-    def plot_stamp(self,
-                   img = None,
-                   stampNum = 0,
-                   ax = None,
-                   im  = None,
-                   txt = None,
-                   plo = 10.0,
-                   phi = 99.0):
+    def getGuiderIds(self):
+        """Get the ids of the guider detectors.
         """
-        Either create or update the image & text artists for a given stamp.
-        
-        Parameters
-        ----------
-        stampNum : int
-            Index of the stamp to plot.
-        ax : matplotlib.axes.Axes
-            The axes in which to draw.
-        im : AxesImage or None
-            If None, a new imshow() is created; otherwise it's updated.
-        txt : Text or None
-            If None, a new Text is created; otherwise it's updated.
-        plo, phi : float
-            Percentiles for display stretch.
-        
-        Returns
-        -------
-        (im, txt) : tuple
-            The image and text artists (new or updated).
-        """
-        # Read & normalise
-        if img is None:
-            img = self.read(stampNum)
-        bias = np.median(img)
-        img_isr = img - bias
-        lo, hi = np.nanpercentile(img_isr, [plo, phi])
-
-        # Image artist
-        if im is None:
-            im = ax.imshow(img_isr,
-                           origin='lower',
-                           cmap='Greys',
-                           vmin=lo, vmax=hi,
-                           animated=True)
-        else:
-            im.set_data(img_isr)
-            im.set_clim(lo, hi)
-
-        # Text artist
-        key = f"{self.key}: #{stampNum}"
-        if txt is None:
-            txt = ax.text(0.15, 0.9,
-                          key,
-                          transform=ax.transAxes,
-                          fontsize=14, color="w",
-                          animated=True)
-        else:
-            ax.text(0.15, 0.9 , txt)
-            # txt.set_position((0.15, 0.9))
-            # ax.set_text(key)
-
-        # Hide ticks once (if first call)
-        if stampNum == 0 and txt is None:
-            ax.set_xticks([]); ax.set_yticks([])
-
-        return im, txt
+        return list(self.guiders.values())
                        
 def read_guider_data(filename):
     rp = ResourcePath(filename)
@@ -343,3 +274,93 @@ def read_guider_data(filename):
     grand_hdr = hdu_list[0].header
 
     return imgs, timestamps, grand_hdr
+
+
+def get_guider_stamps(idet,seqNum,dayObs,repo='/repo/embargo',collections=['LSSTCam/raw/guider'],butler=None,view='dvcs'):
+    """
+    This class reads the stamp object from the Butler for one Guiders and 
+    converts them to DVCS view, making a new Stamps object
+    
+    Parameters
+    ----------
+    idet : int
+        Detector Id
+        
+    seqNum : int 
+        Sequence Number
+
+    dayObs : int
+        Day Observation
+
+    repo : str
+        Butler repo
+
+    collections : list of str
+        Butler collections
+
+    Returns
+    -------
+    stamps : lsst.meas.algorithms.stamps.Stamps
+        Stamp images oriented in DVCS
+    
+    """
+    # get Camera object
+    camera = LsstCam.getCamera()
+    detector = camera[idet]
+    
+    # Get a Butler if none is provided
+    if butler==None:
+        butler = Butler(repo, collections=collections)
+
+
+    # for dayObs of 20250509 or before, the ROIs are swapped between SG0 and SG1.  Fix here
+    if dayObs < 20250509:
+        detName = camera[idet].getName()
+        raft = detName[0:3]
+        ccd = detName[4:7]
+        if ccd=='SG0':
+            ccd_swapped = 'SG1'
+        elif ccd=='SG1':
+            ccd_swapped = 'SG0'
+
+        detName_swapped = raft + '_' + ccd_swapped
+        detector_swapped = camera[detName_swapped]
+        idet_swapped = detector_swapped.getId()
+
+        dataId = {'instrument': 'LSSTCam', 'detector': idet_swapped, 'day_obs': dayObs,'seq_num':seqNum}
+
+    else:
+        dataId = {'instrument': 'LSSTCam', 'detector': idet, 'day_obs': dayObs,'seq_num':seqNum}
+
+
+    # finally read from the Butler
+    raw_stamps = butler.get('guider_raw', dataId)
+    md = raw_stamps.metadata
+
+    # fix CCD in the metadata
+    if dayObs < 20250509:
+        md['CCDSLOT'] = ccd_swapped        
+
+    # also get the ampName
+    segment = md['ROISEG']
+    ampName = 'C'+ segment[7:]
+
+    # build the CCD view and DVCS view Bounding Boxes
+    ccd_view_bbox,dvcs_view_bbox = mk_roi_bboxes(md,camera)
+    
+    # now loop over the individual ROIs 
+    stamp_list= []
+    for i,masked_ims in enumerate(raw_stamps.getMaskedImages()):        
+
+        # convert to DVCS view
+        raw_roi = masked_ims.getImage().getArray()
+        roi_dvcs = convert_roi(raw_roi,detector,ampName,camera,view=view)
+        
+        # build a Stamp Object
+        output_masked_im = MaskedImageF(roi_dvcs)
+        archive_element = [ccd_view_bbox,dvcs_view_bbox]
+        stamp_list.append(Stamp(output_masked_im,archive_element))
+    
+    output_stamps = Stamps(stamp_list,md,use_archive=True)
+
+    return output_stamps
