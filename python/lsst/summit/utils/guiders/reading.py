@@ -120,7 +120,7 @@ class readGuiderData:
     def initialize_butler(self, collections=None):
         if site=="summit":  
             repo = "LSSTCam"
-        elif site=="usdf":
+        elif (site=="usdf")or(site=='staff-rsp'):
             repo = "/repo/embargo"
         else:
             raise ValueError(f"Unknown butler repo for {site}")
