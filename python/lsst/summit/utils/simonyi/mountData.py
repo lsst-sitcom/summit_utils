@@ -36,6 +36,7 @@ if TYPE_CHECKING:
 
     from lsst.daf.butler import DimensionRecord
 
+
 @dataclass
 class MountData:
     begin: Time
@@ -48,9 +49,15 @@ class MountData:
     includedPostPadding: float
     expRecord: DimensionRecord | None
 
+
 def getAzElRotDataForPeriod(
-        client: EfdClient, begin: Time, end: Time, prePadding: float = 0, postPadding: float = 0, 
-        maxDeltaT: float = 1.0e-3) -> MountData:
+    client: EfdClient,
+    begin: Time,
+    end: Time,
+    prePadding: float = 0,
+    postPadding: float = 0,
+    maxDeltaT: float = 1.0e-3,
+) -> MountData:
     azimuthData = getEfdData(
         client,
         "lsst.sal.MTMount.azimuth",
@@ -132,6 +139,7 @@ def getAzElRotDataForPeriod(
         begin, end, azimuthData, elevationData, rotationData, rotationTorques, prePadding, postPadding, None
     )
     return mountData
+
 
 def getAzElRotDataForExposure(
     client: EfdClient, expRecord: DimensionRecord, prePadding: float = 0, postPadding: float = 0
