@@ -49,6 +49,36 @@ from lsst.summit.utils.guiders.transformation import mk_roi_bboxes, convert_roi
 # Todo: put in summit utils guiders
 #from utils import get_guider_stamps
 
+from astropy.io import fits
+from lsst.resources import ResourcePath
+
+def read_guider_data(filename):
+    rp = ResourcePath(filename)
+    
+    with rp.open(mode="rb") as f:
+        
+        hdu_list = fits.open(f)
+        
+        N_frames = hdu_list[0].header['N_STAMPS']
+        x, y = hdu_list[0].header['ROIROWS'], hdu_list[0].header['ROICOLS']
+
+        imgs = np.zeros((N_frames, x, y))
+        timestamps = np.zeros(N_frames)
+
+        if (len(hdu_list) - 1)/2 == N_frames:  ## if has rawstamps
+            for i, j in zip(range(N_frames), range(2, len(hdu_list), 2)):
+                imgs[i, :, :] = hdu_list[j].data
+                timestamps[i] = hdu_list[j].header['STMPTMJD']
+
+        elif len(hdu_list)-1 == N_frames:     ## if no rawstamps
+            for i, j in zip(range(N_frames), range(1, len(hdu_list))):
+                imgs[i, :, :] = hdu_list[j].data
+                timestamps[i] = hdu_list[j].header['STMPTMJD']
+    
+    grand_hdr = hdu_list[0].header
+
+    return imgs, timestamps, grand_hdr
+    
 class readGuiderData:
     """Class to read and unpack the Guider data from Butler.
        Plot an animated gif of the CCD guider stamp.
