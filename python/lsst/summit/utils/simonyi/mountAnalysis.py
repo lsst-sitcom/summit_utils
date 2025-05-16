@@ -86,7 +86,7 @@ def calculateMountErrors(
     expRecord: DimensionRecord,
     client: EfdClient,
     maxDelta=0.1,
-    doFilterResiduals=True,
+    doFilterResiduals=False,
 ) -> tuple[MountErrors, MountData] | tuple[None, None]:
     """Queries EFD for a given exposure and calculates the RMS errors in the
     axes during the exposure, optionally plotting and saving the data.
