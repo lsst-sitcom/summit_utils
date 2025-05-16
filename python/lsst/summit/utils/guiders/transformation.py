@@ -20,6 +20,12 @@
 # along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
 __all__ = [
+    "mk_rot",
+    "mk_ccd_to_dvcs",
+    "mk_roi_bboxes",
+    "stamp_to_ccd",
+    "get_detector_amp",
+    "convert_roi",
     "focal_to_pixel",
     "pixel_to_focal",
     "stamp_to_ccd",
@@ -36,9 +42,23 @@ from lsst.afw.image import ImageF
 
 # Aaron's code to make transformations from ROI coordinates to Focal Plane and sky coordinates.
 
-def mk_rot(det_nquarter):
+def mk_rot(det_nquarter,direction=1):
     """ 
     Make rotation Transform
+
+    Parameters
+    ----------
+    det_nquarter: int
+        Number of 90 degree CCW rotations
+
+    direction: int
+        =1 for forward, =-1 for reverse
+
+    Returns
+    -------
+    rotation: AffineTransformation
+        rotation transformation
+
     """
     rot = {}
     rot[0] = np.array([[1.,0.],[0.,1.]])
@@ -46,14 +66,23 @@ def mk_rot(det_nquarter):
     rot[2] = np.array([[-1.,0.],[0.,-1.]])
     rot[3] = np.array([[0.,1.],[-1.,0.]])
 
+    irot = {}
+    irot[0] = rot[0].transpose()
+    irot[1] = rot[1].transpose()
+    irot[2] = rot[2].transpose()
+    irot[3] = rot[3].transpose()
+
     nq = np.mod(det_nquarter,4)
-    frotation = AffineTransform(rot[nq])
-    return frotation
+    if direction==1:
+        rotation = AffineTransform(rot[nq])
+    elif direction==-1:
+        rotation = AffineTransform(irot[nq])
+    return rotation
 
 def mk_ccd_to_dvcs(llpt_ccd,det_nquarter):
     """
     Make transformations suitable for Guider stamps, to go from
-    a view of the stamp in CCD pixel coordinates (ie. with 0,0 in the Lower Left) 
+    a view of the stamp in CCD pixel coordinates (ie. with 0,0 in the Lower Left of C00) 
     to DVCS view (ie. orientated in the Focal Plane correctly in the DVCS) 
 
     Parameters
@@ -87,27 +116,32 @@ def mk_ccd_to_dvcs(llpt_ccd,det_nquarter):
     sky_coord = wcs.pixelToSky(pt_ccd)
     
     """
-    rot = {}
-    rot[0] = np.array([[1.,0.],[0.,1.]])
-    rot[1] = np.array([[0.,-1],[1.,0.]])
-    rot[2] = np.array([[-1.,0.],[0.,-1.]])
-    rot[3] = np.array([[0.,1.],[-1.,0.]])
-
-    irot = {}
-    irot[0] = rot[0].transpose()
-    irot[1] = rot[1].transpose()
-    irot[2] = rot[2].transpose()
-    irot[3] = rot[3].transpose()
-
+    # number of 90deg CCW rotations
     nq = np.mod(det_nquarter,4)
-    
-    ftranslation = AffineTransform(-llpt_ccd)
-    frotation = AffineTransform(rot[nq])
-    forwards = frotation*ftranslation # ordering is second*first
 
+    # get LL,Size of the CCD view BBox
+    bboxd_ccd = Box2D(bbox_ccd)
+    llpt_ccd = Extent2D(bboxd_ccd.getCorners()[0])
+    nx,ny = bbox_ccd.getDimensions()
+
+    # get translations to use for each NQ value
+    boxtranslation = {}
+    boxtranslation[0] = Extent2D(0,0)
+    boxtranslation[1] = Extent2D(ny,0)
+    boxtranslation[2] = Extent2D(nx,ny)
+    boxtranslation[3] = Extent2D(0,nx)
+
+    # build the forward Transform
+    ftranslation = AffineTransform(-llpt_ccd)
+    frotation = AffineTransform(mk_rot(nq,1)) 
+    fboxtranslation = AffineTransform(boxtranslation[nq])
+    forwards = fboxtranslation*frotation*ftranslation # ordering is third*second*first
+
+    # and the backward Transform
     btranslation = AffineTransform(llpt_ccd)
-    brotation = AffineTransform(irot[nq])
-    backwards = btranslation*brotation
+    brotation = AffineTransform(mk_rot(nq,-1))
+    bboxtranslation = AffineTransform(-boxtranslation[nq])
+    backwards = btranslation*brotation*bboxtranslation
 
     return forwards,backwards
 
@@ -118,11 +152,11 @@ def mk_roi_bboxes(md,camera):
 
     Parameters
     ----------
-    md : 
+    md : lsst.daf.base.PropertyList
         Metadata from one Guider CCD
 
-    camera:
-        LsstCam 
+    camera: lsst.obs.lsst.LsstCam
+        LsstCam object
 
     Returns
     -------
@@ -189,6 +223,21 @@ def get_detector_amp(md,camera):
     """
     Unpack Detector and Amplifier info. 
     
+    Parameters
+    ----------
+    md : lsst.daf.base.PropertyList
+        Metadata from one Guider CCD
+
+    camera: lsst.obs.lsst.LsstCam
+        LsstCam object
+
+    Returns
+    -------
+    detector : lsst.afw.cameraGeom.Detector
+        CCD Detector 
+
+    ampName : String
+        Amplifier name, eg. C00
     """
     raftBay = md['RAFTBAY']
     ccdSlot = md['CCDSLOT']
@@ -205,14 +254,31 @@ def get_detector_amp(md,camera):
 
 def convert_roi(roi,detector,ampName,camera,view='dvcs'):
     """
-    convert roi to CCD or DVCS views
+    convert ROI image from raw to CCD or DVCS views
+
+    Parameters
+    ----------
+    roi : numpy.ndarray
+        ROI array
+
+    detector : lsst.afw.cameraGeom.Detector
+        CCD detector object
+
+    ampName : str
+        Amplifier Name, eg. C00
+
+    camera : lsst.obs.lsst.LsstCam
+        LsstCam object
+
+    view : string
+        Desired view for ROI. Default is 'dvcs', other option is 'ccd'  
 
     """
 
     # convert image to ccd view
     roi_ccdview = amp_to_ccdview(roi,detector,ampName)
 
-    # convert image to dvcs view
+    # convert image to dvcs view (nb. np.rot90 works opposite to afwMath.rotateImageBy90)
     roi_dvcsview = np.rot90(roi_ccdview,-detector.getOrientation().getNQuarter())
 
     # output ImageF
@@ -266,6 +332,9 @@ def pixel_to_focal(x, y, det):
 
 def stamp_to_ccd(stamp,ccdimg,detector,camera,ampName,ampCol,ampRow):
     """ 
+    Place ROI (stamp) into existing full CCD array, all in CCD view
+    (Should rewrite to use mk_roi_bboxes(md,camera))
+
     Parameters
     ----------
     stamp : array
@@ -323,6 +392,8 @@ def stamp_to_ccd(stamp,ccdimg,detector,camera,ampName,ampCol,ampRow):
 
 def amp_to_ccdview(stamp,detector,ampName):
     """ 
+    Comvert a Guider ROI stamp image from Amp view to CCD view
+
     Parameters
     ----------
     stamp : array
@@ -336,9 +407,6 @@ def amp_to_ccdview(stamp,detector,ampName):
     -------
     img : array
         ROI image flipped to be in CCD coordinate orientation
-    """
-
-    """ Converts an image array from Amp view to CCD (DMCV) view
     """
     amp = detector[ampName]
     img = stamp.copy()
