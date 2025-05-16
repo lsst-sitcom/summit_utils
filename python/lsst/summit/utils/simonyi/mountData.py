@@ -95,7 +95,6 @@ def getAzElRotDataForPeriod(
         value = abs(np.median(error))
         return value
 
-
     azValues = np.asarray(azimuthData["actualPosition"])
     azValTimes = np.asarray(azimuthData["actualPositionTimestamp"])
     azDemand = np.asarray(azimuthData["demandPosition"])
