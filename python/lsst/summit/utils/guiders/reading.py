@@ -60,27 +60,36 @@ class readGuiderData:
         guiders (dict): Dictionary of guider detector information
     
     Example:
-        # Example usage
+        from lsst.summit.utils.guiders.reading import readGuiderData
+
         seqNum, dayObs = 591, 20250425
-    
+
         # Load the data from the butler
         reader = readGuiderData(seqNum, dayObs, view='dvcs', verbose=True)
-        reader.load()
-    
+        reader.init_guiders()
+        reader.load_data()
+
         # reader makes a dictionary of the guider data
         # with the keys being the guider names 
         # and the values being the stamps object
         # the stamps orientation are defined by view, default 'dvcs'
-        print(10*'-----')
         print("Guider names: ", reader.getGuiderNames())
         print("Guider ids: ", reader.getGuiderIds())
         print("Data orientation: ", reader.view)
-        print(10*'-----')
         print("Guider data: ", reader.dataset)
-        print(10*'-----')
+
+        # Create the plotter object
+        plotter = plotGuiderCCDStamps(reader)
+        
+        # Plot the initial stamp
+        plotter.plot_stamp_array(stampNum=0, nStampsMax=10)
+
+        # Make a gif of the stamps
+        plotter.make_gif(nStampsMax=10, fps=5)
+        
     """
     def __init__(self, seqNum, dayObs, verbose=False,
-                 butler=None, view='dvcs', collections=['LSSTCam/raw/guider']):
+                 butler=None, view='dvcs', collections=['LSSTCam/raw/all', 'LSSTCam/raw/guider']):
         
         # data id
         self.butler = butler
@@ -112,6 +121,7 @@ class readGuiderData:
         # Load the data
         self.load_data()
         self.get_header_info(self.dataset[self.detnames[0]])
+        self.get_timestamp()
 
         # verbose
         if self.verbose:
@@ -120,7 +130,7 @@ class readGuiderData:
     def initialize_butler(self, collections=None):
         if site=="summit":  
             repo = "LSSTCam"
-        elif (site=="usdf")or(site=='staff-rsp'):
+        elif site=="usdf":
             repo = "/repo/embargo"
         else:
             raise ValueError(f"Unknown butler repo for {site}")
@@ -138,7 +148,7 @@ class readGuiderData:
             if detector.getType()== cameraGeom.DetectorType.GUIDER :
                 detName = detector.getName()
                 self.guiders[detName] = detector.getId()
-                        
+
         self.detnames = list(self.guiders.keys())
         self.nGuiders = len(self.guiders)
         pass
@@ -168,7 +178,18 @@ class readGuiderData:
                 datas[detName] = get_guider_stamps(idet,self.seqNum,self.dayObs,butler=self.butler,view='ccd')
 
         self.dataset = datas
+        self.init_ampnames()
         #self.nStamps = max([len(data) for data in datas.values()])
+        pass
+
+    def init_ampnames(self):
+        self.ampNames = {}
+        for detname in self.guiders.keys():
+            md = self.dataset[detname].metadata.toDict()
+            # also get the ampName
+            segment = md['ROISEG']
+            ampName = 'C'+ segment[7:]        
+            self.ampNames[detname] = ampName
         pass
 
     def get_timestamp(self):
@@ -247,34 +268,36 @@ class readGuiderData:
         """Get the ids of the guider detectors.
         """
         return list(self.guiders.values())
-                       
-def read_guider_data(filename):
-    rp = ResourcePath(filename)
     
-    with rp.open(mode="rb") as f:
+    def getGuiderAmpNames(self):
+        """
+        Get list of guider amp names
+        """
+        if hasattr(self, 'ampNames'):
+            return list(self.ampNames.values())
+
+        ampNames = {}
+        for detname in self.guiders.keys():
+            md = self.dataset[detname].metadata.toDict()
+            # also get the ampName
+            segment = md['ROISEG']
+            ampName = 'C'+ segment[7:]        
+            ampNames[detname] = ampName
+        self.ampNames = ampNames
+        return list(ampNames.values())
+
+    def set_detector(self, detname):
+        """
+        Set the guider detector to be referenced.
+        """
+        if detname not in self.guiders.keys():
+            raise ValueError(f"Guider {detname} not found.")
         
-        hdu_list = fits.open(f)
-        
-        N_frames = hdu_list[0].header['N_STAMPS']
-        x, y = hdu_list[0].header['ROIROWS'], hdu_list[0].header['ROICOLS']
-
-        imgs = np.zeros((N_frames, x, y))
-        timestamps = np.zeros(N_frames)
-
-        if (len(hdu_list) - 1)/2 == N_frames:  ## if has rawstamps
-            for i, j in zip(range(N_frames), range(2, len(hdu_list), 2)):
-                imgs[i, :, :] = hdu_list[j].data
-                timestamps[i] = hdu_list[j].header['STMPTMJD']
-
-        elif len(hdu_list)-1 == N_frames:     ## if no rawstamps
-            for i, j in zip(range(N_frames), range(1, len(hdu_list))):
-                imgs[i, :, :] = hdu_list[j].data
-                timestamps[i] = hdu_list[j].header['STMPTMJD']
-    
-    grand_hdr = hdu_list[0].header
-
-    return imgs, timestamps, grand_hdr
-
+        self.detname = detname
+        self.idet = self.guiders[detname]
+        self.detector = self.camera[self.idet]
+        self.ampName = self.ampNames[detname]
+        pass
 
 def get_guider_stamps(idet,seqNum,dayObs,repo='/repo/embargo',collections=['LSSTCam/raw/guider'],butler=None,view='dvcs'):
     """
