@@ -27,6 +27,12 @@ __all__ = [
     "get_detector_amp",
     "convert_roi",
     "CoordinatesToAltAz",
+    "mk_rot",
+    "mk_ccd_to_dvcs",
+    "mk_roi_bboxes",
+    "stamp_to_ccd",
+    "get_detector_amp",
+    "convert_roi",
     "focal_to_pixel",
     "pixel_to_focal",
     "stamp_to_ccd",
@@ -240,7 +246,7 @@ class CoordinatesToAltAz:
         return self.convert_pixels_to_altaz(x_pix, y_pix)
 
 # Aaron's code to make transformations from ROI coordinates to Focal Plane and sky coordinates.
-def mk_rot(det_nquarter):
+def mk_rot(det_nquarter,direction=1):
     """
     Make rotation Transform
 
