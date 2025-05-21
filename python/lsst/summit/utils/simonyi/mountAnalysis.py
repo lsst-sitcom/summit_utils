@@ -248,6 +248,8 @@ def plotMountErrors(
         dayObsString = dayObsIntToString(expRecord.day_obs)
         dataIdString = f"{expRecord.instrument} {dayObsString} - seqNum {expRecord.seq_num}"
         title = f"{dataIdString} - Exposure time = {expRecord.exposure_time:.1f}s"
+    else:
+        title = "Mount Errors"  # if the data is of unknown provenance
 
     if figure is None:
         figure = plt.figure(figsize=(12, 8))

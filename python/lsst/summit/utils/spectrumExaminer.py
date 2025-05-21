@@ -404,6 +404,8 @@ class SpectrumExaminer:
         amplitudeThreshold = np.nanpercentile(amplitudes, 75)
         sortedListLengths = sorted(listLengths)
 
+        longestListLength = 0
+        longestListIndex = 0
         for listLength in sortedListLengths[::-1]:
             longestListLength = listLength
             longestListIndex = listLengths.index(longestListLength)

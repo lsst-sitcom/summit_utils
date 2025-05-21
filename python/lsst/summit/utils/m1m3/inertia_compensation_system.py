@@ -31,7 +31,7 @@ from pandas import DataFrame, DatetimeIndex, Series
 
 from lsst.summit.utils.efdUtils import getEfdData
 from lsst.summit.utils.tmaUtils import TMAEvent, TMAEventMaker
-from lsst.ts.xml.tables.m1m3 import FATABLE_XFA, FATABLE_YFA, FATABLE_ZFA, HP_COUNT
+from lsst.ts.xml.tables.m1m3 import FATABLE_XFA, FATABLE_YFA, FATABLE_ZFA, HP_COUNT  # type: ignore
 
 HAS_EFD_CLIENT = True
 try:
