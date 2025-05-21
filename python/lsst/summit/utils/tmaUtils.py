@@ -695,7 +695,7 @@ def plotEvent(
 def getCommandsDuringEvent(
     client: EfdClient,
     event: TMAEvent,
-    commands: Iterable[str] = ("raDecTarget"),
+    commands: Iterable[str] = ("raDecTarget",),
     prePadding: float = 0,
     postPadding: float = 0,
     timeFormat: str = "python",
