@@ -29,6 +29,7 @@ import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
 from astropy.time import TimeDelta
+from utils import getVcr
 
 import lsst.utils.tests
 from lsst.summit.utils.efdUtils import calcNextDay, getDayObsStartTime, makeEfdClient
@@ -48,8 +49,6 @@ from lsst.summit.utils.tmaUtils import (
     getTracksFromEventList,
     plotEvent,
 )
-
-from .utils import getVcr
 
 __all__ = [
     "writeNewTmaEventTestTruthValues",

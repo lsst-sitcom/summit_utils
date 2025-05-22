@@ -25,18 +25,13 @@ import tempfile
 import unittest
 
 import matplotlib.pyplot as plt
+from utils import getVcr
 
 import lsst.utils.tests
 from lsst.summit.utils.efdUtils import makeEfdClient
 from lsst.summit.utils.m1m3.inertia_compensation_system import evaluate_m1m3_ics_single_slew
-from lsst.summit.utils.m1m3.plots.inertia_compensation_system import (
-    FIGURE_HEIGHT,
-    FIGURE_WIDTH,
-    plot_hp_measured_data,
-)
+from lsst.summit.utils.m1m3.plots.plot_ics import FIGURE_HEIGHT, FIGURE_WIDTH, plot_hp_measured_data
 from lsst.summit.utils.tmaUtils import TMAEventMaker
-
-from .utils import getVcr
 
 vcr = getVcr()
 
