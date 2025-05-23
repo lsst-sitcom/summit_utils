@@ -139,7 +139,7 @@ class plotGuiderCCDStamps:
                        )
         return txt
 
-    def plot_stamp_array(self, stampNum=0, fig=None, axs=None):
+    def plot_stamp_array(self, stampNum=0, fig=None, axs=None, plo=90., phi=99.):
         """Plot the stamp array for all the guiders.
         Args:
             stampNum (int): stamp number
@@ -152,7 +152,7 @@ class plotGuiderCCDStamps:
 
         artists = []
         for detname in self.detnames:
-            im = self.plot_stamp_ccd(detname, stampNum=stampNum, axs=axs[detname], plo=90)
+            im = self.plot_stamp_ccd(detname, stampNum=stampNum, axs=axs[detname], plo=plo,phi=phi)
             txt = self.plot_text_ccd_name(detname, axs=axs[detname])
             artists.extend([im, txt])
         stamp_info = self.plot_stamp_info(axs=axs['center'], stampNum=stampNum)
