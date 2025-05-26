@@ -28,9 +28,11 @@ from dataclasses import dataclass
 from typing import TYPE_CHECKING
 from zoneinfo import ZoneInfo
 
+import astropy.units as u
 import matplotlib.dates as mdates
 import matplotlib.pyplot as plt
 import numpy as np
+from astropy.coordinates import AltAz, EarthLocation, SkyCoord
 from matplotlib.dates import num2date
 from matplotlib.ticker import FuncFormatter
 
@@ -113,6 +115,56 @@ def calculateMountErrors(
         nReplacedEl = filterBadValues(elError, maxDelta)
         mountData.azimuthData["azError"] = azError
         mountData.elevationData["elError"] = elError
+
+    # Calculate the linear demand model
+    [azRate, elRate, rotRate] = getLinearRates(expRecord)
+
+    azimuthData = mountData.azimuthData
+    azValues = np.asarray(azimuthData["actualPosition"])
+    azValTimes = np.asarray(azimuthData["actualPositionTimestamp"])
+    azModelValues = np.zeros_like(azValues)
+    azMedian = np.median(azValues)
+    azTimesMedian = np.median(azValTimes)
+    azModelValues = azMedian + azRate * (azValTimes - azTimesMedian)
+    azimuthData["linearModel"] = azModelValues
+    azLinearError = (azValues - azModelValues) * 3600
+    azLinearRms = np.sqrt(np.mean(azLinearError * azLinearError))
+    if azLinearRms > 1.0:
+        # If linear error is large, replace demand errors with linear error
+        azimuthData["azError"] = azLinearError
+
+    elevationData = mountData.elevationData
+    elValues = np.asarray(elevationData["actualPosition"])
+    elValTimes = np.asarray(elevationData["actualPositionTimestamp"])
+    elModelValues = np.zeros_like(elValues)
+    elMedian = np.median(elValues)
+    elTimesMedian = np.median(elValTimes)
+    elModelValues = elMedian + elRate * (elValTimes - elTimesMedian)
+    elevationData["linearModel"] = elModelValues
+    elLinearError = (elValues - elModelValues) * 3600
+    elLinearRms = np.sqrt(np.mean(elLinearError * elLinearError))
+    if elLinearRms > 1.0:
+        # If linear error is large, replace demand errors with linear error
+        elevationData["elError"] = elLinearError
+
+    rotationData = mountData.rotationData
+    rotValues = np.asarray(rotationData["actualPosition"])
+    rotValTimes = np.asarray(rotationData["timestamp"])
+    rotModelValues = np.zeros_like(rotValues)
+    rotMedian = np.median(rotValues)
+    rotTimesMedian = np.median(rotValTimes)
+    rotModelValues = rotMedian + rotRate * (rotValTimes - rotTimesMedian)
+    rotationData["linearModel"] = rotModelValues
+    rotLinearError = (rotValues - rotModelValues) * 3600
+    rotLinearRms = np.sqrt(np.mean(rotLinearError * rotLinearError))
+    if rotLinearRms > 5.0:
+        # If linear error is large, replace demand errors with linear error
+        rotationData["rotError"] = rotLinearError
+
+    azError = mountData.azimuthData["azError"].to_numpy()
+    elError = mountData.elevationData["elError"].to_numpy()
+    rotError = mountData.rotationData["rotError"].to_numpy()
+
     azRms = np.sqrt(np.mean(azError * azError))
     elRms = np.sqrt(np.mean(elError * elError))
     rotRms = np.sqrt(np.mean(rotError * rotError))
@@ -193,6 +245,13 @@ def plotMountErrors(
         c=lineColors[colorCounter % nColors],
     )
     colorCounter += 1
+    ax1.plot(
+        mountData.azimuthData["linearModel"],
+        label="Azimuth linear model",
+        ls="--",
+        c=lineColors[colorCounter % nColors],
+    )
+    colorCounter += 1
     ax1.yaxis.set_major_formatter(FuncFormatter(tickFormatter))
     ax1.set_ylabel("Azimuth (degrees)")
 
@@ -200,6 +259,13 @@ def plotMountErrors(
     ax1_twin.plot(
         mountData.elevationData["actualPosition"],
         label="Elevation position",
+        c=lineColors[colorCounter % nColors],
+    )
+    colorCounter += 1
+    ax1_twin.plot(
+        mountData.elevationData["linearModel"],
+        label="Elevation linear model",
+        ls="--",
         c=lineColors[colorCounter % nColors],
     )
     colorCounter += 1
@@ -266,6 +332,13 @@ def plotMountErrors(
         c=lineColors[colorCounter % nColors],
     )
     colorCounter += 1
+    ax4.plot(
+        mountData.rotationData["linearModel"],
+        label="Rotator linearModel",
+        ls="--",
+        c=lineColors[colorCounter % nColors],
+    )
+    colorCounter += 1
     ax4.yaxis.set_major_formatter(FuncFormatter(tickFormatter))
     ax4.yaxis.tick_right()
     ax4.set_ylabel("Rotator angle (degrees)")
@@ -320,6 +393,7 @@ def plotMountErrors(
 
     ax1.set_title("Azimuth and Elevation")
     ax4.set_title("Rotator")
+    ax4.legend()
     figure.subplots_adjust(top=0.85)  # Adjust the top margin to make room for the suptitle
     figure.suptitle(title, fontsize=14, y=1.04)  # Adjust y to move the title up
 
@@ -357,3 +431,30 @@ def plotMountErrors(
         figure.savefig(saveFilename, bbox_inches="tight")
 
     return figure
+
+
+def getLinearRates(expRecord: DimensionRecord) -> list:
+    # Calculates linear rates of motion in Az, El, Rot.
+    # This is for identifying exposures where the mount
+    # did not behave as it should.
+    begin = expRecord.timespan.begin
+    end = expRecord.timespan.end
+    dT = (expRecord.timespan.end - expRecord.timespan.begin).value * 86400.0
+    location = EarthLocation.of_site("Rubin:Simonyi")
+    rotEarth = 15.04106858  # degrees/hour
+    rotRate = (
+        -rotEarth
+        * np.cos(location.lat.rad)
+        * np.cos(expRecord.azimuth * u.deg)
+        / np.cos((90.0 - expRecord.zenith_angle) * u.deg)
+        / 3600.0
+    )
+    skyLocation = SkyCoord(expRecord.tracking_ra * u.deg, expRecord.tracking_dec * u.deg)
+    altAz1 = AltAz(obstime=begin, location=location)
+    altAz2 = AltAz(obstime=end, location=location)
+    obsAltAz1 = skyLocation.transform_to(altAz1)
+    obsAltAz2 = skyLocation.transform_to(altAz2)
+    elRate = (obsAltAz2.alt.deg - obsAltAz1.alt.deg) / dT
+    azRate = (obsAltAz2.az.deg - obsAltAz1.az.deg) / dT
+    # All rates are in degrees / second
+    return [azRate, elRate, rotRate]
