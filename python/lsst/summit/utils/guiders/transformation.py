@@ -41,37 +41,42 @@ __all__ = [
     "mk_roi_bboxes",
     "get_detector_amp",
     "convert_roi",
-    "mk_rot"
+    "mk_rot",
 ]
 
-import numpy as np
 from typing import Optional
-from astropy.time import Time
-import astropy.units as u
-from astropy.coordinates import SkyCoord, AltAz, EarthLocation
 
-from lsst.daf.butler import Butler
+import astropy.units as u
+import numpy as np
+from astropy.coordinates import AltAz, EarthLocation, SkyCoord
+from astropy.time import Time
+
 from lsst.afw import cameraGeom
-from lsst.afw.cameraGeom import Detector, Camera
-from lsst.obs.lsst import LsstCam
-from lsst.obs.base import createInitialSkyWcs
-from lsst.obs.lsst.cameraTransforms import LsstCameraTransforms
-from lsst.geom import Point2D, Box2D, Box2I
-from lsst.geom import AffineTransform
+from lsst.afw.cameraGeom import Camera, Detector
 from lsst.afw.image import ImageF
+from lsst.daf.butler import Butler
+from lsst.geom import AffineTransform, Box2D, Box2I, Extent2D, Point2D
+from lsst.obs.base import createInitialSkyWcs
+from lsst.obs.lsst import LsstCam
+from lsst.obs.lsst.cameraTransforms import LsstCameraTransforms
+
 
 class CoordinatesToAltAz:
     """
-    Convert CCD-pixel or focal-plane coordinates to Alt/Az using LSST DM + Astropy.
+    Convert CCD-pixel or focal-plane coordinates to Alt/Az using LSST DM +
+    Astropy.
     """
-    def __init__(self,
-                 seq_num: int,
-                 obs_date: int,
-                 det_name: str,
-                 butler: Optional[Butler] = None,
-                 wcs=None,
-                 camera: Optional[Camera] = None,
-                 verbose: bool = False):
+
+    def __init__(
+        self,
+        seq_num: int,
+        obs_date: int,
+        det_name: str,
+        butler: Optional[Butler] = None,
+        wcs=None,
+        camera: Optional[Camera] = None,
+        verbose: bool = False,
+    ):
         """
         Parameters
         ----------
@@ -90,23 +95,23 @@ class CoordinatesToAltAz:
         verbose : bool
             If True, print a log line at the start of each method.
         """
-        self.seq_num  = seq_num
+        self.seq_num = seq_num
         self.obs_date = obs_date
         self.det_name = det_name
-        self.verbose  = verbose
+        self.verbose = verbose
 
         # DataId for butler queries
         self.dataId = {
-            'day_obs': obs_date,
-            'seq_num': seq_num,
-            'instrument':'LSSTCam',
-            'detector':  94   # center of the raft
+            "day_obs": obs_date,
+            "seq_num": seq_num,
+            "instrument": "LSSTCam",
+            "detector": 94,  # center of the raft
         }
 
         # 1) Initialize Butler (if needed), then visitInfo & detector & WCS
         self._init_butler(butler)
         self.camera = camera or LsstCam.getCamera()
-        self.wcs    = wcs
+        self.wcs = wcs
 
         self._initialize_wcs_and_detector()
 
@@ -115,7 +120,6 @@ class CoordinatesToAltAz:
 
         # 3) Observation time
         self._get_observation_time()
-
 
     def _log(self, msg: str):
         """Print only if verbose=True."""
@@ -129,12 +133,12 @@ class CoordinatesToAltAz:
 
         if butler is None:
             self._log("Creating Butler")
-            repo = "LSSTCam" # "/repo/embargo"
-            collections = ['LSSTCam/raw/all','LSSTCam/raw/guider']
+            repo = "LSSTCam"  # "/repo/embargo"
+            collections = ["LSSTCam/raw/all", "LSSTCam/raw/guider"]
             self.butler = Butler(repo, collections=collections)
 
         self._log(f"raw.visitInfo of dataId: {self.dataId}")
-        self.visit_info = self.butler.get('raw.visitInfo', self.dataId)
+        self.visit_info = self.butler.get("raw.visitInfo", self.dataId)
         if self.visit_info is None:
             raise RuntimeError("visitInfo not found for " + str(self.dataId))
         pass
@@ -147,9 +151,7 @@ class CoordinatesToAltAz:
         # 2) WCS
         if self.wcs is None:
             self._log("Creating initial SkyWcs")
-            self.wcs = createInitialSkyWcs(self.visit_info,
-                                           self.detector,
-                                           flipX=False)
+            self.wcs = createInitialSkyWcs(self.visit_info, self.detector, flipX=False)
 
     def _build_earth_location(self):
         """Assemble an Astropy EarthLocation from visitInfo observatory."""
@@ -157,34 +159,27 @@ class CoordinatesToAltAz:
         obs = self.visit_info.observatory
         lat = obs.getLatitude().asDegrees()
         lon = obs.getLongitude().asDegrees()
-        elev= obs.getElevation()
-        self.SIMONYI_LOCATION = EarthLocation(lat=lat*u.deg,
-                                      lon=lon*u.deg,
-                                      height=elev*u.m)
+        elev = obs.getElevation()
+        self.SIMONYI_LOCATION = EarthLocation(lat=lat * u.deg, lon=lon * u.deg, height=elev * u.m)
 
     def _get_observation_time(self):
         """Parse the visitInfo DateTime into an Astropy Time object."""
         self._log("Parsing observation time")
         # LSST DateTime → ISO string
         date = self.visit_info.date.toPython()
-        # by default toString() yields something like "2025-04-26T08:52:52.946467"
-        self.obstime = Time(date, scale='utc')
+        # by default toString() yields something like
+        # "2025-04-26T08:52:52.946467"
+        self.obstime = Time(date, scale="utc")
         pass
 
-    def convert_pixel_to_radec(self,
-                               x_flat: np.ndarray,
-                               y_flat: np.ndarray
-                              ) -> tuple[np.ndarray,np.ndarray]:
+    def convert_pixel_to_radec(self, x_flat: np.ndarray, y_flat: np.ndarray) -> tuple[np.ndarray, np.ndarray]:
         """
         Map detector-pixel → ICRS RA/Dec (radians).
         """
         self._log(f"Convert pixel to RA/Dec on {np.size(x_flat)} points")
         return self.wcs.pixelToSkyArray(x_flat, y_flat)
 
-    def convert_pixels_to_altaz(self,
-                            x_pix: np.ndarray,
-                            y_pix: np.ndarray
-                            ) -> tuple[np.ndarray,np.ndarray]:
+    def convert_pixels_to_altaz(self, x_pix: np.ndarray, y_pix: np.ndarray) -> tuple[np.ndarray, np.ndarray]:
         """
         Vectorized conversion of detector-pixel coords → AltAz (deg).
 
@@ -196,14 +191,15 @@ class CoordinatesToAltAz:
         Returns
         -------
         az, alt : np.ndarray
-            Arrays of the same shape as x_pix/y_pix giving Az and Alt in degrees.
+            Arrays of the same shape as x_pix/y_pix giving Az and Alt in
+            degrees.
         """
         self._log(f"convert_pixels_to_altaz on {np.size(x_pix)} points")
 
         # 1) make sure we have numpy arrays, remember their shape
         x_arr = np.asarray(x_pix)
         y_arr = np.asarray(y_pix)
-        shp   = x_arr.shape
+        shp = x_arr.shape
 
         # 2) flatten for the WCS call
         x_flat = x_arr.ravel()
@@ -217,25 +213,22 @@ class CoordinatesToAltAz:
         sc_icrs = SkyCoord(
             ra=ra_flat * u.rad,
             dec=dec_flat * u.rad,
-            frame='icrs',
+            frame="icrs",
             obstime=self.obstime,
             location=self.SIMONYI_LOCATION,
         )
 
         # Transform to AltAz
-        sc_altaz = sc_icrs.transform_to(
-            AltAz(obstime=self.obstime, location=self.SIMONYI_LOCATION)
-        )
+        sc_altaz = sc_icrs.transform_to(AltAz(obstime=self.obstime, location=self.SIMONYI_LOCATION))
 
         # 5) reshape back to original grid
-        az  = sc_altaz.az .deg.reshape(shp)
+        az = sc_altaz.az.deg.reshape(shp)
         alt = sc_altaz.alt.deg.reshape(shp)
         return az, alt
 
-    def convert_focal_to_altaz(self,
-                               x_focal: np.ndarray,
-                               y_focal: np.ndarray
-                              ) -> tuple[np.ndarray,np.ndarray]:
+    def convert_focal_to_altaz(
+        self, x_focal: np.ndarray, y_focal: np.ndarray
+    ) -> tuple[np.ndarray, np.ndarray]:
         """
         Map focal-plane mm (or any XY) → Alt/Az by going
         focal → pixel → AltAz.
@@ -245,8 +238,10 @@ class CoordinatesToAltAz:
         x_pix, y_pix = focal_to_pixel(x_focal, y_focal, self.detector)
         return self.convert_pixels_to_altaz(x_pix, y_pix)
 
-# Aaron's code to make transformations from ROI coordinates to Focal Plane and sky coordinates.
-def mk_rot(det_nquarter,direction=1):
+
+# Aaron's code to make transformations from ROI coordinates to Focal Plane and
+# sky coordinates.
+def mk_rot(det_nquarter, direction=1):
     """
     Make rotation Transform
 
@@ -265,10 +260,10 @@ def mk_rot(det_nquarter,direction=1):
 
     """
     rot = {}
-    rot[0] = np.array([[1.,0.],[0.,1.]])
-    rot[1] = np.array([[0.,-1],[1.,0.]])
-    rot[2] = np.array([[-1.,0.],[0.,-1.]])
-    rot[3] = np.array([[0.,1.],[-1.,0.]])
+    rot[0] = np.array([[1.0, 0.0], [0.0, 1.0]])
+    rot[1] = np.array([[0.0, -1], [1.0, 0.0]])
+    rot[2] = np.array([[-1.0, 0.0], [0.0, -1.0]])
+    rot[3] = np.array([[0.0, 1.0], [-1.0, 0.0]])
 
     irot = {}
     irot[0] = rot[0].transpose()
@@ -276,40 +271,46 @@ def mk_rot(det_nquarter,direction=1):
     irot[2] = rot[2].transpose()
     irot[3] = rot[3].transpose()
 
-    nq = np.mod(det_nquarter,4)
-    if direction==1:
+    nq = np.mod(det_nquarter, 4)
+    if direction == 1:
         rotation = AffineTransform(rot[nq])
-    elif direction==-1:
+    elif direction == -1:
         rotation = AffineTransform(irot[nq])
     return rotation
 
-def mk_ccd_to_dvcs(llpt_ccd,det_nquarter):
+
+def mk_ccd_to_dvcs(llpt_ccd, det_nquarter):
     """
-    Make transformations suitable for Guider stamps, to go from
-    a view of the stamp in CCD pixel coordinates (ie. with 0,0 in the Lower Left of C00)
-    to DVCS view (ie. orientated in the Focal Plane correctly in the DVCS)
+    Make transformations suitable for Guider stamps, to go from a view of the
+    stamp in CCD pixel coordinates (ie. with 0,0 in the Lower Left of C00) to
+    DVCS view (ie. orientated in the Focal Plane correctly in the DVCS)
 
     Parameters
     ----------
     llpt_ccd : Extent2I
         The Lower Left point in the CCD pixel coordinates
     det_nquarter : int
-        The number of 90degree quarters needed to rotate from CCD view to DVCS view
+        The number of 90degree quarters needed to rotate from CCD view to DVCS
+        view
 
     Returns
     -------
     forwards : AffineTransform
-        A transform from CCD pixel coordinates in the CCD view to Stamp pixel coordinates in DVCS view
+        A transform from CCD pixel coordinates in the CCD view to Stamp pixel
+        coordinates in DVCS view
 
     backwards : AffineTransform
-        A transform from Stamp pixel coordinates in DVCS view to CCD pixel coordinates in the CCD view
+        A transform from Stamp pixel coordinates in DVCS view to CCD pixel
+        coordinates in the CCD view
 
     Example
     -------
 
-    detector = camera[189]
-    llpt_ccd = Extent2D(100.,200.)
-    ft,bt = mk_ccd_to_dvcs(llpt_ccd,detector.getOrientation().getNQuarter())
+    detector = camera[189] llpt_ccd = Extent2D(100.,200.) ft,bt =
+    mk_ccd_to_dvcs(llpt_ccd,detector.getOrientation().getNQuarter())
+
+    # given a sky coordinate, find point on the stamp in DVCS view pt_ccd =
+    wcs.skyToPixel(sky_coord) pt_stamp_dvcs = ft(pt_ccd)
 
     # given a sky coordinate, find point on the stamp in DVCS view
     pt_ccd = wcs.skyToPixel(sky_coord)
@@ -319,37 +320,41 @@ def mk_ccd_to_dvcs(llpt_ccd,det_nquarter):
     pt_ccd = bt(pt_stamp_dvcs)
     sky_coord = wcs.pixelToSky(pt_ccd)
 
+    # given a point on the stamp in DVCS view, find the skyCoord pt_ccd =
+    bt(pt_stamp_dvcs) sky_coord = wcs.pixelToSky(pt_ccd)
+
     """
     # number of 90deg CCW rotations
-    nq = np.mod(det_nquarter,4)
+    nq = np.mod(det_nquarter, 4)
 
     # get LL,Size of the CCD view BBox
     bboxd_ccd = Box2D(bbox_ccd)
     llpt_ccd = Extent2D(bboxd_ccd.getCorners()[0])
-    nx,ny = bbox_ccd.getDimensions()
+    nx, ny = bbox_ccd.getDimensions()
 
     # get translations to use for each NQ value
     boxtranslation = {}
-    boxtranslation[0] = Extent2D(0,0)
-    boxtranslation[1] = Extent2D(ny,0)
-    boxtranslation[2] = Extent2D(nx,ny)
-    boxtranslation[3] = Extent2D(0,nx)
+    boxtranslation[0] = Extent2D(0, 0)
+    boxtranslation[1] = Extent2D(ny, 0)
+    boxtranslation[2] = Extent2D(nx, ny)
+    boxtranslation[3] = Extent2D(0, nx)
 
     # build the forward Transform
     ftranslation = AffineTransform(-llpt_ccd)
-    frotation = AffineTransform(mk_rot(nq,1))
+    frotation = AffineTransform(mk_rot(nq, 1))
     fboxtranslation = AffineTransform(boxtranslation[nq])
-    forwards = fboxtranslation*frotation*ftranslation # ordering is third*second*first
+    forwards = fboxtranslation * frotation * ftranslation  # ordering is third*second*first
 
     # and the backward Transform
     btranslation = AffineTransform(llpt_ccd)
-    brotation = AffineTransform(mk_rot(nq,-1))
+    brotation = AffineTransform(mk_rot(nq, -1))
     bboxtranslation = AffineTransform(-boxtranslation[nq])
-    backwards = btranslation*brotation*bboxtranslation
+    backwards = btranslation * brotation * bboxtranslation
 
-    return forwards,backwards
+    return forwards, backwards
 
-def mk_roi_bboxes(md,camera):
+
+def mk_roi_bboxes(md, camera):
     """
     Make bounding boxes for a Guider stamp in CCD and DVCS view
 
@@ -371,18 +376,18 @@ def mk_roi_bboxes(md,camera):
     """
 
     # get need info from the stamp metadata
-    roiCol    = md['ROICOL']
-    roiRow    = md['ROIROW']
-    roiCols   = md['ROICOLS']
-    roiRows   = md['ROIROWS']
+    roiCol = md["ROICOL"]
+    roiRow = md["ROIROW"]
+    roiCols = md["ROICOLS"]
+    roiRows = md["ROIROWS"]
 
     # get detector and amp
-    detector,ampName = get_detector_amp(md,camera)
+    detector, ampName = get_detector_amp(md, camera)
     amp = detector[ampName]
 
     # get corner0 of the location for the ROI
-    lct = LsstCameraTransforms(camera,detector.getName())
-    corner0_CCDX,corner0_CCDY = lct.ampPixelToCcdPixel(roiCol,roiRow,ampName)
+    lct = LsstCameraTransforms(camera, detector.getName())
+    corner0_CCDX, corner0_CCDY = lct.ampPixelToCcdPixel(roiCol, roiRow, ampName)
     corner0_CCDX = int(corner0_CCDX)
     corner0_CCDY = int(corner0_CCDY)
 
@@ -400,13 +405,13 @@ def mk_roi_bboxes(md,camera):
 
     # now make the CCD view BBox, here we want the LowerLeft Point to be the
     # smallest x,y
-    ll_x = min(corner0_CCDX,corner2_CCDX)
-    ur_x = max(corner0_CCDX,corner2_CCDX)
-    ll_y = min(corner0_CCDY,corner2_CCDY)
-    ur_y = max(corner0_CCDY,corner2_CCDY)
-    ll_CCD = Point2D(ll_x,ll_y)
-    ur_CCD = Point2D(ur_x,ur_y)
-    ccd_view_bbox = Box2I(Box2D(ll_CCD,ur_CCD))
+    ll_x = min(corner0_CCDX, corner2_CCDX)
+    ur_x = max(corner0_CCDX, corner2_CCDX)
+    ll_y = min(corner0_CCDY, corner2_CCDY)
+    ur_y = max(corner0_CCDY, corner2_CCDY)
+    ll_CCD = Point2D(ll_x, ll_y)
+    ur_CCD = Point2D(ur_x, ur_y)
+    ccd_view_bbox = Box2I(Box2D(ll_CCD, ur_CCD))
 
     # next make the DVCS view BBox, by rotating by NQuarters
     frot = mk_rot(detector.getOrientation().getNQuarter())
@@ -423,6 +428,18 @@ def mk_roi_bboxes(md,camera):
     return ccd_view_bbox,dvcs_view_bbox
 
 def get_detector_amp(md,camera):
+    ll_x_dvcs = min(ll_rot.getX(), ur_rot.getX())
+    ur_x_dvcs = max(ll_rot.getX(), ur_rot.getX())
+    ll_y_dvcs = min(ll_rot.getY(), ur_rot.getY())
+    ur_y_dvcs = max(ll_rot.getY(), ur_rot.getY())
+    ll_DVCS = Point2D(ll_x_dvcs, ur_x_dvcs)
+    ur_DVCS = Point2D(ll_y_dvcs, ur_y_dvcs)
+    dvcs_view_bbox = Box2I(Box2D(ll_DVCS, ur_DVCS))
+
+    return ccd_view_bbox, dvcs_view_bbox
+
+
+def get_detector_amp(md, camera):
     """
     Unpack Detector and Amplifier info.
 
@@ -442,20 +459,18 @@ def get_detector_amp(md,camera):
     ampName : String
         Amplifier name, eg. C00
     """
-    raftBay = md['RAFTBAY']
-    ccdSlot = md['CCDSLOT']
-    obsId = md['OBSID']
-    dayObs = int(obsId[5:13])
-    seqNum = int(obsId[14:])
+    raftBay = md["RAFTBAY"]
+    ccdSlot = md["CCDSLOT"]
 
-    segment = md['ROISEG']
-    ampName = 'C'+ segment[7:]
-    detName = raftBay + '_' + ccdSlot
+    segment = md["ROISEG"]
+    ampName = "C" + segment[7:]
+    detName = raftBay + "_" + ccdSlot
     detector = camera[detName]
 
-    return detector,ampName
+    return detector, ampName
 
-def convert_roi(roi,detector,ampName,camera,view='dvcs'):
+
+def convert_roi(roi, detector, ampName, camera, view="dvcs"):
     """
     convert ROI image from raw to CCD or DVCS views
 
@@ -479,18 +494,19 @@ def convert_roi(roi,detector,ampName,camera,view='dvcs'):
     """
 
     # convert image to ccd view
-    roi_ccdview = amp_to_ccdview(roi,detector,ampName)
+    roi_ccdview = amp_to_ccdview(roi, detector, ampName)
 
-    # convert image to dvcs view (nb. np.rot90 works opposite to afwMath.rotateImageBy90)
-    roi_dvcsview = np.rot90(roi_ccdview,-detector.getOrientation().getNQuarter())
+    # convert image to dvcs view (nb. np.rot90 works opposite to
+    # afwMath.rotateImageBy90)
+    roi_dvcsview = np.rot90(roi_ccdview, -detector.getOrientation().getNQuarter())
 
     # output ImageF
-    ny,nx = roi.shape
-    imf = ImageF(nx,ny,0.)
+    ny, nx = roi.shape
+    imf = ImageF(nx, ny, 0.0)
 
-    if view=='dvcs':
+    if view == "dvcs":
         imf.array[:] = roi_dvcsview
-    elif view=='ccd':
+    elif view == "ccd":
         imf.array[:] = roi_ccdview
 
     return imf
@@ -514,6 +530,7 @@ def focal_to_pixel(fpx, fpy, det):
     x, y = tx.getMapping().applyForward(np.vstack((fpx, fpy)))
     return x.ravel(), y.ravel()
 
+
 def pixel_to_focal(x, y, det):
     """
     Parameters
@@ -533,7 +550,8 @@ def pixel_to_focal(x, y, det):
     fpx, fpy = tx.getMapping().applyForward(np.vstack((x, y)))
     return fpx.ravel(), fpy.ravel()
 
-def stamp_to_ccd(stamp,ccdimg,detector,camera,ampName,ampCol,ampRow):
+
+def stamp_to_ccd(stamp, ccdimg, detector, camera, ampName, ampCol, ampRow):
     """
     Place ROI (stamp) into existing full CCD array, all in CCD view
     (Should rewrite to use mk_roi_bboxes(md,camera))
@@ -561,12 +579,12 @@ def stamp_to_ccd(stamp,ccdimg,detector,camera,ampName,ampCol,ampRow):
         ccd image array filled with ROI
     """
 
-    stamp_ccd = amp_to_ccdview(stamp,detector,ampName)
-    ampRows,ampCols = stamp_ccd.shape
+    stamp_ccd = amp_to_ccdview(stamp, detector, ampName)
+    ampRows, ampCols = stamp_ccd.shape
 
     # get corner0 of the location for the ROI
-    lct = LsstCameraTransforms(camera,detector.getName())
-    corner0_CCDX,corner0_CCDY = lct.ampPixelToCcdPixel(ampCol,ampRow,ampName)
+    lct = LsstCameraTransforms(camera, detector.getName())
+    corner0_CCDX, corner0_CCDY = lct.ampPixelToCcdPixel(ampCol, ampRow, ampName)
     corner0_CCDX = int(corner0_CCDX)
     corner0_CCDY = int(corner0_CCDY)
 
@@ -584,16 +602,19 @@ def stamp_to_ccd(stamp,ccdimg,detector,camera,ampName,ampCol,ampRow):
 
     # now place the ROI
     try:
-        ccdimg[min(corner0_CCDY,corner2_CCDY):max(corner0_CCDY,corner2_CCDY),
-               min(corner0_CCDX,corner2_CCDX):max(corner0_CCDX,corner2_CCDX)] = stamp_ccd
-    except:
-        print(detector.getName(),ampName)
-        print('Y: ',min(corner0_CCDY,corner2_CCDY),max(corner0_CCDY,corner2_CCDY))
-        print('X: ',min(corner0_CCDX,corner2_CCDX),max(corner0_CCDX,corner2_CCDX))
+        ccdimg[
+            min(corner0_CCDY, corner2_CCDY) : max(corner0_CCDY, corner2_CCDY),
+            min(corner0_CCDX, corner2_CCDX) : max(corner0_CCDX, corner2_CCDX),
+        ] = stamp_ccd
+    except Exception:
+        print(f"Failed: {detector.getName()}, {ampName}")
+        print("Y: ", min(corner0_CCDY, corner2_CCDY), max(corner0_CCDY, corner2_CCDY))
+        print("X: ", min(corner0_CCDX, corner2_CCDX), max(corner0_CCDX, corner2_CCDX))
 
     return ccdimg
 
-def amp_to_ccdview(stamp,detector,ampName):
+
+def amp_to_ccdview(stamp, detector, ampName):
     """
     Comvert a Guider ROI stamp image from Amp view to CCD view
 
