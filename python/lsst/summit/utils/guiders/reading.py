@@ -44,7 +44,8 @@ camera = LsstCam.getCamera()
 from lsst.meas.algorithms.stamps import Stamp,Stamps
 from lsst.afw.image import MaskedImageF
 
-from lsst.summit.utils.guiders.transformation import mk_roi_bboxes, convert_roi
+from lsst.summit.utils.guiders.transformation import mk_roi_bboxes, convert_roi, mk_ccd_to_dvcs
+
 
 # Todo: put in summit utils guiders
 #from utils import get_guider_stamps
@@ -329,9 +330,10 @@ class readGuiderData:
         self.ampName = self.ampNames[detname]
         pass
 
-def get_guider_stamps(idet,seqNum,dayObs,repo='/repo/embargo',collections=['LSSTCam/raw/guider'],butler=None,view='dvcs'):
+def get_guider_stamps(idet,seqNum,dayObs,repo='/repo/embargo',collections=['LSSTCam/raw/guider'],
+                      butler=None,view='dvcs',whichstamps=None):
     """
-    This class reads the stamp object from the Butler for one Guiders and 
+    This class reads the stamp object from the Butler for one Guider and 
     converts them to DVCS view, making a new Stamps object
     
     Parameters
@@ -351,10 +353,19 @@ def get_guider_stamps(idet,seqNum,dayObs,repo='/repo/embargo',collections=['LSST
     collections : list of str
         Butler collections
 
+    butler : lsst.daf.butler.Butler, optional
+        Butler object. If None, a new Butler will be created.
+
+    view : str, optional
+        View type, either 'dvcs' or 'ccd'. Default is 'dvcs'.
+
+    whichstamps : list of int, optional
+        List of stamp indices to read. If None, all stamps will be read.
+
     Returns
     -------
     stamps : lsst.meas.algorithms.stamps.Stamps
-        Stamp images oriented in DVCS
+        Stamp images oriented in DVCS or CCD view, depending on the `view` parameter.
     
     """
     # get Camera object
@@ -364,7 +375,6 @@ def get_guider_stamps(idet,seqNum,dayObs,repo='/repo/embargo',collections=['LSST
     # Get a Butler if none is provided
     if butler==None:
         butler = Butler(repo, collections=collections)
-
 
     # for dayObs of 20250509 or before, the ROIs are swapped between SG0 and SG1.  Fix here
     if dayObs < 20250509:
@@ -385,7 +395,6 @@ def get_guider_stamps(idet,seqNum,dayObs,repo='/repo/embargo',collections=['LSST
     else:
         dataId = {'instrument': 'LSSTCam', 'detector': idet, 'day_obs': dayObs,'seq_num':seqNum}
 
-
     # finally read from the Butler
     raw_stamps = butler.get('guider_raw', dataId)
     md = raw_stamps.metadata
@@ -398,20 +407,29 @@ def get_guider_stamps(idet,seqNum,dayObs,repo='/repo/embargo',collections=['LSST
     segment = md['ROISEG']
     ampName = 'C'+ segment[7:]
 
-    # build the CCD view and DVCS view Bounding Boxes
-    ccd_view_bbox,dvcs_view_bbox = mk_roi_bboxes(md,camera)
-    
+    # build the CCD view Bounding Boxes
+    ccd_view_bbox = mk_roi_bboxes(md,camera)
+
+    # also build the Translation methods from CCD view -> DVCS view and the reverse
+    ft,bt = mk_ccd_to_dvcs(ccd_view_bbox,detector.getOrientation().getNQuarter())
+
     # now loop over the individual ROIs 
     stamp_list= []
-    for i,masked_ims in enumerate(raw_stamps.getMaskedImages()):        
+    if whichstamps==None:
+        iterstamps = np.arange(len(raw_stamps.getMaskedImages()))
+    else:
+        iterstamps = whichstamps
+    
+    for i in iterstamps:        
 
-        # convert to DVCS view
+        masked_ims = raw_stamps.getMaskedImages()[i]
+        # convert to DVCS or CCD view
         raw_roi = masked_ims.getImage().getArray()
-        roi_dvcs = convert_roi(raw_roi,detector,ampName,camera,view=view)
+        roi_dvcs = convert_roi(raw_roi,md,detector,ampName,camera,view=view)
         
         # build a Stamp Object
         output_masked_im = MaskedImageF(roi_dvcs)
-        archive_element = [ccd_view_bbox,dvcs_view_bbox]
+        archive_element = [ccd_view_bbox,ft,bt]   
         stamp_list.append(Stamp(output_masked_im,archive_element))
     
     output_stamps = Stamps(stamp_list,md,use_archive=True)

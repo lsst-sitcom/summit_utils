@@ -29,13 +29,7 @@ __all__ = [
     "convert_roi",
     "focal_to_pixel",
     "pixel_to_focal",
-    "stamp_to_ccd",
-    "amp_to_ccdview",
-    "mk_ccd_to_dvcs",
-    "mk_roi_bboxes",
-    "get_detector_amp",
-    "convert_roi",
-    "mk_rot"
+    "amp_to_ccdview"
 ]
 
 import numpy as np
@@ -50,7 +44,7 @@ from lsst.afw.cameraGeom import Detector, Camera
 from lsst.obs.lsst import LsstCam
 from lsst.obs.base import createInitialSkyWcs
 from lsst.obs.lsst.cameraTransforms import LsstCameraTransforms
-from lsst.geom import Point2D, Box2D, Box2I
+from lsst.geom import Point2D, Box2D, Box2I, Extent2D
 from lsst.geom import AffineTransform
 from lsst.afw.image import ImageF
 
@@ -277,16 +271,17 @@ def mk_rot(det_nquarter,direction=1):
         rotation = AffineTransform(irot[nq])
     return rotation
 
-def mk_ccd_to_dvcs(llpt_ccd,det_nquarter):
+def mk_ccd_to_dvcs(bbox_ccd,det_nquarter):
     """
     Make transformations suitable for Guider stamps, to go from
     a view of the stamp in CCD pixel coordinates (ie. with 0,0 in the Lower Left of C00) 
-    to DVCS view (ie. orientated in the Focal Plane correctly in the DVCS) 
+    to DVCS view (ie. orientated in the Focal Plane correctly in the DVCS, 
+    with 0,0 at the Lower Left of the ROI) 
 
     Parameters
     ----------
-    llpt_ccd : Extent2I
-        The Lower Left point in the CCD pixel coordinates
+    bbox_ccd : Box2I
+        Bounding Box for the ROI in CCD pixel coordinates
     det_nquarter : int
         The number of 90degree quarters needed to rotate from CCD view to DVCS view
 
@@ -302,8 +297,8 @@ def mk_ccd_to_dvcs(llpt_ccd,det_nquarter):
     -------
 
     detector = camera[189]
-    llpt_ccd = Extent2D(100.,200.)
-    ft,bt = mk_ccd_to_dvcs(llpt_ccd,detector.getOrientation().getNQuarter())
+    bbox_ccd = Box2I(Point2I(300,600),Point2I(350,650))
+    ft,bt = mk_ccd_to_dvcs(box_ccd,detector.getOrientation().getNQuarter())
 
     # given a sky coordinate, find point on the stamp in DVCS view 
     pt_ccd = wcs.skyToPixel(sky_coord)
@@ -314,38 +309,49 @@ def mk_ccd_to_dvcs(llpt_ccd,det_nquarter):
     sky_coord = wcs.pixelToSky(pt_ccd)
     
     """
+    # build integer rotation matrices
+    rot = {}
+    rot[0] = np.array([[1.,0.],[0.,1.]])
+    rot[1] = np.array([[0.,-1],[1.,0.]])
+    rot[2] = np.array([[-1.,0.],[0.,-1.]])
+    rot[3] = np.array([[0.,1.],[-1.,0.]])
+
+    irot = {}
+    irot[0] = rot[0].transpose()
+    irot[1] = rot[1].transpose()
+    irot[2] = rot[2].transpose()
+    irot[3] = rot[3].transpose()
+
     # number of 90deg CCW rotations
     nq = np.mod(det_nquarter,4)
 
     # get LL,Size of the CCD view BBox
-    bboxd_ccd = Box2D(bbox_ccd)
-    llpt_ccd = Extent2D(bboxd_ccd.getCorners()[0])
+    llpt_ccd = Extent2D(bbox_ccd.getCorners()[0])
     nx,ny = bbox_ccd.getDimensions()
 
     # get translations to use for each NQ value
     boxtranslation = {}
     boxtranslation[0] = Extent2D(0,0)
-    boxtranslation[1] = Extent2D(ny,0)
-    boxtranslation[2] = Extent2D(nx,ny)
-    boxtranslation[3] = Extent2D(0,nx)
+    boxtranslation[1] = Extent2D(ny-1,0)
+    boxtranslation[2] = Extent2D(nx-1,ny-1)
+    boxtranslation[3] = Extent2D(0,nx-1)
 
-    # build the forward Transform
-    ftranslation = AffineTransform(-llpt_ccd)
-    frotation = AffineTransform(mk_rot(nq,1)) 
-    fboxtranslation = AffineTransform(boxtranslation[nq])
+    # build the forware Transform
+    ftranslation = AffineTransform.makeTranslation(-llpt_ccd)
+    frotation = AffineTransform(rot[nq]) 
+    fboxtranslation = AffineTransform.makeTranslation(boxtranslation[nq])
     forwards = fboxtranslation*frotation*ftranslation # ordering is third*second*first
 
-    # and the backward Transform
-    btranslation = AffineTransform(llpt_ccd)
-    brotation = AffineTransform(mk_rot(nq,-1))
-    bboxtranslation = AffineTransform(-boxtranslation[nq])
+    btranslation = AffineTransform.makeTranslation(llpt_ccd)
+    brotation = AffineTransform(irot[nq])
+    bboxtranslation = AffineTransform.makeTranslation(-boxtranslation[nq])
     backwards = btranslation*brotation*bboxtranslation
 
     return forwards,backwards
 
 def mk_roi_bboxes(md,camera):
     """
-    Make bounding boxes for a Guider stamp in CCD and DVCS view
+    Make bounding box for a Guider stamp in the full CCD view
 
     Parameters
     ----------
@@ -358,10 +364,7 @@ def mk_roi_bboxes(md,camera):
     Returns
     -------
     ccd_view_bbox : Box2I
-        Bounding box for the stamps in the full CCD in CCD view
-
-    dvcs_view_bbox : Box2I
-        Bounding box for the stamps in the full CCD but rotated to DVCS view
+        Bounding box for the stamps inside the full CCD in CCD view
     """
 
     # get need info from the stamp metadata
@@ -383,14 +386,14 @@ def mk_roi_bboxes(md,camera):
     # get opposite corner, corner2, of the ROI
     # depending on the RawFlipX,Y it could be either below or above corner0
     if amp.getRawFlipX():
-        corner2_CCDX = corner0_CCDX - roiCols
+        corner2_CCDX = corner0_CCDX - (roiCols-1)
     else:
-        corner2_CCDX = corner0_CCDX + roiCols
+        corner2_CCDX = corner0_CCDX + (roiCols-1)
 
     if amp.getRawFlipY():
-        corner2_CCDY = corner0_CCDY - roiRows
+        corner2_CCDY = corner0_CCDY - (roiRows-1)
     else:
-        corner2_CCDY = corner0_CCDY + roiRows
+        corner2_CCDY = corner0_CCDY + (roiRows-1)
 
     # now make the CCD view BBox, here we want the LowerLeft Point to be the 
     # smallest x,y
@@ -402,19 +405,7 @@ def mk_roi_bboxes(md,camera):
     ur_CCD = Point2D(ur_x,ur_y)
     ccd_view_bbox = Box2I(Box2D(ll_CCD,ur_CCD))
     
-    # next make the DVCS view BBox, by rotating by NQuarters
-    frot = mk_rot(detector.getOrientation().getNQuarter())
-    ll_rot = frot(ll_CCD)
-    ur_rot = frot(ur_CCD)
-    ll_x_dvcs = min(ll_rot.getX(),ur_rot.getX())
-    ur_x_dvcs = max(ll_rot.getX(),ur_rot.getX())
-    ll_y_dvcs = min(ll_rot.getY(),ur_rot.getY())
-    ur_y_dvcs = max(ll_rot.getY(),ur_rot.getY())
-    ll_DVCS = Point2D(ll_x_dvcs,ur_x_dvcs)
-    ur_DVCS = Point2D(ll_y_dvcs,ur_y_dvcs)
-    dvcs_view_bbox = Box2I(Box2D(ll_DVCS,ur_DVCS))
-    
-    return ccd_view_bbox,dvcs_view_bbox
+    return ccd_view_bbox
 
 def get_detector_amp(md,camera):
     """
@@ -449,7 +440,7 @@ def get_detector_amp(md,camera):
 
     return detector,ampName
 
-def convert_roi(roi,detector,ampName,camera,view='dvcs'):
+def convert_roi(roi,md,detector,ampName,camera,view='dvcs'):
     """
     convert ROI image from raw to CCD or DVCS views
 
@@ -458,6 +449,9 @@ def convert_roi(roi,detector,ampName,camera,view='dvcs'):
     roi : numpy.ndarray
         ROI array
 
+    md : lsst.daf.base.PropertyList
+        Metadata from one Guider CCD
+    
     detector : lsst.afw.cameraGeom.Detector
         CCD detector object
 
@@ -479,13 +473,23 @@ def convert_roi(roi,detector,ampName,camera,view='dvcs'):
     roi_dvcsview = np.rot90(roi_ccdview,-detector.getOrientation().getNQuarter())
 
     # output ImageF
-    ny,nx = roi.shape
-    imf = ImageF(nx,ny,0.)
-
     if view=='dvcs':
+        ny,nx = roi.shape
+        imf = ImageF(nx,ny,0.)
         imf.array[:] = roi_dvcsview
     elif view=='ccd':
+        ny,nx = roi.shape
+        imf = ImageF(nx,ny,0.)
         imf.array[:] = roi_ccdview
+    elif view=='ccdfull':
+        # make the full CCD and place the ROI inside it
+        nx,ny = detector.getBBox().getDimensions()
+        imf = ImageF(nx,ny,0.)
+        segment = md['ROISEG']
+        ampName = 'C'+ segment[7:]
+        roiCol    = md['ROICOL']
+        roiRow    = md['ROIROW']        
+        imf.array[:] = stamp_to_ccd(roi,imf.array[:],detector,camera,ampName,roiCol,roiRow)
 
     return imf
     
