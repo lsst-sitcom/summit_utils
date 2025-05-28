@@ -368,9 +368,10 @@ def plot_hp_measured_data(
     if commands is not None:
         for commandTime, command in commands.items():
             command = command.replace("lsst.sal.", "")
+            
             for ax in (ax_hp, ax_tor, ax_vel):  # so that the line spans all plots
                 line = ax.axvline(
-                    commandTime.utc.datetime,
+                    commandTime,
                     c=lineColors[colorCounter],
                     ls="--",
                     alpha=0.75,
