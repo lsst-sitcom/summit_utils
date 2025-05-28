@@ -21,7 +21,7 @@
 from __future__ import annotations
 
 import logging
-from typing import TYPE_CHECKING, Any, TypedDict
+from typing import TYPE_CHECKING, Any, Optional, TypedDict
 
 import matplotlib.pyplot as plt
 import pandas as pd
@@ -215,7 +215,11 @@ def add_hp_limits(ax: plt.Axes) -> list[plt.Line2D]:
         The axes on which the velocity data is plotted.
     """
     hp_limits: dict[str, HPLimitsDict] = {
-        "HP Breakaway Limit": {"pos_limit": HP_BREAKAWAY_LIMIT, "neg_limit": -HP_BREAKAWAY_LIMIT, "ls": "-"},
+        "HP Breakaway Limit": {
+            "pos_limit": HP_BREAKAWAY_LIMIT,
+            "neg_limit": -HP_BREAKAWAY_LIMIT,
+            "ls": "-",
+        },
         "Repeated Load Limit (30% breakaway)": {
             "pos_limit": HP_FATIGUE_LIMIT,
             "neg_limit": -HP_FATIGUE_LIMIT,
@@ -275,7 +279,9 @@ def plot_torque_data(ax: plt.Axes, dataset: M1M3ICSAnalysis) -> None:
     ax.legend(ncol=2, fontsize="x-small")
 
 
-def plot_stable_region(fig: plt.Figure, begin: Time, end: Time, label: str = "", color: str = "b") -> Patch:
+def plot_stable_region(
+    fig: plt.Figure, begin: Time, end: Time, label: str = "", color: str = "b"
+) -> Optional[Patch]:
     """Highlight a stable region on the plot with a colored span.
 
     Parameters
@@ -297,6 +303,7 @@ def plot_stable_region(fig: plt.Figure, begin: Time, end: Time, label: str = "",
     patch : `matplotlib.patches.Patch`
         The patch object representing the highlighted region.
     """
+    span = None  # Fixes mypy error about uninitialized variable
     for ax in fig.axes[1:]:
         span = ax.axvspan(begin.datetime, end.datetime, fc=color, alpha=0.1, zorder=-2, label=label)
     return span
@@ -368,9 +375,10 @@ def plot_hp_measured_data(
     if commands is not None:
         for commandTime, command in commands.items():
             command = command.replace("lsst.sal.", "")
+
             for ax in (ax_hp, ax_tor, ax_vel):  # so that the line spans all plots
                 line = ax.axvline(
-                    commandTime.utc.datetime,
+                    commandTime,
                     c=lineColors[colorCounter],
                     ls="--",
                     alpha=0.75,
