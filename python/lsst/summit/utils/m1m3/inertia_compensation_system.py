@@ -81,7 +81,9 @@ class M1M3ICSAnalysis:
         log: logging.Logger | None = None,
     ) -> None:
         self.log = (
-            log.getChild(type(self).__name__) if log is not None else logging.getLogger(type(self).__name__)
+            log.getChild(type(self).__name__)
+            if log is not None
+            else logging.getLogger(type(self).__name__)
         )
 
         self.event = event
@@ -91,7 +93,9 @@ class M1M3ICSAnalysis:
         self.client = efd_client
 
         self.number_of_hardpoints = HP_COUNT
-        self.measured_forces_topics = [f"measuredForce{i}" for i in range(self.number_of_hardpoints)]
+        self.measured_forces_topics = [
+            f"measuredForce{i}" for i in range(self.number_of_hardpoints)
+        ]
 
         self.applied_forces_topics = (
             [f"xForces{actuator}" for actuator in range(FATABLE_XFA)]
@@ -107,39 +111,6 @@ class M1M3ICSAnalysis:
 
         self.log.info("Packing results into a Series")
         self.stats = self.pack_stats_series()
-
-    def find_stable_region(self) -> tuple[Time, Time]:
-        """
-        Find the stable region of the dataset. By stable, we mean the region
-        where the torque is within n_sigma of the mean.
-
-        Returns
-        -------
-        stable_region : `tuple[Time, Time]`
-            The begin and end times of the stable region.
-        """
-        az_torque = self.df["az_actual_torque"]
-        az_torque_regions = find_adjacent_true_regions(
-            np.abs(az_torque - az_torque.mean()) < self.n_sigma * az_torque.std()
-        )
-
-        el_torque = self.df["el_actual_torque"]
-        el_torque_regions = find_adjacent_true_regions(
-            np.abs(el_torque - el_torque.mean()) < self.n_sigma * el_torque.std()
-        )
-
-        if az_torque_regions and el_torque_regions:
-            stable_begin = max([reg[0] for reg in az_torque_regions + el_torque_regions])
-            stable_begin = Time(stable_begin, scale="utc")
-
-            stable_end = min([reg[-1] for reg in az_torque_regions + el_torque_regions])
-            stable_end = Time(stable_end, scale="utc")
-        else:
-            self.log.warning("No stable region found. Using full slew.")
-            stable_begin = self.event.begin
-            stable_end = self.event.end
-
-        return stable_begin, stable_end
 
     def query_dataset(self) -> DataFrame:
         """
@@ -158,21 +129,14 @@ class M1M3ICSAnalysis:
                 "columns": self.measured_forces_topics,
                 "err_msg": f"No hard-point data found for event {evt.seqNum} on {evt.dayObs}",
             },
-            "m1m3_applied_velocity_forces": {
-                "topic": "lsst.sal.MTM1M3.appliedVelocityForces",
-                "columns": self.applied_forces_topics,
-                "err_msg": None,
-                "rename_columns": {col: f"avf_{col}" for col in self.applied_forces_topics},
-            },
-            "m1m3_applied_acceleration_forces": {
-                "topic": "lsst.sal.MTM1M3.appliedAccelerationForces",
-                "columns": self.applied_forces_topics,
-                "err_msg": None,
-                "rename_columns": {col: f"aaf_{col}" for col in self.applied_forces_topics},
-            },
             "tma_az": {
                 "topic": "lsst.sal.MTMount.azimuth",
-                "columns": ["timestamp", "actualPosition", "actualVelocity", "actualTorque"],
+                "columns": [
+                    "timestamp",
+                    "actualPosition",
+                    "actualVelocity",
+                    "actualTorque",
+                ],
                 "err_msg": f"No TMA azimuth data found for event {evt.seqNum} on {evt.dayObs}",
                 "reset_index": True,
                 "rename_columns": {
@@ -183,7 +147,12 @@ class M1M3ICSAnalysis:
             },
             "tma_el": {
                 "topic": "lsst.sal.MTMount.elevation",
-                "columns": ["timestamp", "actualPosition", "actualVelocity", "actualTorque"],
+                "columns": [
+                    "timestamp",
+                    "actualPosition",
+                    "actualVelocity",
+                    "actualTorque",
+                ],
                 "err_msg": f"No TMA elevation data found for event {evt.seqNum} on {evt.dayObs}",
                 "reset_index": True,
                 "rename_columns": {
@@ -288,10 +257,14 @@ class M1M3ICSAnalysis:
                 self.log.error(err_msg)
                 raise ValueError(err_msg)
             else:
-                self.log.warning(f"Empty dataset for {topic}. Returning a zero-padded dataframe.")
+                self.log.warning(
+                    f"Empty dataset for {topic}. Returning a zero-padded dataframe."
+                )
                 begin_timestamp = pd.Timestamp(self.event.begin.unix, unit="s")
                 end_timestamp = pd.Timestamp(self.event.end.unix, unit="s")
-                index = pd.DatetimeIndex(pd.date_range(begin_timestamp, end_timestamp, freq="1S"))
+                index = pd.DatetimeIndex(
+                    pd.date_range(begin_timestamp, end_timestamp, freq="1S")
+                )
                 df = pd.DataFrame(
                     columns=columns,
                     index=index,
@@ -302,7 +275,9 @@ class M1M3ICSAnalysis:
             df = df.rename(columns=rename_columns)
 
         if reset_index:
-            df["timestamp"] = Time(df["timestamp"], format="unix_tai", scale="utc").datetime
+            df["timestamp"] = Time(
+                df["timestamp"], format="unix_tai", scale="utc"
+            ).datetime
             df.set_index("timestamp", inplace=True)
             df.index = df.index.tz_localize("UTC")
 
@@ -330,55 +305,11 @@ class M1M3ICSAnalysis:
         maximum, and peak-to-peak values for each column's data.
         """
         cols = self.measured_forces_topics
-        full_slew_stats = DataFrame(data=[self.get_slew_minmax(self.df[col]) for col in cols], index=cols)
-        self.log.info("Finding stable time window")
-        begin, end = self.find_stable_region()
-
-        self.log.debug("Updating begin and end times")
-        begin = begin + self.inner_pad
-        end = end - self.inner_pad
-
-        self.log.debug("Calculating statistics in stable time window from M1M3")
-        stable_slew_stats = DataFrame(
-            data=[
-                self.get_stats_in_torqueless_interval(self.df[col].loc[begin.isot : end.isot]) for col in cols
-            ],
-            index=cols,
+        stats = DataFrame(
+            data=[self.get_slew_minmax(self.df[col]) for col in cols], index=cols
         )
-
-        self.log.debug("Concatenating statistics")
-        stats = pd.concat((full_slew_stats, stable_slew_stats), axis=1)
 
         return stats
-
-    @staticmethod
-    def get_stats_in_torqueless_interval(s: Series) -> Series:
-        """
-        Calculates the statistical measures within a torqueless interval.
-
-        This static method computes descriptive statistics for a given pandas
-        Series within a torqueless interval. The torqueless interval represents
-        a period of the data analysis when no external torque is applied.
-
-        Parameters
-        ----------
-        s : `pd.Series`
-            A pandas Series containing data values for analysis.
-
-        Returns
-        -------
-        stats : `pd.Series`
-            A pandas Series containing the following statistical measures:
-            - Mean: The arithmetic mean of the data.
-            - Median: The median value of the data.
-            - Standard Deviation (Std): The standard deviation of the data.
-        """
-        result = Series(
-            data=[s.mean(), s.median(), s.std()],
-            index=["mean", "median", "std"],
-            name=s.name,
-        )
-        return result
 
     @staticmethod
     def get_slew_minmax(s: Series) -> Series:
@@ -465,11 +396,15 @@ class M1M3ICSAnalysis:
         # Create a new Pandas Series correlating event and system information
         system_series = pd.Series(
             {
-                "az_start": self.get_nearest_value("az_actual_torque", self.event.begin),
+                "az_start": self.get_nearest_value(
+                    "az_actual_torque", self.event.begin
+                ),
                 "az_end": self.get_nearest_value("az_actual_torque", self.event.end),
                 "az_extreme_vel": self.get_extreme_value("az_actual_velocity"),
                 "az_extreme_torque": self.get_extreme_value("az_actual_torque"),
-                "el_start": self.get_nearest_value("el_actual_torque", self.event.begin),
+                "el_start": self.get_nearest_value(
+                    "el_actual_torque", self.event.begin
+                ),
                 "el_end": self.get_nearest_value("el_actual_torque", self.event.end),
                 "el_extreme_vel": self.get_extreme_value("el_actual_velocity"),
                 "el_extreme_torque": self.get_extreme_value("el_actual_torque"),
@@ -559,8 +494,18 @@ class M1M3ICSAnalysis:
         status : `bool`
             True if the ICS is enabled, False otherwise.
         """
-        avf0 = (self.df[[c for c in self.df.columns if "avf" in c]].abs() < threshold).all().eq(True).all()
-        aaf0 = (self.df[[c for c in self.df.columns if "aaf" in c]].abs() < threshold).all().eq(True).all()
+        avf0 = (
+            (self.df[[c for c in self.df.columns if "avf" in c]].abs() < threshold)
+            .all()
+            .eq(True)
+            .all()
+        )
+        aaf0 = (
+            (self.df[[c for c in self.df.columns if "aaf" in c]].abs() < threshold)
+            .all()
+            .eq(True)
+            .all()
+        )
         return not (avf0 and aaf0)
 
 
@@ -695,7 +640,9 @@ def evaluate_m1m3_ics_day_obs(
                 n_sigma=n_sigma,
                 log=log,
             )
-            log.info(f"Complete inertia compensation system analysis on {event.seqNum}.")
+            log.info(
+                f"Complete inertia compensation system analysis on {event.seqNum}."
+            )
         except ValueError:
             log.warning(f"Missing data for {event.seqNum} on {event.dayObs}")
             continue
