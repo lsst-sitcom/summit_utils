@@ -574,12 +574,15 @@ def makePsfPanel(
         )
 
     # set colorbar
+    vmin = None
+    vmax = None
+    if fwhmDict:
+        vmin = min(fwhmDict.values()) * 0.2
+        vmax = max(fwhmDict.values()) * 0.2
     cbar = fig.colorbar(
         matplotlib.cm.ScalarMappable(
             cmap=cmap,
-            norm=matplotlib.pyplot.Normalize(
-                vmin=min(fwhmDict.values()) * 0.2, vmax=max(fwhmDict.values()) * 0.2
-            ),
+            norm=matplotlib.pyplot.Normalize(vmin=vmin, vmax=vmax),
         ),
         cax=axsDict["cbar"],
     )
