@@ -703,11 +703,18 @@ def makePanel(
     -------
     fig: `matplotlib.figure.Figure`
         The figure.
+
+    Raises
+    ------
+    ValueError
+        If no image or source table datasets are found for the given visit.
     """
 
     # retrieve the image and source table dataset references
-    imgRefs = butler.query_datasets("post_isr_image", where=f"exposure={visit}")
-    srcRefs = butler.query_datasets("single_visit_psf_star", where=f"exposure={visit}")
+    imgRefs = butler.query_datasets("post_isr_image", where=f"exposure={visit}", explain=False)
+    srcRefs = butler.query_datasets("single_visit_psf_star", where=f"exposure={visit}", explain=False)
+    if not imgRefs or not srcRefs:
+        raise ValueError(f"No image and source tables found for visit {visit}")
 
     # grab the instrument name from one of the imgRefs
     instrument = imgRefs[0].dataId["instrument"]
