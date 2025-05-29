@@ -108,7 +108,7 @@ def doWork(idx: int, row: astropy.table.Row, doPlot: bool) -> tuple[str, str, fl
     exposureId : `int`
         Exposure ID of the exposure.
     """
-    global apeGlobals
+    global apeGlobals  # noqa F824
     assert apeGlobals is not None, "initializePoolProcess must be called before doWork"
     bestEffort, pet, display, fig, ax = apeGlobals
     exposureId = row["exposureId"]
