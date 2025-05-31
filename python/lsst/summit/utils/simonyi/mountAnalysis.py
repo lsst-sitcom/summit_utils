@@ -28,9 +28,11 @@ from dataclasses import dataclass
 from typing import TYPE_CHECKING
 from zoneinfo import ZoneInfo
 
+import astropy.units as u
 import matplotlib.dates as mdates
 import matplotlib.pyplot as plt
 import numpy as np
+from astropy.coordinates import AltAz, EarthLocation, SkyCoord
 from matplotlib.dates import num2date
 from matplotlib.ticker import FuncFormatter
 
@@ -40,6 +42,7 @@ from lsst.summit.utils.utils import dayObsIntToString
 from .mountData import getAzElRotDataForExposure
 
 if TYPE_CHECKING:
+    from astropy.time import Time
     from lsst_efd_client import EfdClient
     from matplotlib.figure import Figure
 
@@ -60,6 +63,9 @@ MOUNT_IMAGE_BAD_LEVEL = 0.10  # and red for this
 
 N_REPLACED_WARNING_LEVEL = 999999  # fill these values in once you've spoken to Craig and Brian
 N_REPLACED_BAD_LEVEL = 999999  # fill these values in once you've spoken to Craig and Brian
+
+SIMONYI_LOCATION = EarthLocation.of_site("Rubin:Simonyi")
+EARTH_ROTATION = 15.04106858  # degrees/hour
 
 
 @dataclass
@@ -85,11 +91,36 @@ def tickFormatter(value: float, tick_number: float) -> str:
 def calculateMountErrors(
     expRecord: DimensionRecord,
     client: EfdClient,
-    maxDelta=0.1,
-    doFilterResiduals=False,
+    maxDelta: float = 0.1,
+    doFilterResiduals: bool = False,
+    useMockPointingModelResidualsAboveAzEl: float = 10.0,
+    useMockPointingModelResidualsAboveRot: float = 15.0,
 ) -> tuple[MountErrors, MountData] | tuple[None, None]:
-    """Queries EFD for a given exposure and calculates the RMS errors in the
-    axes during the exposure, optionally plotting and saving the data.
+    """Queries the EFD over a given exposure and calculates the RMS errors
+    for the axes, optionally using a pointing model to calculate residuals.
+
+    Parameters
+    ----------
+    expRecord : `DimensionRecord`
+        The exposure record containing the necessary fields for calculations.
+    client : `EfdClient`
+        The EFD client to query for mount data.
+    maxDelta : `float`, optional
+        The maximum delta for filtering bad values, by default 0.1.
+    doFilterResiduals : `bool`, optional
+        Whether to filter residuals.
+    useMockPointingModelResidualsAboveAzEl : `float`, optional
+        The threshold above which to use the mock pointing model residuals, as
+        an RMS, in arcseconds, for the azimuth and elevation axes.
+    useMockPointingModelResidualsAboveRot : `float`, optional
+        The threshold above which to use the mock pointing model residuals, as
+        an RMS, in arcseconds, for the rotator.
+
+    Returns
+    -------
+    tuple[MountErrors, MountData] | tuple[None, None]
+        A tuple containing the mount errors and mount data, or (None, None) if
+        the exposure type is non-tracking.
     """
     logger = logging.getLogger(__name__)
 
@@ -113,6 +144,72 @@ def calculateMountErrors(
         nReplacedEl = filterBadValues(elError, maxDelta)
         mountData.azimuthData["azError"] = azError
         mountData.elevationData["elError"] = elError
+
+    # Calculate the linear demand model
+    if len(mountData.azimuthData) == len(mountData.elevationData):
+        azModelValues, elModelValues = getAltAzOverPeriod(expRecord, nPoints=len(mountData.azimuthData))
+    else:
+        azModelValues, _ = getAltAzOverPeriod(expRecord, nPoints=len(mountData.azimuthData))
+        _, elModelValues = getAltAzOverPeriod(expRecord, nPoints=len(mountData.elevationData))
+
+    _, _, rotRate = getLinearRates(expRecord)
+
+    azimuthData = mountData.azimuthData
+    azValues = np.asarray(azimuthData["actualPosition"])
+    azMedian = np.median(azValues)
+    azModelMedian = np.median(azModelValues)
+    # subtract the overall offset
+    azModelValues -= azModelMedian - azMedian
+    azimuthData["linearModel"] = azModelValues
+    azLinearError = (azValues - azModelValues) * 3600
+    azLinearRms = np.sqrt(np.mean(azLinearError * azLinearError))
+    if azLinearRms > useMockPointingModelResidualsAboveAzEl:
+        logger.warning(
+            f"Azimuth pointing model RMS error {azLinearRms:.3f} arcsec is above threshold of "
+            f"{useMockPointingModelResidualsAboveAzEl:.3f} arcsec, calculating errors vs astropy."
+        )
+        # If linear error is large, replace demand errors with linear error
+        azimuthData["azError"] = azLinearError
+
+    elevationData = mountData.elevationData
+    elValues = np.asarray(elevationData["actualPosition"])
+    elMedian = np.median(elValues)
+    elModelMedian = np.median(elModelValues)
+    # subtract the overall offset
+    elModelValues -= elModelMedian - elMedian
+    elevationData["linearModel"] = elModelValues
+    elLinearError = (elValues - elModelValues) * 3600
+    elLinearRms = np.sqrt(np.mean(elLinearError * elLinearError))
+    if elLinearRms > useMockPointingModelResidualsAboveAzEl:
+        logger.warning(
+            f"Elevation pointing model RMS error {elLinearRms:.3f} arcsec is above threshold of "
+            f"{useMockPointingModelResidualsAboveAzEl:.3f} arcsec, calculating errors vs astropy."
+        )
+        # If linear error is large, replace demand errors with linear error
+        elevationData["elError"] = elLinearError
+
+    rotationData = mountData.rotationData
+    rotValues = np.asarray(rotationData["actualPosition"])
+    rotValTimes = np.asarray(rotationData["timestamp"])
+    rotModelValues = np.zeros_like(rotValues)
+    rotMedian = np.median(rotValues)
+    rotTimesMedian = np.median(rotValTimes)
+    rotModelValues = rotMedian + rotRate * (rotValTimes - rotTimesMedian)
+    rotationData["linearModel"] = rotModelValues
+    rotLinearError = (rotValues - rotModelValues) * 3600
+    rotLinearRms = np.sqrt(np.mean(rotLinearError * rotLinearError))
+    if rotLinearRms > useMockPointingModelResidualsAboveRot:
+        logger.warning(
+            f"Rotation pointing model RMS error {rotLinearRms:.3f} arcsec is above threshold of "
+            f"{useMockPointingModelResidualsAboveAzEl:.3f} arcsec, calculating errors vs astropy."
+        )
+        # If linear error is large, replace demand errors with linear error
+        rotationData["rotError"] = rotLinearError
+
+    azError = mountData.azimuthData["azError"].to_numpy()
+    elError = mountData.elevationData["elError"].to_numpy()
+    rotError = mountData.rotationData["rotError"].to_numpy()
+
     azRms = np.sqrt(np.mean(azError * azError))
     elRms = np.sqrt(np.mean(elError * elError))
     rotRms = np.sqrt(np.mean(rotError * rotError))
@@ -124,13 +221,13 @@ def calculateMountErrors(
     imageImpactRms = np.sqrt(imageAzRms**2 + imageElRms**2 + imageRotRms**2)
 
     mountErrors = MountErrors(
-        azRms=azRms,
-        elRms=elRms,
-        rotRms=rotRms,
-        imageAzRms=imageAzRms,
-        imageElRms=imageElRms,
-        imageRotRms=imageRotRms,
-        imageImpactRms=imageImpactRms,
+        azRms=float(azRms),
+        elRms=float(elRms),
+        rotRms=float(rotRms),
+        imageAzRms=float(imageAzRms),
+        imageElRms=float(imageElRms),
+        imageRotRms=float(imageRotRms),
+        imageImpactRms=float(imageImpactRms),
         residualFiltering=doFilterResiduals,
         nReplacedAz=nReplacedAz,
         nReplacedEl=nReplacedEl,
@@ -193,6 +290,13 @@ def plotMountErrors(
         c=lineColors[colorCounter % nColors],
     )
     colorCounter += 1
+    ax1.plot(
+        mountData.azimuthData["linearModel"],
+        label="Azimuth linear model",
+        ls="--",
+        c=lineColors[colorCounter % nColors],
+    )
+    colorCounter += 1
     ax1.yaxis.set_major_formatter(FuncFormatter(tickFormatter))
     ax1.set_ylabel("Azimuth (degrees)")
 
@@ -200,6 +304,13 @@ def plotMountErrors(
     ax1_twin.plot(
         mountData.elevationData["actualPosition"],
         label="Elevation position",
+        c=lineColors[colorCounter % nColors],
+    )
+    colorCounter += 1
+    ax1_twin.plot(
+        mountData.elevationData["linearModel"],
+        label="Elevation linear model",
+        ls="--",
         c=lineColors[colorCounter % nColors],
     )
     colorCounter += 1
@@ -266,6 +377,13 @@ def plotMountErrors(
         c=lineColors[colorCounter % nColors],
     )
     colorCounter += 1
+    ax4.plot(
+        mountData.rotationData["linearModel"],
+        label="Rotator linearModel",
+        ls="--",
+        c=lineColors[colorCounter % nColors],
+    )
+    colorCounter += 1
     ax4.yaxis.set_major_formatter(FuncFormatter(tickFormatter))
     ax4.yaxis.tick_right()
     ax4.set_ylabel("Rotator angle (degrees)")
@@ -320,6 +438,7 @@ def plotMountErrors(
 
     ax1.set_title("Azimuth and Elevation")
     ax4.set_title("Rotator")
+    ax4.legend()
     figure.subplots_adjust(top=0.85)  # Adjust the top margin to make room for the suptitle
     figure.suptitle(title, fontsize=14, y=1.04)  # Adjust y to move the title up
 
@@ -357,3 +476,75 @@ def plotMountErrors(
         figure.savefig(saveFilename, bbox_inches="tight")
 
     return figure
+
+
+def getLinearRates(expRecord: DimensionRecord) -> tuple[float, float, float]:
+    """Calculate the linear rates of motion for az, el, and rotation during an
+    exposure.
+
+    The rates are calculated based on the tracking RA and Dec, azimuth, zenith
+    angle, and the exposure timespan. The rates are returned in degrees per
+    second.
+
+    Parameters
+    ----------
+    expRecord : `DimensionRecord`
+        The exposure record containing the necessary fields for calculations.
+
+    Returns
+    -------
+    azRate, elRate, rotRate: `tuple`[`float`, `float`, `float`]
+        The azimuth rate, elevation rate, and rotator rate in degrees per
+        second.
+    """
+    begin: Time = expRecord.timespan.begin
+    end: Time = expRecord.timespan.end
+    dT: float = (expRecord.timespan.end - expRecord.timespan.begin).value * 86400.0
+    rotRate = (
+        -EARTH_ROTATION
+        * np.cos(SIMONYI_LOCATION.lat.rad)
+        * np.cos(expRecord.azimuth * u.deg)
+        / np.cos((90.0 - expRecord.zenith_angle) * u.deg)
+        / 3600.0
+    )
+    skyLocation = SkyCoord(expRecord.tracking_ra * u.deg, expRecord.tracking_dec * u.deg)
+    altAz1 = AltAz(obstime=begin, location=SIMONYI_LOCATION)
+    altAz2 = AltAz(obstime=end, location=SIMONYI_LOCATION)
+    obsAltAz1 = skyLocation.transform_to(altAz1)
+    obsAltAz2 = skyLocation.transform_to(altAz2)
+    elRate = float((obsAltAz2.alt.deg - obsAltAz1.alt.deg) / dT)
+    azRate = float((obsAltAz2.az.deg - obsAltAz1.az.deg) / dT)
+
+    # All rates are in degrees / second
+    return azRate, elRate, float(rotRate.value)
+
+
+def getAltAzOverPeriod(
+    expRecord: DimensionRecord,
+    nPoints: int,
+) -> tuple[np.ndarray, np.ndarray]:
+    """Get the AltAz coordinates over a period.
+
+    Parameters
+    ----------
+    begin : `Time`
+        The beginning of the period.
+    end : `Time`
+        The end of the period.
+    target : `SkyCoord`
+        The sky coordinates to track.
+    nPoints : `int`, optional
+        The number of points to sample, by default 100.
+
+    Returns
+    -------
+    tuple[np.ndarray, np.ndarray]
+        The azimuth and elevation coordinates in degrees.
+    """
+    begin = expRecord.timespan.begin
+    end = expRecord.timespan.end
+    times = begin + (end - begin) * np.linspace(0, 1, nPoints)
+    target = SkyCoord(expRecord.tracking_ra * u.deg, expRecord.tracking_dec * u.deg)
+    altAzFrame = AltAz(obstime=times, location=SIMONYI_LOCATION)
+    targetAltAz = target.transform_to(altAzFrame)
+    return targetAltAz.az.degree, targetAltAz.alt.degree
