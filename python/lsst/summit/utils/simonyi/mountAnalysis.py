@@ -42,6 +42,7 @@ from lsst.summit.utils.utils import dayObsIntToString
 from .mountData import getAzElRotDataForExposure
 
 if TYPE_CHECKING:
+    from astropy.time import Time
     from lsst_efd_client import EfdClient
     from matplotlib.figure import Figure
 
@@ -87,11 +88,36 @@ def tickFormatter(value: float, tick_number: float) -> str:
 def calculateMountErrors(
     expRecord: DimensionRecord,
     client: EfdClient,
-    maxDelta=0.1,
-    doFilterResiduals=False,
+    maxDelta: float = 0.1,
+    doFilterResiduals: bool = False,
+    usePointingModelResidualsAboveAzEl: float = 1.0,
+    usePointingModelResidualsAboveRot: float = 5.0,
 ) -> tuple[MountErrors, MountData] | tuple[None, None]:
-    """Queries EFD for a given exposure and calculates the RMS errors in the
-    axes during the exposure, optionally plotting and saving the data.
+    """Queries the EFD over a given exposure and calculates the RMS errors
+    for the axes, optionally using a pointing model to calculate residuals.
+
+    Parameters
+    ----------
+    expRecord : `DimensionRecord`
+        The exposure record containing the necessary fields for calculations.
+    client : `EfdClient`
+        The EFD client to query for mount data.
+    maxDelta : `float`, optional
+        The maximum delta for filtering bad values, by default 0.1.
+    doFilterResiduals : `bool`, optional
+        Whether to filter residuals.
+    usePointingModelResidualsAboveAzEl : `float`, optional
+        The threshold above which to use pointing model residuals, as an RMS,
+        in arcseconds, for the azimuth and elevation axes.
+    usePointingModelResidualsAboveRot : `float`, optional
+        The threshold above which to use pointing model residuals, as an RMS,
+        in arcseconds, for the rotator.
+
+    Returns
+    -------
+    tuple[MountErrors, MountData] | tuple[None, None]
+        A tuple containing the mount errors and mount data, or (None, None) if
+        the exposure type is non-tracking.
     """
     logger = logging.getLogger(__name__)
 
@@ -117,7 +143,7 @@ def calculateMountErrors(
         mountData.elevationData["elError"] = elError
 
     # Calculate the linear demand model
-    [azRate, elRate, rotRate] = getLinearRates(expRecord)
+    azRate, elRate, rotRate = getLinearRates(expRecord)
 
     azimuthData = mountData.azimuthData
     azValues = np.asarray(azimuthData["actualPosition"])
@@ -129,7 +155,7 @@ def calculateMountErrors(
     azimuthData["linearModel"] = azModelValues
     azLinearError = (azValues - azModelValues) * 3600
     azLinearRms = np.sqrt(np.mean(azLinearError * azLinearError))
-    if azLinearRms > 1.0:
+    if azLinearRms > usePointingModelResidualsAboveAzEl:
         # If linear error is large, replace demand errors with linear error
         azimuthData["azError"] = azLinearError
 
@@ -143,7 +169,7 @@ def calculateMountErrors(
     elevationData["linearModel"] = elModelValues
     elLinearError = (elValues - elModelValues) * 3600
     elLinearRms = np.sqrt(np.mean(elLinearError * elLinearError))
-    if elLinearRms > 1.0:
+    if elLinearRms > usePointingModelResidualsAboveAzEl:
         # If linear error is large, replace demand errors with linear error
         elevationData["elError"] = elLinearError
 
@@ -157,7 +183,7 @@ def calculateMountErrors(
     rotationData["linearModel"] = rotModelValues
     rotLinearError = (rotValues - rotModelValues) * 3600
     rotLinearRms = np.sqrt(np.mean(rotLinearError * rotLinearError))
-    if rotLinearRms > 5.0:
+    if rotLinearRms > usePointingModelResidualsAboveRot:
         # If linear error is large, replace demand errors with linear error
         rotationData["rotError"] = rotLinearError
 
@@ -433,13 +459,28 @@ def plotMountErrors(
     return figure
 
 
-def getLinearRates(expRecord: DimensionRecord) -> list:
-    # Calculates linear rates of motion in Az, El, Rot.
-    # This is for identifying exposures where the mount
-    # did not behave as it should.
-    begin = expRecord.timespan.begin
-    end = expRecord.timespan.end
-    dT = (expRecord.timespan.end - expRecord.timespan.begin).value * 86400.0
+def getLinearRates(expRecord: DimensionRecord) -> tuple[float, float, float]:
+    """Calculate the linear rates of motion for az, el, and rotation during an
+    exposure.
+
+    The rates are calculated based on the tracking RA and Dec, azimuth, zenith
+    angle, and the exposure timespan. The rates are returned in degrees per
+    second.
+
+    Parameters
+    ----------
+    expRecord : `DimensionRecord`
+        The exposure record containing the necessary fields for calculations.
+
+    Returns
+    -------
+    azRate, elRate, rotRate: `tuple`[`float`, `float`, `float`]
+        The azimuth rate, elevation rate, and rotator rate in degrees per
+        second.
+    """
+    begin: Time = expRecord.timespan.begin
+    end: Time = expRecord.timespan.end
+    dT: float = (expRecord.timespan.end - expRecord.timespan.begin).value * 86400.0
     location = EarthLocation.of_site("Rubin:Simonyi")
     rotEarth = 15.04106858  # degrees/hour
     rotRate = (
@@ -454,7 +495,8 @@ def getLinearRates(expRecord: DimensionRecord) -> list:
     altAz2 = AltAz(obstime=end, location=location)
     obsAltAz1 = skyLocation.transform_to(altAz1)
     obsAltAz2 = skyLocation.transform_to(altAz2)
-    elRate = (obsAltAz2.alt.deg - obsAltAz1.alt.deg) / dT
-    azRate = (obsAltAz2.az.deg - obsAltAz1.az.deg) / dT
+    elRate = float((obsAltAz2.alt.deg - obsAltAz1.alt.deg) / dT)
+    azRate = float((obsAltAz2.az.deg - obsAltAz1.az.deg) / dT)
+
     # All rates are in degrees / second
-    return [azRate, elRate, rotRate]
+    return azRate, elRate, float(rotRate.value)
