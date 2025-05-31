@@ -202,13 +202,13 @@ def calculateMountErrors(
     imageImpactRms = np.sqrt(imageAzRms**2 + imageElRms**2 + imageRotRms**2)
 
     mountErrors = MountErrors(
-        azRms=azRms,
-        elRms=elRms,
-        rotRms=rotRms,
-        imageAzRms=imageAzRms,
-        imageElRms=imageElRms,
-        imageRotRms=imageRotRms,
-        imageImpactRms=imageImpactRms,
+        azRms=float(azRms),
+        elRms=float(elRms),
+        rotRms=float(rotRms),
+        imageAzRms=float(imageAzRms),
+        imageElRms=float(imageElRms),
+        imageRotRms=float(imageRotRms),
+        imageImpactRms=float(imageImpactRms),
         residualFiltering=doFilterResiduals,
         nReplacedAz=nReplacedAz,
         nReplacedEl=nReplacedEl,
