@@ -156,6 +156,10 @@ def calculateMountErrors(
     azLinearError = (azValues - azModelValues) * 3600
     azLinearRms = np.sqrt(np.mean(azLinearError * azLinearError))
     if azLinearRms > usePointingModelResidualsAboveAzEl:
+        logger.warning(
+            f"Azimuth pointing model RMS error {azLinearRms:.3f} arcsec is above threshold of "
+            f"{usePointingModelResidualsAboveAzEl:.3f} arcsec, replacing azimuth errors with linear error."
+        )
         # If linear error is large, replace demand errors with linear error
         azimuthData["azError"] = azLinearError
 
@@ -170,6 +174,10 @@ def calculateMountErrors(
     elLinearError = (elValues - elModelValues) * 3600
     elLinearRms = np.sqrt(np.mean(elLinearError * elLinearError))
     if elLinearRms > usePointingModelResidualsAboveAzEl:
+        logger.warning(
+            f"Elevation pointing model RMS error {azLinearRms:.3f} arcsec is above threshold of "
+            f"{usePointingModelResidualsAboveAzEl:.3f} arcsec, replacing elevation errors with linear error."
+        )
         # If linear error is large, replace demand errors with linear error
         elevationData["elError"] = elLinearError
 
@@ -184,6 +192,10 @@ def calculateMountErrors(
     rotLinearError = (rotValues - rotModelValues) * 3600
     rotLinearRms = np.sqrt(np.mean(rotLinearError * rotLinearError))
     if rotLinearRms > usePointingModelResidualsAboveRot:
+        logger.warning(
+            f"Rotation pointing model RMS error {azLinearRms:.3f} arcsec is above threshold of "
+            f"{usePointingModelResidualsAboveAzEl:.3f} arcsec, replacing rotation errors with linear error."
+        )
         # If linear error is large, replace demand errors with linear error
         rotationData["rotError"] = rotLinearError
 
