@@ -453,7 +453,7 @@ def plotMountErrors(
         )
         colorCounter += 1
     ax7.yaxis.set_major_formatter(FuncFormatter(tickFormatter))
-    ax7.set_ylabel("CamHex motions(mm) (minus median)")
+    ax7.set_ylabel("CamHex motions(micron) (minus median)")
     ax7.yaxis.tick_right()
     ax7.yaxis.set_label_position("right")
     ax7.legend()
@@ -469,7 +469,7 @@ def plotMountErrors(
         colorCounter += 1
     ax8.legend()
     ax8.yaxis.set_major_formatter(FuncFormatter(tickFormatter))
-    ax8.set_ylabel("M2Hex motions(mm) (minus median)")
+    ax8.set_ylabel("M2Hex motions(micron) (minus median)")
     ax8.yaxis.tick_right()
     ax8.yaxis.set_label_position("right")
     ax8.set_xlabel("Time (UTC)")  # yes, it really is UTC, matplotlib converts this automatically!
