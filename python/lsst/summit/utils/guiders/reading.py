@@ -163,6 +163,8 @@ class readGuiderData:
             repo = "LSSTCam"
         elif site=="staff-rsp":
             repo = "/repo/embargo"
+        elif site=="rubin-devl":
+            repo = "/repo/embargo"            
         else:
             raise ValueError(f"Unknown butler repo for {site}")
         
