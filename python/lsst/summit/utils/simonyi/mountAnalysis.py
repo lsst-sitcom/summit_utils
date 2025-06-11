@@ -73,6 +73,8 @@ class MountErrors:
     azRms: float
     elRms: float
     rotRms: float
+    camHexRms: float
+    m2HexRms: float
     imageAzRms: float
     imageElRms: float
     imageRotRms: float
@@ -217,13 +219,17 @@ def calculateMountErrors(
     # Calculate Image impact RMS
     imageAzRms = azRms * np.cos(elevation * np.pi / 180.0)
     imageElRms = elRms
-    imageRotRms = rotRms * COMCAM_ANGLE_TO_EDGE_OF_FIELD_ARCSEC * np.pi / 180.0 / 3600.0
-    imageImpactRms = np.sqrt(imageAzRms**2 + imageElRms**2 + imageRotRms**2)
+    imageRotRms = rotRms * LSSTCAM_ANGLE_TO_EDGE_OF_FIELD_ARCSEC * np.pi / 180.0 / 3600.0
+    [camHexRms, m2HexRms] = calculateHexRms(mountData)
+    # TODO should the hex RMS values be added in quadrature?
+    imageImpactRms = np.sqrt(imageAzRms**2 + imageElRms**2 + imageRotRms**2 + camHexRms**2 + m2HexRms**2)
 
     mountErrors = MountErrors(
         azRms=float(azRms),
         elRms=float(elRms),
         rotRms=float(rotRms),
+        camHexRms=float(camHexRms),
+        m2HexRms=float(m2HexRms),
         imageAzRms=float(imageAzRms),
         imageElRms=float(imageElRms),
         imageRotRms=float(imageRotRms),
@@ -275,9 +281,9 @@ def plotMountErrors(
             "wspace": 0.25,
             "hspace": 0,
             "height_ratios": [2.5, 1, 1],
-            "width_ratios": [1.5, 1],
+            "width_ratios": [1.4, 1],
             "left": 0.07,
-            "right": 0.65,
+            "right": 0.60,
         },
     )
     [ax7, ax8] = figure.subplots(
@@ -357,7 +363,9 @@ def plotMountErrors(
     ax2.set_ylim(-0.05, 0.05)
     ax2.set_yticks([-0.04, -0.02, 0.0, 0.02, 0.04])
     ax2.legend(loc="lower center")
-    ax2.text(0.1, 0.9, f"Image impact RMS = {imageImpactRms:.3f} arcsec (with rot).", transform=ax2.transAxes)
+    ax2.text(
+        0.1, 0.9, f"Image impact RMS = {imageImpactRms:.3f} arcsec (w/ rot&hex).", transform=ax2.transAxes
+    )
     if mountErrors.residualFiltering:
         ax2.text(
             0.1,
@@ -443,7 +451,7 @@ def plotMountErrors(
     ax6.legend()
 
     hexNames = ["X", "Y", "Z", "U", "V", "W"]
-    for i in range(6):
+    for i in [0, 1, 2]:
         camhex = mountData.camhexData[f"position{i}"]
         camhex -= np.median(camhex)
         ax7.plot(
@@ -453,12 +461,26 @@ def plotMountErrors(
         )
         colorCounter += 1
     ax7.yaxis.set_major_formatter(FuncFormatter(tickFormatter))
-    ax7.set_ylabel("CamHex motions(micron) (minus median)")
-    ax7.yaxis.tick_right()
-    ax7.yaxis.set_label_position("right")
+    ax7.set_ylabel("CamHex XYZ(micron) (minus median)")
     ax7.legend()
+    ax7_twin = ax7.twinx()
+    for i in [3, 4]:
+        camhex = mountData.camhexData[f"position{i}"]
+        camhex *= 3600.0  # convert to arcseconds
+        camhex -= np.median(camhex)
+        ax7_twin.plot(
+            camhex,
+            label=hexNames[i],
+            c=lineColors[colorCounter % nColors],
+        )
+        colorCounter += 1
+    ax7_twin.yaxis.set_major_formatter(FuncFormatter(tickFormatter))
+    ax7_twin.set_ylabel("CamHex UV(arcsec) (minus median)")
+    # ax7_twin.yaxis.tick_right()
+    # ax7.yaxis.set_label_position("right")
+    ax7_twin.legend()
 
-    for i in range(6):
+    for i in [0, 1, 2]:
         m2hex = mountData.m2hexData[f"position{i}"]
         m2hex -= np.median(m2hex)
         ax8.plot(
@@ -469,9 +491,7 @@ def plotMountErrors(
         colorCounter += 1
     ax8.legend()
     ax8.yaxis.set_major_formatter(FuncFormatter(tickFormatter))
-    ax8.set_ylabel("M2Hex motions(micron) (minus median)")
-    ax8.yaxis.tick_right()
-    ax8.yaxis.set_label_position("right")
+    ax8.set_ylabel("M2Hex XYZ(micron) (minus median)")
     ax8.set_xlabel("Time (UTC)")  # yes, it really is UTC, matplotlib converts this automatically!
     # put the ticks at an angle, and right align with the tick marks
     ax8.set_xticks(ax8.get_xticks())  # needed to supress a user warning
@@ -480,6 +500,22 @@ def plotMountErrors(
     ax8.tick_params(axis="x", rotation=45)
     ax8.xaxis.set_major_locator(mdates.AutoDateLocator())
     ax8.xaxis.set_major_formatter(mdates.DateFormatter("%H:%M:%S"))
+    ax8_twin = ax8.twinx()
+    for i in [3, 4]:
+        m2hex = mountData.m2hexData[f"position{i}"]
+        m2hex *= 3600.0  # Convert to arcseconds
+        m2hex -= np.median(m2hex)
+        ax8_twin.plot(
+            m2hex,
+            label=hexNames[i],
+            c=lineColors[colorCounter % nColors],
+        )
+        colorCounter += 1
+    ax8_twin.yaxis.set_major_formatter(FuncFormatter(tickFormatter))
+    ax8_twin.set_ylabel("M2Hex UV(arcsec) (minus median)")
+    # ax7_twin.yaxis.tick_right()
+    # ax7.yaxis.set_label_position("right")
+    ax8_twin.legend()
 
     ax1_twin.yaxis.set_major_formatter(FuncFormatter(tickFormatter))
     ax1_twin.set_ylabel("Elevation (degrees)")
@@ -621,3 +657,50 @@ def getAltAzOverPeriod(
     altAzFrame = AltAz(obstime=times, location=SIMONYI_LOCATION)
     targetAltAz = target.transform_to(altAzFrame)
     return targetAltAz.az.degree, targetAltAz.alt.degree
+
+
+def calculateHexRms(mountData: MountData) -> tuple[float, float]:
+    """Calculate the image impact of hexapod motions.
+
+    Parameters
+    ----------
+    mountData : MountData
+        The EFD data associated with the exposure
+
+    Returns
+    -------
+    tuple[float, float]
+        The image motions associated with the CamHex and M2Hex motions.
+    """
+    # The below image motion coefficients were calculated
+    # with a Batoid simulation by Josh Meyers
+    camHexXY = 1.00  # microns / micron
+    camHexUV = 4.92  # microns / arcsecond
+    m2HexXY = 1.13  # microns / micron
+    m2HexUV = 37.26  # microns / arcsecond
+
+    # Convert these to image impact in arcseconds
+    pixelScale = 0.2  # arcseconds / pixel - find this elsewhere?
+    camHexXY = camHexXY / 10.0 * pixelScale  # arcseconds / micron
+    camHexUV = camHexUV / 10.0 * pixelScale  # arcseconds / arcsecond
+    camCoefs = [camHexXY, camHexXY, 0, camHexUV, camHexUV, 0]
+    m2HexXY = m2HexXY / 10.0 * pixelScale  # arcseconds / micron
+    m2HexUV = m2HexUV / 10.0 * pixelScale  # arcseconds / arcsecond
+    m2Coefs = [m2HexXY, m2HexXY, 0, m2HexUV, m2HexUV, 0]
+
+    camHexMs = 0.0
+    for i in [0, 1, 3, 4]:
+        camhex = mountData.camhexData[f"position{i}"]
+        camhex -= np.median(camhex)
+        camhex *= camCoefs[i]
+        camHexMs += np.mean(camhex * camhex)
+    camHexRms = np.sqrt(camHexMs)  # in arcseconds image impact
+
+    m2HexMs = 0.0
+    for i in [0, 1, 3, 4]:
+        m2hex = mountData.m2hexData[f"position{i}"]
+        m2hex -= np.median(m2hex)
+        m2hex *= m2Coefs[i]
+        m2HexMs += np.mean(m2hex * m2hex)
+    m2HexRms = np.sqrt(m2HexMs)  # in arcseconds image impact
+    return [camHexRms, m2HexRms]
