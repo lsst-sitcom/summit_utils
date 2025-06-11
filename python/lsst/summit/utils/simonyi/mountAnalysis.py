@@ -703,4 +703,4 @@ def calculateHexRms(mountData: MountData) -> tuple[float, float]:
         m2hex *= m2Coefs[i]
         m2HexMs += np.mean(m2hex * m2hex)
     m2HexRms = np.sqrt(m2HexMs)  # in arcseconds image impact
-    return [camHexRms, m2HexRms]
+    return [float(camHexRms), float(m2HexRms)]
