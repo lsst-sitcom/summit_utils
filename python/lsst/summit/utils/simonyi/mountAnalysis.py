@@ -23,8 +23,8 @@ from __future__ import annotations
 
 __all__ = ["calculateMountErrors", "plotMountErrors"]
 
-import logging
 import copy
+import logging
 from dataclasses import dataclass
 from typing import TYPE_CHECKING
 from zoneinfo import ZoneInfo
