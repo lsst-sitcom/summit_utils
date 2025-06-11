@@ -676,18 +676,19 @@ def calculateHexRms(mountData: MountData) -> tuple[float, float]:
     """
     # The below image motion coefficients were calculated
     # with a Batoid simulation by Josh Meyers
-    camHexXY = 1.00  # microns / micron
-    camHexUV = 4.92  # microns / arcsecond
-    m2HexXY = 1.13  # microns / micron
-    m2HexUV = 37.26  # microns / arcsecond
+    camHexXY = 1.00  # microns(image) / micron(hexapod)
+    camHexUV = 4.92  # microns(image) / arcsecond(hexapod)
+    m2HexXY = 1.13  # microns(image) / micron(hexapod)
+    m2HexUV = 37.26  # microns(image) / arcsecond(hexapod
 
     # Convert these to image impact in arcseconds
+    # The 10.0 is microns / pixel
     pixelScale = 0.2  # arcseconds / pixel - find this elsewhere?
-    camHexXY = camHexXY / 10.0 * pixelScale  # arcseconds / micron
-    camHexUV = camHexUV / 10.0 * pixelScale  # arcseconds / arcsecond
+    camHexXY = camHexXY / 10.0 * pixelScale  # arcseconds(image) / micron(hexapod)
+    camHexUV = camHexUV / 10.0 * pixelScale  # arcseconds(image) / arcsecond(hexapod)
     camCoefs = [camHexXY, camHexXY, 0, camHexUV, camHexUV, 0]
-    m2HexXY = m2HexXY / 10.0 * pixelScale  # arcseconds / micron
-    m2HexUV = m2HexUV / 10.0 * pixelScale  # arcseconds / arcsecond
+    m2HexXY = m2HexXY / 10.0 * pixelScale  # arcseconds(image) / micron(hexapod)
+    m2HexUV = m2HexUV / 10.0 * pixelScale  # arcseconds(image) / arcsecond(hexapod)
     m2Coefs = [m2HexXY, m2HexXY, 0, m2HexUV, m2HexUV, 0]
 
     camHexMs = 0.0
