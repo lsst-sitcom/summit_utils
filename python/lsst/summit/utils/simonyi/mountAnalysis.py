@@ -220,7 +220,7 @@ def calculateMountErrors(
     imageAzRms = azRms * np.cos(elevation * np.pi / 180.0)
     imageElRms = elRms
     imageRotRms = rotRms * LSSTCAM_ANGLE_TO_EDGE_OF_FIELD_ARCSEC * np.pi / 180.0 / 3600.0
-    [camHexRms, m2HexRms] = calculateHexRms(mountData)
+    (camHexRms, m2HexRms) = calculateHexRms(mountData)
     # TODO should the hex RMS values be added in quadrature?
     imageImpactRms = np.sqrt(imageAzRms**2 + imageElRms**2 + imageRotRms**2 + camHexRms**2 + m2HexRms**2)
 
@@ -703,4 +703,4 @@ def calculateHexRms(mountData: MountData) -> tuple[float, float]:
         m2hex *= m2Coefs[i]
         m2HexMs += np.mean(m2hex * m2hex)
     m2HexRms = np.sqrt(m2HexMs)  # in arcseconds image impact
-    return [float(camHexRms), float(m2HexRms)]
+    return (float(camHexRms), float(m2HexRms))
