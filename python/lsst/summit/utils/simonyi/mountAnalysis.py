@@ -23,7 +23,7 @@ from __future__ import annotations
 
 __all__ = ["calculateMountErrors", "plotMountErrors"]
 
-import logging
+import logging, copy
 from dataclasses import dataclass
 from typing import TYPE_CHECKING
 from zoneinfo import ZoneInfo
@@ -454,6 +454,7 @@ def plotMountErrors(
     for i in [0, 1, 2]:
         camhex = mountData.camhexData[f"position{i}"]
         camhex -= np.median(camhex)
+        print(i, np.min(camhex), np.max(camhex))
         ax7.plot(
             camhex,
             label=hexNames[i],
@@ -690,7 +691,7 @@ def calculateHexRms(mountData: MountData) -> tuple[float, float]:
 
     camHexMs = 0.0
     for i in [0, 1, 3, 4]:
-        camhex = mountData.camhexData[f"position{i}"]
+        camhex = copy.deepcopy(mountData.camhexData[f"position{i}"])
         camhex -= np.median(camhex)
         camhex *= camCoefs[i]
         camHexMs += np.mean(camhex * camhex)
@@ -698,7 +699,7 @@ def calculateHexRms(mountData: MountData) -> tuple[float, float]:
 
     m2HexMs = 0.0
     for i in [0, 1, 3, 4]:
-        m2hex = mountData.m2hexData[f"position{i}"]
+        m2hex = copy.deepcopy(mountData.m2hexData[f"position{i}"])
         m2hex -= np.median(m2hex)
         m2hex *= m2Coefs[i]
         m2HexMs += np.mean(m2hex * m2hex)
