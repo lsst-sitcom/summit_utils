@@ -1,24 +1,36 @@
+# This file is part of summit_utils.
+#
+# Developed for the LSST Data Management System.
+# This product includes software developed by the LSST Project
+# (https://www.lsst.org).
+# See the COPYRIGHT file at the top-level directory of this distribution
+# for details of code ownership.
+#
+# This program is free software: you can redistribute it and/or modify
+# it under the terms of the GNU General Public License as published by
+# the Free Software Foundation, either version 3 of the License, or
+# (at your option) any later version.
+#
+# This program is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU General Public License for more details.
+#
+# You should have received a copy of the GNU General Public License
+# along with this program.  If not, see <https://www.gnu.org/licenses/>.
+
+__all__ = ["starGuideFinder"]
+
+import sep
 import pandas as pd
 import numpy as np
-import sep
+
 import astropy.units as u
 import matplotlib.pyplot as plt
-from astropy.nddata import CCDData, Cutout2D
-import ccdproc as ccdp
-import logging
-import astroquery
-
-# 1) Grab the astroquery logger
-logger = logging.getLogger('astroquery')
-
-# 2) Raise its level to ERROR (so WARNINGs are hidden)
-logger.setLevel(logging.ERROR)
-
 from astropy.nddata import CCDData, Cutout2D
 from astropy.stats import mad_std
 from astropy.stats import sigma_clipped_stats, SigmaClip
 
-from photutils.detection import DAOStarFinder
 from photutils.background import Background2D, MedianBackground
 from photutils.segmentation import detect_threshold, detect_sources
 from photutils.utils import circular_footprint
