@@ -31,6 +31,7 @@ from astropy.nddata import CCDData, Cutout2D
 from astropy.stats import mad_std
 from astropy.stats import sigma_clipped_stats, SigmaClip
 
+from photutils.detection import DAOStarFinder
 from photutils.background import Background2D, MedianBackground
 from photutils.segmentation import detect_threshold, detect_sources
 from photutils.utils import circular_footprint
@@ -40,145 +41,116 @@ from lsst.summit.utils.guiders.transformation import pixel_to_focal
 from lsst.summit.utils.guiders.reading import readGuiderData
 from matplotlib.patches import Rectangle
 
+DefaultColumns = ["xcentroid", "ycentroid", "xpixel", "ypixel",
+                  "xfp", "yfp", "xfp_ref", "yfp_ref", "alt", "az",
+                  "alt_ref", "az_ref", "detector", "det_id", "ampname",
+                  "expId", "star_id", "stamp", "timestamp",
+                  "mag_offset", "ixx", "iyy", "ixy", "ixx_err", "iyy_err", "ixy_err",
+                  "fwhm","e1", "e2","flux", "flux_err","snr",
+                  "dx", "dy", "dxfp", "dyfp","dalt", "daz"]
+
+
 class starGuideFinder:
     """
-    Class to find stars in the Guider data.
+    Class to find stars in the Guider data and measure astrometric/photometric statistics.
 
-    Example
-    -------
-    >>> from lsst.obs.lsst import LsstCam
-    >>> from read import readGuiderData
-    >>> from starGuideFinder import starGuideFinder
-    
-    >>> seqNum, dayObs = 591, 20250425
-    >>> camera = LsstCam.getCamera()
-    >>> reader = readGuiderData(seqNum, dayObs)
-    
-    >>> finder = starGuideFinder(reader, camera)
-    >>> finder.run()
-    >>> print("Check the reference catalog, sorted by SNR")
-    >>> finder.ref_catalog
-    
-    >>> finder.plot_stacked_sources()
-    >>> finder.plot_drifts_with_errors()
-    >>> finder.plot_scatter_stamp()
-    
+    Parameters
+    ----------
+    reader : readGuiderData
+        Reader object with loaded guider exposures.
+    detector_name : str
+        Name of the detector (e.g., 'R22_S11').
+    camera : Camera, optional
+        Camera model; if None, uses reader.camera.
+    psf_fwhm : float, default=6.0
+        Expected PSF full-width at half-maximum in pixels.
+    min_snr : float, default=3.0
+        Minimum signal-to-noise ratio for stars in the reference catalog.
+    min_stamp_detections : int, default=30
+        Minimum number of stamps a star must be detected in to be considered valid.
+    edge_margin : int, default=30
+        Pixels from CCD edge to exclude reference sources.
+    max_ellipticity : float, default=0.1
+        Maximum allowed ellipticity for sources.
     """
-    def __init__(self, readerObject, detname, camera=None, fwhm=6.0, 
-                snr_threshold=3.0, nstamps_min=30, edge_size=30, max_ellip=0.1):
-        """
-        Initialize the starGuideFinder class.
-        Parameters
-        ----------
-        readerObject : readGuiderData
-            Instance of the readGuiderData class.
-        detname : str
-            Name of the detector. E.g. 'R22_S11'.
-        camera : Camera
-            Instance of the Camera class.
-        fwhm : float
-            Full width at half maximum for star detection.
-        snr_threshold : float
-            Signal-to-noise ratio threshold for star detection.
-        nstamps_min : int
-            Minimum number of stamps a star must be detected in to be considered valid.
-        edge_size : int
-            Size of the edge to mask in pixels.            
-        max_ellip : float
-            Maximum ellipticity for star detection.
-        """
-        self.reader = readerObject
-        self.expId = self.reader.expId
+    def __init__(
+        self,
+        reader,
+        detector_name,
+        camera=None,
+        psf_fwhm=6.0,
+        min_snr=3.0,
+        min_stamp_detections=30,
+        edge_margin=30,
+        max_ellipticity=0.1
+    ):
+        self.reader = reader
+        self.expId = reader.expId
+        self.detector_name = detector_name
+        self.reader.set_detector(detector_name)
+        self.ampName = reader.ampName
 
-        # Source detection parameters
-        self.fwhm = fwhm
+        # detection and QC parameters
+        self.psf_fwhm = psf_fwhm
+        self.min_snr = min_snr
+        self.min_stamp_detections = min_stamp_detections
+        self.edge_margin = edge_margin
+        self.max_ellipticity = max_ellipticity
 
-        # Quality control parameters
-        self.snr_threshold = snr_threshold
-        self.nstamps_min = nstamps_min
-        self.max_ellip = max_ellip
+        # ROI geometry
+        self.roiRow  = reader.roiRow
+        self.roiCol  = reader.roiCol
+        self.roiRows = reader.roiRows
+        self.roiCols = reader.roiCols
+        self.nStamps = reader.nStamps
+        self.timestamp = reader.timestamp
 
-        # Set the ROfI parameters
-        self.roiRow = self.reader.roiRow
-        self.roiCol = self.reader.roiCol
-        self.roiRows = self.reader.roiRows
-        self.roiCols = self.reader.roiCols
-        
-        # Set the number of stamps
-        self.nStamps = self.reader.nStamps
-        self.timestamp = self.reader.timestamp
+        # camera and transforms
+        self.camera = camera or reader.camera
+        self.detector = self.camera[self.detector_name]
+        self.lct = LsstCameraTransforms(self.camera, self.detector_name)
 
-        # Set detector attributes
-        self.detname = detname
-        self.reader.set_detector(detname)
-        self.ampName = self.reader.ampName
-        self.edge_size = edge_size
+        # initialize outputs
+        self.stars           = pd.DataFrame(columns=DefaultColumns)
+        self.output_catalog  = pd.DataFrame(columns=DefaultColumns)
 
-        # Set the camera object
-        self.camera = camera or self.reader.camera
-        self.detector = self.camera[self.detname]
-        self.lct = LsstCameraTransforms(self.camera, self.detname)
-
-        # Initialize attributes
-        self.stars = pd.DataFrame()
-
-        # Get the lowest corner of the amplifier
+        # compute amplifier offset
         self.get_amplifier_lowest_corner()
-        pass
 
     @classmethod
-    def run_all_guiders(cls, reader, camera=None, fwhm=12.0, snr_threshold=3.0, nstamps_min=30, max_ellip=0.1):
+    def run_all_guiders(
+        cls,
+        reader,
+        camera=None,
+        psf_fwhm=12.0,
+        min_snr=3.0,
+        min_stamp_detections=30,
+        max_ellipticity=0.1
+    ):
         """
-        Run star detection on all guider detectors and return a master star table.
+        Run detection and tracking on all guider detectors.
 
-        Parameters
-        ----------
-        reader : readGuiderData
-            Reader object already loaded.
-        camera : Camera, optional
-            Camera object. If None, will use reader.camera.
-        fwhm, snr_threshold, nstamps_min, mag_offset_bias_max, mag_offset_std_max :
-            Parameters forwarded to each starGuideFinder instance.
-
-        Returns
-        -------
-        pandas.DataFrame
-            Master catalog of selected stars from all guider detectors.
+        Returns a concatenated DataFrame of all selected stars.
         """
         stars_list = []
-        for detname in reader.getGuiderNames():
-            # print(f"Processing {detname}")
-            finder = cls(reader, detname, camera=camera,
-                        fwhm=fwhm, snr_threshold=snr_threshold,
-                        nstamps_min=nstamps_min
-                        , max_ellip=max_ellip)
-            finder.run()
-            # print(f"Found {len(finder.ref_catalog)} stars in {detname} with SNR > {finder.snr_threshold}")
-            stars_list.append(finder.stars)
+        for det in reader.getGuiderNames():
+            finder = cls(
+                reader,
+                det,
+                camera=camera,
+                psf_fwhm=psf_fwhm,
+                min_snr=min_snr,
+                min_stamp_detections=min_stamp_detections,
+                max_ellipticity=max_ellipticity
+            )
+            stars_list.append(finder.run())
 
         # Filter out empty DataFrames
         stars_list = [df for df in stars_list if not df.empty]
-
         if not stars_list:
-            return pd.DataFrame()
-        
+            return pd.DataFrame()    
         stars = pd.concat(stars_list, ignore_index=True)
         return stars
-
-    def get_amplifier_lowest_corner(self):
-        """
-        Get the lowest corner of the amplifier in CCD coordinates.
-        Returns
-        -------
-        tuple
-            The lowest corner of the amplifier in CCD coordinates.
-        """
-        a, b = self.lct.ampPixelToCcdPixel(self.roiCol,self.roiRow,self.ampName)
-        c, d = self.lct.ampPixelToCcdPixel(self.roiCol+self.roiCols,self.roiRow+self.roiRows,self.ampName)
-        begin_x, begin_y = min([a,c]), min([b,d])
-        self.min_x = begin_x
-        self.min_y = begin_y
-        pass
     
     def run(self):
         """
@@ -199,91 +171,83 @@ class starGuideFinder:
 
         # If no reference catalog was built, exit early
         if len(self.ref_catalog)==0:
-            return
+            return self.stars
 
         # Track motion for all stars
         self.track_stars()
 
-        # Select the best star per stamp
-        self.select_best_star_per_stack()
+        # Filter the minimum number of detections per stamp
+        self.filter_min_stamp_detections()
 
         # convert to focal plane coordinates/ altaz
         self.convert_to_focal_plane()
         self.convert_to_altaz()
 
         # Set unique IDs
-        self.stars = self.set_unique_id(self.stars)
+        self.set_unique_id()
 
         # Compute offsets
-        self.stars = self.compute_offsets(self.stars)
-        pass
+        self.compute_offsets()
+        return self.stars
 
-    def set_unique_id(self, stars):
+    def set_unique_id(self):
         # 1) Build a detector→index map (0,1,2,…)
         det_map = self.reader.guiders
 
         # 2) Create a numeric “global” star_id:
         #    global_id = det_index * 10000 + local star_id
-        stars['det_id']     = stars['detector'].map(det_map)
-        stars['star_local'] = stars['star_id'].astype(int)
-        stars['star_id']    = stars['det_id']*10000 + stars['star_local']
-        stars['expId']      = self.expId
+        self.stars['det_id']     = self.stars['detector'].map(det_map)
+        star_local = self.stars['star_id'].astype(int)
+        self.stars['star_id']    = self.stars['det_id']*10000 + star_local
+        self.stars['expId']      = self.expId
 
-        # 3) Drop the helpers if you like
-        stars = stars.drop(columns=['star_local'])
-        return stars
-
-    def compute_offsets(self, stars):
+    def get_amplifier_lowest_corner(self):
+        """
+        Compute the lowest corner of the amplifier in CCD coordinates.
+        """
+        a, b = self.lct.ampPixelToCcdPixel(
+            self.roiCol, self.roiRow, self.ampName
+        )
+        c, d = self.lct.ampPixelToCcdPixel(
+            self.roiCol + self.roiCols,
+            self.roiRow + self.roiRows,
+            self.ampName
+        )
+        self.min_x = int(min(a, c))
+        self.min_y = int(min(b, d))
+        pass
+    
+    def compute_offsets(self):
         """
         Compute the offsets for each star in the catalog.
         """
-        df = stars.copy()
-
         # Compute all your offsets
-        df['dx']    = df['xpixel'] - df['xpixel_ref']
-        df['dy']    = df['ypixel'] - df['ypixel_ref']
-        df['dxfp']  = df['xfp']    - df['xfp_ref']
-        df['dyfp']  = df['yfp']    - df['yfp_ref']
-        df['dalt']  = (df['alt']    - df['alt_ref'])*3600
-        df['daz']   = (df['az']     - df['az_ref'])*3600
+        self.stars['dx']    = self.stars['xpixel'] - self.stars['xpixel_ref']
+        self.stars['dy']    = self.stars['ypixel'] - self.stars['ypixel_ref']
+        self.stars['dxfp']  = self.stars['xfp']    - self.stars['xfp_ref']
+        self.stars['dyfp']  = self.stars['yfp']    - self.stars['yfp_ref']
+        self.stars['dalt']  = (self.stars['alt']    - self.stars['alt_ref'])*3600
+        self.stars['daz']   = (self.stars['az']     - self.stars['az_ref'])*3600
 
-        # Drop columns with ref
-        # df.drop(columns=['xpixel_ref', 'ypixel_ref', 'xfp_ref', 'yfp_ref', 'alt_ref', 'az_ref'], inplace=True)
-        return df
-
-    def select_best_star_per_stack(self):
+    def filter_min_stamp_detections(self):
         """
-        Select the best star per stamp based on:
-        1) SNR
-        2) number of stamps
-        3) photometric stability
-
-        Returns
-        -------
-        best_stars : list
-            List of best stars for each stamp.
+        Select the best star per stamp based on the number of detections.
         """
         df = self.output_catalog.copy()
         df.drop(columns=['detector', 'ampname'], inplace=True, errors='ignore')
-        # count the number of valid flux stamps for each star
-        n_stamps = df.groupby('star_id').count()['flux'].values
-        # compute the median SNR for each star
-        med_snr = df.groupby('star_id').median()['snr'].values
 
-        cut  = med_snr > self.snr_threshold
-        cut &= n_stamps > self.nstamps_min
+        n_stamps = df.groupby('star_id').count()['flux'].values
+
+        cut = (n_stamps > self.min_stamp_detections)
         starids = df.groupby('star_id').count().loc[cut].index
-        
-        # filter the stars
-        mask = df['star_id'].isin(starids)
-        df = df[mask].copy()
+
+        df = df[df['star_id'].isin(starids)].copy()
         df.sort_values(['stamp', 'snr'], ascending=[True, False], inplace=True)
         df.reset_index(drop=True, inplace=True)
 
-        df['detector'] = self.detname
+        df['detector'] = self.detector_name
         df['ampname'] = self.ampName
-        self.stars = df
-        pass
+        self.stars = df.copy()
 
     def track_star_stamp(self,
                         star_id: int,
@@ -299,7 +263,7 @@ class starGuideFinder:
         ref = self.ref_catalog.iloc[star_id].copy()
         ref_x, ref_y = ref['xcentroid'], ref['ycentroid']
         ref_flux     = ref['flux']
-        fwhm = self.fwhm
+        fwhm = self.psf_fwhm
         ampname = ref['ampname']
         bkg = ref['noise']/self.nStamps
         bias = ref['bias']/self.nStamps
@@ -330,12 +294,13 @@ class starGuideFinder:
             
             _, median, std = sigma_clipped_stats(cutout.data, sigma=3.0, mask=mask_cutout.data)
             # data = np.where(mask_cutout.data, cutout.data, 0)
-            # sources = run_sextractor(cutout.data-median, aperture_radius=self.fwhm, th=5, max_ellip=0.2, mask=mask_cutout.data)
+            # sources = run_sextractor(cutout.data-median, aperture_radius=self.psf_fwhm, th=5, max_ellipticity0.2, mask=mask_cutout.data)
             sources = measure_star_in_aperture(cutout.data-median, aperture_radius=fwhm, std_bkg=std, gain=1.0, mask=mask_cutout.data)
 
             if len(sources) == 0:
                 # No sources detected in this stamp, skip it
                 continue
+
             sources['star_id'] = star_id
             sources['stamp'] = si
             sources['ampname'] = ampname
@@ -351,6 +316,9 @@ class starGuideFinder:
 
         df = pd.DataFrame(rows)
         
+        if len(df) == 1:
+            return
+                    
         # Define the reference as the median of the other stamps
         flux_med = np.nanmedian(df['flux'][1:]) + 1e-12  # avoid division by zero
         df['mag_offset'] = -2.5 * np.log10(df['flux']/flux_med)
@@ -358,19 +326,9 @@ class starGuideFinder:
         df['ycentroid_ref'] = np.nanmedian(df['ycentroid'][1:])
         df['xpixel_ref'] = np.nanmedian(df['xpixel'][1:])
         df['ypixel_ref'] = np.nanmedian(df['ypixel'][1:])
-
-        # if len(df)>1:
-        #     df['mag_offset'] = -2.5 * np.log10(df['flux']/df['flux'][1:].median())
-        #     df.iloc[0, df.columns.get_loc('xcentroid')] = np.median(df.iloc[1:, df.columns.get_loc('xcentroid')])
-        #     df.iloc[0, df.columns.get_loc('ycentroid')] = np.median(df.iloc[1:, df.columns.get_loc('ycentroid')])
-        #     df.iloc[0, df.columns.get_loc('xpixel')] = np.median(df.iloc[1:, df.columns.get_loc('xpixel')])
-        #     df.iloc[0, df.columns.get_loc('ypixel')] = np.median(df.iloc[1:, df.columns.get_loc('ypixel')])
         return df
 
-    def track_stars(self,
-                    threshold_sigma: float = 3.0,
-                    roundness_max: float = 0.5
-                ) -> pd.DataFrame:
+    def track_stars(self) -> pd.DataFrame:
         """
         Track all reference stars; return one big DataFrame with every
         (star_id, stamp) row, including the reference (stamp=-1).
@@ -378,27 +336,21 @@ class starGuideFinder:
         dfs = []
         for i in range(len(self.ref_catalog)):
             df_i = self.track_star_stamp(i)
-            dfs.append(df_i)
+            if df_i is not None and not df_i.empty:
+                dfs.append(df_i)
         
         if not dfs:
-            # return an empty DataFrame with the expected columns
-            cols = ['star_id', 'stamp', 'detector', 'det_id', 'ampname',
-                    'xcentroid', 'ycentroid', 'xpixel', 'ypixel', 
-                    'xerr', 'yerr', 'xfp', 'yfp', 'alt', 'az',
-                    'ixx', 'iyy', 'ixy', 'ixx_err', 'iyy_err', 
-                    'ixy_err', 'fwhm',
-                    'flux', 'flux_err', 'snr', 'mag_offset',
-                    'dx', 'dy', 'dxfp', 'dyfp', 'dalt', 'daz']
-            self.output_catalog = pd.DataFrame(columns=cols)
-            return 
+            return self.output_catalog
         
+        # Concatenate all DataFrames
         output = pd.concat(dfs, ignore_index=True)
+
         # filter SNR
-        output = output[output['snr'] > self.snr_threshold]
+        output = output[output['snr'] > self.min_snr]
+        # filter min flux
         output = output[output['flux'] > 1e-6]
         output.sort_values(['star_id', 'stamp'], inplace=True)
         output.reset_index(inplace=True, drop=True)
-
         self.output_catalog = output
         pass
     
@@ -411,7 +363,7 @@ class starGuideFinder:
         stacked_image : 2D numpy array
             Stacked image of the detected stars.
         """
-        image_list = [self.reader.read(stamp, self.detname) 
+        image_list = [self.reader.read(stamp, self.detector_name) 
                       for stamp in range(self.nStamps)]
         # parallel overscan region correction
         image_list = [img-np.nanmedian(img,axis=0) for img in image_list]
@@ -423,7 +375,7 @@ class starGuideFinder:
         self.stacked = stacked
         return stacked
 
-    def build_ref_catalog(self, threshold_sigma=3.0, edge_size=None):
+    def build_ref_catalog(self, threshold_sigma=3.0, edge_margin=None):
         """
         Build a reference catalog of stars from the stacked image.
 
@@ -443,14 +395,14 @@ class starGuideFinder:
         else:
             stacked_image = self.stacked
         
-        if edge_size is None:
-            edge_size = self.edge_size
+        if edge_margin is None:
+            edge_margin = self.edge_margin
 
         # Find Bad columns 
         streak_mask = find_bad_columns(stacked_image, nsigma=2)
 
         # Build the background model
-        median, mean, std, mask = background_model(stacked_image, fwhm=self.fwhm, streak_mask=streak_mask)
+        median, mean, std, mask = background_model(stacked_image, fwhm=self.psf_fwhm, streak_mask=streak_mask)
 
         self.bias = median
         self.noise_ref = std
@@ -468,10 +420,10 @@ class starGuideFinder:
         # and filter out streaks
         # Use the background model to subtract the background
         # isr = stacked_image - self.sky_bkg.background
-        # ref_catalog = detect_stars_filtered(isr, fwhm=self.fwhm, threshold_sigma=threshold_sigma, 
+        # ref_catalog = detect_stars_filtered(isr, fwhm=self.psf_fwhm, threshold_sigma=threshold_sigma, 
         #                                     roundness_max=0.2, median=0, std=std)
 
-        ref_catalog = run_sextractor(stacked_image, aperture_radius=self.fwhm, th=threshold_sigma, max_ellip=self.max_ellip, mask=streak_mask)
+        ref_catalog = run_sextractor(stacked_image, aperture_radius=self.psf_fwhm, th=threshold_sigma, max_ellipticity=self.max_ellipticity, mask=streak_mask)
 
         sel_columns = ['star_id', 'stamp', 'detector', 'det_id', 'ampname', 
                         'xcentroid', 'ycentroid', 'xpixel', 'ypixel', 'xerr', 'yerr', 'xfp', 'yfp', 'alt', 'az',
@@ -481,7 +433,7 @@ class starGuideFinder:
                         ]
         
         if ref_catalog is None or len(ref_catalog) == 0:
-            print(f"Error: No stars found in the reference catalog for {self.detname}.")
+            print(f"Error: No stars found in the reference catalog for {self.detector_name}.")
             self.ref_catalog = pd.DataFrame(columns=sel_columns)
             self.stars = pd.DataFrame(columns=sel_columns)
             return
@@ -494,8 +446,8 @@ class starGuideFinder:
 
         # Filter out sources that are too close to the edges
         # and have low SNR
-        self.filter_ref_catalog(snr_threshold=self.snr_threshold*np.sqrt(self.nStamps))
-        self.mask_edge_ref_catalog(edge=edge_size)
+        self.filter_ref_catalog(snr_threshold=self.min_snr*np.sqrt(self.nStamps))
+        self.mask_edge_ref_catalog(edge=edge_margin)
         
         # Add additional information to the reference catalog
         self.add_ref_catalog_info(median, std)
@@ -582,7 +534,7 @@ class starGuideFinder:
         """
         if len(self.stars['xfp'])>0:
             from transformation import CoordinatesToAltAz
-            coord = CoordinatesToAltAz(self.reader.seqNum, self.reader.dayObs, self.detname,
+            coord = CoordinatesToAltAz(self.reader.seqNum, self.reader.dayObs, self.detector_name,
                                     butler=self.reader.butler)
             az, alt = coord.convert_pixels_to_altaz(self.stars['xpixel'], self.stars['ypixel'])
             az_ref, alt_ref = coord.convert_pixels_to_altaz(self.stars['xpixel_ref'], self.stars['ypixel_ref'])
@@ -719,7 +671,7 @@ class starGuideFinder:
         ax.set_ylim(0, stacked.shape[0])
         # ax.set_xticks([]); ax.set_yticks([])
         ax.set_aspect('equal')
-        ax.set_title("Stacked guider image with reference sources"+"\n"+f"({self.detname}, {self.expId})")
+        ax.set_title("Stacked guider image with reference sources"+"\n"+f"({self.detector_name}, {self.expId})")
 
         # Plot the edges of the frame
         # Unpack your edges
@@ -796,10 +748,10 @@ class starGuideFinder:
 
         ax.axhline(0, color='grey', lw=1, ls='--')
 
-        # --- new jitter annotation ---
-        jitter_pix = np.nanstd(stars[['dx', 'dy']].to_numpy())
-        jitter_arcsec = jitter_pix * 0.2
-        txt = f"Jitter (rms): {jitter_pix:.2f} pixel, {jitter_arcsec:.2f} arcsec"
+        # --- new std_centroid annotation ---
+        std_centroid_pix = np.nanstd(stars[['dx', 'dy']].to_numpy())
+        std_centroid_arcsec = std_centroid_pix * 0.2
+        txt = f"std_centroid (rms): {std_centroid_pix:.2f} pixel, {std_centroid_arcsec:.2f} arcsec"
         ax.text(0.02, 0.98, txt,
                 transform=ax.transAxes,
                 ha='left', va='top',
@@ -847,10 +799,10 @@ class starGuideFinder:
         ax.axhline(0, color='grey', lw=1, ls='--')
     
         
-        # --- new jitter annotation ---
-        jitter_pix   = mad_std(magOffsets, ignore_nan=True)
-        # jitter_arcsec = jitter_pix * 0.2
-        txt = f"\\sigma (rms): {jitter_pix:.2f} mag "
+        # --- new std_centroid annotation ---
+        std_centroid_pix   = mad_std(magOffsets, ignore_nan=True)
+        # std_centroid_arcsec = std_centroid_pix * 0.2
+        txt = f"\\sigma (rms): {std_centroid_pix:.2f} mag "
         ax.text(0.02, 0.98, txt,
                 transform=ax.transAxes,
                 ha='left', va='top',
@@ -867,96 +819,27 @@ class starGuideFinder:
         return fig, ax
 
     @staticmethod
-    def measure_jitter_stats(stars: pd.DataFrame) -> pd.DataFrame:
+    def format_std_centroid_summary(std_centroid_stats: dict) -> str:
         """
-        Compute global jitter statistics across all guiders.
-
-        Parameters
-        ----------
-        stars : pd.DataFrame
-            Concatenated star table across all guider detectors.
-
-        Returns
-        -------
-        stars : pd.DataFrame
-            DataFrame with new jitter statistic columns broadcasted to all rows.
+        Pretty string summary of centroid stdev. stats from run_all_guiders.
         """
-        time = (stars.stamp.to_numpy() + 0.5) * 0.3  # seconds
-        time = time.astype(np.float64)
-        az = stars.daz.to_numpy()
-        alt = stars.dalt.to_numpy()
+        if not std_centroid_stats:
+            return "No centroid stdev. statistics available."
 
-        # Linear fits
-        coefs_az = np.polyfit(time, az, 1)
-        coefs_alt = np.polyfit(time, alt, 1)
-
-        # Stats
-        jitter_stats = {
-            "jitter_az": mad_std(az),
-            "jitter_alt": mad_std(alt),
-            "jitter_corr_az": mad_std(az - np.polyval(coefs_az, time)),
-            "jitter_corr_alt": mad_std(alt - np.polyval(coefs_alt, time)),
-            "drift_rate_az": coefs_az[0],
-            "drift_rate_alt": coefs_alt[0],
-            "offset_zero_az": coefs_az[1],
-            "offset_zero_alt": coefs_alt[1],
-        }
-        
-        return jitter_stats
-
-    @staticmethod
-    def format_jitter_summary(jitter_stats: dict) -> str:
-        """
-        Pretty string summary of jitter stats from run_all_guiders.
-        """
-        if not jitter_stats:
-            return "No jitter statistics available."
-
-        js = jitter_stats
+        js = std_centroid_stats
         summary = (
-            f"\nGlobal Jitter Summary Across All Guiders\n"
+            f"\nGlobal centroid stdev. Summary Across All Guiders\n"
             f"{'-'*45}\n"
-            f"  - Jitter (AZ):         {js['jitter_az']:.3f} arcsec (raw)\n"
-            f"  - Jitter (ALT):        {js['jitter_alt']:.3f} arcsec (raw)\n"
-            f"  - Jitter (AZ):         {js['jitter_corr_az']:.3f} arcsec (linear corr)\n"
-            f"  - Jitter (ALT):        {js['jitter_corr_alt']:.3f} arcsec (linear corr)\n"
+            f"  - centroid stdev. (AZ):         {js['std_centroid_az']:.3f} arcsec (raw)\n"
+            f"  - centroid stdev. (ALT):        {js['std_centroid_alt']:.3f} arcsec (raw)\n"
+            f"  - centroid stdev. (AZ):         {js['std_centroid_corr_az']:.3f} arcsec (linear corr)\n"
+            f"  - centroid stdev. (ALT):        {js['std_centroid_corr_alt']:.3f} arcsec (linear corr)\n"
             f"  - Drift Rate (AZ):     {15*js['drift_rate_az']:.3f} arcsec per exposure\n"
             f"  - Drift Rate (ALT):    {15*js['drift_rate_alt']:.3f} arcsec per exposure\n"
             f"  - Zero Offset (AZ):    {js['offset_zero_az']:.3f} arcsec\n"
             f"  - Zero Offset (ALT):   {js['offset_zero_alt']:.3f} arcsec"
         )
         return summary
-
-
-
-    @staticmethod
-    def measure_photometric_variation(stars: pd.DataFrame) -> tuple[pd.DataFrame, dict]:
-        """
-        Fit mag_offset vs time across all rows, compute drift rate, zero-point, and RMS scatter,
-        then add these as constant columns to `stars`.
-        """
-        mo = stars["mag_offset"].to_numpy()
-        mask = np.isfinite(mo)
-        if not mask.any():
-            phot_stats = {
-                "mag_offset_rate": np.nan,
-                "mag_offset_zero": np.nan,
-                "mag_offset_rms": np.nan,
-            }
-        else:
-            time = (stars["stamp"].to_numpy()[mask] + 0.5) * 0.3  # seconds
-            mo_valid = mo[mask]
-            coef = np.polyfit(time, mo_valid, 1)
-            rate, zero = coef
-            resid = mo_valid - np.polyval(coef, time)
-            rms = mad_std(resid)
-            phot_stats = {
-                "mag_offset_rate": rate,
-                "mag_offset_zero": zero,
-                "mag_offset_rms": rms,
-            }
-            
-        return phot_stats
 
     @staticmethod
     def format_photometric_summary(phot_stats: dict) -> str:
@@ -975,115 +858,192 @@ class starGuideFinder:
         )
 
     @staticmethod
-    def format_stats_per_guider(stars_per_guiders: dict) -> str:
+    def format_stats_summary(summary: dict) -> str:
         """
-        Formats the per-guider star counts (e.g. {'N_R22_S11': 5, ...}) as a table.
+        Pretty-print only the stats that are present in `summary`.
+        Expects keys like:
+          n_guiders, n_unique_stars, n_measurements, fraction_valid_stamps,
+          N_<detector>, std_centroid_*, mag_offset_*, etc.
         """
-        if not stars_per_guiders:
-            return "No guider star counts available."
+        lines = []
 
-        lines = ["",
-            f"{'Guider':<20} {'N_stars':>8}",
-            "-" * 30,
-        ]
-        for guider, n_stars in sorted(stars_per_guiders.items()):
-            lines.append(f"{guider:<20} {n_stars:8d}")
-        return "\n".join(lines)
-    
-    @staticmethod
-    def format_stats_per_guider_full(stars_per_guiders: dict, n_guider: int, n_unique_stars: int, n_measurements: int, fraction_valid: float) -> str:
-        """
-        Formats per-guider star counts with extra global stats.
-        """
-        out = "-" * 50
-        out += f"\nNumber of Stars: {n_unique_stars}\n"
-        out +=  f"Number of Guiders: {n_guider}\n"
-        out += f"Total valid measurements: {n_measurements:,d}"
-        out += f"\nFraction valid stamps:    {fraction_valid:.3f}\n"
-        out += starGuideFinder.format_stats_per_guider(stars_per_guiders)
-        return out
-    
+        # Basic overall stats
+        if 'n_guiders' in summary:
+            lines.append(f"Number of Guiders: {summary['n_guiders']}")
+        if 'n_unique_stars' in summary:
+            lines.append(f"Number of Unique Stars: {summary['n_unique_stars']}")
+        if 'n_measurements' in summary:
+            lines.append(f"Total Measurements: {summary['n_measurements']}")
+        if 'fraction_valid_stamps' in summary:
+            frac = summary['fraction_valid_stamps']
+            lines.append(f"Fraction Valid Stamps: {frac:.3f}")
+
+        # Per-guider counts (keys begin with 'N_')
+        guider_keys = sorted(k for k in summary if k.startswith('N_'))
+        if guider_keys:
+            lines.append("\nStars per Guider:")
+            for k in guider_keys:
+                lines.append(f"  - {k[2:]}: {summary[k]}")
     
     @classmethod
-    def run_guide_stats(cls, reader, fwhm=10, snr_threshold=10, 
-                        camera=None, nstamps_min=30, vebose=True, max_ellip=0.2):
+    def run_guide_stats(cls,
+                        reader,
+                        camera=None,
+                        psf_fwhm=12.0,
+                        min_snr=3.0,
+                        min_stamp_detections=30,
+                        max_ellipticity=0.1,    
+                        vebose=False
+                        ):
         """
         Run all guiders, then produce a one‐row DataFrame containing:
         - Number of valid guiders
         - Number of unique stars
         - Number of stars per guider (e.g., N_R02_S11, N_R22_S11, etc.)
         - Number of star measurements across all guiders and stamps
-        - Global jitter statistics (az/alt, detrended, rates, zero‐points)
+        - Global centroid stdev. statistics (az/alt, detrended, rates, zero‐points)
         - Global photometric variation statistics (drift rate, zero‐point, RMS)
         - Fraction of valid stamp measurements
         """
         # 1) Run detections across all guiders
-        stars = cls.run_all_guiders(reader, fwhm=fwhm, snr_threshold=snr_threshold,
-                                    camera=camera, nstamps_min=nstamps_min, max_ellip=max_ellip)
-        if stars.empty:
-            cols = [
-                'n_guiders',
-                'n_unique_stars',
-                'fraction_valid_stamps',
-                'n_measurements',
-            ]
-            # Dynamically include per‐guider star counts, jitter, and photometry keys
-            # Use placeholders for column names
-            example_jitter = ['jitter_az','jitter_alt','jitter_corr_az','jitter_corr_alt',
-                            'offset_rate_az','offset_rate_alt','offset_zero_az','offset_zero_alt']
-            example_phot = ['mag_offset_rate','mag_offset_zero','mag_offset_rms']
-            cols += [f'N_{det}' for det in []] + example_jitter + example_phot
-            return pd.DataFrame(), pd.DataFrame(columns=cols)
-
-
-        # 2) Number of valid guiders
-        n_guiders = stars['detector'].nunique()
-
-        # 3) Number of unique stars
-        n_unique_stars = stars['star_id'].nunique()
-
-        # 4) Number of stars per guider
-        stars_per_guiders = {}
-        counts = (stars.groupby('detector')['star_id'].nunique().to_dict())
-        for det in reader.guiders.keys():
-            stars_per_guiders[f'N_{det}'] = counts.get(det, 0)
-
-
-        # 5) Number of star measurements (stamp >= 0 and xpixel not NaN)
-        mask_valid = (stars['stamp'] >= 0) & (stars['xpixel'].notna())
-        n_measurements = int(mask_valid.sum())
-
-        # 6) Global jitter stats (adds jitter cols to stars)
-        jitter_stats = cls.measure_jitter_stats(stars)
-
-        # 7) Global photometric variation stats (adds photometry cols to stars)
-        phot_stats = cls.measure_photometric_variation(stars)
-
-        # 8) Fraction of valid stamp measurements:
-        #    total possible = n_unique_stars * reader.nStamps
-        total_possible = n_unique_stars * reader.nStamps
-        fraction_valid = n_measurements / total_possible if total_possible > 0 else np.nan
-
-        # 9) Assemble summary dict
-        summary = {
-            'n_guiders': n_guiders,
-            'n_stars': n_unique_stars,
-            'n_measurements': n_measurements,
-            'fraction_valid_stamps': fraction_valid,
-            **stars_per_guiders,
-            **jitter_stats,
-            **phot_stats
-        }
-        # 10) Return as single‐row DataFrame
-        stats = pd.DataFrame([summary])
+        stars = cls.run_all_guiders(reader, 
+                                    psf_fwhm=psf_fwhm, 
+                                    min_snr=min_snr,
+                                    camera=camera, 
+                                    min_stamp_detections=min_stamp_detections, 
+                                    max_ellipticity=max_ellipticity
+                                    )
+            
+        # 2) Build the stats via our new helper
+        stats = assemble_stats(stars, reader)
 
         if vebose:
-            print(cls.format_stats_per_guider_full(stars_per_guiders, n_guiders, n_unique_stars, n_measurements, fraction_valid))        
-            print(cls.format_jitter_summary(jitter_stats))
-            print(cls.format_photometric_summary(phot_stats))
+            print(cls.format_stats_summary(stats))
+            print(cls.format_std_centroid_summary(stats))
+            print(cls.format_photometric_summary(stats))
             print("-" * 50)
             
         return stars, stats
+
+def assemble_stats(stars: pd.DataFrame, reader) -> pd.DataFrame:
+    """
+    Given a (possibly empty) stars DataFrame and a reader,
+    compute and return the one‐row summary stats DataFrame.
+    """
+    # 1) If empty, build an empty stats frame with the right columns
+    if stars.empty:
+        cols = [
+            'n_guiders',
+            'n_unique_stars',
+            'fraction_valid_stamps',
+            'n_measurements',
+        ]
+        example_std_centroid = [
+            'std_centroid_az','std_centroid_alt','std_centroid_corr_az','std_centroid_corr_alt',
+            'offset_rate_az','offset_rate_alt','offset_zero_az','offset_zero_alt'
+        ]
+        example_phot = ['mag_offset_rate','mag_offset_zero','mag_offset_rms']
+        cols += [f'N_{det}' for det in reader.guiders.keys()] + example_std_centroid + example_phot
+        return pd.DataFrame(columns=cols)
+
+    # 2) Number of valid guiders
+    n_guiders = stars['detector'].nunique()
+
+    # 3) Number of unique stars
+    n_unique = stars['star_id'].nunique()
+
+    # 4) Stars per guider
+    counts = stars.groupby('detector')['star_id'].nunique().to_dict()
+    stars_per_guiders = {f'N_{det}': counts.get(det, 0) for det in reader.guiders.keys()}
+
+    # 5) Valid measurements
+    mask_valid = (stars['stamp'] >= 0) & (stars['xpixel'].notna())
+    n_meas = int(mask_valid.sum())
+
+    # 6/7) Global std_centroid & photometric stats
+    std_centroid = measure_std_centroid_stats(stars)
+    phot   = measure_photometric_variation(stars)
+
+    # 8) Fraction valid
+    total_possible = n_unique * reader.nStamps
+    frac_valid = n_meas / total_possible if total_possible>0 else np.nan
+
+    # 9) Assemble
+    summary = {
+        'n_guiders': n_guiders,
+        'n_unique_stars': n_unique,
+        'n_measurements': n_meas,
+        'fraction_valid_stamps': frac_valid,
+        **stars_per_guiders,
+        **std_centroid,
+        **phot
+    }
+    return pd.DataFrame([summary])
+
+def measure_std_centroid_stats(stars: pd.DataFrame) -> pd.DataFrame:
+    """
+    Compute global std_centroid statistics across all guiders.
+
+    Parameters
+    ----------
+    stars : pd.DataFrame
+        Concatenated star table across all guider detectors.
+
+    Returns
+    -------
+    stars : pd.DataFrame
+        DataFrame with new std_centroid statistic columns broadcasted to all rows.
+    """
+    time = (stars.stamp.to_numpy() + 0.5) * 0.3  # seconds
+    time = time.astype(np.float64)
+    az = stars.daz.to_numpy()
+    alt = stars.dalt.to_numpy()
+
+    # Linear fits
+    coefs_az = np.polyfit(time, az, 1)
+    coefs_alt = np.polyfit(time, alt, 1)
+
+    # Stats
+    std_centroid_stats = {
+        "std_centroid_az": mad_std(az),
+        "std_centroid_alt": mad_std(alt),
+        "std_centroid_corr_az": mad_std(az - np.polyval(coefs_az, time)),
+        "std_centroid_corr_alt": mad_std(alt - np.polyval(coefs_alt, time)),
+        "drift_rate_az": coefs_az[0],
+        "drift_rate_alt": coefs_alt[0],
+        "offset_zero_az": coefs_az[1],
+        "offset_zero_alt": coefs_alt[1],
+    }    
+    return std_centroid_stats
+    
+def measure_photometric_variation(stars: pd.DataFrame) -> tuple[pd.DataFrame, dict]:
+    """
+    Fit mag_offset vs time across all rows, compute drift rate, zero-point, and RMS scatter,
+    then add these as constant columns to `stars`.
+    """
+    mo = stars["mag_offset"].to_numpy()
+    mask = np.isfinite(mo)
+    if not mask.any():
+        phot_stats = {
+            "mag_offset_rate": np.nan,
+            "mag_offset_zero": np.nan,
+            "mag_offset_rms": np.nan,
+        }
+    else:
+        time = (stars["stamp"].to_numpy()[mask] + 0.5) * 0.3  # seconds
+        mo_valid = mo[mask]
+        coef = np.polyfit(time, mo_valid, 1)
+        rate, zero = coef
+        resid = mo_valid - np.polyval(coef, time)
+        rms = mad_std(resid)
+        phot_stats = {
+            "mag_offset_rate": rate,
+            "mag_offset_zero": zero,
+            "mag_offset_rms": rms,
+        }
+        
+    return phot_stats
+
 
 def stats_background(image, fwhm=10.0):
     """
@@ -1190,6 +1150,7 @@ def measure_star_in_aperture(
     pandas.DataFrame with one row and columns:
       xcentroid, ycentroid, xerr, yerr,
       ixx, iyy, ixy, ixx_err, iyy_err, ixy_err,
+        e1, e2,  # ellipticity components
       flux, flux_err, fwhm, snr
     """
     h, w = cutout_data.shape
@@ -1262,6 +1223,8 @@ def measure_star_in_aperture(
         "ixx": ixx,
         "iyy": iyy,
         "ixy": ixy,
+        "e1": (ixx - iyy) / (ixx + iyy + 1e-12),
+        "e2": (2 * ixy) / (ixx + iyy + 1e-12),
         "ixx_err": ixx_err,
         "iyy_err": iyy_err,
         "ixy_err": ixy_err,
@@ -1313,7 +1276,7 @@ def find_bad_columns(img, mask=None, nsigma=3.0):
         
     return bad_mask
 
-def run_sextractor(img, th=10, median=0, std=None, bkg_size=50, aperture_radius=5, max_ellip=0.1, gain=1.0, mask=None):
+def run_sextractor(img, th=10, median=0, std=None, bkg_size=50, aperture_radius=5, max_ellipticity=0.1, gain=1.0, mask=None):
     """
     Vectorized SEP photometry with centroid errors, outputs a pandas DataFrame.
     Only returns nearly round, bright sources.
@@ -1350,8 +1313,8 @@ def run_sextractor(img, th=10, median=0, std=None, bkg_size=50, aperture_radius=
     e2 = (2 * ixy) / denom
 
     # Filter: round and bright sources only
-    mask = np.abs(e1) < max_ellip  # nearly round
-    mask &= np.abs(e2) < max_ellip  # nearly round
+    mask = np.abs(e1) < max_ellipticity # nearly round
+    mask &= np.abs(e2) < max_ellipticity # nearly round
 
     # Compute centroid errors from moment errors (astrometry error estimate)
     # For a Gaussian, σ_xcentroid ≈ sqrt(ixx_err) / sqrt(flux)
@@ -1404,7 +1367,7 @@ if __name__ == "__main__":
     # Example usage
     # from reading import readGuiderData
     from lsst.summit.utils.guiders.reading import readGuiderData
-    from lsst.summit.utils.guiders.sourceSelection import starGuideFinder
+    from lsst.summit.utils.guiders.detection import starGuideFinder
     import pandas as pd
 
     seqNum, dayObs = 591, 20250425
@@ -1413,8 +1376,8 @@ if __name__ == "__main__":
 
     # Run the source detection for all guider
     # return the stars DataFrame with all the measurements
-    # return some stats information of the number of stars, jitter, photometric variance
-    stars, stats = starGuideFinder.run_guide_stats(reader, fwhm=10, snr_threshold=10)
+    # return some stats information of the number of stars, std_centroid, photometric variance
+    stars, stats = starGuideFinder.run_guide_stats(reader, psf_fwhm=10, min_snr=10)
 
     ##### Some stats
     # The number of valid (not nan) stamp measurements per star
@@ -1423,5 +1386,5 @@ if __name__ == "__main__":
     # The centroid error for each stamp
     stars.groupby('stamp')[['dalt','daz']].std()
 
-    # The mean jitter in arcsec
+    # The mean std_centroid in arcsec
     stars[['dalt','daz']].std()
