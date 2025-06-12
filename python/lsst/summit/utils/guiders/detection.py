@@ -5,6 +5,14 @@ import astropy.units as u
 import matplotlib.pyplot as plt
 from astropy.nddata import CCDData, Cutout2D
 import ccdproc as ccdp
+import logging
+import astroquery
+
+# 1) Grab the astroquery logger
+logger = logging.getLogger('astroquery')
+
+# 2) Raise its level to ERROR (so WARNINGs are hidden)
+logger.setLevel(logging.ERROR)
 
 from astropy.nddata import CCDData, Cutout2D
 from astropy.stats import mad_std
@@ -45,7 +53,7 @@ class starGuideFinder:
     
     """
     def __init__(self, readerObject, detname, camera=None, fwhm=6.0, 
-                snr_threshold=3.0, nstamps_min=30, edge_size=30):
+                snr_threshold=3.0, nstamps_min=30, edge_size=30, max_ellip=0.1):
         """
         Initialize the starGuideFinder class.
         Parameters
@@ -64,6 +72,8 @@ class starGuideFinder:
             Minimum number of stamps a star must be detected in to be considered valid.
         edge_size : int
             Size of the edge to mask in pixels.            
+        max_ellip : float
+            Maximum ellipticity for star detection.
         """
         self.reader = readerObject
         self.expId = self.reader.expId
@@ -74,6 +84,7 @@ class starGuideFinder:
         # Quality control parameters
         self.snr_threshold = snr_threshold
         self.nstamps_min = nstamps_min
+        self.max_ellip = max_ellip
 
         # Set the ROfI parameters
         self.roiRow = self.reader.roiRow
@@ -104,8 +115,7 @@ class starGuideFinder:
         pass
 
     @classmethod
-    def run_all_guiders(cls, reader, camera=None, fwhm=12.0, snr_threshold=3.0,
-                        nstamps_min=30):
+    def run_all_guiders(cls, reader, camera=None, fwhm=12.0, snr_threshold=3.0, nstamps_min=30, max_ellip=0.1):
         """
         Run star detection on all guider detectors and return a master star table.
 
@@ -128,7 +138,8 @@ class starGuideFinder:
             # print(f"Processing {detname}")
             finder = cls(reader, detname, camera=camera,
                         fwhm=fwhm, snr_threshold=snr_threshold,
-                        nstamps_min=nstamps_min)
+                        nstamps_min=nstamps_min
+                        , max_ellip=max_ellip)
             finder.run()
             # print(f"Found {len(finder.ref_catalog)} stars in {detname} with SNR > {finder.snr_threshold}")
             stars_list.append(finder.stars)
@@ -448,7 +459,7 @@ class starGuideFinder:
         # ref_catalog = detect_stars_filtered(isr, fwhm=self.fwhm, threshold_sigma=threshold_sigma, 
         #                                     roundness_max=0.2, median=0, std=std)
 
-        ref_catalog = run_sextractor(stacked_image, aperture_radius=self.fwhm, th=threshold_sigma, max_ellip=0.2, mask=streak_mask)
+        ref_catalog = run_sextractor(stacked_image, aperture_radius=self.fwhm, th=threshold_sigma, max_ellip=self.max_ellip, mask=streak_mask)
 
         sel_columns = ['star_id', 'stamp', 'detector', 'det_id', 'ampname', 
                         'xcentroid', 'ycentroid', 'xpixel', 'ypixel', 'xerr', 'yerr', 'xfp', 'yfp', 'alt', 'az',
@@ -792,6 +803,57 @@ class starGuideFinder:
         ax.grid(True, ls=':', color='grey', alpha=0.5)
         return fig, ax
 
+    def plot_scatter_stamp(self,
+                            magOffsets=None,
+                            stamp_axis=None,
+                            figsize=(8,5),
+                            **plot_kw):
+        """
+
+        Returns
+        -------
+        fig, ax : matplotlib objects
+        """
+        # 1) get the motions array
+        if magOffsets is None:
+            motions, magOffsets = self.track_stars()
+        nstars, nstamps = magOffsets.shape
+
+        # 2) define the x-axis
+        if stamp_axis is None:
+            stamp_axis = np.arange(nstamps)
+
+        # 4) do the errorbar plot
+        fig, ax = plt.subplots(figsize=figsize)
+        defaults = dict(fmt='o', capsize=3, markersize=5, alpha=0.8)
+        defaults.update(plot_kw)
+
+        for i in range(nstars):
+            p = ax.plot(stamp_axis, magOffsets[i]-np.nanmedian(magOffsets[i]), alpha=0.5, ls='--', lw=0.5)
+            c = p[0].get_color()
+            ax.scatter(stamp_axis, magOffsets[i]-np.nanmedian(magOffsets[i]), color=c, alpha=0.75, label=f'Star {i+1}')
+        ax.axhline(0, color='grey', lw=1, ls='--')
+    
+        
+        # --- new jitter annotation ---
+        jitter_pix   = mad_std(magOffsets, ignore_nan=True)
+        # jitter_arcsec = jitter_pix * 0.2
+        txt = f"\\sigma (rms): {jitter_pix:.2f} mag "
+        ax.text(0.02, 0.98, txt,
+                transform=ax.transAxes,
+                ha='left', va='top',
+                fontsize=12, color='grey',
+                bbox=dict(facecolor='white', alpha=0.7, edgecolor='none'))
+
+        # 5) polish
+        ax.set_xlabel("Stamp #")
+        ax.set_ylabel("Mag Offset: stamp-ref [mag]")
+        ax.set_title(f"Star flux variation over {nstamps} stamps ({nstars} stars)"+"\n"+f"({self.reader.key}, {self.reader.expId})")
+        ax.legend(frameon=False, ncol=2)
+        ax.grid(True, ls=':', color='grey', alpha=0.5)
+        fig.tight_layout()
+        return fig, ax
+
     @staticmethod
     def measure_jitter_stats(stars: pd.DataFrame) -> pd.DataFrame:
         """
@@ -931,7 +993,8 @@ class starGuideFinder:
     
     
     @classmethod
-    def run_guide_stats(cls, reader, fwhm=10, snr_threshold=10, camera=None, nstamps_min=30, vebose=True,):
+    def run_guide_stats(cls, reader, fwhm=10, snr_threshold=10, 
+                        camera=None, nstamps_min=30, vebose=True, max_ellip=0.2):
         """
         Run all guiders, then produce a one‐row DataFrame containing:
         - Number of valid guiders
@@ -944,7 +1007,7 @@ class starGuideFinder:
         """
         # 1) Run detections across all guiders
         stars = cls.run_all_guiders(reader, fwhm=fwhm, snr_threshold=snr_threshold,
-                                    camera=camera, nstamps_min=nstamps_min)
+                                    camera=camera, nstamps_min=nstamps_min, max_ellip=max_ellip)
         if stars.empty:
             cols = [
                 'n_guiders',
@@ -1036,7 +1099,10 @@ def background_model(image, fwhm=10.0, streak_mask=None):
     segment_img = detect_sources(image, threshold, npixels=fwhm/2., mask=streak_mask)
     footprint = circular_footprint(radius=2*fwhm)
     
-    mask = segment_img.make_source_mask(footprint=footprint)
+    if footprint is None:
+        mask = np.zeros_like(image, dtype=bool)
+    else:
+        mask = segment_img.make_source_mask(footprint=footprint)
     mean, median, std = sigma_clipped_stats(image, sigma=3.0, mask=mask | streak_mask)
     return mean, median, std, mask
         
@@ -1302,6 +1368,26 @@ def run_sextractor(img, th=10, median=0, std=None, bkg_size=50, aperture_radius=
 
     return df
 
+def make_stars_pairs(df0, seqNum=300):
+    df = df0[df0['seqNum']==seqNum].copy()
+    starids = df['star_id'].values
+    seqnum = df['seqNum'].values
+    regions = df['region'].values
+    snr = df['snr'].values
+    flux = df['flux'].values
+    
+    stars1, stars2 = [], []
+    for r1, r2 in [(0,3), (1,2)]:
+        m1 = (regions == r1)
+        m2 = (regions == r2)
+        ix = np.argsort(snr)
+
+        s1 = starids[ix][m1]
+        s2 = starids[ix][m2]
+        stars1.append(s1)
+        stars2.append(s2)
+
+
 if __name__ == "__main__":
     # Example usage
     # from reading import readGuiderData
@@ -1316,4 +1402,14 @@ if __name__ == "__main__":
     # Run the source detection for all guider
     # return the stars DataFrame with all the measurements
     # return some stats information of the number of stars, jitter, photometric variance
-    stars, stats = starGuideFinder.run_guide_stats(reader, fwhm=6, snr_threshold=10)
+    stars, stats = starGuideFinder.run_guide_stats(reader, fwhm=10, snr_threshold=10)
+
+    ##### Some stats
+    # The number of valid (not nan) stamp measurements per star
+    stars.groupby('star_id')[['stamp','xpixel']].count()
+    
+    # The centroid error for each stamp
+    stars.groupby('stamp')[['dalt','daz']].std()
+
+    # The mean jitter in arcsec
+    stars[['dalt','daz']].std()
