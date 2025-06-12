@@ -217,7 +217,7 @@ def calculateMountErrors(
     # Calculate Image impact RMS
     imageAzRms = azRms * np.cos(elevation * np.pi / 180.0)
     imageElRms = elRms
-    imageRotRms = rotRms * COMCAM_ANGLE_TO_EDGE_OF_FIELD_ARCSEC * np.pi / 180.0 / 3600.0
+    imageRotRms = rotRms * LSSTCAM_ANGLE_TO_EDGE_OF_FIELD_ARCSEC * np.pi / 180.0 / 3600.0
     imageImpactRms = np.sqrt(imageAzRms**2 + imageElRms**2 + imageRotRms**2)
 
     mountErrors = MountErrors(
