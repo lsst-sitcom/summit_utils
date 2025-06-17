@@ -1,36 +1,12 @@
-# This file is part of summit_utils.
-#
-# Developed for the LSST Data Management System.
-# This product includes software developed by the LSST Project
-# (https://www.lsst.org).
-# See the COPYRIGHT file at the top-level directory of this distribution
-# for details of code ownership.
-#
-# This program is free software: you can redistribute it and/or modify
-# it under the terms of the GNU General Public License as published by
-# the Free Software Foundation, either version 3 of the License, or
-# (at your option) any later version.
-#
-# This program is distributed in the hope that it will be useful,
-# but WITHOUT ANY WARRANTY; without even the implied warranty of
-# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-# GNU General Public License for more details.
-#
-# You should have received a copy of the GNU General Public License
-# along with this program.  If not, see <https://www.gnu.org/licenses/>.
-
-__all__ = ["starGuideFinder"]
-
-import sep
 import pandas as pd
 import numpy as np
-
+import sep
 import astropy.units as u
 import matplotlib.pyplot as plt
 from astropy.nddata import CCDData, Cutout2D
-from astropy.stats import mad_std
-from astropy.stats import sigma_clipped_stats, SigmaClip
-
+import ccdproc as ccdp
+import logging
+from astropy.stats import mad_std, sigma_clipped_stats, SigmaClip
 from photutils.detection import DAOStarFinder
 from photutils.background import Background2D, MedianBackground
 from photutils.segmentation import detect_threshold, detect_sources
@@ -154,14 +130,17 @@ class starGuideFinder:
     
     def run(self):
         """
-        Run the star detection and tracking process.
+        Executes detection & tracking for *one* guider:
 
-        Returns
-        -------
-        motions : ndarray
-            Array of star offsets across all stamps.
-        magOffsets : ndarray
-            Array of magnitude offsets for all stars across all stamps.
+        1. Stack the sequence of guider exposures.
+        2. Build a reference catalog from the stacked image.
+        3. If no stars found, return early (empty DataFrame).
+        4. Track each reference star across all stamps (makes cutouts)
+        5. Filter out stars detected in fewer than `min_stamp_detections` stamps.
+        6. Convert positions to focal-plane (xfp,yfp) and AltAz (alt,az).
+        7. Assign a unique global `star_id` per guider.
+        8. Compute pixel & arcsecond offsets (`dx,dy,dalt,daz`).
+        9. Return the populated `self.stars` DataFrame.
         """
         # Stack the images
         self.stacked_image = self.stack_guider_images()
@@ -819,14 +798,21 @@ class starGuideFinder:
         return fig, ax
 
     @staticmethod
-    def format_std_centroid_summary(std_centroid_stats: dict) -> str:
+    def format_std_centroid_summary(stats_df: pd.DataFrame) -> str:
         """
         Pretty string summary of centroid stdev. stats from run_all_guiders.
         """
-        if not std_centroid_stats:
+        # handle both dicts and DataFrames
+        if (isinstance(stats_df, pd.DataFrame) and stats_df.empty) or (isinstance(stats_df, dict) and not stats_df):
             return "No centroid stdev. statistics available."
 
-        js = std_centroid_stats
+        # if it's a DataFrame, extract the one-row dict
+        if isinstance(stats_df, pd.DataFrame):
+            stats = stats_df.iloc[0].to_dict()
+        else:
+            stats = stats_df
+
+        js = stats
         summary = (
             f"\nGlobal centroid stdev. Summary Across All Guiders\n"
             f"{'-'*45}\n"
@@ -842,48 +828,57 @@ class starGuideFinder:
         return summary
 
     @staticmethod
-    def format_photometric_summary(phot_stats: dict) -> str:
+    def format_photometric_summary(phot_stats: pd.DataFrame) -> str:
         """
         Pretty-print summary of photometric variation statistics.
         """
-        if not phot_stats:
+        if (isinstance(phot_stats, pd.DataFrame) and phot_stats.empty) or (isinstance(phot_stats, dict) and not phot_stats):
             return "No photometric statistics available."
+
+        # if it's a DataFrame, extract the one-row dict
+        if isinstance(phot_stats, pd.DataFrame):
+            stats = phot_stats.iloc[0].to_dict()
+        else:
+            stats = phot_stats
 
         return (
             "\nPhotometric Variation Summary\n"
             "-------------------------------\n"
-            f"  - Mag Drift Rate:      {phot_stats['mag_offset_rate']:.5f} mag/sec\n"
-            f"  - Mag Zero Offset:     {phot_stats['mag_offset_zero']:.5f} mag\n"
-            f"  - Mag RMS (detrended): {phot_stats['mag_offset_rms']:.5f} mag"
+            f"  - Mag Drift Rate:      {stats['mag_offset_rate']:.5f} mag/sec\n"
+            f"  - Mag Zero Offset:     {stats['mag_offset_zero']:.5f} mag\n"
+            f"  - Mag RMS (detrended): {stats['mag_offset_rms']:.5f} mag"
         )
 
     @staticmethod
-    def format_stats_summary(summary: dict) -> str:
+    def format_stats_summary(summary: pd.DataFrame) -> str:
         """
         Pretty-print only the stats that are present in `summary`.
         Expects keys like:
           n_guiders, n_unique_stars, n_measurements, fraction_valid_stamps,
           N_<detector>, std_centroid_*, mag_offset_*, etc.
         """
-        lines = []
+        if (isinstance(summary, pd.DataFrame) and summary.empty) or (isinstance(summary, dict) and not summary):
+            return "No summary statistics available."
+        # if it's a DataFrame, extract the one-row dict
+        if isinstance(summary, pd.DataFrame):
+            summary = summary.iloc[0].to_dict()
+
+        lines = ["-" * 50]
 
         # Basic overall stats
-        if 'n_guiders' in summary:
-            lines.append(f"Number of Guiders: {summary['n_guiders']}")
-        if 'n_unique_stars' in summary:
-            lines.append(f"Number of Unique Stars: {summary['n_unique_stars']}")
-        if 'n_measurements' in summary:
-            lines.append(f"Total Measurements: {summary['n_measurements']}")
-        if 'fraction_valid_stamps' in summary:
-            frac = float(summary['fraction_valid_stamps'].iloc[0])
-            lines.append(f"Fraction Valid Stamps: {frac:.3f}")
+        lines.append(f"Number of Guiders: {int(summary['n_guiders'])}")
+        lines.append(f"Number of Unique Stars: {int(summary['n_unique_stars'])}")
+        lines.append(f"Total Measurements: {int(summary['n_measurements'])}")
+        frac = summary['fraction_valid_stamps']
+        lines.append(f"Fraction Valid Stamps: {frac:.3f}")
 
         # Per-guider counts (keys begin with 'N_')
         guider_keys = sorted(k for k in summary if k.startswith('N_'))
         if guider_keys:
             lines.append("\nStars per Guider:")
             for k in guider_keys:
-                lines.append(f"  - {k[2:]}: {summary[k]}")
+                lines.append(f"  - {k[2:]}: {int(summary[k])}")
+        return "\n".join(lines)
     
     @classmethod
     def run_guide_stats(cls,
