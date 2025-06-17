@@ -875,7 +875,7 @@ class starGuideFinder:
         if 'n_measurements' in summary:
             lines.append(f"Total Measurements: {summary['n_measurements']}")
         if 'fraction_valid_stamps' in summary:
-            frac = summary['fraction_valid_stamps'].values
+            frac = float(summary['fraction_valid_stamps'].iloc[0])
             lines.append(f"Fraction Valid Stamps: {frac:.3f}")
 
         # Per-guider counts (keys begin with 'N_')
