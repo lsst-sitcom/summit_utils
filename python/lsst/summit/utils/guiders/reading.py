@@ -276,7 +276,7 @@ class readGuiderData:
         roiarr = stamps[stamp].stamp_im.image.array
         return roiarr
     
-    def read_stacked(self, detname):
+    def read_stacked(self, detname, return_image_list=False):
         """
         Read the Guider data from Butler and return image array.
         Orientation is defined by the view setting.
@@ -290,8 +290,12 @@ class readGuiderData:
         roiarr = []
         for stamp in stamps:
             roiarr.append(stamp.stamp_im.image.array)
-        return np.median(roiarr, axis=0)
-    
+        stack = np.nanmedian(roiarr, axis=0)
+        if return_image_list:
+            return stack, roiarr
+        else:
+            return stack
+            
     def getGuiderNames(self):
         """Get the names of the guider detectors.
         """
