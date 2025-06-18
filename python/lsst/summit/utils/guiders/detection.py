@@ -232,6 +232,7 @@ class starGuideFinder:
 
         df['detector'] = self.detector_name
         df['ampname'] = self.ampName
+        df['filter'] = self.filter
         self.stars = df.copy()
 
     def track_star_stamp(self,
@@ -259,7 +260,7 @@ class starGuideFinder:
 
         # # --- reference row ---
         sel_columns = [
-            'star_id', 'stamp', 'ampname',
+            'star_id', 'stamp', 'ampname', 'filter',
             'xcentroid', 'ycentroid', 'xpixel', 'ypixel', 'xerr', 'yerr',
             'flux', 'flux_err', 'snr', 'mag_offset',
             'ixx', 'iyy', 'ixy', 'ixx_err', 'iyy_err', 'ixy_err', 'fwhm',
@@ -289,6 +290,7 @@ class starGuideFinder:
             sources['star_id'] = star_id
             sources['stamp'] = si
             sources['ampname'] = ampname
+            sources['filter'] = self.filter
 
             # Centroid in amplifier roi coordinates
             sources['xcentroid'] += cutout.xmin_original
@@ -488,6 +490,7 @@ class starGuideFinder:
         self.ref_catalog['expId'] = self.reader.expId
         self.ref_catalog['ampname'] = self.ampName
         self.ref_catalog['stamp'] = -1
+        self.ref_catalog['filter'] = self.filter
         self.ref_catalog['id'] = np.arange(len(self.ref_catalog))
 
         # Convert the star positions to CCD coordinates
