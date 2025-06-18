@@ -109,8 +109,7 @@ class GuiderPlotter:
         return pd.DataFrame([summary])
 
     def print_metrics(self):
-        seqNum = int(str(self.expId)[-5:])
-        filtered_stats_df = self.stats_df[self.stats_df['seqNum'] == seqNum].copy()
+        filtered_stats_df = self.stats_df[self.stats_df['expId'] == self.expId].copy()
 
         print(self.format_stats_summary(filtered_stats_df))
         print(self.format_std_centroid_summary(filtered_stats_df))
