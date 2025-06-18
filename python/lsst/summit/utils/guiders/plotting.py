@@ -323,19 +323,19 @@ def plot_guide_circles(ax, center, radii, colors, labels=None,
     x0, y0 = center
     txt_list = []
     for i, r in enumerate(radii):
-    c = Circle((x0, y0), r,
-               edgecolor=colors[i],
-               facecolor='none',
-               linestyle='--',
-               **circle_kwargs)
-    ax.add_patch(c)
-    
-    txt = ax.text(x0 + r + text_offset, y0-r/4.,
-            labels[i],
-            color=colors[i],
-            va='center',
-            fontsize=8)
-    txt_list.append([txt])
+        c = Circle((x0, y0), r,
+                   edgecolor=colors[i],
+                   facecolor='none',
+                   linestyle='--',
+                   **circle_kwargs)
+        ax.add_patch(c)
+        
+        txt = ax.text(x0 + r + text_offset, y0-r/4.,
+                labels[i],
+                color=colors[i],
+                va='center',
+                fontsize=8)
+        txt_list.append([txt])
     return txt_list
                    
 class plotGuiderCCDStamps:
