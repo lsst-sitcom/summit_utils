@@ -7,7 +7,7 @@ from astropy.nddata import CCDData, Cutout2D
 import ccdproc as ccdp
 import logging
 from astropy.stats import mad_std, sigma_clipped_stats, SigmaClip
-from photutils.detection import DAOStarFinder
+# from photutils.detection import DAOStarFinder # replaced by sep
 from photutils.background import Background2D, MedianBackground
 from photutils.segmentation import detect_threshold, detect_sources
 from photutils.utils import circular_footprint
