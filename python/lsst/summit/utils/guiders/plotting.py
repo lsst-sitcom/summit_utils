@@ -109,10 +109,12 @@ class GuiderPlotter:
         return pd.DataFrame([summary])
 
     def print_metrics(self):
-        num_stars = self.stats_df['n_unique_stars'].sum()
-        print(f"Number of stars: {num_stars}\n")
-        print("Metrics summary:")
-        print(self.stats_df)
+        seqNum = int(str(self.expId)[-5:])
+        filtered_stats_df = self.stats_df[self.stats_df['seqNum'] == seqNum].copy()
+
+        print(self.format_stats_summary(filtered_stats_df))
+        print(self.format_std_centroid_summary(filtered_stats_df))
+        print(self.format_photometric_summary(filtered_stats_df))
 
     def strip_plot(self, plot_type='centroidAltAz'):
         plot_columns = {
@@ -310,7 +312,93 @@ class GuiderPlotter:
         ani.save(filepath, fps=fps, dpi=dpi, writer="pillow")
         plt.close(fig)
         return ani
-    
+    @staticmethod
+    def format_std_centroid_summary(stats_df: pd.DataFrame) -> str:
+        """
+        Pretty string summary of centroid stdev. stats from run_all_guiders.
+        """
+        # handle both dicts and DataFrames
+        if (isinstance(stats_df, pd.DataFrame) and stats_df.empty) or (isinstance(stats_df, dict) and not stats_df):
+            return "No centroid stdev. statistics available."
+
+        # if it's a DataFrame, extract the one-row dict
+        if isinstance(stats_df, pd.DataFrame):
+            stats = stats_df.iloc[0].to_dict()
+        else:
+            stats = stats_df
+
+        # replace column names that starts with jitter to std_centroid
+        # stats = {k.replace('jitter', 'std_centroid'): v for k, v in stats.items()}
+
+        js = stats
+        summary = (
+            f"\nGlobal centroid stdev. Summary Across All Guiders\n"
+            f"{'-'*45}\n"
+            f"  - centroid stdev. (AZ):         {js['std_centroid_az']:.3f} arcsec (raw)\n"
+            f"  - centroid stdev. (ALT):        {js['std_centroid_alt']:.3f} arcsec (raw)\n"
+            f"  - centroid stdev. (AZ):         {js['std_centroid_corr_az']:.3f} arcsec (linear corr)\n"
+            f"  - centroid stdev. (ALT):        {js['std_centroid_corr_alt']:.3f} arcsec (linear corr)\n"
+            f"  - Drift Rate (AZ):     {15*js['drift_rate_az']:.3f} arcsec per exposure\n"
+            f"  - Drift Rate (ALT):    {15*js['drift_rate_alt']:.3f} arcsec per exposure\n"
+            f"  - Zero Offset (AZ):    {js['offset_zero_az']:.3f} arcsec\n"
+            f"  - Zero Offset (ALT):   {js['offset_zero_alt']:.3f} arcsec"
+        )
+        return summary
+
+    @staticmethod
+    def format_photometric_summary(phot_stats: pd.DataFrame) -> str:
+        """
+        Pretty-print summary of photometric variation statistics.
+        """
+        if (isinstance(phot_stats, pd.DataFrame) and phot_stats.empty) or (isinstance(phot_stats, dict) and not phot_stats):
+            return "No photometric statistics available."
+
+        # if it's a DataFrame, extract the one-row dict
+        if isinstance(phot_stats, pd.DataFrame):
+            stats = phot_stats.iloc[0].to_dict()
+        else:
+            stats = phot_stats
+
+        return (
+            "\nPhotometric Variation Summary\n"
+            "-------------------------------\n"
+            f"  - Mag Drift Rate:      {stats['mag_offset_rate']:.5f} mag/sec\n"
+            f"  - Mag Zero Offset:     {stats['mag_offset_zero']:.5f} mag\n"
+            f"  - Mag RMS (detrended): {stats['mag_offset_rms']:.5f} mag"
+        )
+
+    @staticmethod
+    def format_stats_summary(summary: pd.DataFrame) -> str:
+        """
+        Pretty-print only the stats that are present in `summary`.
+        Expects keys like:
+          n_guiders, n_unique_stars, n_measurements, fraction_valid_stamps,
+          N_<detector>, std_centroid_*, mag_offset_*, etc.
+        """
+        if (isinstance(summary, pd.DataFrame) and summary.empty) or (isinstance(summary, dict) and not summary):
+            return "No summary statistics available."
+        # if it's a DataFrame, extract the one-row dict
+        if isinstance(summary, pd.DataFrame):
+            summary = summary.iloc[0].to_dict()
+
+        lines = ["-" * 50]
+
+        # Basic overall stats
+        lines.append(f"Number of Guiders: {int(summary['n_guiders'])}")
+        lines.append(f"Number of Unique Stars: {int(summary['n_stars'])}")
+        lines.append(f"Total Measurements: {int(summary['n_measurements'])}")
+        frac = summary['fraction_valid_stamps']
+        lines.append(f"Fraction Valid Stamps: {frac:.3f}")
+
+        # Per-guider counts (keys begin with 'N_')
+        guider_keys = sorted(k for k in summary if k.startswith('N_'))
+        if guider_keys:
+            lines.append("\nStars per Guider:")
+            for k in guider_keys:
+                lines.append(f"  - {k[2:]}: {int(summary[k])}")
+        return "\n".join(lines)
+
+
 def make_cutout(image, xcen, ycen, size=30):
     if xcen is not None:
         x0, x1 = int(xcen - size/2.), int(xcen + size/2.)
