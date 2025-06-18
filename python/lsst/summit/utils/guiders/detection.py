@@ -973,7 +973,9 @@ def assemble_stats(stars: pd.DataFrame, reader) -> pd.DataFrame:
         **std_centroid,
         **phot
     }
-    return pd.DataFrame([summary])
+    df = pd.DataFrame([summary])
+    df['expId'] = stars['expId']
+    return df
 
 def measure_std_centroid_stats(stars: pd.DataFrame) -> pd.DataFrame:
     """
