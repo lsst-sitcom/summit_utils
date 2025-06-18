@@ -300,7 +300,7 @@ class starGuideFinder:
                     
         # Define the reference as the median of the other stamps
         flux_med = np.nanmedian(df['flux'][1:]) + 1e-12  # avoid division by zero
-        df['mag_offset'] = -2.5 * np.log10(df['flux']/flux_med)
+        df['mag_offset'] = -2.5 * np.log10((df['flux']+1e-12)/flux_med)
         df['xcentroid_ref'] = np.nanmedian(df['xcentroid'][1:])
         df['ycentroid_ref'] = np.nanmedian(df['ycentroid'][1:])
         df['xpixel_ref'] = np.nanmedian(df['xpixel'][1:])
