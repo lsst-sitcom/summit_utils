@@ -310,33 +310,33 @@ class GuiderPlotter:
         return ani
     
 def make_cutout(image, xcen, ycen, size=30):
-if xcen is not None:
-    x0, x1 = int(xcen - size/2.), int(xcen + size/2.)
-    y0, y1 = int(ycen - size/2.), int(ycen + size/2.)
-    cutout = image[y0:y1, x0:x1]
-else:
-    cutout = np.zeros((size, size))
-return cutout
+    if xcen is not None:
+        x0, x1 = int(xcen - size/2.), int(xcen + size/2.)
+        y0, y1 = int(ycen - size/2.), int(ycen + size/2.)
+        cutout = image[y0:y1, x0:x1]
+    else:
+        cutout = np.zeros((size, size))
+    return cutout
 
 def plot_guide_circles(ax, center, radii, colors, labels=None,
                text_offset=1, **circle_kwargs):
-x0, y0 = center
-txt_list = []
-for i, r in enumerate(radii):
-c = Circle((x0, y0), r,
-           edgecolor=colors[i],
-           facecolor='none',
-           linestyle='--',
-           **circle_kwargs)
-ax.add_patch(c)
-
-txt = ax.text(x0 + r + text_offset, y0-r/4.,
-        labels[i],
-        color=colors[i],
-        va='center',
-        fontsize=8)
-txt_list.append([txt])
-return txt_list
+    x0, y0 = center
+    txt_list = []
+    for i, r in enumerate(radii):
+    c = Circle((x0, y0), r,
+               edgecolor=colors[i],
+               facecolor='none',
+               linestyle='--',
+               **circle_kwargs)
+    ax.add_patch(c)
+    
+    txt = ax.text(x0 + r + text_offset, y0-r/4.,
+            labels[i],
+            color=colors[i],
+            va='center',
+            fontsize=8)
+    txt_list.append([txt])
+    return txt_list
                    
 class plotGuiderCCDStamps:
     """Class to read and unpack the Guider data from Butler.
