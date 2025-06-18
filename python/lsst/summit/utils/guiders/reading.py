@@ -247,11 +247,12 @@ class readGuiderData:
         self.roiUnder  = m.get('ROIUNDER', m.get('ROIUNDRC', 6))
         self.nStamps   = m['N_STAMPS']
         self.start_time= m['GDSSTART']
+        self.filter    = m['FILTBAND']
         self.FREQ      = 5  # 5 Hz
         pass
 
     def print_header_info(self):
-        print(f"Data Id: {self.dataId}")
+        print(f"Data Id: {self.dataId}, filter-band: {self.filter}")
         print(f"ROI Row: {self.roiRow}, ROI Col: {self.roiCol}, ROI Rows: {self.roiRows}, ROI Cols: {self.roiCols}")
         print(f"Number of Stamps: {self.nStamps}")
         print(f"Acq. Start Time: {self.start_time}")
