@@ -854,7 +854,7 @@ class starGuideFinder:
         """
         Pretty-print only the stats that are present in `summary`.
         Expects keys like:
-          n_guiders, n_unique_stars, n_measurements, fraction_valid_stamps,
+          n_guiders, n_stars, n_measurements, fraction_valid_stamps,
           N_<detector>, std_centroid_*, mag_offset_*, etc.
         """
         if (isinstance(summary, pd.DataFrame) and summary.empty) or (isinstance(summary, dict) and not summary):
@@ -867,7 +867,7 @@ class starGuideFinder:
 
         # Basic overall stats
         lines.append(f"Number of Guiders: {int(summary['n_guiders'])}")
-        lines.append(f"Number of Unique Stars: {int(summary['n_unique_stars'])}")
+        lines.append(f"Number of Unique Stars: {int(summary['n_stars'])}")
         lines.append(f"Total Measurements: {int(summary['n_measurements'])}")
         frac = summary['fraction_valid_stamps']
         lines.append(f"Fraction Valid Stamps: {frac:.3f}")
@@ -929,7 +929,7 @@ def assemble_stats(stars: pd.DataFrame, reader) -> pd.DataFrame:
     if stars.empty:
         cols = [
             'n_guiders',
-            'n_unique_stars',
+            'n_stars',
             'fraction_valid_stamps',
             'n_measurements',
         ]
@@ -966,7 +966,7 @@ def assemble_stats(stars: pd.DataFrame, reader) -> pd.DataFrame:
     # 9) Assemble
     summary = {
         'n_guiders': n_guiders,
-        'n_unique_stars': n_unique,
+        'n_stars': n_unique,
         'n_measurements': n_meas,
         'fraction_valid_stamps': frac_valid,
         **stars_per_guiders,
