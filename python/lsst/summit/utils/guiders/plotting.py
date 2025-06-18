@@ -258,7 +258,7 @@ class GuiderPlotter:
         """Annotate the center panel with exposure and stamp info."""
         self.clear_axis_ticks(ax)
         text = f"ExpId: {self.expId}\nStamp #: {stampNum+1:02d}" if stampNum>=0 else f"ExpId: {self.expId}\nStacked w/ {self.stars_df['stamp'].nunique()} stamps"
-        text+= f"\nCenter Stdev.: {jitter:.1f} arcsec" if jitter>0 else ""
+        text+= f"\nCenter Stdev.: {jitter:.2f} arcsec" if jitter>0 else ""
         txt = ax.text(
             1.085, -0.10, text,
             transform=ax.transAxes,
