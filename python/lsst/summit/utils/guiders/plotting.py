@@ -225,7 +225,8 @@ class GuiderPlotter:
             artists.extend([im_object, txt_object])
 
         # Annotate the center
-        stamp_info = self.annotate_center(stampNum, axs['center'])
+        std = np.nanstd(np.hypot(self.stars_df['dalt'], self.stars_df['daz']))
+        stamp_info = self.annotate_center(stampNum, axs['center'], jitter=std)
         axs['center'].axis('off')
         artists.append(stamp_info)
     
@@ -251,10 +252,11 @@ class GuiderPlotter:
         )
         return txt
 
-    def annotate_center(self, stampNum, ax):
+    def annotate_center(self, stampNum, ax, jitter=-1):
         """Annotate the center panel with exposure and stamp info."""
         self.clear_axis_ticks(ax)
         text = f"ExpId: {self.expId}\nStamp #: {stampNum+1:02d}" if stampNum>=0 else f"ExpId: {self.expId}\nStacked w/ {self.stars_df['stamp'].nunique()} stamps"
+        text+= f"\nCenter Stdev.: {jitter:.1f} arcsec" if jitter>0 else ""
         txt = ax.text(
             1.085, -0.10, text,
             transform=ax.transAxes,
