@@ -20,7 +20,7 @@ from matplotlib.patches import Rectangle
 DefaultColumns = ["xcentroid", "ycentroid", "xpixel", "ypixel",
                   "xfp", "yfp", "xfp_ref", "yfp_ref", "alt", "az",
                   "alt_ref", "az_ref", "detector", "det_id", "ampname",
-                  "expId", "star_id", "stamp", "timestamp",
+                  "expId", "star_id", "stamp", "timestamp", "filter",
                   "mag_offset", "ixx", "iyy", "ixy", "ixx_err", "iyy_err", "ixy_err",
                   "fwhm","e1", "e2","flux", "flux_err","snr",
                   "dx", "dy", "dxfp", "dyfp","dalt", "daz"]
@@ -65,6 +65,7 @@ class starGuideFinder:
         self.detector_name = detector_name
         self.reader.set_detector(detector_name)
         self.ampName = reader.ampName
+        self.filter = reader.filter
 
         # detection and QC parameters
         self.psf_fwhm = psf_fwhm
@@ -208,6 +209,11 @@ class starGuideFinder:
         self.stars['dalt']  = (self.stars['alt']    - self.stars['alt_ref'])*3600
         self.stars['daz']   = (self.stars['az']     - self.stars['az_ref'])*3600
 
+        # Correct for cos(alt) in daz
+        self.stars['daz'] = np.cos(self.stars['alt_ref']*np.pi/180)*self.stars['daz']
+        pass
+
+  
     def filter_min_stamp_detections(self):
         """
         Select the best star per stamp based on the number of detections.
