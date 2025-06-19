@@ -18,7 +18,7 @@ from lsst.summit.utils.guiders.reading import readGuiderData
 from matplotlib.patches import Rectangle
 
 DefaultColumns = ["xcentroid", "ycentroid", "xpixel", "ypixel",
-                  "xpixel", "ypixel", "xfp", "yfp", "xfp_ref", "yfp_ref", 
+                  "xpixel_ref", "ypixel_ref", "xfp", "yfp", "xfp_ref", "yfp_ref", 
                   "alt", "az", "alt_ref", "az_ref", "detector", "det_id", "ampname",
                   "expId", "star_id", "stamp", "timestamp", "filter",
                   "mag_offset", "ixx", "iyy", "ixy", "ixx_err", "iyy_err", "ixy_err",
