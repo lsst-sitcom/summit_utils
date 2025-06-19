@@ -1063,7 +1063,7 @@ def make_empty_summary(reader):
     # 1) Basic summary columns
     cols = [
         'n_guiders',
-        'n_unique_stars',
+        'n_stars',
         'fraction_valid_stamps',
         'n_measurements',
     ]
