@@ -1079,6 +1079,7 @@ def make_empty_summary(reader):
         'std_centroid_corr_az','std_centroid_corr_alt',
         'offset_rate_az','offset_rate_alt',
         'offset_zero_az','offset_zero_alt',
+        'drift_rate_az', 'drift_rate_alt'
     ]
     for c in std_cols:
         zero_row[c] = np.nan
