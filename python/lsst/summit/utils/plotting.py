@@ -21,6 +21,7 @@
 from __future__ import annotations
 
 import logging
+from typing import TYPE_CHECKING
 
 import astropy.visualization as vis
 import matplotlib
@@ -35,6 +36,9 @@ import lsst.afw.image as afwImage
 import lsst.afw.table as afwTable
 import lsst.geom as geom
 from lsst.summit.utils.utils import getImageArray, getQuantiles
+
+if TYPE_CHECKING:
+    from matplotlib.figure import Figure
 
 
 def drawCompass(
@@ -135,7 +139,7 @@ def plot(
     addLegend: bool = False,
     savePlotAs: str | None = None,
     logger: logging.Logger | None = None,
-) -> matplotlib.figure.Figure:
+) -> Figure:
     """Plot an input image accommodating different data types and additional
     features, like: overplotting centroids, compass (if the input image
     has a WCS), stretching, plot title, and legend.

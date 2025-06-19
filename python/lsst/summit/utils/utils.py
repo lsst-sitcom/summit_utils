@@ -18,11 +18,13 @@
 #
 # You should have received a copy of the GNU General Public License
 # along with this program.  If not, see <https://www.gnu.org/licenses/>.
+from __future__ import annotations
 
 import datetime
 import logging
 import os
 from collections.abc import Iterable, Sequence
+from typing import TYPE_CHECKING
 
 import astropy.units as u
 import matplotlib
@@ -55,6 +57,9 @@ from lsst.obs.lsst.translators.latiss import AUXTEL_LOCATION
 from lsst.obs.lsst.translators.lsst import FILTER_DELIMITER
 
 from .astrometry.utils import genericCameraHeaderToWcs
+
+if TYPE_CHECKING:
+    from lsst.afw.cameraGeom import Camera
 
 __all__ = [
     "SIGMATOFWHM",
@@ -1131,10 +1136,11 @@ def getQuantiles(data: npt.NDArray[np.float64], nColors: int) -> npt.NDArray[np.
         A monotonically increasing sequence of size (nColors + 1). These are
         the edges of nColors intervals.
     """
-    if (np.nanmax(data) - np.nanmin(data)) > 300_000:
+    dataRange = np.nanmax(data) - np.nanmin(data)
+    if dataRange > 300_000:
         # Use slower but memory efficient nanquantile
         logger = logging.getLogger(__name__)
-        logger.warning("Data range is very large; using slower quantile code.")
+        logger.warning(f"Data range is very large ({dataRange}); using slower quantile code.")
         boundaries = np.nanquantile(data, np.linspace(0, 1, nColors + 1))
     else:
         cdf, minVal, maxVal = getCdf(data, nColors)
@@ -1274,7 +1280,7 @@ def getDetectorIds(instrumentName: str) -> list[int]:
     return [detector.getId() for detector in camera]
 
 
-def getCameraFromInstrumentName(instrumentName: str) -> lsst.afw.cameraGeom.Camera:
+def getCameraFromInstrumentName(instrumentName: str) -> Camera:
     """Get the camera object given the instrument name (case insenstive).
 
     Parameters
