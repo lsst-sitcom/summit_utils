@@ -936,19 +936,7 @@ def assemble_stats(stars: pd.DataFrame, reader) -> pd.DataFrame:
     """
     # 1) If empty, build an empty stats frame with the right columns
     if stars.empty:
-        cols = [
-            'n_guiders',
-            'n_stars',
-            'fraction_valid_stamps',
-            'n_measurements',
-        ]
-        example_std_centroid = [
-            'std_centroid_az','std_centroid_alt','std_centroid_corr_az','std_centroid_corr_alt',
-            'offset_rate_az','offset_rate_alt','offset_zero_az','offset_zero_alt'
-        ]
-        example_phot = ['mag_offset_rate','mag_offset_zero','mag_offset_rms']
-        cols += [f'N_{det}' for det in reader.guiders.keys()] + example_std_centroid + example_phot
-        return pd.DataFrame(columns=cols)
+        return make_empty_summary(reader)
 
     # 2) Number of valid guiders
     n_guiders = stars['detector'].nunique()
@@ -1052,6 +1040,67 @@ def measure_photometric_variation(stars: pd.DataFrame) -> tuple[pd.DataFrame, di
         
     return phot_stats
 
+
+def make_empty_summary(reader):
+    """
+    Build a one‐row “zeroed” summary table with the full set of columns,
+    filling in seqNum, dayObs, expId, and filter from the reader.
+
+    Parameters
+    ----------
+    reader : your Reader class instance
+        Must have attributes:
+          - seqNum, dayObs, expId
+          - filter (or you can replace with reader.filterName)
+          - guiders: a dict (or iterable) of guider names
+
+    Returns
+    -------
+    pd.DataFrame
+        One‐row DataFrame with all summary columns set to zero,
+        except seqNum/dayObs/expId/filter filled in.
+    """
+    # 1) Basic summary columns
+    cols = [
+        'n_guiders',
+        'n_unique_stars',
+        'fraction_valid_stamps',
+        'n_measurements',
+    ]
+
+    # 2) Per-guider counts
+    guider_cols = [f"N_{g}" for g in reader.guiders.keys()]
+    cols += guider_cols
+    zero_row = {c: 0 for c in cols}
+
+    # 3) Centroid statistics
+    std_cols = [
+        'std_centroid_az','std_centroid_alt',
+        'std_centroid_corr_az','std_centroid_corr_alt',
+        'offset_rate_az','offset_rate_alt',
+        'offset_zero_az','offset_zero_alt',
+    ]
+    for c in std_cols:
+        zero_row[c] = np.nan
+
+    # 4) Photometric stats
+    phot_cols = ['mag_offset_rate','mag_offset_zero','mag_offset_rms']
+    cols += phot_cols
+
+    for c in phot_cols:
+        zero_row[c] = np.nan
+
+    # 5) Add metadata columns
+    meta_cols = ['seqNum','dayObs','expId','filter']
+    cols += meta_cols
+
+    # 7) Overwrite the metadata values
+    zero_row['seqNum'] = reader.seqNum
+    zero_row['dayObs'] = reader.dayObs
+    zero_row['expId']  = reader.expId
+    zero_row['filter'] = getattr(reader, 'filter', None)
+
+    return pd.DataFrame([zero_row])
 
 def stats_background(image, fwhm=10.0):
     """
