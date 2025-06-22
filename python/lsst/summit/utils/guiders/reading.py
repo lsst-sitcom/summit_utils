@@ -257,10 +257,8 @@ class GuiderDataReader:
 
     def print_header_info(self):
         print(f"Data Id: {self.dataId}, filter-band: {self.filter}")
-        print(
-            f"ROI Row: {self.roi_row}, ROI Col: {self.roi_col}," +
-            f"ROI Rows: {self.roi_rows}, ROI Cols: {self.roi_cols}"
-        )
+        print(f"ROI Row: {self.roi_row}, ROI Col: {self.roi_col}")
+        print(f"ROI Rows: {self.roi_rows}, ROI Cols: {self.roi_cols}")
         print(f"Number of Stamps: {self.n_stamps}")
         print(f"Acq. Start Time: {self.start_time}")
         pass
@@ -386,7 +384,7 @@ def get_guider_stamps(
     Returns
     -------
     stamps : lsst.meas.algorithms.stamps.Stamps
-        Stamp images oriented in DVCS or CCD view, 
+        Stamp images oriented in DVCS or CCD view,
         depending on the `view` parameter.
 
     """
@@ -395,10 +393,12 @@ def get_guider_stamps(
     detector = camera[idet]
 
     # Get a Butler if none is provided
-    if butler == None:
+    if butler is None:
         butler = Butler(repo, collections=collections)
 
-    # for dayObs of 20250509 or before, the ROIs are swapped between SG0 and SG1.  Fix here
+    # for dayObs of 20250509 or before,
+    # the ROIs are swapped between SG0 and SG1.
+    # Fix here
     if dayObs < 20250509:
         detName = camera[idet].getName()
         raft = detName[0:3]
@@ -432,12 +432,13 @@ def get_guider_stamps(
     # build the CCD view Bounding Boxes
     ccd_view_bbox = mk_roi_bboxes(md, camera)
 
-    # also build the Translation methods from CCD view -> DVCS view and the reverse
+    # also build the Translation methods
+    # from CCD view -> DVCS view and the reverse
     ft, bt = mk_ccd_to_dvcs(ccd_view_bbox, detector.getOrientation().getNQuarter())
 
     # now loop over the individual ROIs
     stamp_list = []
-    if whichstamps == None:
+    if whichstamps is None:
         iterstamps = np.arange(len(raw_stamps.getMaskedImages()))
     else:
         iterstamps = whichstamps
