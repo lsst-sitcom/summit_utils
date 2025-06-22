@@ -86,7 +86,8 @@ DEFAULT_COLUMNS = [
 
 class StarGuideFinder:
     """
-    Class to find stars in the Guider data and measure astrometric/photometric statistics.
+    Class to find stars in the Guider data and
+    measure astrometric/photometric statistics.
 
     Parameters
     ----------
@@ -101,7 +102,8 @@ class StarGuideFinder:
     min_snr : float, default=3.0
         Minimum signal-to-noise ratio for stars in the reference catalog.
     min_stamp_detections : int, default=30
-        Minimum number of stamps a star must be detected in to be considered valid.
+        Minimum number of stamps a star must be detected
+        in to be considered valid.
     edge_margin : int, default=30
         Pixels from CCD edge to exclude reference sources.
     max_ellipticity : float, default=0.1
@@ -120,6 +122,7 @@ class StarGuideFinder:
         max_ellipticity=0.1,
     ):
         self.reader = reader
+        self.view = reader.view
         self.exp_id = reader.exp_id
         self.detector_name = detector_name
         self.reader.set_detector(detector_name)
@@ -185,16 +188,16 @@ class StarGuideFinder:
     def run_source_detection(self):
         """
         Executes detection & tracking for *one* guider:
-
         1. Stack the sequence of guider exposures.
         2. Build a reference catalog from the stacked image.
         3. If no stars found, return early (empty DataFrame).
         4. Track each reference star across all stamps (makes cutouts)
-        5. Filter out stars detected in fewer than `min_stamp_detections` stamps.
-        6. Convert positions to focal-plane (xfp,yfp) and AltAz (alt,az).
-        7. Assign a unique global `star_id` per guider.
-        8. Compute pixel & arcsecond offsets (`dx,dy,dalt,daz`).
-        9. Return the populated `self.stars` DataFrame.
+        5. Filter out stars within `min_stamp_detections` stamps.
+        6. Convert star positions to CCD pixels if the view is DVCS.
+        7. Convert positions to focal-plane (xfp,yfp) and AltAz (alt,az).
+        8. Assign a unique global `star_id` per guider.
+        9. Compute pixel & arcsecond offsets (`dx,dy,dalt,daz`).
+        10. Return the populated `self.stars` DataFrame.
         """
         # Stack the images
         self.stacked_image = self.stack_guider_images()
@@ -213,6 +216,8 @@ class StarGuideFinder:
         self.filter_min_stamp_detections()
 
         # convert to focal plane coordinates/ altaz
+        # action to check weather the view is dvcs
+        self.convert_if_dvcs_to_ccd()
         self.convert_to_focal_plane()
         self.convert_to_altaz()
 
@@ -222,6 +227,31 @@ class StarGuideFinder:
         # Compute offsets
         self.compute_offsets()
         return self.stars
+
+    def convert_if_dvcs_to_ccd(self):
+        """
+        Convert xcentroid/ycentroid to CCD pixels if the view is DVCS.
+        """
+        if self.view == "dvcs":
+            # Convert xcentroid/ycentroid to CCD pixels
+            stamps = self.reader.dataset[self.detector_name]
+
+            # get CCD<->DVCS translation from the stamps
+            _, _, dvcs = stamps.getArchiveElements()[0]
+
+            xy = self.stars[["xpixel", "ypixel"]].to_numpy()
+            xy_ref = self.stars[["xpixel_ref", "ypixel_ref"]].to_numpy()
+
+            x_ccd, y_ccd = dvcs(xy[:, 0], xy[:, 1])
+            x_ccd_ref, y_ccd_ref = dvcs(xy_ref[:, 0], xy_ref[:, 1])
+            self.stars["xpixel"] = x_ccd
+            self.stars["ypixel"] = y_ccd
+            self.stars["xpixel_ref"] = x_ccd_ref
+            self.stars["ypixel_ref"] = y_ccd_ref
+        elif self.view == "ccd":
+            # No conversion needed for CCD view
+            pass
+        pass
 
     def set_unique_id(self):
         # 1) Build a detector→index map (0,1,2,…)
@@ -341,8 +371,6 @@ class StarGuideFinder:
             cutout = Cutout2D(isr, (ref_x, ref_y), size=50, mode="partial", fill_value=np.nan)
 
             _, median, std = sigma_clipped_stats(cutout.data, sigma=3.0, mask=mask_cutout.data)
-            # data = np.where(mask_cutout.data, cutout.data, 0)
-            # sources = run_sextractor(cutout.data-median, aperture_radius=self.psf_fwhm, th=5, max_ellipticity0.2, mask=mask_cutout.data)
             sources = measure_star_in_aperture(
                 cutout.data - median, aperture_radius=fwhm, std_bkg=std, gain=1.0, mask=mask_cutout.data
             )
@@ -360,7 +388,8 @@ class StarGuideFinder:
             sources["xcentroid"] += cutout.xmin_original
             sources["ycentroid"] += cutout.ymin_original
 
-            # pixel in ccd coordinates
+            # pixel in image view coordinates
+            # if ccd view, ccd pixel
             sources["xpixel"] = sources["xcentroid"] + self.min_x
             sources["ypixel"] = sources["ycentroid"] + self.min_y
             rows.append(sources.iloc[0])
@@ -373,6 +402,7 @@ class StarGuideFinder:
         # Define the reference as the median of the other stamps
         flux_med = np.nanmedian(df["flux"][1:]) + 1e-12  # avoid division by zero
         df["mag_offset"] = -2.5 * np.log10((df["flux"] + 1e-12) / flux_med)
+
         df["xcentroid_ref"] = np.nanmedian(df["xcentroid"][1:])
         df["ycentroid_ref"] = np.nanmedian(df["ycentroid"][1:])
         df["xpixel_ref"] = np.nanmedian(df["xpixel"][1:])
@@ -450,28 +480,9 @@ class StarGuideFinder:
 
         # Find Bad columns
         streak_mask = find_bad_columns(stacked_image, nsigma=2)
-
-        # # Build the background model
-        # median, mean, std, mask = background_model(stacked_image, fwhm=self.psf_fwhm, streak_mask=streak_mask)
-
-        # self.bias = median
-        # self.noise_ref = std
-        # self.mask_source = mask
         self.mask_streak = streak_mask
 
         # # model the background
-        # try:
-        #     self.sky_bkg = Background2D(stacked_image, box_size=50, filter_size=3, bkg_estimator=MedianBackground(), mask=mask)
-        # except Exception as e:
-        #     print(f"Error building background model: {e}")
-        #     self.sky_bkg = Background2D(stacked_image, box_size=50, filter_size=3, bkg_estimator=MedianBackground(), exclude_percentile=30)
-
-        # Detect stars in the stacked image
-        # and filter out streaks
-        # Use the background model to subtract the background
-        # isr = stacked_image - self.sky_bkg.background
-        # ref_catalog = detect_stars_filtered(isr, fwhm=self.psf_fwhm, threshold_sigma=threshold_sigma,
-        #                                     roundness_max=0.2, median=0, std=std)
 
         ref_catalog = run_sextractor(
             stacked_image,
@@ -825,10 +836,6 @@ class StarGuideFinder:
         defaults = dict(fmt="o", capsize=3, markersize=5, alpha=0.8)
         defaults.update(plot_kw)
 
-        # # Optional: show all data as faded dots for context
-        # ax.scatter(stars['stamp'], stars['dx'], color='k', marker='x', alpha=0.25, label='CCD ΔX (all)')
-        # ax.scatter(stars['stamp'], stars['dy'], color='firebrick', marker='+', alpha=0.25, label='CCD ΔY (all)')
-
         # Median drift/error bars
         ax.errorbar(stamps, med_dx, yerr=sig_dx, color="k", label="Median ΔX", **defaults)
         ax.errorbar(stamps, med_dy, yerr=sig_dy, color="firebrick", label="Median ΔY", **defaults)
@@ -891,7 +898,7 @@ class StarGuideFinder:
                 magOffsets[i] - np.nanmedian(magOffsets[i]),
                 color=c,
                 alpha=0.75,
-                label=f"Star {i+1}",
+                label=f"Star {i + 1}",
             )
         ax.axhline(0, color="grey", lw=1, ls="--")
 
@@ -944,15 +951,15 @@ class StarGuideFinder:
         js = stats
         summary = (
             f"\nGlobal centroid stdev. Summary Across All Guiders\n"
-            f"{'-'*45}\n"
-            f"  - centroid stdev. (AZ):         {js['std_centroid_az']:.3f} arcsec (raw)\n"
-            f"  - centroid stdev. (ALT):        {js['std_centroid_alt']:.3f} arcsec (raw)\n"
-            f"  - centroid stdev. (AZ):         {js['std_centroid_corr_az']:.3f} arcsec (linear corr)\n"
-            f"  - centroid stdev. (ALT):        {js['std_centroid_corr_alt']:.3f} arcsec (linear corr)\n"
-            f"  - Drift Rate (AZ):     {15*js['drift_rate_az']:.3f} arcsec per exposure\n"
-            f"  - Drift Rate (ALT):    {15*js['drift_rate_alt']:.3f} arcsec per exposure\n"
-            f"  - Zero Offset (AZ):    {js['offset_zero_az']:.3f} arcsec\n"
-            f"  - Zero Offset (ALT):   {js['offset_zero_alt']:.3f} arcsec"
+            f"{'-' * 45}\n"
+            f"  - centroid stdev.  (AZ): {js['std_centroid_az']:.3f} arcsec (raw)\n"
+            f"  - centroid stdev. (ALT): {js['std_centroid_alt']:.3f} arcsec (raw)\n"
+            f"  - centroid stdev.  (AZ): {js['std_centroid_corr_az']:.3f} arcsec (linear corr)\n"
+            f"  - centroid stdev. (ALT): {js['std_centroid_corr_alt']:.3f} arcsec (linear corr)\n"
+            f"  - Drift Rate       (AZ): {15 * js['drift_rate_az']:.3f} arcsec per exposure\n"
+            f"  - Drift Rate      (ALT): {15 * js['drift_rate_alt']:.3f} arcsec per exposure\n"
+            f"  - Zero Offset      (AZ): {js['offset_zero_az']:.3f} arcsec\n"
+            f"  - Zero Offset     (ALT): {js['offset_zero_alt']:.3f} arcsec"
         )
         return summary
 
@@ -1030,8 +1037,8 @@ class StarGuideFinder:
         - Number of unique stars
         - Number of stars per guider (e.g., N_R02_S11, N_R22_S11, etc.)
         - Number of star measurements across all guiders and stamps
-        - Global centroid stdev. statistics (az/alt, detrended, rates, zero‐points)
-        - Global photometric variation statistics (drift rate, zero‐point, RMS)
+        - Global centroid stdev. statistics (az/alt, rates, zero-points)
+        - Global photometric variation statistics (drift rate, zero-point, RMS)
         - Fraction of valid stamp measurements
         """
         # 1) Run detections across all guiders
@@ -1116,7 +1123,7 @@ def measure_std_centroid_stats(stars: pd.DataFrame) -> pd.DataFrame:
     Returns
     -------
     stars : pd.DataFrame
-        DataFrame with new std_centroid statistic columns broadcasted to all rows.
+        DataFrame with new std_centroid statistic columns.
     """
     time = (stars.stamp.to_numpy() + 0.5) * 0.3  # seconds
     time = time.astype(np.float64)
@@ -1143,8 +1150,8 @@ def measure_std_centroid_stats(stars: pd.DataFrame) -> pd.DataFrame:
 
 def measure_photometric_variation(stars: pd.DataFrame) -> tuple[pd.DataFrame, dict]:
     """
-    Fit mag_offset vs time across all rows, compute drift rate, zero-point, and RMS scatter,
-    then add these as constant columns to `stars`.
+    Fit mag_offset vs time across all rows, compute drift rate,
+    zero-point, and RMS scatter, then add these as constant columns to `stars`.
     """
     mo = stars["mag_offset"].to_numpy()
     mask = np.isfinite(mo)
@@ -1461,7 +1468,7 @@ def find_bad_columns(img, mask=None, nsigma=3.0):
     img : 2D ndarray
         The input image (can contain NaNs).
     mask : 2D bool ndarray or None
-        True where pixels should be ignored in the stats (e.g. masked or bad pixels).
+        True where pixels should be ignored in the stats (e.g. masked pixels).
     nsigma : float
         number of stdevs from the median to be considered a bada column.
 
@@ -1475,7 +1482,7 @@ def find_bad_columns(img, mask=None, nsigma=3.0):
         img, sigma=3.0, maxiters=5, mask=mask, axis=0  # collapse over rows → one stat per column
     )
 
-    # 2) Determine threshold: median of medians + thresh_sigma * median of sigmas
+    # 2) Determine threshold
     global_med_of_meds = np.nanmedian(median_cols)
     global_med_of_stds = np.nanmedian(std_cols)
     threshold = global_med_of_meds + nsigma * global_med_of_stds
@@ -1593,7 +1600,8 @@ if __name__ == "__main__":
 
     # Run the source detection for all guider
     # return the stars DataFrame with all the measurements
-    # return some stats information of the number of stars, std_centroid, photometric variance
+    # return some stats information of
+    # the number of stars, std_centroid, photometric variance
     stars, stats = starGuideFinder.run_guide_stats(reader, psf_fwhm=10, min_snr=10)
 
     # Some stats
