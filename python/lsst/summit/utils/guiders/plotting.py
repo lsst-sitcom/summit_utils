@@ -124,52 +124,82 @@ class GuiderPlotter:
         print(self.format_photometric_summary(filtered_stats_df))
 
     def strip_plot(self, plot_type="centroidAltAz"):
-        plot_columns = {
-            "centroidAltAz": ["dalt", "daz"],
-            "centroidPixel": ["dx", "dy"],
-            "flux": ["mag_offset"],
-            "secondMoments": ["ixx", "iyy", "ixy"],
-            "psf": ["e1", "e2", "fwhm"],
+        plot_kwargs = {
+            "centroidAltAz": {
+                "ylabel": "Centroid Offset [arcsec]",
+                "col": ["dalt", "daz"],
+                "title": "Alt/Az Centroid Offsets",
+            },
+            "centroidPixel": {
+                "ylabel": "Centroid Offset [pixels]",
+                "col": ["dx", "dy"],
+                "title": "CCD Pixel Centroid Offsets",
+            },
+            "flux": {
+                "ylabel": "Magnitude Offset [mag]",
+                "col": ["mag_offset"],
+                "title": "Flux Magnitude Offsets",
+            },
+            "secondMoments": {
+                "ylabel": "Second Moments [pixels²]",
+                "col": ["ixx", "iyy"],
+                "title": "Second Moments",
+            },
+            "psf": {"ylabel": "PSF FWHM [arcsec]", "col": ["fwhm"], "scale": 0.2, "title": "PSF FWHM"},
         }
+        cfg = plot_kwargs[plot_type]
+        scale = cfg.get("scale", 1.0)
+        cols = cfg["col"]
 
-        data = self.stars_df[self.stars_df["stamp"] > 0][["stamp"] + plot_columns[plot_type]].copy()
-        # for col in plot_columns[plot_type]:
-        #     data[col] -= data[col].median()
+        # filter and prepare
+        df = self.stars_df[self.stars_df["stamp"] > 0][["stamp"] + cols].copy()
 
-        melted = data.melt(id_vars="stamp", var_name="Measurement", value_name="value")
+        # setup subplots
+        n = len(cols)
+        fig, axes = plt.subplots(nrows=1, ncols=n, figsize=(7 * n + 1, 6), sharex=True, sharey=True)
+        if n == 1:
+            axes = [axes]
 
-        fig, ax1 = plt.subplots(figsize=(8, 6))
-        measurements = melted["Measurement"].unique()
-        for i, measure in enumerate(measurements):
-            subset = melted[melted["Measurement"] == measure]
-            std = np.nanstd(subset["value"])
-            ax1.scatter(
-                subset["stamp"],
-                subset["value"],
-                color=self.COLOR_MAP[i % len(self.COLOR_MAP)],
-                marker=self.MARKERS[i % len(self.MARKERS)],
-                alpha=0.7,
-                label=f"{measure} (rms: {std:.3f} {self.UNIT_DICT[plot_type]})",
+        # define bins
+        max_stamp = int(df["stamp"].max()) + 1
+        bins = np.arange(1, max_stamp + 6, 5)
+        bin_centers = bins[:-1] + 2.5
+
+        for ax, col in zip(axes, cols):
+            # scatter points
+            ax.scatter(df["stamp"], df[col] * scale, color="lightgrey", alpha=0.7, label=col)
+
+            # compute binned stats
+            df["bin"] = pd.cut(df["stamp"], bins=bins, labels=False)
+            stats = df.groupby("bin")[col].agg(["mean", "std"]).reset_index()
+            # plot error bars
+            ax.errorbar(
+                bin_centers[stats["bin"]],
+                stats["mean"] * scale,
+                yerr=stats["std"] * scale,
+                fmt="o",
+                color="#6495ED",
+                ecolor="#6495ED",
+                capsize=3,
             )
 
-        ax1.axhline(0, color="grey", ls="--")
-        ax1.set_xlabel("# stamp")
-        ax1.set_ylabel(f"value-median [{self.UNIT_DICT[plot_type]}]")
+            ax.set_ylabel(cfg["ylabel"])
+            ax.set_xlabel("# stamp")
+            ax.legend(fontsize=12, loc="upper right")
 
-        stamp_unique = np.unique(melted["stamp"])
-        ax1.set_xticks(stamp_unique[::5])
+            # top axis for elapsed time
+            xstampers = np.arange(0, max_stamp + 10, 10)
+            ax.set_xticks(xstampers)
+            ax2 = ax.twiny()
+            # xt = ax.get_xticks()
+            elapsed = 15.0 * xstampers / max_stamp
+            ax2.set_xticks(xstampers)
+            ax2.set_xticklabels([f"{e:.1f}" for e in elapsed])
+            ax2.set_xlabel("Elapsed time [s]")
 
-        # Second x-axis for elapsed time
-        ax2 = ax1.twiny()
-        ax2.set_xticks(ax1.get_xticks())
-        elapsed_time = 15 * (ax1.get_xticks() + 1) / (stamp_unique.max() + 1)
-        ax2.set_xticklabels([f"{et:.1f}" for et in elapsed_time])
-        ax2.set_xlabel("Elapsed time [s]")
-
-        plt.title(f"Strip plot: {plot_type}\nExpId: {self.exp_id}")
-        ax1.legend(fontsize=12)
-        plt.tight_layout()
-        plt.show()
+        fig.suptitle(cfg["title"], fontsize=14, fontweight="bold")
+        fig.tight_layout()
+        # plt.show()
 
     def select_best_star(self) -> dict:
         """
@@ -202,6 +232,10 @@ class GuiderPlotter:
             fig (matplotlib.figure.Figure): figure object
             axs (matplotlib.axes.Axes): axes object
         """
+        # the reader view should be 'dvcs'
+        if reader.view != "dvcs":
+            raise ValueError("Reader view must be 'dvcs' for mosaic plotting.")
+
         if fig is None:
             gs = dict(hspace=0.0, wspace=0.0)
             fig, axs = plt.subplot_mosaic(
@@ -231,8 +265,6 @@ class GuiderPlotter:
             axs_img.axvline(cutout_size / 2.0, color="grey", linestyle="--", linewidth=1)
             axs_img.axhline(cutout_size / 2.0, color="grey", linestyle="--", linewidth=1)
             axs_img.set_aspect("equal", "box")
-            # self.plot_circle(axs_img, cutout_size/2, cutout_size/2, radius=5, color='grey')
-            # self.plot_circle(axs_img, cutout_size/2, cutout_size/2, radius=10, color='grey')
             _ = plot_guide_circles(
                 axs_img,
                 center,
@@ -281,7 +313,7 @@ class GuiderPlotter:
         """Annotate the center panel with exposure and stamp info."""
         self.clear_axis_ticks(ax)
         text = (
-            f"ExpId: {self.exp_id}\nStamp #: {stamp_num+1:02d}"
+            f"ExpId: {self.exp_id}\nStamp #: {stamp_num + 1:02d}"
             if stamp_num >= 0
             else f"ExpId: {self.exp_id}\nStacked w/ {self.stars_df['stamp'].nunique()} stamps"
         )
@@ -307,6 +339,10 @@ class GuiderPlotter:
         return circ
 
     def make_gif(self, reader, n_stamp_max=60, fps=5, dpi=80, plo=90.0, phi=99.0, cutout_size=30):
+        # the reader view should be 'dvcs'
+        if reader.view != "dvcs":
+            raise ValueError("Reader view must be 'dvcs' for mosaic GIF creation.")
+
         from matplotlib import animation
 
         # build canvas
@@ -355,21 +391,18 @@ class GuiderPlotter:
         else:
             stats = stats_df
 
-        # replace column names that starts with jitter to std_centroid
-        # stats = {k.replace('jitter', 'std_centroid'): v for k, v in stats.items()}
-
         js = stats
         summary = (
             f"\nGlobal centroid stdev. Summary Across All Guiders\n"
-            f"{'-'*45}\n"
-            f"  - centroid stdev. (AZ):         {js['std_centroid_az']:.3f} arcsec (raw)\n"
-            f"  - centroid stdev. (ALT):        {js['std_centroid_alt']:.3f} arcsec (raw)\n"
-            f"  - centroid stdev. (AZ):         {js['std_centroid_corr_az']:.3f} arcsec (linear corr)\n"
-            f"  - centroid stdev. (ALT):        {js['std_centroid_corr_alt']:.3f} arcsec (linear corr)\n"
-            f"  - Drift Rate (AZ):     {15*js['drift_rate_az']:.3f} arcsec per exposure\n"
-            f"  - Drift Rate (ALT):    {15*js['drift_rate_alt']:.3f} arcsec per exposure\n"
-            f"  - Zero Offset (AZ):    {js['offset_zero_az']:.3f} arcsec\n"
-            f"  - Zero Offset (ALT):   {js['offset_zero_alt']:.3f} arcsec"
+            f"{'-' * 45}\n"
+            f"  - centroid stdev.  (AZ): {js['std_centroid_az']:.3f} arcsec (raw)\n"
+            f"  - centroid stdev. (ALT): {js['std_centroid_alt']:.3f} arcsec (raw)\n"
+            f"  - centroid stdev.  (AZ): {js['std_centroid_corr_az']:.3f} arcsec (linear corr)\n"
+            f"  - centroid stdev. (ALT): {js['std_centroid_corr_alt']:.3f} arcsec (linear corr)\n"
+            f"  - Drift Rate       (AZ): {15 * js['drift_rate_az']:.3f} arcsec per exposure\n"
+            f"  - Drift Rate      (ALT): {15 * js['drift_rate_alt']:.3f} arcsec per exposure\n"
+            f"  - Zero Offset      (AZ): {js['offset_zero_az']:.3f} arcsec\n"
+            f"  - Zero Offset     (ALT): {js['offset_zero_alt']:.3f} arcsec"
         )
         return summary
 
@@ -527,7 +560,7 @@ class GuiderMosaicPlotter:
         text = f"day_obs: {self.dayObs}" + "\n" + f"seq_num: {self.seqNum}" + "\n"
         text += f"orientation: {self.view}" + "\n"
         if stamp_num > 0:
-            text += f"Stamp #: {stamp_num+1:02d}"
+            text += f"Stamp #: {stamp_num + 1:02d}"
         else:
             text += f"Stacked Image w/ {self.n_stamps} stamps"
         return text
@@ -684,7 +717,8 @@ def measure_std_centroid_stats(stars: pd.DataFrame) -> pd.DataFrame:
     Returns
     -------
     stars : pd.DataFrame
-        DataFrame with new std_centroid statistic columns broadcasted to all rows.
+        DataFrame with new std_centroid statistic
+        columns broadcasted to all rows.
     """
     time = (stars.stamp.to_numpy() + 0.5) * 0.3  # seconds
     time = time.astype(np.float64)
@@ -711,7 +745,8 @@ def measure_std_centroid_stats(stars: pd.DataFrame) -> pd.DataFrame:
 
 def measure_photometric_variation(stars: pd.DataFrame) -> tuple[pd.DataFrame, dict]:
     """
-    Fit mag_offset vs time across all rows, compute drift rate, zero-point, and RMS scatter,
+    Fit mag_offset vs time across all rows, compute drift rate,
+      zero-point, and RMS scatter,
     then add these as constant columns to `stars`.
     """
     mo = stars["mag_offset"].to_numpy()
