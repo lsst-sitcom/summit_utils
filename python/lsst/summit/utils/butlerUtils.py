@@ -202,12 +202,16 @@ def makeDefaultButler(
             logger.debug("embargo option is irrelevant on the summit, ignoring")
             embargo = False  # there's only one repo too, so this makes the code more simple too
 
-    baseCollection = f"{instrument}/defaults"
-    raCollection = f"{instrument}/runs/quickLook" if summitLike else f"{instrument}/runs/nightlyValidation"
+    baseCollection = [f"{instrument}/defaults"]
+    raCollection = (
+        [f"{instrument}/runs/quickLook"] if summitLike else [f"{instrument}/runs/nightlyValidation"]
+    )
+    if instrument == "LSSTCam":
+        baseCollection.append("LSSTCam/raw/guider")
 
     repo = instrument if embargo is False else "embargo"
 
-    collections = [baseCollection, raCollection]
+    collections = itertools.chain(baseCollection, raCollection)
     if extraCollections is not None:
         assert extraCollections is not None  # just for mypy
         extraCollectionsList = ensure_iterable(extraCollections)
