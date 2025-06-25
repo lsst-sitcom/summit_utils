@@ -20,13 +20,11 @@
 # along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
 __all__ = [
-    "read_guider_data",
     "GuiderDataReader",
     "get_guider_stamps",
 ]
 import astropy.units as u
 import numpy as np
-from astropy.io import fits
 from astropy.time import Time
 
 from lsst.afw import cameraGeom
@@ -34,7 +32,6 @@ from lsst.afw.image import MaskedImageF
 from lsst.daf.butler import Butler
 from lsst.meas.algorithms.stamps import Stamp, Stamps
 from lsst.obs.lsst import LsstCam
-from lsst.resources import ResourcePath
 from lsst.summit.utils.guiders.transformation import convert_roi, mk_ccd_to_dvcs, mk_roi_bboxes
 from lsst.summit.utils.utils import getSite
 
@@ -43,35 +40,6 @@ from lsst.summit.utils.utils import getSite
 # Get the site and the camera object
 site = getSite()
 camera = LsstCam.getCamera()
-
-
-# Define the ResourcePath for the guider data
-def read_guider_data(filename):
-    rp = ResourcePath(filename)
-
-    with rp.open(mode="rb") as f:
-
-        hdu_list = fits.open(f)
-
-        N_frames = hdu_list[0].header["N_STAMPS"]
-        x, y = hdu_list[0].header["roiRows"], hdu_list[0].header["roiCols"]
-
-        imgs = np.zeros((N_frames, x, y))
-        timestamps = np.zeros(N_frames)
-
-        if (len(hdu_list) - 1) / 2 == N_frames:  # if has rawstamps
-            for i, j in zip(range(N_frames), range(2, len(hdu_list), 2)):
-                imgs[i, :, :] = hdu_list[j].data
-                timestamps[i] = hdu_list[j].header["STMPTMJD"]
-
-        elif len(hdu_list) - 1 == N_frames:  # if no rawstamps
-            for i, j in zip(range(N_frames), range(1, len(hdu_list))):
-                imgs[i, :, :] = hdu_list[j].data
-                timestamps[i] = hdu_list[j].header["STMPTMJD"]
-
-    grand_hdr = hdu_list[0].header
-
-    return imgs, timestamps, grand_hdr
 
 
 class GuiderDataReader:
