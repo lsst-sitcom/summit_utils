@@ -21,19 +21,83 @@
 
 __all__ = [
     "GuiderDataReader",
-    "get_guider_stamps",
+    "getGuiderStamps",
 ]
+from dataclasses import dataclass
+
 import astropy.units as u
 import numpy as np
 from astropy.time import Time
 
+import lsst.summit.utils.butlerUtils as butlerUtils
 from lsst.afw import cameraGeom
 from lsst.afw.image import MaskedImageF
 from lsst.daf.butler import Butler
 from lsst.meas.algorithms.stamps import Stamp, Stamps
 from lsst.obs.lsst import LsstCam
 from lsst.summit.utils.guiders.transformation import convert_roi, mk_ccd_to_dvcs, mk_roi_bboxes
-from lsst.summit.utils.utils import getSite
+
+FREQ = 5.0  # Hz, frequency of the guider data acquisition
+DELAY = 20 / 1000  # seconds
+
+
+@dataclass
+class GuiderData:
+    """Data class to hold guider data information."""
+
+    dayObs: int
+    seqNum: int
+    header: dict[str, str | float]
+    roiAmpNames: dict[str, str]
+    timestamps: list[Time]
+    datasets: dict[str, Stamps]  # TODO: Consider renaming this & making private
+    freq: float = FREQ  # TODO: Stop hard coding this, once that's possible from upstream
+    # TODO: Add these properties back in if needed
+    # filter_band: str
+
+    def getStampArray(self, stampNum: int, detName: str) -> np.ndarray:
+        """Get the stamp for a given stamp number and detector name.
+
+        Parameters
+        ----------
+        stampNum : `int`
+            The index of the stamp to retrieve.
+        detName : `str`
+            The name of the detector for which to retrieve the stamp.
+
+        Returns
+        -------
+        data : `np.ndarray`
+            The stamp image array for the specified detector and stamp number.
+        """
+        if detName not in self.datasets:
+            raise ValueError(f"Detector {detName} not found in datasets.")
+        stamps = self.datasets[detName]
+        if stampNum >= len(stamps):
+            raise IndexError(f"Stamp number {stampNum} out of range for detector {detName}.")
+        return stamps[stampNum].stamp_im.image.array
+
+    def getStackedStampArray(self, detName: str) -> np.ndarray:
+        """Get the stacked stamp for a given detector name.
+
+        Parameters
+        ----------
+        detName : `str`
+            The name of the detector for which to retrieve the stacked stamp.
+
+        Returns
+        -------
+        stack : `np.ndarray`
+            The median stack of all stamps for the specified detector.
+        """
+        if detName not in self.datasets:
+            raise ValueError(f"Detector {detName} not found in datasets.")
+        stamps = self.datasets[detName]
+        roiarr = []
+        for stamp in stamps:
+            roiarr.append(stamp.stamp_im.image.array)
+        stack = np.nanmedian(roiarr, axis=0)
+        return stack
 
 
 class GuiderDataReader:
@@ -53,7 +117,7 @@ class GuiderDataReader:
         # Load the data from the butler
         reader = GuiderDataReader(seqNum, dayObs, view='dvcs', verbose=True)
         reader.init_guiders()
-        reader.load_data()
+        reader.getDataForAllDetectors()
 
         # reader makes a dictionary of the guider data
         # with the keys being the guider names
@@ -77,233 +141,168 @@ class GuiderDataReader:
 
     def __init__(
         self,
-        seqNum,
-        dayObs,
-        verbose=False,
-        butler=None,
-        view="dvcs",
-        collections=["LSSTCam/raw/all", "LSSTCam/raw/guider"],
+        butler: Butler | None = None,
+        view: str = "dvcs",
+        verbose: bool = False,
     ):
-
-        # data id
         self.butler = butler
-        self.dayObs = dayObs
-        self.seqNum = seqNum
-        self.dataId = {"instrument": "LSSTCam", "day_obs": self.dayObs, "seq_num": self.seqNum}
-
-        # exposure
-        self.exp_id = dayObs * 100000 + seqNum
+        if butler is None:
+            self.butler = butlerUtils.makeDefaultButler("LSSTCam")
+        assert self.butler is not None, "Butler must be provided or created."
 
         # Define camera objects
         self.camera = LsstCam.getCamera()
 
-        self.FREQ = 5  # Hz
-        self.DELAY = 20 / 1000  # seconds
-
         self.view = view
-        self.dataset = None
         self.verbose = verbose
-        self.guiders = {}
+        self.guiderNameMap: dict[str, int] = {}
 
-        # Butler
-        self.initialize_butler(collections)
-
-    def load(self):
-        # Initialize the attributes
-        self.init_guiders()
-
-        # Load the data
-        self.load_data()
-        self.get_header_info(self.dataset[self.detnames[0]])
-        self.get_timestamp()
-
-        # verbose
-        if self.verbose:
-            self.print_header_info()
-
-    def initialize_butler(self, collections=None):
-        site = getSite()
-        if site == "summit":
-            repo = "LSSTCam"
-        elif site == "staff-rsp":
-            repo = "/repo/embargo"
-        elif site == "rubin-devl":
-            repo = "/repo/embargo"
-        else:
-            raise ValueError(f"Unknown butler repo for {site}")
-
-        if self.butler is None:
-            # Initialize butler
-            self.butler = Butler(repo, collections=["LSSTCam/raw/guider"] + collections, instrument="LSSTCam")
-        pass
-
-    def init_guiders(self):
-        """Load the guider detector information."""
-        self.guiders = {}
         for detector in self.camera:
             if detector.getType() == cameraGeom.DetectorType.GUIDER:
                 detName = detector.getName()
-                self.guiders[detName] = detector.getId()
+                self.guiderNameMap[detName] = detector.getId()
 
-        self.detnames = list(self.guiders.keys())
-        self.nGuiders = len(self.guiders)
-        pass
+        self.detNames = list(self.guiderNameMap.keys())
+        self.nGuiders = len(self.guiderNameMap)
 
-    def load_data(self):
+    def get(self, dayObs: int, seqNum: int, detectors: list[int] | None = None) -> GuiderData:
+        """Get the guider data for a given day of observation and sequence
+        number.
+
+        Parameters
+        ----------
+        dayObs : `int`
+            Day of observation in YYYYMMDD format.
+        seqNum : `int`
+            Sequence number of the observation.
+        detectors : `list[int]`, optional
+            List of detector IDs to filter the data. If ``None``, all detectors
+            will be included.
+
+        Returns
+        -------
+        guiderData : `GuiderData`
+            An instance of `GuiderData` containing the guider data.
+        """
+        if detectors is not None:
+            # TODO: Add option to only get data for some detectors
+            raise NotImplementedError("Filtering by specific detectors is not yet implemented.")
+
+        perDetectorData = self.getDataForAllDetectors(dayObs, seqNum)
+        header = self.getHeaderInfo(perDetectorData[self.detNames[0]])  # assume all the same for now
+        roiAmpNames = self.getRoiAmpNames(perDetectorData)
+        timestamps = self.getTimestamps(header)
+
+        if self.verbose:
+            self.printHeaderInfo(header)
+
+        guiderData = GuiderData(
+            dayObs=dayObs,
+            seqNum=seqNum,
+            header=header,
+            roiAmpNames=roiAmpNames,
+            timestamps=timestamps,
+            datasets=perDetectorData,
+        )
+        return guiderData
+
+    def getTimestamps(self, header: dict[str, str | float]) -> list[Time]:
+        nPoints = header["n_stamps"]
+        samples = np.arange(nPoints, dtype=float)
+
+        t0 = Time(header["start_time"], format="isot", scale="utc")
+
+        dt = (1.0 / FREQ) * u.second
+        dt += DELAY * u.second
+        timestamp = t0 + samples * dt
+        return list(timestamp)
+
+    def getDataForAllDetectors(self, dayObs: int, seqNum: int) -> dict[str, Stamps]:
         """Load the data from the butler for all guider detectors.
 
-        Args:
-            butler (Butler): butler object
-            dayObs (int): day of observation
-            seqNum (int): sequence number
-            view (str): view type ('roi', 'dvcs', 'ccd')
+        Parameters
+        ----------
+        dayObs : `int`
+            Day of observation in YYYYMMDD format.
+        seqNum : `int`
+            Sequence number of the observation.
+
+        Returns
+        -------
+        dataset : `dict[str, Stamps]`
+            Dictionary with guider detector names as keys and Stamps objects as
+            values.
         """
-        datas = {}
-        dataId = self.dataId.copy()
-        for detName, detNum in self.guiders.items():
-            # det = self.camera[detNum]
+        assert self.butler is not None, "Butler must be provided or created."  # make mypy happy
+        dataset: dict[str, Stamps] = {}
+        for detName, detNum in self.guiderNameMap.items():
             if self.view == "roi":
-                dataId["detector"] = detNum
-                datas[detName] = self.butler.get("guider_raw", dataId)
-
+                # TODO: Fix this!
+                dataset[detName] = self.butler.get(
+                    "guider_raw", day_obs=dayObs, seq_num=seqNum, detector=detNum
+                )
             elif self.view == "dvcs":
-                datas[detName] = get_guider_stamps(
-                    detNum, self.seqNum, self.dayObs, butler=self.butler, view="dvcs"
-                )
-
+                dataset[detName] = getGuiderStamps(detNum, seqNum, dayObs, butler=self.butler, view="dvcs")
             elif self.view == "ccd":
-                datas[detName] = get_guider_stamps(
-                    detNum, self.seqNum, self.dayObs, butler=self.butler, view="ccd"
-                )
+                dataset[detName] = getGuiderStamps(detNum, seqNum, dayObs, butler=self.butler, view="ccd")
+            else:
+                raise ValueError(f"Unknown view type: {self.view}. Use 'roi', 'dvcs', or 'ccd'.")
 
-        self.dataset = datas
-        self.init_ampnames()
-        # self.n_stamps = max([len(data) for data in datas.values()])
-        pass
+        return dataset
 
-    def init_ampnames(self):
-        self.ampNames = {}
-        for detname in self.guiders.keys():
-            md = self.dataset[detname].metadata.toDict()
+    def getRoiAmpNames(self, dataset: dict[str, Stamps]) -> dict[str, str]:
+        """Get the name of the amplifier used for the ROI for each guider
+        detector in the focal plane.
+
+        Returns
+        -------
+        ampNames : dict[str, str]
+            Dictionary with detector names as keys and amplifier names as
+            values.
+        """
+        ampNames: dict[str, str] = {}
+        for detName in dataset.keys():
+            md = dataset[detName].metadata.toDict()
             # also get the ampName
             segment = md["ROISEG"]
             ampName = "C" + segment[7:]
-            self.ampNames[detname] = ampName
-        pass
+            ampNames[detName] = ampName
+        return ampNames
 
-    def get_timestamp(self):
-        # 1) stamp indices
-        self.stamp = np.arange(self.n_stamps, dtype=float)
-
-        # 2) parse start time once
-        t0 = Time(self.start_time, format="isot", scale="utc")
-
-        # 3) build Time array
-        dt = (1.0 / self.FREQ) * u.second
-        dt += self.DELAY * u.second
-        self.timestamp = t0 + self.stamp * dt
-        return self.timestamp
-
-    def get_header_info(self, raw):
+    def getHeaderInfo(self, raw: Stamps) -> dict[str, str | float]:
+        info: dict[str, str | float] = {}
         m = raw.metadata.toDict()
-        self.roi_col = m["ROICOL"]
-        self.roi_row = m["ROIROW"]
-        self.roi_cols = m["ROICOLS"]
-        self.roi_rows = m["ROIROWS"]
-        self.roiUnder = m.get("ROIUNDER", m.get("ROIUNDRC", 6))
-        self.n_stamps = m["N_STAMPS"]
-        self.start_time = m["GDSSTART"]
-        self.filter = m["FILTBAND"]
-        self.FREQ = 5  # 5 Hz
-        pass
+        info["roi_col"] = m["ROICOL"]
+        info["roi_row"] = m["ROIROW"]
+        info["roi_cols"] = m["ROICOLS"]
+        info["roi_rows"] = m["ROIROWS"]
+        info["roiUnder"] = m.get("ROIUNDER", m.get("ROIUNDRC", 6))
+        info["n_stamps"] = m["N_STAMPS"]
+        info["start_time"] = m["GDSSTART"]
+        info["filter"] = m["FILTBAND"]
+        info["FREQ"] = FREQ
+        return info
 
-    def print_header_info(self):
-        print(f"Data Id: {self.dataId}, filter-band: {self.filter}")
-        print(f"ROI Row: {self.roi_row}, ROI Col: {self.roi_col}")
-        print(f"ROI Rows: {self.roi_rows}, ROI Cols: {self.roi_cols}")
-        print(f"Number of Stamps: {self.n_stamps}")
-        print(f"Acq. Start Time: {self.start_time}")
-        pass
+    def printHeaderInfo(self, header: dict[str, str | float]) -> None:
+        # TODO: reinstate dataId and filter if necessary
+        # print(f"Data Id: {self.dataId}, filter-band: {self.filter}")
+        print(f"ROI Row: {header['roi_row']}, ROI Col: {header['roi_col']}")
+        print(f"ROI Rows: {header['roi_rows']}, ROI Cols: {header['roi_cols']}")
+        print(f"Number of Stamps: {header['n_stamps']}")
+        print(f"Acq. Start Time: {header['start_time']}")
 
-    def read(self, stamp, detname):
-        """
-        Read the Guider data from Butler and return image array.
-        Orientation is defined by the view setting.
-        Args:
-            stamp (int): stamp number
-            detname (str): detector name
-        Returns:
-            array: image array
-        """
-        # Unpack the data
-        stamps = self.dataset[detname]
-
-        if stamp >= len(stamps):
-            return np.zeros((self.roi_rows, self.roi_cols), dtype=np.float32)
-
-        roiarr = stamps[stamp].stamp_im.image.array
-        return roiarr
-
-    def read_stacked(self, detname, return_image_list=False):
-        """
-        Read the Guider data from Butler and return image array.
-        Orientation is defined by the view setting.
-        Args:
-            detname (str): detector name
-        Returns:
-            array: image array
-        """
-        # Unpack the data
-        stamps = self.dataset[detname]
-        roiarr = []
-        for stamp in stamps:
-            roiarr.append(stamp.stamp_im.image.array)
-        stack = np.nanmedian(roiarr, axis=0)
-        if return_image_list:
-            return stack, roiarr
-        else:
-            return stack
-
-    def get_guider_names(self):
+    @property
+    def guiderNames(self):
         """Get the names of the guider detectors."""
-        return list(self.guiders.keys())
+        return list(self.guiderNameMap.keys())
 
-    def get_guider_ids(self):
+    @property
+    def guiderIds(self):
         """Get the ids of the guider detectors."""
-        return list(self.guiders.values())
-
-    def get_guider_amp_names(self):
-        """
-        Get list of guider amp names
-        """
-        if hasattr(self, "ampNames"):
-            return list(self.ampNames.values())
-
-        ampNames = {}
-        for detname in self.guiders.keys():
-            md = self.dataset[detname].metadata.toDict()
-            # also get the ampName
-            segment = md["ROISEG"]
-            ampName = "C" + segment[7:]
-            ampNames[detname] = ampName
-        self.ampNames = ampNames
-        return list(ampNames.values())
-
-    def set_detector(self, detname):
-        """
-        Set the guider detector to be referenced.
-        """
-        if detname not in self.guiders.keys():
-            raise ValueError(f"Guider {detname} not found.")
-
-        self.detname = detname
-        self.detNum = self.guiders[detname]
-        self.detector = self.camera[self.detNum]
-        self.amp_name = self.ampNames[detname]
-        pass
+        return list(self.guiderNameMap.values())
 
 
-def get_guider_stamps(
+def getGuiderStamps(
     detNum: int,
     seqNum: int,
     dayObs: int,
@@ -383,9 +382,10 @@ def get_guider_stamps(
     ft, bt = mk_ccd_to_dvcs(ccd_view_bbox, detector.getOrientation().getNQuarter())
 
     # now loop over the individual ROIs
-    stamp_list = []
+    stamp_list: list[Stamp] = []
+    iterstamps: list[int] = []
     if whichstamps is None:
-        iterstamps = np.arange(len(raw_stamps.getMaskedImages()))
+        iterstamps = list(np.arange(len(raw_stamps.getMaskedImages())))
     else:
         iterstamps = whichstamps
 

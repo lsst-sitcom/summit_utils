@@ -31,7 +31,7 @@ from matplotlib.patches import Rectangle
 
 from lsst.obs.lsst.cameraTransforms import LsstCameraTransforms
 from lsst.summit.utils.guiders.reading import GuiderDataReader
-from lsst.summit.utils.guiders.transformation import pixel_to_focal
+from lsst.summit.utils.guiders.transformation import CoordinatesToAltAz, pixel_to_focal
 
 DEFAULT_COLUMNS = [
     "xcentroid",
@@ -630,8 +630,6 @@ class StarGuideFinder:
         Convert the star positions to altaz coordinates.
         """
         if len(self.stars["xfp"]) > 0:
-            from transformation import CoordinatesToAltAz
-
             coord = CoordinatesToAltAz(
                 self.reader.seqNum, self.reader.dayObs, self.detector_name, butler=self.reader.butler
             )
@@ -1584,19 +1582,27 @@ def build_star_pairs(df0, seqNum=300):
 
 if __name__ == "__main__":
     # Example usage
+<<<<<<< HEAD
     import pandas as pd
 
     from lsst.summit.utils.guiders.detection import starGuideFinder
+=======
+    import lsst.summit.utils.butlerUtils as butlerUtils
+    from lsst.summit.utils.guiders.reading import GuiderData
+
+    butler = butlerUtils.makeDefaultButler("LSSTCam")
+    reader = GuiderDataReader(butler, view="ccd")
+>>>>>>> f602096 (fixup! Refactor GuiderDataReader to be reusable, i.e. return data when reading)
 
     seqNum, dayObs = 591, 20250425
-    reader = GuiderDataReader(seqNum, dayObs, view="ccd")
-    reader.load()
+    guiderData = reader.get(dayObs, seqNum)
+    assert isinstance(guiderData, GuiderData), "Expected a GuiderDataReader instance"
 
     # Run the source detection for all guider
     # return the stars DataFrame with all the measurements
     # return some stats information of
     # the number of stars, std_centroid, photometric variance
-    stars, stats = starGuideFinder.run_guide_stats(reader, psf_fwhm=10, min_snr=10)
+    stars, stats = StarGuideFinder.run_guide_stats(reader, psf_fwhm=10, min_snr=10)
 
     # Some stats
     # The number of valid (not nan) stamp measurements per star
