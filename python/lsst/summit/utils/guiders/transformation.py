@@ -229,7 +229,7 @@ class CoordinatesToAltAz:
 
 # Aaron's code to make transformations from ROI coordinates to Focal Plane and
 # sky coordinates.
-def mk_rot(det_nquarter, direction=1):
+def mk_rot(det_nquarter: int, direction: int = 1) -> AffineTransform:
     """
     Make rotation Transform
 
@@ -267,7 +267,7 @@ def mk_rot(det_nquarter, direction=1):
     return rotation
 
 
-def mk_ccd_to_dvcs(bbox_ccd, det_nquarter):
+def mk_ccd_to_dvcs(bbox_ccd: Box2I, det_nquarter: int) -> tuple[AffineTransform, AffineTransform]:
     """
     Make transformations suitable for Guider stamps, to go from a view of the
     stamp in CCD pixel coordinates (ie. with 0,0 in the Lower Left of C00) to
