@@ -35,12 +35,6 @@ from lsst.obs.lsst import LsstCam
 from lsst.summit.utils.guiders.transformation import convert_roi, mk_ccd_to_dvcs, mk_roi_bboxes
 from lsst.summit.utils.utils import getSite
 
-# Todo: put in summit utils guiders
-# from utils import get_guider_stamps
-# Get the site and the camera object
-site = getSite()
-camera = LsstCam.getCamera()
-
 
 class GuiderDataReader:
     """Class to read and unpack the Guider data from Butler.
@@ -128,6 +122,7 @@ class GuiderDataReader:
             self.print_header_info()
 
     def initialize_butler(self, collections=None):
+        site = getSite()
         if site == "summit":
             repo = "LSSTCam"
         elif site == "staff-rsp":
