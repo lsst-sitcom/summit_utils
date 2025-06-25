@@ -33,12 +33,6 @@ from lsst.obs.lsst.cameraTransforms import LsstCameraTransforms
 from lsst.summit.utils.guiders.reading import GuiderDataReader
 from lsst.summit.utils.guiders.transformation import pixel_to_focal
 
-# from photutils.detection import DAOStarFinder # replaced by sep
-# from photutils.background import Background2D, MedianBackground
-# from photutils.segmentation import detect_threshold, detect_sources
-# from photutils.utils import circular_footprint
-
-
 DEFAULT_COLUMNS = [
     "xcentroid",
     "ycentroid",
