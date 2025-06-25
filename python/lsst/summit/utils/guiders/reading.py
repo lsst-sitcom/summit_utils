@@ -44,7 +44,6 @@ camera = LsstCam.getCamera()
 
 class GuiderDataReader:
     """Class to read and unpack the Guider data from Butler.
-       Plot an animated gif of the CCD guider stamp.
 
     Works in the summit and usdf environments.
 
@@ -166,20 +165,20 @@ class GuiderDataReader:
         """
         datas = {}
         dataId = self.dataId.copy()
-        for detName, idet in self.guiders.items():
-            # det = self.camera[idet]
+        for detName, detNum in self.guiders.items():
+            # det = self.camera[detNum]
             if self.view == "roi":
-                dataId["detector"] = idet
+                dataId["detector"] = detNum
                 datas[detName] = self.butler.get("guider_raw", dataId)
 
             elif self.view == "dvcs":
                 datas[detName] = get_guider_stamps(
-                    idet, self.seqNum, self.dayObs, butler=self.butler, view="dvcs"
+                    detNum, self.seqNum, self.dayObs, butler=self.butler, view="dvcs"
                 )
 
             elif self.view == "ccd":
                 datas[detName] = get_guider_stamps(
-                    idet, self.seqNum, self.dayObs, butler=self.butler, view="ccd"
+                    detNum, self.seqNum, self.dayObs, butler=self.butler, view="ccd"
                 )
 
         self.dataset = datas
@@ -303,72 +302,57 @@ class GuiderDataReader:
             raise ValueError(f"Guider {detname} not found.")
 
         self.detname = detname
-        self.idet = self.guiders[detname]
-        self.detector = self.camera[self.idet]
+        self.detNum = self.guiders[detname]
+        self.detector = self.camera[self.detNum]
         self.amp_name = self.ampNames[detname]
         pass
 
 
 def get_guider_stamps(
-    idet,
-    seqNum,
-    dayObs,
-    repo="/repo/embargo",
-    collections=["LSSTCam/raw/guider"],
-    butler=None,
-    view="dvcs",
-    whichstamps=None,
-):
+    detNum: int,
+    seqNum: int,
+    dayObs: int,
+    butler: Butler,
+    view: str = "dvcs",
+    whichstamps: list[int] | None = None,
+) -> Stamps:
     """
     This class reads the stamp object from the Butler for one Guider and
     converts them to DVCS view, making a new Stamps object
 
     Parameters
     ----------
-    idet : int
+    detNum : `int`
         Detector Id
-
-    seqNum : int
+    seqNum : `int`
         Sequence Number
-
-    dayObs : int
+    dayObs : `int`
         Day Observation
-
-    repo : str
+    repo : `str`
         Butler repo
-
-    collections : list of str
+    collections : `list` of `str`
         Butler collections
-
-    butler : lsst.daf.butler.Butler, optional
+    butler : `lsst.daf.butler.Butler`, optional
         Butler object. If None, a new Butler will be created.
-
-    view : str, optional
+    view : `str`, optional
         View type, either 'dvcs' or 'ccd'. Default is 'dvcs'.
-
-    whichstamps : list of int, optional
+    whichstamps : `list` of `int`, optional
         List of stamp indices to read. If None, all stamps will be read.
 
     Returns
     -------
-    stamps : lsst.meas.algorithms.stamps.Stamps
-        Stamp images oriented in DVCS or CCD view,
-        depending on the `view` parameter.
-
+    stamps : `lsst.meas.algorithms.stamps.Stamps`
+        Stamp images oriented in DVCS or CCD view, depending on the `view`
+        parameter.
     """
     # get Camera object
     camera = LsstCam.getCamera()
-    detector = camera[idet]
+    detector = camera[detNum]
 
-    # Get a Butler if none is provided
-    if butler is None:
-        butler = Butler(repo, collections=collections)
-
-    # for dayObs of 20250509 or before,
-    # the ROIs are swapped between SG0 and SG1.
-    # Fix here
+    # for dayObs of 20250509 or before, the ROIs are swapped between SG0 and
+    # SG1. Fix here
     if dayObs < 20250509:
-        detName = camera[idet].getName()
+        detName = camera[detNum].getName()
         raft = detName[0:3]
         ccd = detName[4:7]
         if ccd == "SG0":
@@ -378,12 +362,11 @@ def get_guider_stamps(
 
         detName_swapped = raft + "_" + ccd_swapped
         detector_swapped = camera[detName_swapped]
-        idet_swapped = detector_swapped.getId()
+        detNum_swapped = detector_swapped.getId()
 
-        dataId = {"instrument": "LSSTCam", "detector": idet_swapped, "day_obs": dayObs, "seq_num": seqNum}
-
+        dataId = {"instrument": "LSSTCam", "detector": detNum_swapped, "day_obs": dayObs, "seq_num": seqNum}
     else:
-        dataId = {"instrument": "LSSTCam", "detector": idet, "day_obs": dayObs, "seq_num": seqNum}
+        dataId = {"instrument": "LSSTCam", "detector": detNum, "day_obs": dayObs, "seq_num": seqNum}
 
     # finally read from the Butler
     raw_stamps = butler.get("guider_raw", dataId)
