@@ -18,6 +18,7 @@
 #
 # You should have received a copy of the GNU General Public License
 # along with this program.  If not, see <https://www.gnu.org/licenses/>.
+from __future__ import annotations
 
 __all__ = ["StarGuideFinder"]
 
@@ -32,6 +33,8 @@ from matplotlib.patches import Rectangle
 from lsst.obs.lsst.cameraTransforms import LsstCameraTransforms
 from lsst.summit.utils.guiders.reading import GuiderDataReader
 from lsst.summit.utils.guiders.transformation import CoordinatesToAltAz, pixel_to_focal
+
+from .transformation import CoordinatesToAltAz
 
 DEFAULT_COLUMNS = [
     "xcentroid",
@@ -1582,17 +1585,11 @@ def build_star_pairs(df0, seqNum=300):
 
 if __name__ == "__main__":
     # Example usage
-<<<<<<< HEAD
-    import pandas as pd
-
-    from lsst.summit.utils.guiders.detection import starGuideFinder
-=======
     import lsst.summit.utils.butlerUtils as butlerUtils
     from lsst.summit.utils.guiders.reading import GuiderData
 
     butler = butlerUtils.makeDefaultButler("LSSTCam")
     reader = GuiderDataReader(butler, view="ccd")
->>>>>>> f602096 (fixup! Refactor GuiderDataReader to be reusable, i.e. return data when reading)
 
     seqNum, dayObs = 591, 20250425
     guiderData = reader.get(dayObs, seqNum)
