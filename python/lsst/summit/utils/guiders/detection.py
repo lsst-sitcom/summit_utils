@@ -32,9 +32,7 @@ from matplotlib.patches import Rectangle
 
 from lsst.obs.lsst.cameraTransforms import LsstCameraTransforms
 from lsst.summit.utils.guiders.reading import GuiderDataReader
-from lsst.summit.utils.guiders.transformation import CoordinatesToAltAz, pixel_to_focal
-
-from .transformation import CoordinatesToAltAz
+from lsst.summit.utils.guiders.transformation import convert_pixels_to_altaz, pixel_to_focal
 
 DEFAULT_COLUMNS = [
     "xcentroid",
@@ -117,7 +115,7 @@ class StarGuideFinder:
         min_stamp_detections=30,
         edge_margin=30,
         max_ellipticity=0.1,
-    ):
+    ) -> None:
         self.reader = reader
         self.view = reader.view
         self.exp_id = reader.exp_id
@@ -156,7 +154,7 @@ class StarGuideFinder:
     @classmethod
     def run_all_guiders(
         cls, reader, camera=None, psf_fwhm=12.0, min_snr=3.0, min_stamp_detections=30, max_ellipticity=0.1
-    ):
+    ) -> pd.DataFrame:
         """
         Run detection and tracking on all guider detectors.
 
@@ -182,7 +180,7 @@ class StarGuideFinder:
         stars = pd.concat(stars_list, ignore_index=True)
         return stars
 
-    def run_source_detection(self):
+    def run_source_detection(self) -> pd.DataFrame:
         """
         Executes detection & tracking for *one* guider:
         1. Stack the sequence of guider exposures.
@@ -225,7 +223,7 @@ class StarGuideFinder:
         self.compute_offsets()
         return self.stars
 
-    def convert_if_dvcs_to_ccd(self):
+    def convert_if_dvcs_to_ccd(self) -> None:
         """
         Convert xcentroid/ycentroid to CCD pixels if the view is DVCS.
         """
@@ -248,9 +246,9 @@ class StarGuideFinder:
         elif self.view == "ccd":
             # No conversion needed for CCD view
             pass
-        pass
+        return
 
-    def set_unique_id(self):
+    def set_unique_id(self) -> None:
         # 1) Build a detector→index map (0,1,2,…)
         det_map = self.reader.guiders
 
@@ -261,7 +259,7 @@ class StarGuideFinder:
         self.stars["star_id"] = self.stars["det_id"] * 10000 + star_local
         self.stars["expId"] = self.exp_id
 
-    def get_amplifier_lowest_corner(self):
+    def get_amplifier_lowest_corner(self) -> None:
         """
         Compute the lowest corner of the amplifier in CCD coordinates.
         """
@@ -271,9 +269,9 @@ class StarGuideFinder:
         )
         self.min_x = int(min(a, c))
         self.min_y = int(min(b, d))
-        pass
+        return
 
-    def compute_offsets(self):
+    def compute_offsets(self) -> None:
         """
         Compute the offsets for each star in the catalog.
         """
@@ -287,9 +285,9 @@ class StarGuideFinder:
 
         # Correct for cos(alt) in daz
         self.stars["daz"] = np.cos(self.stars["alt_ref"] * np.pi / 180) * self.stars["daz"]
-        pass
+        return
 
-    def filter_min_stamp_detections(self):
+    def filter_min_stamp_detections(self) -> None:
         """
         Select the best star per stamp based on the number of detections.
         """
@@ -406,7 +404,7 @@ class StarGuideFinder:
         df["ypixel_ref"] = np.nanmedian(df["ypixel"][1:])
         return df
 
-    def track_stars(self) -> pd.DataFrame:
+    def track_stars(self) -> pd.DataFrame | None:
         """
         Track all reference stars; return one big DataFrame with every
         (star_id, stamp) row, including the reference (stamp=-1).
@@ -417,8 +415,9 @@ class StarGuideFinder:
             if df_i is not None and not df_i.empty:
                 dfs.append(df_i)
 
+        # TODO: make an empty dataframe and return it here for type consistency
         if not dfs:
-            return self.output_catalog
+            return None
 
         # Concatenate all DataFrames
         output = pd.concat(dfs, ignore_index=True)
@@ -430,9 +429,9 @@ class StarGuideFinder:
         output.sort_values(["star_id", "stamp"], inplace=True)
         output.reset_index(inplace=True, drop=True)
         self.output_catalog = output
-        pass
+        return
 
-    def stack_guider_images(self):
+    def stack_guider_images(self) -> np.ndarray:
         """
         Stack guider images
 
@@ -452,7 +451,7 @@ class StarGuideFinder:
         self.stacked = stacked
         return stacked
 
-    def build_ref_catalog(self, threshold_sigma=3.0, edge_margin=None):
+    def build_ref_catalog(self, threshold_sigma=3.0, edge_margin=None) -> None:
         """
         Build a reference catalog of stars from the stacked image.
 
@@ -548,7 +547,7 @@ class StarGuideFinder:
         self.ref_catalog = self.ref_catalog.sort_values(by="snr", ascending=False)
         self.ref_catalog = self.ref_catalog.reset_index(drop=True)
 
-    def filter_ref_catalog(self, snr_threshold=20):
+    def filter_ref_catalog(self, snr_threshold=20) -> None:
         """
         Filter the reference catalog based on SNR.
 
@@ -560,7 +559,7 @@ class StarGuideFinder:
         # Filter out sources with low SNR
         self.ref_catalog = self.ref_catalog[self.ref_catalog["snr"] > snr_threshold]
 
-    def mask_edge_ref_catalog(self, edge=20):
+    def mask_edge_ref_catalog(self, edge=20) -> None:
         """
         Mask the edges of the reference catalog.
 
@@ -583,7 +582,7 @@ class StarGuideFinder:
             & (self.ref_catalog["ycentroid"] < y_max)
         ]
 
-    def add_ref_catalog_info(self, median, std):
+    def add_ref_catalog_info(self, median, std) -> None:
         """
         Add additional information to the reference catalog.
         Parameters
@@ -606,9 +605,9 @@ class StarGuideFinder:
         # Convert the star positions to CCD coordinates
         self.ref_catalog["xpixel"] = self.ref_catalog["xcentroid"] + self.min_x
         self.ref_catalog["ypixel"] = self.ref_catalog["ycentroid"] + self.min_y
-        pass
+        return
 
-    def convert_to_focal_plane(self):
+    def convert_to_focal_plane(self) -> None:
         """
         Convert the star positions to focal plane coordinates.
         """
@@ -626,19 +625,16 @@ class StarGuideFinder:
         self.stars["yfp"] = yfp
         self.stars["xfp_ref"] = xfp_ref
         self.stars["yfp_ref"] = yfp_ref
-        pass
+        return
 
-    def convert_to_altaz(self):
+    def convert_to_altaz(self) -> None:
         """
         Convert the star positions to altaz coordinates.
         """
         if len(self.stars["xfp"]) > 0:
-            coord = CoordinatesToAltAz(
-                self.reader.seqNum, self.reader.dayObs, self.detector_name, butler=self.reader.butler
-            )
-            az, alt = coord.convert_pixels_to_altaz(self.stars["xpixel"], self.stars["ypixel"])
-            az_ref, alt_ref = coord.convert_pixels_to_altaz(
-                self.stars["xpixel_ref"], self.stars["ypixel_ref"]
+            az, alt = convert_pixels_to_altaz(self.wcs, self.time, self.stars["xpixel"], self.stars["ypixel"])
+            az_ref, alt_ref = convert_pixels_to_altaz(
+                self.wcs, self.time, self.stars["xpixel_ref"], self.stars["ypixel_ref"]
             )
         else:
             az, alt = None, None
@@ -647,9 +643,9 @@ class StarGuideFinder:
         self.stars["az"] = az
         self.stars["alt_ref"] = alt_ref
         self.stars["az_ref"] = az_ref
-        pass
+        return
 
-    def get_cutout_star(self, star_id, size=50):
+    def get_cutout_star(self, star_id, size=50) -> np.ndarray:
         """
         Get a cutout of a specific star.
 
@@ -674,7 +670,7 @@ class StarGuideFinder:
         cutout = Cutout2D(self.stacked, (x, y), size=size, mode="partial", fill_value=np.nan)
         return cutout.data
 
-    def get_cutout_stamp(self, stamp_id, size=50):
+    def get_cutout_stamp(self, stamp_id, size=50) -> np.ndarray:
         """
         Get a cutout of a specific stamp for the best star (highest SNR).
 
@@ -702,9 +698,9 @@ class StarGuideFinder:
 
     def plot_stacked_sources(
         self, lo=10, hi=98, marker_color="firebrick", marker_size=12, annotate_ids=False, ax=None
-    ):
+    ) -> tuple[plt.Figure, plt.Axes]:
         """
-        Show the stacked image with your reference‐catalog positions overlaid.
+        Show the stacked image with your reference-catalog positions overlaid.
 
         Parameters
         ----------
@@ -794,7 +790,9 @@ class StarGuideFinder:
         fig.tight_layout()
         return fig, ax
 
-    def plot_drifts_with_errors(self, stars=None, figsize=(6, 4), fig=None, ax=None, **plot_kw):
+    def plot_drifts_with_errors(
+        self, stars=None, figsize=(6, 4), fig=None, ax=None, **plot_kw
+    ) -> tuple[plt.Figure, plt.Axes]:
         """
         Plot the median drift ± robust σ (from MAD) for ΔX and ΔY per stamp.
         """
@@ -864,7 +862,9 @@ class StarGuideFinder:
         ax.grid(True, ls=":", color="grey", alpha=0.5)
         return fig, ax
 
-    def plot_scatter_stamp(self, magOffsets=None, stamp_axis=None, figsize=(8, 5), **plot_kw):
+    def plot_scatter_stamp(
+        self, magOffsets=None, stamp_axis=None, figsize=(8, 5), **plot_kw
+    ) -> tuple[plt.Figure, plt.Axes]:
         """
 
         Returns
@@ -1025,7 +1025,7 @@ class StarGuideFinder:
         min_stamp_detections=30,
         max_ellipticity=0.1,
         vebose=False,
-    ):
+    ) -> tuple[pd.DataFrame, pd.DataFrame]:
         """
         Run all guiders, then produce a one‐row DataFrame containing:
         - Number of valid guiders
@@ -1240,7 +1240,7 @@ def make_empty_summary(reader):
     return pd.DataFrame([zero_row])
 
 
-def stats_background(image, fwhm=10.0):
+def stats_background(image: np.ndarray) -> tuple[float, float, float]:
     """
     Compute the background statistics of an image.
 
@@ -1248,8 +1248,6 @@ def stats_background(image, fwhm=10.0):
     ----------
     image : 2D array
         Input image.
-    fwhm : float
-        FWHM for star detection.
 
     Returns
     -------
@@ -1261,7 +1259,9 @@ def stats_background(image, fwhm=10.0):
     return mean, median, std
 
 
-def background_model(image, fwhm=10.0, streak_mask=None):
+def background_model(
+    image: np.ndarray, fwhm: float = 10.0, streak_mask: np.ndarray | None = None
+) -> tuple[float, float, float, np.ndarray]:
     from photutils.segmentation import detect_sources, detect_threshold
     from photutils.utils import circular_footprint
 
@@ -1329,7 +1329,7 @@ def measure_star_in_aperture(
     std_bkg=1.0,
     gain=1.0,
     mask=None,
-):
+) -> pd.DataFrame:
     """
     Measure centroid, moments, and flux in a circular aperture, ignoring any
     pixels flagged in `mask`.
@@ -1454,7 +1454,7 @@ def measure_star_in_aperture(
     )
 
 
-def find_bad_columns(img, mask=None, nsigma=3.0):
+def find_bad_columns(img, mask=None, nsigma=3.0) -> np.ndarray:
     """
     Identify bad columns in an image using per-column sigma-clipped statistics.
 

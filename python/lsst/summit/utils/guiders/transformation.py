@@ -21,7 +21,6 @@
 from __future__ import annotations
 
 __all__ = [
-    "CoordinatesToAltAz",
     "mk_rot",
     "mk_ccd_to_dvcs",
     "mk_roi_bboxes",
@@ -33,199 +32,89 @@ __all__ = [
     "amp_to_ccdview",
 ]
 
-from typing import Optional
+from typing import Any
 
 import astropy.units as u
 import numpy as np
-from astropy.coordinates import AltAz, EarthLocation, SkyCoord
+from astropy.coordinates import AltAz, SkyCoord
 from astropy.time import Time
 
 from lsst.afw import cameraGeom
-from lsst.afw.cameraGeom import Camera, Detector
+from lsst.afw.cameraGeom import Detector
 from lsst.afw.image import ImageF
-from lsst.daf.butler import Butler
 from lsst.geom import AffineTransform, Box2D, Box2I, Extent2D, Point2D
-from lsst.obs.base import createInitialSkyWcs
-from lsst.obs.lsst import LsstCam
 from lsst.obs.lsst.cameraTransforms import LsstCameraTransforms
+from lsst.obs.lsst.translators.lsst import SIMONYI_LOCATION
 
 
-class CoordinatesToAltAz:
+def convert_pixel_to_radec(wcs: Any, x_flat: np.ndarray, y_flat: np.ndarray) -> tuple[np.ndarray, np.ndarray]:
     """
-    Convert CCD-pixel or focal-plane coordinates to Alt/Az using LSST DM +
-    Astropy.
+    Map detector-pixel → ICRS RA/Dec (radians).
+    """
+    return wcs.pixelToSkyArray(x_flat, y_flat)
+
+
+def convert_pixels_to_altaz(
+    wcs: Any, time: Time, x_pix: np.ndarray, y_pix: np.ndarray
+) -> tuple[np.ndarray, np.ndarray]:
+    """
+    Vectorized conversion of detector-pixel coords → AltAz (deg).
+
+    Parameters
+    ----------
+    x_pix : `np.ndarray`
+        Same-shaped arrays of pixel coordinates.
+    y_pix : `np.ndarray`
+        Same-shaped arrays of pixel coordinates.
+
+    Returns
+    -------
+    az, alt : np.ndarray
+        Arrays of the same shape as x_pix/y_pix giving Az and Alt in
+        degrees.
     """
 
-    def __init__(
-        self,
-        seq_num: int,
-        obs_date: int,
-        det_name: str,
-        butler: Optional[Butler] = None,
-        wcs=None,
-        camera: Optional[Camera] = None,
-        verbose: bool = False,
-    ):
-        """
-        Parameters
-        ----------
-        seq_num : int
-            Sequence number of the visit (visitInfo.id % 100000).
-        obs_date : int
-            YYYYMMDD of the night.
-        det_name : str
-            e.g. "R00_SG0".
-        butler : Butler, optional
-            If None, one is constructed for LSSTCam/raw/guider.
-        wcs : SkyWcs, optional
-            If provided, skip WCS creation.
-        camera : Camera, optional
-            Your LsstCam.getCamera() instance.  Required if wcs is None.
-        verbose : bool
-            If True, print a log line at the start of each method.
-        """
-        self.seq_num = seq_num
-        self.obs_date = obs_date
-        self.det_name = det_name
-        self.verbose = verbose
+    # 1) make sure we have numpy arrays, remember their shape
+    x_arr = np.asarray(x_pix)
+    y_arr = np.asarray(y_pix)
+    shp = x_arr.shape
 
-        # DataId for butler queries
-        self.dataId = {
-            "day_obs": obs_date,
-            "seq_num": seq_num,
-            "instrument": "LSSTCam",
-            "detector": 94,  # center of the raft
-        }
+    # 2) flatten for the WCS call
+    x_flat = x_arr.ravel()
+    y_flat = y_arr.ravel()
 
-        # 1) Initialize Butler (if needed), then visitInfo & detector & WCS
-        self._init_butler(butler)
-        self.camera = camera or LsstCam.getCamera()
-        self.wcs = wcs
+    # 3) scalarSKyWcs → ICRS RA/Dec (radians) in bulk:
+    #    (pixelToSkyArray expects floats and returns two 1D arrays)
+    ra_flat, dec_flat = convert_pixel_to_radec(wcs, x_flat, y_flat)
 
-        self._initialize_wcs_and_detector()
+    # 4) assemble a single SkyCoord and transform once
+    sc_icrs = SkyCoord(
+        ra=ra_flat * u.rad,
+        dec=dec_flat * u.rad,
+        frame="icrs",
+        obstime=time,
+        location=SIMONYI_LOCATION,
+    )
 
-        # 2) Build EarthLocation
-        self._build_earth_location()
+    # Transform to AltAz
+    sc_altaz = sc_icrs.transform_to(AltAz(obstime=time, location=SIMONYI_LOCATION))
 
-        # 3) Observation time
-        self._get_observation_time()
+    # 5) reshape back to original grid
+    az = sc_altaz.az.deg.reshape(shp)
+    alt = sc_altaz.alt.deg.reshape(shp)
+    return az, alt
 
-    def _log(self, msg: str):
-        """Print only if verbose=True."""
-        if self.verbose:
-            print(f"[CoordinatesToAltAz] {msg}")
 
-    def _init_butler(self, butler: Optional[Butler]):
-        """Initialize the butler and visitInfo."""
-        self._log("Initializing Butler visitInfo and WCS")
-        self.butler = butler
-
-        if butler is None:
-            self._log("Creating Butler")
-            repo = "LSSTCam"  # "/repo/embargo"
-            collections = ["LSSTCam/raw/all", "LSSTCam/raw/guider"]
-            self.butler = Butler(repo, collections=collections)
-
-        self._log(f"raw.visitInfo of dataId: {self.dataId}")
-        self.visit_info = self.butler.get("raw.visitInfo", self.dataId)
-        if self.visit_info is None:
-            raise RuntimeError("visitInfo not found for " + str(self.dataId))
-        pass
-
-    def _initialize_wcs_and_detector(self):
-        """Grab visitInfo, detector-object, build initial SkyWcs if needed."""
-        # 1) detector object
-        self.detector: Detector = self.camera[self.det_name]
-
-        # 2) WCS
-        if self.wcs is None:
-            self._log("Creating initial SkyWcs")
-            self.wcs = createInitialSkyWcs(self.visit_info, self.detector, flipX=False)
-
-    def _build_earth_location(self):
-        """Assemble an Astropy EarthLocation from visitInfo observatory."""
-        self._log("Building EarthLocation for observatory")
-        obs = self.visit_info.observatory
-        lat = obs.getLatitude().asDegrees()
-        lon = obs.getLongitude().asDegrees()
-        elev = obs.getElevation()
-        self.SIMONYI_LOCATION = EarthLocation(lat=lat * u.deg, lon=lon * u.deg, height=elev * u.m)
-
-    def _get_observation_time(self):
-        """Parse the visitInfo DateTime into an Astropy Time object."""
-        self._log("Parsing observation time")
-        # LSST DateTime → ISO string
-        date = self.visit_info.date.toPython()
-        # by default toString() yields something like
-        # "2025-04-26T08:52:52.946467"
-        self.obstime = Time(date, scale="utc")
-        pass
-
-    def convert_pixel_to_radec(self, x_flat: np.ndarray, y_flat: np.ndarray) -> tuple[np.ndarray, np.ndarray]:
-        """
-        Map detector-pixel → ICRS RA/Dec (radians).
-        """
-        self._log(f"Convert pixel to RA/Dec on {np.size(x_flat)} points")
-        return self.wcs.pixelToSkyArray(x_flat, y_flat)
-
-    def convert_pixels_to_altaz(self, x_pix: np.ndarray, y_pix: np.ndarray) -> tuple[np.ndarray, np.ndarray]:
-        """
-        Vectorized conversion of detector-pixel coords → AltAz (deg).
-
-        Parameters
-        ----------
-        x_pix, y_pix : array_like
-            Same-shaped arrays of pixel coordinates.
-
-        Returns
-        -------
-        az, alt : np.ndarray
-            Arrays of the same shape as x_pix/y_pix giving Az and Alt in
-            degrees.
-        """
-        self._log(f"convert_pixels_to_altaz on {np.size(x_pix)} points")
-
-        # 1) make sure we have numpy arrays, remember their shape
-        x_arr = np.asarray(x_pix)
-        y_arr = np.asarray(y_pix)
-        shp = x_arr.shape
-
-        # 2) flatten for the WCS call
-        x_flat = x_arr.ravel()
-        y_flat = y_arr.ravel()
-
-        # 3) scalarSKyWcs → ICRS RA/Dec (radians) in bulk:
-        #    (pixelToSkyArray expects floats and returns two 1D arrays)
-        ra_flat, dec_flat = self.convert_pixel_to_radec(x_flat, y_flat)
-
-        # 4) assemble a single SkyCoord and transform once
-        sc_icrs = SkyCoord(
-            ra=ra_flat * u.rad,
-            dec=dec_flat * u.rad,
-            frame="icrs",
-            obstime=self.obstime,
-            location=self.SIMONYI_LOCATION,
-        )
-
-        # Transform to AltAz
-        sc_altaz = sc_icrs.transform_to(AltAz(obstime=self.obstime, location=self.SIMONYI_LOCATION))
-
-        # 5) reshape back to original grid
-        az = sc_altaz.az.deg.reshape(shp)
-        alt = sc_altaz.alt.deg.reshape(shp)
-        return az, alt
-
-    def convert_focal_to_altaz(
-        self, x_focal: np.ndarray, y_focal: np.ndarray
-    ) -> tuple[np.ndarray, np.ndarray]:
-        """
-        Map focal-plane mm (or any XY) → Alt/Az by going
-        focal → pixel → AltAz.
-        """
-        self._log(f"convert_focal_to_altaz on {np.size(x_focal)} points")
-        # You must provide focal_to_pixel or similar
-        x_pix, y_pix = focal_to_pixel(x_focal, y_focal, self.detector)
-        return self.convert_pixels_to_altaz(x_pix, y_pix)
+def convert_focal_to_altaz(
+    wcs: Any, time: Time, detector: Detector, x_focal: np.ndarray, y_focal: np.ndarray
+) -> tuple[np.ndarray, np.ndarray]:
+    """
+    Map focal-plane mm (or any XY) → Alt/Az by going
+    focal → pixel → AltAz.
+    """
+    # You must provide focal_to_pixel or similar
+    x_pix, y_pix = focal_to_pixel(x_focal, y_focal, detector)
+    return convert_pixels_to_altaz(wcs, time, x_pix, y_pix)
 
 
 # Aaron's code to make transformations from ROI coordinates to Focal Plane and
@@ -492,7 +381,7 @@ def convert_roi(roi, md, detector, ampName, camera, view="dvcs"):
     return imf
 
 
-def focal_to_pixel(fpx, fpy, det):
+def focal_to_pixel(fpx: np.ndarray, fpy: np.ndarray, det: Detector) -> tuple[np.ndarray, np.ndarray]:
     """
     Parameters
     ----------
