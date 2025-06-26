@@ -125,8 +125,8 @@ def tifToExp(filename: str) -> afwImage.Exposure:
         The exposure.
     """
     im = Image.open(filename)
-    data = im.getdata()
-    data = np.asarray(data, dtype=np.float32)
+    imageData = im.getdata()
+    data = np.asarray(imageData, dtype=np.float32)
     data = data.reshape(im.height, im.width)
     img = afwImage.ImageF(data)
     maskedIm = afwImage.MaskedImageF(img)

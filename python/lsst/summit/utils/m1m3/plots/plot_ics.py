@@ -1,12 +1,37 @@
+# This file is part of summit_utils.
+#
+# Developed for the LSST Data Management System.
+# This product includes software developed by the LSST Project
+# (https://www.lsst.org).
+# See the COPYRIGHT file at the top-level directory of this distribution
+# for details of code ownership.
+#
+# This program is free software: you can redistribute it and/or modify
+# it under the terms of the GNU General Public License as published by
+# the Free Software Foundation, either version 3 of the License, or
+# (at your option) any later version.
+#
+# This program is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU General Public License for more details.
+#
+# You should have received a copy of the GNU General Public License
+# along with this program.  If not, see <https://www.gnu.org/licenses/>.
+from __future__ import annotations
+
 import logging
-from typing import Any, TypedDict
+from typing import TYPE_CHECKING, Any, Optional, TypedDict
 
 import matplotlib.pyplot as plt
 import pandas as pd
 from astropy.time import Time
 from matplotlib.patches import Patch
 
-from lsst.summit.utils.type_utils import M1M3ICSAnalysis
+if TYPE_CHECKING:
+    from matplotlib.figure import Figure
+
+    from ..inertia_compensation_system import M1M3ICSAnalysis
 
 __all__ = [
     "plot_hp_data",
@@ -190,7 +215,11 @@ def add_hp_limits(ax: plt.Axes) -> list[plt.Line2D]:
         The axes on which the velocity data is plotted.
     """
     hp_limits: dict[str, HPLimitsDict] = {
-        "HP Breakaway Limit": {"pos_limit": HP_BREAKAWAY_LIMIT, "neg_limit": -HP_BREAKAWAY_LIMIT, "ls": "-"},
+        "HP Breakaway Limit": {
+            "pos_limit": HP_BREAKAWAY_LIMIT,
+            "neg_limit": -HP_BREAKAWAY_LIMIT,
+            "ls": "-",
+        },
         "Repeated Load Limit (30% breakaway)": {
             "pos_limit": HP_FATIGUE_LIMIT,
             "neg_limit": -HP_FATIGUE_LIMIT,
@@ -250,7 +279,9 @@ def plot_torque_data(ax: plt.Axes, dataset: M1M3ICSAnalysis) -> None:
     ax.legend(ncol=2, fontsize="x-small")
 
 
-def plot_stable_region(fig: plt.Figure, begin: Time, end: Time, label: str = "", color: str = "b") -> Patch:
+def plot_stable_region(
+    fig: plt.Figure, begin: Time, end: Time, label: str = "", color: str = "b"
+) -> Optional[Patch]:
     """Highlight a stable region on the plot with a colored span.
 
     Parameters
@@ -272,6 +303,7 @@ def plot_stable_region(fig: plt.Figure, begin: Time, end: Time, label: str = "",
     patch : `matplotlib.patches.Patch`
         The patch object representing the highlighted region.
     """
+    span = None  # Fixes mypy error about uninitialized variable
     for ax in fig.axes[1:]:
         span = ax.axvspan(begin.datetime, end.datetime, fc=color, alpha=0.1, zorder=-2, label=label)
     return span
@@ -282,7 +314,7 @@ def plot_hp_measured_data(
     fig: plt.Figure,
     commands: dict[Time, str] | None = None,
     log: logging.Logger | None = None,
-) -> plt.Figure:
+) -> Figure:
     """
     Create and plot hardpoint measured data, velocity, and torque on subplots.
     This plot was designed for a figure with `figsize=(10, 7)` and `dpi=120`.
@@ -343,9 +375,10 @@ def plot_hp_measured_data(
     if commands is not None:
         for commandTime, command in commands.items():
             command = command.replace("lsst.sal.", "")
+
             for ax in (ax_hp, ax_tor, ax_vel):  # so that the line spans all plots
                 line = ax.axvline(
-                    commandTime.utc.datetime,
+                    commandTime,
                     c=lineColors[colorCounter],
                     ls="--",
                     alpha=0.75,

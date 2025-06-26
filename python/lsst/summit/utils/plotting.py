@@ -85,9 +85,9 @@ def drawCompass(
     labelPosition = arrowLength + 50.0
 
     for xy, label in [(north, "N"), (east, "E")]:
+        xTip = compassLocation
+        xTipLabel = compassLocation
         if compassLocation == xy[0]:
-            xTip = compassLocation
-            xTipLabel = compassLocation
             if xy[1] > compassLocation:
                 yTip = compassLocation + arrowLength
                 yTipLabel = compassLocation + labelPosition

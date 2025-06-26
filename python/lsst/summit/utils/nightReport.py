@@ -778,6 +778,7 @@ class NightReport:
             if h is None or not isinstance(h, matplotlib.lines.Line2D):
                 continue
             size = 14
+            marker = str(h.get_marker())
             if "-" in marker:
                 size += 5
             h.set_markersize(size)

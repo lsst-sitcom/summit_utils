@@ -18,6 +18,7 @@
 #
 # You should have received a copy of the GNU General Public License
 # along with this program.  If not, see <https://www.gnu.org/licenses/>.
+from __future__ import annotations
 
 import logging
 from datetime import timedelta
@@ -26,10 +27,11 @@ import numpy as np
 import pandas as pd
 from astropy import units as u
 from astropy.time import Time
+from pandas import DataFrame, DatetimeIndex, Series
 
 from lsst.summit.utils.efdUtils import getEfdData
 from lsst.summit.utils.tmaUtils import TMAEvent, TMAEventMaker
-from lsst.ts.xml.tables.m1m3 import FATABLE_XFA, FATABLE_YFA, FATABLE_ZFA, HP_COUNT
+from lsst.ts.xml.tables.m1m3 import FATABLE_XFA, FATABLE_YFA, FATABLE_ZFA, HP_COUNT  # type: ignore
 
 HAS_EFD_CLIENT = True
 try:
@@ -77,7 +79,7 @@ class M1M3ICSAnalysis:
         outer_pad: float = 1.0,
         n_sigma: float = 1.0,
         log: logging.Logger | None = None,
-    ):
+    ) -> None:
         self.log = (
             log.getChild(type(self).__name__) if log is not None else logging.getLogger(type(self).__name__)
         )
@@ -106,40 +108,7 @@ class M1M3ICSAnalysis:
         self.log.info("Packing results into a Series")
         self.stats = self.pack_stats_series()
 
-    def find_stable_region(self) -> tuple[Time, Time]:
-        """
-        Find the stable region of the dataset. By stable, we mean the region
-        where the torque is within n_sigma of the mean.
-
-        Returns
-        -------
-        stable_region : `tuple[Time, Time]`
-            The begin and end times of the stable region.
-        """
-        az_torque = self.df["az_actual_torque"]
-        az_torque_regions = find_adjacent_true_regions(
-            np.abs(az_torque - az_torque.mean()) < self.n_sigma * az_torque.std()
-        )
-
-        el_torque = self.df["el_actual_torque"]
-        el_torque_regions = find_adjacent_true_regions(
-            np.abs(el_torque - el_torque.mean()) < self.n_sigma * el_torque.std()
-        )
-
-        if az_torque_regions and el_torque_regions:
-            stable_begin = max([reg[0] for reg in az_torque_regions + el_torque_regions])
-            stable_begin = Time(stable_begin, scale="utc")
-
-            stable_end = min([reg[-1] for reg in az_torque_regions + el_torque_regions])
-            stable_end = Time(stable_end, scale="utc")
-        else:
-            self.log.warning("No stable region found. Using full slew.")
-            stable_begin = self.event.begin
-            stable_end = self.event.end
-
-        return stable_begin, stable_end
-
-    def query_dataset(self) -> pd.DataFrame:
+    def query_dataset(self) -> DataFrame:
         """
         Queries all the relevant data, resampling them to have the same
         frequency, and merges them into a single dataframe.
@@ -156,21 +125,14 @@ class M1M3ICSAnalysis:
                 "columns": self.measured_forces_topics,
                 "err_msg": f"No hard-point data found for event {evt.seqNum} on {evt.dayObs}",
             },
-            "m1m3_applied_velocity_forces": {
-                "topic": "lsst.sal.MTM1M3.appliedVelocityForces",
-                "columns": self.applied_forces_topics,
-                "err_msg": None,
-                "rename_columns": {col: f"avf_{col}" for col in self.applied_forces_topics},
-            },
-            "m1m3_applied_acceleration_forces": {
-                "topic": "lsst.sal.MTM1M3.appliedAccelerationForces",
-                "columns": self.applied_forces_topics,
-                "err_msg": None,
-                "rename_columns": {col: f"aaf_{col}" for col in self.applied_forces_topics},
-            },
             "tma_az": {
                 "topic": "lsst.sal.MTMount.azimuth",
-                "columns": ["timestamp", "actualPosition", "actualVelocity", "actualTorque"],
+                "columns": [
+                    "timestamp",
+                    "actualPosition",
+                    "actualVelocity",
+                    "actualTorque",
+                ],
                 "err_msg": f"No TMA azimuth data found for event {evt.seqNum} on {evt.dayObs}",
                 "reset_index": True,
                 "rename_columns": {
@@ -181,7 +143,12 @@ class M1M3ICSAnalysis:
             },
             "tma_el": {
                 "topic": "lsst.sal.MTMount.elevation",
-                "columns": ["timestamp", "actualPosition", "actualVelocity", "actualTorque"],
+                "columns": [
+                    "timestamp",
+                    "actualPosition",
+                    "actualVelocity",
+                    "actualTorque",
+                ],
                 "err_msg": f"No TMA elevation data found for event {evt.seqNum} on {evt.dayObs}",
                 "reset_index": True,
                 "rename_columns": {
@@ -204,7 +171,7 @@ class M1M3ICSAnalysis:
 
         return df
 
-    def merge_datasets(self, queries: dict[str, pd.DataFrame]) -> pd.DataFrame:
+    def merge_datasets(self, queries: dict[str, DataFrame]) -> DataFrame:
         """
         Merge multiple datasets based on their timestamps.
 
@@ -242,7 +209,7 @@ class M1M3ICSAnalysis:
         reset_index: bool = False,
         rename_columns: dict | None = None,
         resample: float | None = None,
-    ) -> pd.DataFrame:
+    ) -> DataFrame:
         """
         Query the EFD data for a given topic and return a dataframe.
 
@@ -310,7 +277,7 @@ class M1M3ICSAnalysis:
         """Return the halfway point between begin and end."""
         return self.df.index[len(self.df.index) // 2]
 
-    def get_stats(self) -> pd.DataFrame:
+    def get_stats(self) -> DataFrame:
         """
         Calculate the statistics for each column in the retrieved dataset.
 
@@ -328,58 +295,12 @@ class M1M3ICSAnalysis:
         maximum, and peak-to-peak values for each column's data.
         """
         cols = self.measured_forces_topics
-        full_slew_stats = pd.DataFrame(data=[self.get_slew_minmax(self.df[col]) for col in cols], index=cols)
-        self.log.info("Finding stable time window")
-        begin, end = self.find_stable_region()
-
-        self.log.debug("Updating begin and end times")
-        begin = begin + self.inner_pad
-        end = end - self.inner_pad
-
-        self.log.debug("Calculating statistics in stable time window from M1M3")
-        stable_slew_stats = pd.DataFrame(
-            data=[
-                self.get_stats_in_torqueless_interval(self.df[col].loc[begin.isot : end.isot]) for col in cols
-            ],
-            index=cols,
-        )
-
-        self.log.debug("Concatenating statistics")
-        stats = pd.concat((full_slew_stats, stable_slew_stats), axis=1)
+        stats = DataFrame(data=[self.get_slew_minmax(self.df[col]) for col in cols], index=cols)
 
         return stats
 
     @staticmethod
-    def get_stats_in_torqueless_interval(s: pd.Series) -> pd.Series:
-        """
-        Calculates the statistical measures within a torqueless interval.
-
-        This static method computes descriptive statistics for a given pandas
-        Series within a torqueless interval. The torqueless interval represents
-        a period of the data analysis when no external torque is applied.
-
-        Parameters
-        ----------
-        s : `pd.Series`
-            A pandas Series containing data values for analysis.
-
-        Returns
-        -------
-        stats : `pd.Series`
-            A pandas Series containing the following statistical measures:
-            - Mean: The arithmetic mean of the data.
-            - Median: The median value of the data.
-            - Standard Deviation (Std): The standard deviation of the data.
-        """
-        result = pd.Series(
-            data=[s.mean(), s.median(), s.std()],
-            index=["mean", "median", "std"],
-            name=s.name,
-        )
-        return result
-
-    @staticmethod
-    def get_slew_minmax(s: pd.Series) -> pd.Series:
+    def get_slew_minmax(s: Series) -> Series:
         """
         Calculates the min, max, and peak-to-peak values for a data series.
 
@@ -397,14 +318,14 @@ class M1M3ICSAnalysis:
             - max: Maximum value of the Series.
             - ptp: Peak-to-peak (ptp) value of the Series (abs(max - min)).
         """
-        result = pd.Series(
+        result = Series(
             data=[s.min(), s.max(), np.ptp(s)],
             index=["min", "max", "ptp"],
             name=s.name,
         )
         return result
 
-    def pack_stats_series(self) -> pd.Series:
+    def pack_stats_series(self) -> Series:
         """
         Packs the stats DataFrame into a Series with custom index labels.
 
@@ -421,7 +342,7 @@ class M1M3ICSAnalysis:
             index positions. The Series contains values from all columns of the
             DataFrame.
         """
-        if isinstance(self.stats, pd.Series):
+        if isinstance(self.stats, Series):
             self.log.info("Stats are already packed into a Series.")
             return self.stats
 
@@ -563,8 +484,8 @@ class M1M3ICSAnalysis:
 
 
 def find_adjacent_true_regions(
-    series: pd.Series, min_adjacent: None | int = None
-) -> list[tuple[pd.DatetimeIndex, pd.DatetimeIndex]]:
+    series: Series, min_adjacent: None | int = None
+) -> list[tuple[DatetimeIndex, DatetimeIndex]]:
     """Find regions in a boolean Series containing adjacent True values.
 
     Parameters
@@ -648,7 +569,7 @@ def evaluate_m1m3_ics_day_obs(
     outer_pad: float = 1.0,
     n_sigma: float = 1.0,
     log: logging.Logger | None = None,
-) -> pd.DataFrame:
+) -> DataFrame:
     """
     Evaluate the M1M3 Inertia Compensation System in every slew event during a
     `dayObs`.
@@ -703,6 +624,6 @@ def evaluate_m1m3_ics_day_obs(
         else:
             stats = pd.concat((stats.T, performance_analysis.stats), axis=1).T
 
-    assert isinstance(stats, pd.DataFrame)
+    assert isinstance(stats, DataFrame)
     stats = stats.set_index("seq_num", drop=False)
     return stats

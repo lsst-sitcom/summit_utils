@@ -532,12 +532,21 @@ def plotEvent(
         azError = clippedAzimuthData["azError"].to_numpy()
         elError = clippedElevationData["elError"].to_numpy()
         elVals = clippedElevationData["actualPosition"].to_numpy()
+
         if doFilterResiduals:
             # Filtering out bad values
             nReplacedAz = filterBadValues(azError, maxDelta)
             nReplacedEl = filterBadValues(elError, maxDelta)
             clippedAzimuthData["azError"] = azError
             clippedElevationData["elError"] = elError
+            replacementMsg = (
+                f"{nReplacedAz} bad azimuth values and {nReplacedEl} bad elevation values were replaced"
+            )
+        else:
+            # currently unused, but needed for mypy, and better than an
+            # alternative in case someone redesigns that part later
+            replacementMsg = "No values were replaced because doFilterResiduals is False"
+
         # Calculate RMS
         az_rms = np.sqrt(np.mean(azError * azError))
         el_rms = np.sqrt(np.mean(elError * elError))
@@ -573,7 +582,7 @@ def plotEvent(
             ax1p5.text(
                 0.1,
                 0.8,
-                f"{nReplacedAz} bad azimuth values and {nReplacedEl} bad elevation values were replaced",
+                replacementMsg,
                 transform=ax1p5.transAxes,
             )
         if metadataWriter is not None:
@@ -695,7 +704,7 @@ def plotEvent(
 def getCommandsDuringEvent(
     client: EfdClient,
     event: TMAEvent,
-    commands: Iterable[str] = ("raDecTarget"),
+    commands: Iterable[str] = ("raDecTarget",),
     prePadding: float = 0,
     postPadding: float = 0,
     timeFormat: str = "python",
