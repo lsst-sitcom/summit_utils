@@ -22,6 +22,8 @@ from __future__ import annotations
 
 __all__ = ["StarGuideFinder"]
 
+from typing import Any
+
 import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
@@ -107,14 +109,14 @@ class StarGuideFinder:
 
     def __init__(
         self,
-        reader,
-        detector_name,
-        camera=None,
-        psf_fwhm=6.0,
-        min_snr=3.0,
-        min_stamp_detections=30,
-        edge_margin=30,
-        max_ellipticity=0.1,
+        reader: Any,
+        detector_name: str,
+        camera: Any = None,
+        psf_fwhm: float = 6.0,
+        min_snr: float = 3.0,
+        min_stamp_detections: int = 30,
+        edge_margin: int = 30,
+        max_ellipticity: float = 0.1,
     ) -> None:
         self.reader = reader
         self.view = reader.view
@@ -153,7 +155,13 @@ class StarGuideFinder:
 
     @classmethod
     def run_all_guiders(
-        cls, reader, camera=None, psf_fwhm=12.0, min_snr=3.0, min_stamp_detections=30, max_ellipticity=0.1
+        cls,
+        reader: Any,
+        camera: Any = None,
+        psf_fwhm: float = 12.0,
+        min_snr: float = 3.0,
+        min_stamp_detections: int = 30,
+        max_ellipticity: float = 0.1,
     ) -> pd.DataFrame:
         """
         Run detection and tracking on all guider detectors.
@@ -311,7 +319,7 @@ class StarGuideFinder:
     def track_star_stamp(
         self,
         star_id: int,
-    ) -> pd.DataFrame:
+    ) -> pd.DataFrame | None:
         """
         Track one star across all stamps, returning a DataFrame with:
         ['star_id','stamp','xpixel','ypixel',
@@ -451,7 +459,7 @@ class StarGuideFinder:
         self.stacked = stacked
         return stacked
 
-    def build_ref_catalog(self, threshold_sigma=3.0, edge_margin=None) -> None:
+    def build_ref_catalog(self, threshold_sigma: float = 3.0, edge_margin: int | None = None) -> None:
         """
         Build a reference catalog of stars from the stacked image.
 
@@ -547,7 +555,7 @@ class StarGuideFinder:
         self.ref_catalog = self.ref_catalog.sort_values(by="snr", ascending=False)
         self.ref_catalog = self.ref_catalog.reset_index(drop=True)
 
-    def filter_ref_catalog(self, snr_threshold=20) -> None:
+    def filter_ref_catalog(self, snr_threshold: float = 20) -> None:
         """
         Filter the reference catalog based on SNR.
 
@@ -559,7 +567,7 @@ class StarGuideFinder:
         # Filter out sources with low SNR
         self.ref_catalog = self.ref_catalog[self.ref_catalog["snr"] > snr_threshold]
 
-    def mask_edge_ref_catalog(self, edge=20) -> None:
+    def mask_edge_ref_catalog(self, edge: int = 20) -> None:
         """
         Mask the edges of the reference catalog.
 
@@ -582,7 +590,7 @@ class StarGuideFinder:
             & (self.ref_catalog["ycentroid"] < y_max)
         ]
 
-    def add_ref_catalog_info(self, median, std) -> None:
+    def add_ref_catalog_info(self, median: float, std: float) -> None:
         """
         Add additional information to the reference catalog.
         Parameters
@@ -645,7 +653,7 @@ class StarGuideFinder:
         self.stars["az_ref"] = az_ref
         return
 
-    def get_cutout_star(self, star_id, size=50) -> np.ndarray:
+    def get_cutout_star(self, star_id: int, size: int = 50) -> np.ndarray:
         """
         Get a cutout of a specific star.
 
@@ -670,7 +678,7 @@ class StarGuideFinder:
         cutout = Cutout2D(self.stacked, (x, y), size=size, mode="partial", fill_value=np.nan)
         return cutout.data
 
-    def get_cutout_stamp(self, stamp_id, size=50) -> np.ndarray:
+    def get_cutout_stamp(self, stamp_id: int, size: int = 50) -> np.ndarray:
         """
         Get a cutout of a specific stamp for the best star (highest SNR).
 
@@ -697,7 +705,13 @@ class StarGuideFinder:
         return cutout.data
 
     def plot_stacked_sources(
-        self, lo=10, hi=98, marker_color="firebrick", marker_size=12, annotate_ids=False, ax=None
+        self,
+        lo: float = 10,
+        hi: float = 98,
+        marker_color: str = "firebrick",
+        marker_size: float = 12,
+        annotate_ids: bool = False,
+        ax: Any = None,
     ) -> tuple[plt.Figure, plt.Axes]:
         """
         Show the stacked image with your reference-catalog positions overlaid.
@@ -791,7 +805,12 @@ class StarGuideFinder:
         return fig, ax
 
     def plot_drifts_with_errors(
-        self, stars=None, figsize=(6, 4), fig=None, ax=None, **plot_kw
+        self,
+        stars: pd.DataFrame | None = None,
+        figsize: tuple[int, int] = (6, 4),
+        fig: Any = None,
+        ax: Any = None,
+        **plot_kw: Any,
     ) -> tuple[plt.Figure, plt.Axes]:
         """
         Plot the median drift ± robust σ (from MAD) for ΔX and ΔY per stamp.
@@ -863,7 +882,11 @@ class StarGuideFinder:
         return fig, ax
 
     def plot_scatter_stamp(
-        self, magOffsets=None, stamp_axis=None, figsize=(8, 5), **plot_kw
+        self,
+        magOffsets: Any = None,
+        stamp_axis: Any = None,
+        figsize: tuple[int, int] = (8, 5),
+        **plot_kw: Any,
     ) -> tuple[plt.Figure, plt.Axes]:
         """
 
@@ -1018,13 +1041,13 @@ class StarGuideFinder:
     @classmethod
     def run_guide_stats(
         cls,
-        reader,
-        camera=None,
-        psf_fwhm=12.0,
-        min_snr=3.0,
-        min_stamp_detections=30,
-        max_ellipticity=0.1,
-        vebose=False,
+        reader: Any,
+        camera: Any = None,
+        psf_fwhm: float = 12.0,
+        min_snr: float = 3.0,
+        min_stamp_detections: int = 30,
+        max_ellipticity: float = 0.1,
+        vebose: bool = False,
     ) -> tuple[pd.DataFrame, pd.DataFrame]:
         """
         Run all guiders, then produce a one‐row DataFrame containing:
@@ -1058,7 +1081,7 @@ class StarGuideFinder:
         return stars, stats
 
 
-def assemble_stats(stars: pd.DataFrame, reader) -> pd.DataFrame:
+def assemble_stats(stars: pd.DataFrame, reader: Any) -> pd.DataFrame:
     """
     Given a (possibly empty) stars DataFrame and a reader,
     compute and return the one‐row summary stats DataFrame.
@@ -1106,7 +1129,7 @@ def assemble_stats(stars: pd.DataFrame, reader) -> pd.DataFrame:
     return df
 
 
-def measure_std_centroid_stats(stars: pd.DataFrame) -> pd.DataFrame:
+def measure_std_centroid_stats(stars: pd.DataFrame) -> dict[str, float]:
     """
     Compute global std_centroid statistics across all guiders.
 
@@ -1143,7 +1166,7 @@ def measure_std_centroid_stats(stars: pd.DataFrame) -> pd.DataFrame:
     return std_centroid_stats
 
 
-def measure_photometric_variation(stars: pd.DataFrame) -> tuple[pd.DataFrame, dict]:
+def measure_photometric_variation(stars: pd.DataFrame) -> dict[str, float]:
     """
     Fit mag_offset vs time across all rows, compute drift rate,
     zero-point, and RMS scatter, then add these as constant columns to `stars`.
@@ -1172,7 +1195,7 @@ def measure_photometric_variation(stars: pd.DataFrame) -> tuple[pd.DataFrame, di
     return phot_stats
 
 
-def make_empty_summary(reader):
+def make_empty_summary(reader: Any) -> pd.DataFrame:
     """
     Build a one‐row “zeroed” summary table with the full set of columns,
     filling in seqNum, dayObs, exp_id, and filter from the reader.
@@ -1278,7 +1301,14 @@ def background_model(
     return mean, median, std, mask
 
 
-def detect_stars_filtered(image, fwhm=10.0, threshold_sigma=5.0, roundness_max=1.5, median=None, std=None):
+def detect_stars_filtered(
+    image: np.ndarray,
+    fwhm: float = 10.0,
+    threshold_sigma: float = 5.0,
+    roundness_max: float = 1.5,
+    median: float | None = None,
+    std: float | None = None,
+) -> Any:
     """
     Detect stars and filter out elongated sources (e.g., streaks).
 
@@ -1324,11 +1354,11 @@ def detect_stars_filtered(image, fwhm=10.0, threshold_sigma=5.0, roundness_max=1
 
 
 def measure_star_in_aperture(
-    cutout_data,
-    aperture_radius=5,
-    std_bkg=1.0,
-    gain=1.0,
-    mask=None,
+    cutout_data: np.ndarray,
+    aperture_radius: float = 5,
+    std_bkg: float = 1.0,
+    gain: float = 1.0,
+    mask: np.ndarray | None = None,
 ) -> pd.DataFrame:
     """
     Measure centroid, moments, and flux in a circular aperture, ignoring any
@@ -1454,7 +1484,7 @@ def measure_star_in_aperture(
     )
 
 
-def find_bad_columns(img, mask=None, nsigma=3.0) -> np.ndarray:
+def find_bad_columns(img: np.ndarray, mask: np.ndarray | None = None, nsigma: float = 3.0) -> np.ndarray:
     """
     Identify bad columns in an image using per-column sigma-clipped statistics.
 
@@ -1494,8 +1524,16 @@ def find_bad_columns(img, mask=None, nsigma=3.0) -> np.ndarray:
 
 
 def run_sextractor(
-    img, th=10, median=0, std=None, bkg_size=50, aperture_radius=5, max_ellipticity=0.1, gain=1.0, mask=None
-):
+    img: np.ndarray,
+    th: float = 10,
+    median: float = 0,
+    std: float | None = None,
+    bkg_size: int = 50,
+    aperture_radius: float = 5,
+    max_ellipticity: float = 0.1,
+    gain: float = 1.0,
+    mask: np.ndarray | None = None,
+) -> pd.DataFrame:
     """
     Vectorized SEP photometry with centroid errors, outputs a pandas DataFrame.
     Only returns nearly round, bright sources.
@@ -1565,7 +1603,7 @@ def run_sextractor(
     return df
 
 
-def build_star_pairs(df0, seqNum=300):
+def build_star_pairs(df0: pd.DataFrame, seqNum: int = 300) -> None:
     df = df0[df0["seqNum"] == seqNum].copy()
     starids = df["star_id"].values
     regions = df["region"].values
