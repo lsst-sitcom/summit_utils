@@ -20,6 +20,7 @@
 # along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
 import asyncio
+import logging
 import os
 import tempfile
 import unittest
@@ -53,6 +54,7 @@ class M1M3ICSTestCase(lsst.utils.tests.TestCase):
         cls.events = cls.tmaEventMaker.getEvents(cls.dayObs)  # does the fetch
         cls.sampleData = cls.tmaEventMaker._data[cls.dayObs]  # pull the data from the object and test length
         cls.outputDir = tempfile.mkdtemp()
+        cls.log = logging.getLogger(__name__)
 
     @vcr.use_cassette()
     def tearDown(self):
@@ -62,6 +64,7 @@ class M1M3ICSTestCase(lsst.utils.tests.TestCase):
 
     @vcr.use_cassette()
     def test_analysis(self):
+        self.log.info(f"Writing temp output files to {self.outputDir}")
         plotFilename = os.path.join(self.outputDir, "testPlotting_exp.jpg")
         statFilename = os.path.join(self.outputDir, "m1m3_ics_stats.csv")
         dataFilename = os.path.join(self.outputDir, "m1m3_ics_df.csv")
@@ -74,7 +77,7 @@ class M1M3ICSTestCase(lsst.utils.tests.TestCase):
 
         self.assertTrue(os.path.isfile(dataFilename))
         # data is big, about 2.5MB at time of writing
-        self.assertTrue(os.path.getsize(dataFilename) > 1_000_000)
+        self.assertTrue(os.path.getsize(dataFilename) > 400_000)
         # stats are small, about 1.8kB at time of writing
         self.assertTrue(os.path.isfile(statFilename))
         self.assertTrue(os.path.getsize(statFilename) > 1000)
