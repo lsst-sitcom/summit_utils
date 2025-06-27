@@ -457,7 +457,6 @@ def plotMountErrors(
     for i in [0, 1, 2]:
         camhex = mountData.camhexData[f"position{i}"]
         camhex -= np.median(camhex)
-        print(i, np.min(camhex), np.max(camhex))
         ax7.plot(
             camhex,
             label=hexNames[i],
@@ -660,7 +659,9 @@ def getAltAzOverPeriod(
     target = SkyCoord(expRecord.tracking_ra * u.deg, expRecord.tracking_dec * u.deg)
     altAzFrame = AltAz(obstime=times, location=SIMONYI_LOCATION)
     targetAltAz = target.transform_to(altAzFrame)
-    return targetAltAz.az.degree, targetAltAz.alt.degree
+    az = targetAltAz.az
+    az_wrapped = az.wrap_at(180 * u.deg)
+    return az_wrapped.degree, targetAltAz.alt.degree
 
 
 def calculateHexRms(mountData: MountData) -> tuple[float, float]:
@@ -681,7 +682,7 @@ def calculateHexRms(mountData: MountData) -> tuple[float, float]:
     camHexXY = 1.00  # microns(image) / micron(hexapod)
     camHexUV = 4.92  # microns(image) / arcsecond(hexapod)
     m2HexXY = 1.13  # microns(image) / micron(hexapod)
-    m2HexUV = 37.26  # microns(image) / arcsecond(hexapod
+    m2HexUV = 37.26  # microns(image) / arcsecond(hexapod)
 
     # Convert these to image impact in arcseconds
     # The 10.0 is microns / pixel
