@@ -26,7 +26,6 @@ import json
 import os
 import unittest
 
-import numpy as np
 import pandas as pd
 from utils import getVcr
 
@@ -48,7 +47,7 @@ DELIMITER = "||"  # don't use a comma, as str(list) will naturally contain comma
 TESTDIR = os.path.abspath(os.path.dirname(__file__))
 
 
-def getBlockInfoTestTruthValues(dataFilename=None):
+def getBlockInfoTestTruthValues(dataFilename=None) -> dict[tuple[str, int], str]:
     """Get the current truth values for the block information.
 
     Parameters
@@ -70,9 +69,9 @@ def getBlockInfoTestTruthValues(dataFilename=None):
 
     data = {}
     for dayObsSeqNumStr, line in loaded.items():
-        dayObs = int(dayObsSeqNumStr.split(f"{DELIMITER}")[0])
-        seqNum = int(dayObsSeqNumStr.split(f"{DELIMITER}")[1])
-        data[dayObs, seqNum] = line
+        blockNum = str(dayObsSeqNumStr.split(f"{DELIMITER}")[0])
+        blockSeqNum = int(dayObsSeqNumStr.split(f"{DELIMITER}")[1])
+        data[blockNum, blockSeqNum] = line
     return data
 
 
@@ -87,7 +86,7 @@ def writeNewBlockInfoTestTruthValues():
     blockParser = BlockParser(dayObs)
 
     data = {}
-    for block in blockParser.getBlockNums():
+    for block in (blockParser).getBlockNums():
         seqNums = blockParser.getSeqNums(block)
         for seqNum in seqNums:
             blockInfo = blockParser.getBlockInfo(block, seqNum)
@@ -135,16 +134,16 @@ class BlockParserTestCase(lsst.utils.tests.TestCase):
     @vcr.use_cassette()
     def test_parsing(self):
         blockNums = self.blockParser.getBlockNums()
-        self.assertTrue(all(np.issubdtype(n, int)) for n in blockNums)
+        self.assertTrue(all(isinstance(n, str)) for n in blockNums)
         self.assertEqual(blockNums, list(self.blockDict.keys()))
 
         for block, seqNums in self.blockDict.items():
-            self.assertTrue(np.issubdtype(block, int))
+            self.assertTrue(isinstance(block, str))
             self.assertIsInstance(seqNums, list)
-            self.assertTrue(all(np.issubdtype(s, int)) for s in seqNums)
+            self.assertTrue(all(isinstance(s, int)) for s in seqNums)
 
             found = self.blockParser.getSeqNums(block)
-            self.assertTrue(all(np.issubdtype(s, int) for s in found))
+            self.assertTrue(all(isinstance(s, int) for s in found))
             self.assertEqual(found, seqNums)
             self.blockParser.printBlockEvolution(block)
 

@@ -529,7 +529,7 @@ class TMAEventMakerTestCase(lsst.utils.tests.TestCase):
     @vcr.use_cassette()
     def test_findEvent(self):
         eventMaker = self.tmaEventMaker
-        events = eventMaker.getEvents(self.dayObs)
+        events = eventMaker.getEvents(self.dayObs, addBlockInfo=False)
         event = events[28]  # this one has a contiguous event before it
 
         time = event.begin

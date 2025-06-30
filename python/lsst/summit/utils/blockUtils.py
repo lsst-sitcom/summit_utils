@@ -67,8 +67,9 @@ class BlockInfo:
 
     Parameters
     ----------
-    blockNumber : `int`
-        The block number, as an integer.
+    blockNumber : `str`
+        The block number, as a str - sometimes it'll be like 123 but others it
+        will be like "T123" for test blocks.
     blockId : `str`
         The block ID, as a string.
     dayObs : `int`
@@ -79,6 +80,9 @@ class BlockInfo:
         The time the block execution began.
     end : `astropy.time.Time`
         The time the block execution ended.
+    isTestCase : `bool`
+        Whether this block is a test case type block, or a regular block. This
+        is also reflected in the blockNumber.
     salIndices : `list` of `int`
         One or more SAL indices, relating to the block.
     tickets : `list` of `str`
@@ -91,7 +95,7 @@ class BlockInfo:
             - the reason for state change, as a string, if present
     """
 
-    blockNumber: int
+    blockNumber: str
     blockId: str
     dayObs: int
     seqNum: int
@@ -100,6 +104,7 @@ class BlockInfo:
     salIndices: list
     tickets: list
     states: list
+    isTestCase: bool
 
     def __repr__(self) -> str:
         return (
@@ -182,7 +187,7 @@ class BlockParser:
         The EFD client to use. If not specified, a new one is created.
     """
 
-    def __init__(self, dayObs: int, client: EfdClient | None = None):
+    def __init__(self, dayObs: int, client: EfdClient | None = None) -> None:
         self.log = logging.getLogger("lsst.summit.utils.blockUtils.BlockParser")
         self.dayObs = dayObs
 
@@ -212,18 +217,18 @@ class BlockParser:
         )
         self.data = data
 
-    def augmentDataSlow(self) -> None:
+    def augmentData(self) -> None:
         """Parse each row in the data frame individually, pulling the
         information out into its own columns.
         """
         data = self.data
         blockPattern = r"BLOCK-(\d+)"
-        blockIdPattern = r"BL\d+(?:_\w+)+"
+        blockIdPattern = r"B[LT]\d+(?:_\w+)+"
 
         data["blockNum"] = pd.Series()
-        data["blockId"] = pd.Series()
         data["blockDayObs"] = pd.Series()
         data["blockSeqNum"] = pd.Series()
+        data["isTestCase"] = pd.Series()
 
         if "lastCheckpoint" not in self.data.columns:
             nRows = len(self.data)
@@ -232,61 +237,59 @@ class BlockParser:
                 " so block data cannot be parsed."
             )
 
-        for index, row in data.iterrows():
-            rowStr = row["lastCheckpoint"]
+        # at some point the blockId column was added to the data, so if it's
+        # present, we can use it to extract the blockNum and other information,
+        # but before that we have to parse it out of the lastCheckpoint column
+        if "blockId" in data.columns:
+            blockNumberPattern = re.compile(r"[A-Z]*([0-9]+)(?=_)")
 
-            blockMatch = re.search(blockPattern, rowStr)
-            blockNumber = int(blockMatch.group(1)) if blockMatch else None
-            data.at[index, "blockNum"] = blockNumber
+            for index, row in data.iterrows():
+                # an example blockIdStr value is like BL365_O_20250420_000001
+                blockIdStr = row["blockId"]
+                match = blockNumberPattern.match(blockIdStr)
+                if not match:  # we've failed to get the 365 part in the example
+                    continue
+                blockNum = match.group(1)
 
-            blockIdMatch = re.search(blockIdPattern, rowStr)
-            blockId = blockIdMatch.group(0) if blockIdMatch else None
-            data.at[index, "blockId"] = blockId
-            if blockId is not None:
-                blockDayObs = int(blockId.split("_")[2])
-                blockSeqNum = int(blockId.split("_")[3])
+                idStrSplit = blockIdStr.split("_")
+                isTestCase = False
+                if idStrSplit[0].startswith("BT"):
+                    isTestCase = True
+
+                dayObs = int(idStrSplit[2])
+                seqNum = int(idStrSplit[3])
+                data.at[index, "blockNum"] = f"{'T' if isTestCase else ''}{blockNum}"
+                data.at[index, "blockDayObs"] = int(dayObs)
+                data.at[index, "blockSeqNum"] = int(seqNum)
+                data.at[index, "isTestCase"] = isTestCase
+
+        else:
+            data["blockId"] = pd.Series()  # add it, as it's not present
+            for index, row in data.iterrows():
+                rowStr = row["lastCheckpoint"]
+
+                blockMatch = re.search(blockPattern, rowStr)
+                blockNumber = int(blockMatch.group(1)) if blockMatch else None
+
+                blockIdMatch = re.search(blockIdPattern, rowStr)
+                blockIdStr = blockIdMatch.group(0) if blockIdMatch else None
+                if blockIdStr is None:
+                    continue
+                data.at[index, "blockId"] = blockIdStr
+
+                idStrSplit = blockIdStr.split("_")
+                isTestCase = False
+                if idStrSplit[0].startswith("BT"):
+                    isTestCase = True
+
+                data.at[index, "blockNum"] = f"{'T' if isTestCase else ''}{blockNumber}"
+                data.at[index, "isTestCase"] = isTestCase
+                blockDayObs = int(idStrSplit[2])
+                blockSeqNum = int(idStrSplit[3])
                 data.at[index, "blockDayObs"] = blockDayObs
                 data.at[index, "blockSeqNum"] = blockSeqNum
 
-    def augmentData(self) -> None:
-        """Parse the dataframe using vectorized methods, pulling the
-        information out into its own columns.
-
-        This method is much faster for large dataframes than augmentDataSlow,
-        but is also much harder to maintain/debug, as the vectorized regexes
-        are hard to work with, and to know which row is causing problems.
-        """
-        if "lastCheckpoint" not in self.data.columns:
-            nRows = len(self.data)
-            self.log.warning(
-                f"Found {nRows} rows of data and no 'lastCheckpoint' column was in the data,"
-                " so block data cannot be parsed."
-            )
-            # add the columns that would have been added for consistency
-            self.data["blockNum"] = pd.Series()
-            self.data["blockId"] = pd.Series()
-            self.data["blockDayObs"] = pd.Series()
-            self.data["blockSeqNum"] = pd.Series()
-            return
-
-        data = self.data
-        blockPattern = r"BLOCK-(\d+)"
-        blockIdPattern = r"(BL\d+(?:_\w+)+)"
-
-        col = data["lastCheckpoint"]
-        data["blockNum"] = col.str.extract(blockPattern, expand=False).astype(float).astype(pd.Int64Dtype())
-        data["blockId"] = col.str.extract(blockIdPattern, expand=False)
-
-        blockIdSplit = data["blockId"].str.split("_", expand=True)
-        if blockIdSplit.columns.max() > 1:  # parsing the blockId succeeded
-            data["blockDayObs"] = blockIdSplit[2].astype(float).astype(pd.Int64Dtype())
-            data["blockSeqNum"] = blockIdSplit[3].astype(float).astype(pd.Int64Dtype())
-        else:  # make nan filled columns for these
-            nanSeries = pd.Series([np.nan] * len(data))
-            data["blockDayObs"] = nanSeries
-            data["blockSeqNum"] = nanSeries
-
-    def _listColumnValues(self, column: str, removeNone: bool = True) -> list:
+    def _listColumnValues(self, column: str, removeNone: bool = True) -> list[str]:
         """Get all the different values for the specified column, as a list.
 
         Parameters
@@ -306,7 +309,7 @@ class BlockParser:
             values.remove(None)
         return sorted(values)
 
-    def getBlockNums(self) -> list[int]:
+    def getBlockNums(self) -> list[str]:
         """Get the block numbers which were run on the specified dayObs.
 
         Returns
@@ -316,19 +319,22 @@ class BlockParser:
         """
         return self._listColumnValues("blockNum")
 
-    def getSeqNums(self, block: int) -> list[int]:
+    def getSeqNums(self, block: int | str) -> list[int]:
         """Get the seqNums for the specified block.
 
         Parameters
         ----------
         block : `int`
-            The block number to get the events for.
+            The block name or number to get the events for, e.g. 123 or T123.
 
         Returns
         -------
         seqNums : `list` of `int`
             The sequence numbers for the specified block.
         """
+        if isinstance(block, int):
+            block = str(block)
+
         seqNums = self.data[self.data["blockNum"] == block]["blockSeqNum"]
         # block header rows have no blockId or seqNum, but do have a blockNum
         # so appear here, so drop the nans as they don't relate to an actual
@@ -336,7 +342,7 @@ class BlockParser:
         seqNums = seqNums.dropna()
         return sorted(set(seqNums))
 
-    def getRows(self, block: int, seqNum: int | None = None) -> pd.DataFrame:
+    def getRows(self, block: str | int, seqNum: int | None = None) -> pd.DataFrame:
         """Get all rows of data which relate to the specified block.
 
         If the seqNum is specified, only the rows for that sequence number are
@@ -357,6 +363,9 @@ class BlockParser:
         data : `pandas.DataFrame`
             The row data.
         """
+        if isinstance(block, int):
+            block = str(block)
+
         # Because we query for a whole dayObs, but BLOCKs can overlap the day
         # start/end, it's possible for the block's blockDayObs not to be the
         # same as self.dayObs around the beginning or end of the day, so filter
@@ -371,7 +380,7 @@ class BlockParser:
             return rowsForBlock
         return rowsForBlock[rowsForBlock["blockSeqNum"] == seqNum]
 
-    def printBlockEvolution(self, block: int, seqNum: int | None = None) -> None:
+    def printBlockEvolution(self, block: str | int, seqNum: int | None = None) -> None:
         """Display the evolution of the specified block.
 
         If the seqNum is specified, the evolution of that specific block
@@ -386,6 +395,9 @@ class BlockParser:
             The sequence number, if specified, to print the evolution of. If
             not specified, all sequence numbers for the block are printed.
         """
+        if isinstance(block, int):
+            block = str(block)
+
         if seqNum is None:
             seqNums = self.getSeqNums(block)
         else:
@@ -395,7 +407,7 @@ class BlockParser:
             blockInfo = self.getBlockInfo(block, seqNum)
             print(blockInfo, "\n")
 
-    def getBlockInfo(self, block: int, seqNum: int) -> BlockInfo | None:
+    def getBlockInfo(self, block: int | str, seqNum: int) -> BlockInfo | None:
         """Get the block info for the specified block.
 
         Parses the rows relating to this block execution, and returns
@@ -413,12 +425,16 @@ class BlockParser:
         blockInfo : `lsst.summit.utils.blockUtils.BlockInfo`
             The block info.
         """
+        if isinstance(block, int):
+            block = str(block)
+
         rows = self.getRows(block, seqNum=seqNum)
         if rows.empty:
             print(f"No {seqNum=} on dayObs={self.dayObs} for {block=}")
             return None
 
         blockIds = set()
+        testCases = set()
         tickets = set()
         salIndices = set()
         statePoints = []
@@ -427,6 +443,7 @@ class BlockParser:
         for index, row in rows.iterrows():
             salIndices.add(row["salIndex"])
             blockIds.add(row["blockId"])
+            testCases.add(row["isTestCase"])
 
             lastCheckpoint = row["lastCheckpoint"]
             sitcomMatches = re.findall(sitcomPattern, lastCheckpoint)
@@ -438,10 +455,16 @@ class BlockParser:
             statePoint = ScriptStatePoint(time=time, state=state, reason=reason)
             statePoints.append(statePoint)
 
-        # likewise for the blockIds
-        if len(blockIds) > 1:
-            raise RuntimeError(f"Found multiple blockIds ({blockIds}) for {seqNum=}")
+        # check that blockIds, blockNames, and testCases are all length == 1
+        if any(len(s) != 1 for s in [blockIds, testCases]):
+            raise RuntimeError(
+                f"Expected exactly one unique value for blockIds and testCases, "
+                f"but found: blockIds={blockIds}, testCases={testCases} "
+                f"for {seqNum=}"
+            )
+
         blockId = blockIds.pop()
+        isTestCase = testCases.pop()
 
         blockInfo = BlockInfo(
             blockNumber=block,
@@ -453,11 +476,12 @@ class BlockParser:
             salIndices=sorted(salIndices),
             tickets=[f"SITCOM-{ticket}" for ticket in sorted(tickets)],
             states=statePoints,
+            isTestCase=isTestCase,
         )
 
         return blockInfo
 
-    def getEventsForBlock(self, events: list[TMAEvent], block: int, seqNum: int) -> list[TMAEvent]:
+    def getEventsForBlock(self, events: list[TMAEvent], block: str, seqNum: int) -> list[TMAEvent]:
         """Get the events which occurred during the specified block.
 
         Parameters

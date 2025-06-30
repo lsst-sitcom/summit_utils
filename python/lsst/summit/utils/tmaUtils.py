@@ -918,7 +918,7 @@ class TMAEvent:
 
     def associatedWith(
         self,
-        block: int | None = None,
+        block: int | str | None = None,
         blockSeqNum: int | None = None,
         ticket: str | None = None,
         salIndex: int | None = None,
@@ -948,6 +948,9 @@ class TMAEvent:
             Whether the event is associated with the specified block, ticket,
             and salIndex.
         """
+        if isinstance(block, int):
+            block = str(block)
+
         if all([block is None, ticket is None, salIndex is None]):
             raise ValueError("Must specify at least one of block, ticket, or salIndex")
 
