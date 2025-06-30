@@ -869,6 +869,25 @@ class TMAEvent:
             return self.seqNum < other.seqNum
         return False
 
+    def __eq__(self, other: object) -> bool:
+        if not isinstance(other, TMAEvent):
+            return NotImplemented
+        if self.version != other.version:
+            return False
+        return (
+            self.dayObs == other.dayObs
+            and self.seqNum == other.seqNum
+            and self.type == other.type
+            and self.endReason == other.endReason
+            and self.duration == other.duration
+            and self.begin == other.begin
+            and self.end == other.end
+            # deliberately do not compare on blockInfos, so skip explicitly
+            # and self.blockInfos == other.blockInfos
+            and self._startRow == other._startRow
+            and self._endRow == other._endRow
+        )
+
     def __repr__(self) -> str:
         return (
             f"TMAEvent(dayObs={self.dayObs}, seqNum={self.seqNum}, type={self.type!r},"
