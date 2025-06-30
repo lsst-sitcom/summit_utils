@@ -47,22 +47,20 @@ DELIMITER = "||"  # don't use a comma, as str(list) will naturally contain comma
 TESTDIR = os.path.abspath(os.path.dirname(__file__))
 
 
-def getBlockInfoTestTruthValues(dataFilename=None) -> dict[tuple[str, int], str]:
+def getBlockInfoTestTruthValues(dayObs: int) -> dict[tuple[str, int], str]:
     """Get the current truth values for the block information.
 
     Parameters
     ----------
-    dataFilename : `str`, optional
-        The filename to read the truth values from. If not provided, the
-        default is to read from the file in the tests/data directory.
+    dayObs : `int`, optional
+        The dayObs to get the truth values for.
 
     Returns
     -------
     data : `dict` [`tuple` [`int`, `int`], `str`]
         The block info truth data.
     """
-    if dataFilename is None:
-        dataFilename = os.path.join(TESTDIR, "data", "blockInfoData.json")
+    dataFilename = os.path.join(TESTDIR, "data", f"blockInfoData_{dayObs}.json")
 
     with open(dataFilename, "r") as f:
         loaded = json.loads(f.read())
@@ -75,14 +73,13 @@ def getBlockInfoTestTruthValues(dataFilename=None) -> dict[tuple[str, int], str]
     return data
 
 
-def writeNewBlockInfoTestTruthValues():
+def writeNewBlockInfoTestTruthValues(dayObs: int) -> None:
     """This function is used to write out the truth values for the test cases.
 
     If bugs are found in the parsing, it's possible these values could change,
     and would need to be updated. If that happens, run this function, and check
     the new values into git.
     """
-    dayObs = 20230615
     blockParser = BlockParser(dayObs)
 
     data = {}
@@ -90,6 +87,7 @@ def writeNewBlockInfoTestTruthValues():
         seqNums = blockParser.getSeqNums(block)
         for seqNum in seqNums:
             blockInfo = blockParser.getBlockInfo(block, seqNum)
+            assert blockInfo is not None
             line = (
                 f"{blockInfo.blockId}{DELIMITER}"
                 f"{blockInfo.begin}{DELIMITER}"
@@ -101,7 +99,7 @@ def writeNewBlockInfoTestTruthValues():
             # must store as string not tuple for json serialization
             data[f"{block}{DELIMITER}{seqNum}"] = line
 
-    dataFilename = os.path.join(TESTDIR, "data", "blockInfoData.json")
+    dataFilename = os.path.join(TESTDIR, "data", f"blockInfoData_{dayObs}.json")
     with open(dataFilename, "w") as f:
         json.dump(data, f)
 
@@ -117,9 +115,9 @@ class BlockParserTestCase(lsst.utils.tests.TestCase):
         except RuntimeError:
             raise unittest.SkipTest("Could not instantiate an EFD client")
 
-        cls.dayObs = 20230615
+        cls.dayObsNoTestCases = 20230615
         cls.dayObsNoBlocks = 20230531  # contains data but no blocks
-        cls.blockParser = BlockParser(dayObs=cls.dayObs, client=cls.client)
+        cls.blockParser = BlockParser(dayObs=cls.dayObsNoTestCases, client=cls.client)
         cls.blockNums = cls.blockParser.getBlockNums()
         cls.blockDict = {}
         for block in cls.blockNums:
@@ -184,9 +182,9 @@ class BlockParserTestCase(lsst.utils.tests.TestCase):
 
     @vcr.use_cassette()
     def test_actualValues(self):
-        data = getBlockInfoTestTruthValues()
+        data = getBlockInfoTestTruthValues(self.dayObsNoTestCases)
 
-        blockParser = BlockParser(self.dayObs, client=self.client)
+        blockParser = BlockParser(self.dayObsNoTestCases, client=self.client)
 
         for block in blockParser.getBlockNums():
             seqNums = blockParser.getSeqNums(block)
