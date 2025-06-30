@@ -116,6 +116,7 @@ class BlockParserTestCase(lsst.utils.tests.TestCase):
             raise unittest.SkipTest("Could not instantiate an EFD client")
 
         cls.dayObsNoTestCases = 20230615
+        cls.dayObsWithCases = 20250420  # blocks = ['365', 'T282', 'T3', 'T379', 'T380', 'T4', 'T454']
         cls.dayObsNoBlocks = 20230531  # contains data but no blocks
         cls.blockParser = BlockParser(dayObs=cls.dayObsNoTestCases, client=cls.client)
         cls.blockNums = cls.blockParser.getBlockNums()
@@ -182,22 +183,22 @@ class BlockParserTestCase(lsst.utils.tests.TestCase):
 
     @vcr.use_cassette()
     def test_actualValues(self):
-        data = getBlockInfoTestTruthValues(self.dayObsNoTestCases)
+        for dayObs in [self.dayObsNoTestCases, self.dayObsWithCases]:
+            data = getBlockInfoTestTruthValues(dayObs)
+            blockParser = BlockParser(dayObs, client=self.client)
 
-        blockParser = BlockParser(self.dayObsNoTestCases, client=self.client)
-
-        for block in blockParser.getBlockNums():
-            seqNums = blockParser.getSeqNums(block)
-            for seqNum in seqNums:
-                blockInfo = blockParser.getBlockInfo(block, seqNum)
-                line = data[blockInfo.blockNumber, blockInfo.seqNum]
-                items = line.split(f"{DELIMITER}")
-                self.assertEqual(items[0], blockInfo.blockId)
-                self.assertEqual(items[1], str(blockInfo.begin.value))
-                self.assertEqual(items[2], str(blockInfo.end.value))
-                self.assertEqual(items[3], str(blockInfo.salIndices))
-                self.assertEqual(items[4], str(blockInfo.tickets))
-                self.assertEqual(items[5], str(len(blockInfo.states)))
+            for block in blockParser.getBlockNums():
+                seqNums = blockParser.getSeqNums(block)
+                for seqNum in seqNums:
+                    blockInfo = blockParser.getBlockInfo(block, seqNum)
+                    line = data[blockInfo.blockNumber, blockInfo.seqNum]
+                    items = line.split(f"{DELIMITER}")
+                    self.assertEqual(items[0], blockInfo.blockId)
+                    self.assertEqual(items[1], str(blockInfo.begin.value))
+                    self.assertEqual(items[2], str(blockInfo.end.value))
+                    self.assertEqual(items[3], str(blockInfo.salIndices))
+                    self.assertEqual(items[4], str(blockInfo.tickets))
+                    self.assertEqual(items[5], str(len(blockInfo.states)))
 
 
 class TestMemory(lsst.utils.tests.MemoryTestCase):
