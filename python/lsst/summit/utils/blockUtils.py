@@ -252,15 +252,18 @@ class BlockParser:
                 blockNum = match.group(1)
 
                 idStrSplit = blockIdStr.split("_")
+                blockDayObs = int(idStrSplit[2])
+                if blockDayObs != self.dayObs:
+                    continue  # we're in the padded region
+
                 isTestCase = False
                 if idStrSplit[0].startswith("BT"):
                     isTestCase = True
 
-                dayObs = int(idStrSplit[2])
-                seqNum = int(idStrSplit[3])
+                blockSeqNum = int(idStrSplit[3])
                 data.at[index, "blockNum"] = f"{'T' if isTestCase else ''}{blockNum}"
-                data.at[index, "blockDayObs"] = int(dayObs)
-                data.at[index, "blockSeqNum"] = int(seqNum)
+                data.at[index, "blockDayObs"] = int(blockDayObs)
+                data.at[index, "blockSeqNum"] = int(blockSeqNum)
                 data.at[index, "isTestCase"] = isTestCase
 
         else:
@@ -278,6 +281,10 @@ class BlockParser:
                 data.at[index, "blockId"] = blockIdStr
 
                 idStrSplit = blockIdStr.split("_")
+                blockDayObs = int(idStrSplit[2])
+                if blockDayObs != self.dayObs:
+                    continue  # we're in the padded region
+
                 isTestCase = False
                 if idStrSplit[0].startswith("BT"):
                     isTestCase = True
