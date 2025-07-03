@@ -26,7 +26,6 @@ import json
 import os
 import unittest
 
-import numpy as np
 import pandas as pd
 from utils import getVcr
 
@@ -48,49 +47,47 @@ DELIMITER = "||"  # don't use a comma, as str(list) will naturally contain comma
 TESTDIR = os.path.abspath(os.path.dirname(__file__))
 
 
-def getBlockInfoTestTruthValues(dataFilename=None):
+def getBlockInfoTestTruthValues(dayObs: int) -> dict[tuple[str, int], str]:
     """Get the current truth values for the block information.
 
     Parameters
     ----------
-    dataFilename : `str`, optional
-        The filename to read the truth values from. If not provided, the
-        default is to read from the file in the tests/data directory.
+    dayObs : `int`, optional
+        The dayObs to get the truth values for.
 
     Returns
     -------
     data : `dict` [`tuple` [`int`, `int`], `str`]
         The block info truth data.
     """
-    if dataFilename is None:
-        dataFilename = os.path.join(TESTDIR, "data", "blockInfoData.json")
+    dataFilename = os.path.join(TESTDIR, "data", f"blockInfoData_{dayObs}.json")
 
     with open(dataFilename, "r") as f:
         loaded = json.loads(f.read())
 
     data = {}
     for dayObsSeqNumStr, line in loaded.items():
-        dayObs = int(dayObsSeqNumStr.split(f"{DELIMITER}")[0])
-        seqNum = int(dayObsSeqNumStr.split(f"{DELIMITER}")[1])
-        data[dayObs, seqNum] = line
+        blockNum = str(dayObsSeqNumStr.split(f"{DELIMITER}")[0])
+        blockSeqNum = int(dayObsSeqNumStr.split(f"{DELIMITER}")[1])
+        data[blockNum, blockSeqNum] = line
     return data
 
 
-def writeNewBlockInfoTestTruthValues():
+def writeNewBlockInfoTestTruthValues(dayObs: int) -> None:
     """This function is used to write out the truth values for the test cases.
 
     If bugs are found in the parsing, it's possible these values could change,
     and would need to be updated. If that happens, run this function, and check
     the new values into git.
     """
-    dayObs = 20230615
     blockParser = BlockParser(dayObs)
 
     data = {}
-    for block in blockParser.getBlockNums():
+    for block in (blockParser).getBlockNums():
         seqNums = blockParser.getSeqNums(block)
         for seqNum in seqNums:
             blockInfo = blockParser.getBlockInfo(block, seqNum)
+            assert blockInfo is not None
             line = (
                 f"{blockInfo.blockId}{DELIMITER}"
                 f"{blockInfo.begin}{DELIMITER}"
@@ -102,7 +99,7 @@ def writeNewBlockInfoTestTruthValues():
             # must store as string not tuple for json serialization
             data[f"{block}{DELIMITER}{seqNum}"] = line
 
-    dataFilename = os.path.join(TESTDIR, "data", "blockInfoData.json")
+    dataFilename = os.path.join(TESTDIR, "data", f"blockInfoData_{dayObs}.json")
     with open(dataFilename, "w") as f:
         json.dump(data, f)
 
@@ -118,9 +115,10 @@ class BlockParserTestCase(lsst.utils.tests.TestCase):
         except RuntimeError:
             raise unittest.SkipTest("Could not instantiate an EFD client")
 
-        cls.dayObs = 20230615
+        cls.dayObsNoTestCases = 20230615
+        cls.dayObsWithCases = 20250420  # blocks = ['365', 'T282', 'T3', 'T379', 'T380', 'T4', 'T454']
         cls.dayObsNoBlocks = 20230531  # contains data but no blocks
-        cls.blockParser = BlockParser(dayObs=cls.dayObs, client=cls.client)
+        cls.blockParser = BlockParser(dayObs=cls.dayObsNoTestCases, client=cls.client)
         cls.blockNums = cls.blockParser.getBlockNums()
         cls.blockDict = {}
         for block in cls.blockNums:
@@ -135,16 +133,16 @@ class BlockParserTestCase(lsst.utils.tests.TestCase):
     @vcr.use_cassette()
     def test_parsing(self):
         blockNums = self.blockParser.getBlockNums()
-        self.assertTrue(all(np.issubdtype(n, int)) for n in blockNums)
+        self.assertTrue(all(isinstance(n, str)) for n in blockNums)
         self.assertEqual(blockNums, list(self.blockDict.keys()))
 
         for block, seqNums in self.blockDict.items():
-            self.assertTrue(np.issubdtype(block, int))
+            self.assertTrue(isinstance(block, str))
             self.assertIsInstance(seqNums, list)
-            self.assertTrue(all(np.issubdtype(s, int)) for s in seqNums)
+            self.assertTrue(all(isinstance(s, int)) for s in seqNums)
 
             found = self.blockParser.getSeqNums(block)
-            self.assertTrue(all(np.issubdtype(s, int) for s in found))
+            self.assertTrue(all(isinstance(s, int) for s in found))
             self.assertEqual(found, seqNums)
             self.blockParser.printBlockEvolution(block)
 
@@ -185,22 +183,22 @@ class BlockParserTestCase(lsst.utils.tests.TestCase):
 
     @vcr.use_cassette()
     def test_actualValues(self):
-        data = getBlockInfoTestTruthValues()
+        for dayObs in [self.dayObsNoTestCases, self.dayObsWithCases]:
+            data = getBlockInfoTestTruthValues(dayObs)
+            blockParser = BlockParser(dayObs, client=self.client)
 
-        blockParser = BlockParser(self.dayObs, client=self.client)
-
-        for block in blockParser.getBlockNums():
-            seqNums = blockParser.getSeqNums(block)
-            for seqNum in seqNums:
-                blockInfo = blockParser.getBlockInfo(block, seqNum)
-                line = data[blockInfo.blockNumber, blockInfo.seqNum]
-                items = line.split(f"{DELIMITER}")
-                self.assertEqual(items[0], blockInfo.blockId)
-                self.assertEqual(items[1], str(blockInfo.begin.value))
-                self.assertEqual(items[2], str(blockInfo.end.value))
-                self.assertEqual(items[3], str(blockInfo.salIndices))
-                self.assertEqual(items[4], str(blockInfo.tickets))
-                self.assertEqual(items[5], str(len(blockInfo.states)))
+            for block in blockParser.getBlockNums():
+                seqNums = blockParser.getSeqNums(block)
+                for seqNum in seqNums:
+                    blockInfo = blockParser.getBlockInfo(block, seqNum)
+                    line = data[blockInfo.blockNumber, blockInfo.seqNum]
+                    items = line.split(f"{DELIMITER}")
+                    self.assertEqual(items[0], blockInfo.blockId)
+                    self.assertEqual(items[1], str(blockInfo.begin.value))
+                    self.assertEqual(items[2], str(blockInfo.end.value))
+                    self.assertEqual(items[3], str(blockInfo.salIndices))
+                    self.assertEqual(items[4], str(blockInfo.tickets))
+                    self.assertEqual(items[5], str(len(blockInfo.states)))
 
 
 class TestMemory(lsst.utils.tests.MemoryTestCase):
