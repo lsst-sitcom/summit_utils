@@ -39,6 +39,7 @@ from matplotlib.ticker import FuncFormatter
 
 from lsst.summit.utils.tmaUtils import filterBadValues
 from lsst.summit.utils.utils import dayObsIntToString
+from lsst.utils.plotting.figures import make_figure
 
 from .mountData import getAzElRotHexDataForExposure
 
@@ -221,7 +222,7 @@ def calculateMountErrors(
     imageAzRms = azRms * np.cos(elevation * np.pi / 180.0)
     imageElRms = elRms
     imageRotRms = rotRms * LSSTCAM_ANGLE_TO_EDGE_OF_FIELD_ARCSEC * np.pi / 180.0 / 3600.0
-    (camHexRms, m2HexRms) = calculateHexRms(mountData)
+    camHexRms, m2HexRms = calculateHexRms(mountData)
     # TODO should the hex RMS values be added in quadrature?
     imageImpactRms = np.sqrt(imageAzRms**2 + imageElRms**2 + imageRotRms**2 + camHexRms**2 + m2HexRms**2)
 
@@ -259,7 +260,7 @@ def plotMountErrors(
         title = "Mount Errors"  # if the data is of unknown provenance
 
     if figure is None:
-        figure = plt.figure(figsize=(12, 8))
+        figure = make_figure(figsize=(12, 8))
     else:
         figure.clear()
         ax = figure.gca()
@@ -281,7 +282,7 @@ def plotMountErrors(
         sharex="col",
         sharey=False,
         gridspec_kw={
-            "wspace": 0.25,
+            "wspace": 0.35,
             "hspace": 0,
             "height_ratios": [2.5, 1, 1],
             "width_ratios": [1.4, 1],
@@ -295,7 +296,7 @@ def plotMountErrors(
         sharex="col",
         sharey=False,
         gridspec_kw={
-            "wspace": 0.25,
+            "wspace": 0.35,
             "hspace": 0,
             "height_ratios": [1, 1],
             "width_ratios": [1],
@@ -366,9 +367,7 @@ def plotMountErrors(
     ax2.set_ylim(-0.05, 0.05)
     ax2.set_yticks([-0.04, -0.02, 0.0, 0.02, 0.04])
     ax2.legend(loc="lower center")
-    ax2.text(
-        0.1, 0.9, f"Image impact RMS = {imageImpactRms:.3f} arcsec (w/ rot&hex).", transform=ax2.transAxes
-    )
+    ax2.text(0.1, 0.9, f"Image impact = {imageImpactRms:.3f} arcsec (w/ rot&hex).", transform=ax2.transAxes)
     if mountErrors.residualFiltering:
         ax2.text(
             0.1,
@@ -393,7 +392,6 @@ def plotMountErrors(
     )
     colorCounter += 1
     ax3.set_ylabel("Azimuth torque (Nm)")
-    ax3_twin.set_ylabel("Elevation torque (Nm)")
     ax3.set_xlabel("Time (UTC)")  # yes, it really is UTC, matplotlib converts this automatically!
 
     # put the ticks at an angle, and right align with the tick marks
@@ -440,7 +438,6 @@ def plotMountErrors(
     ax6.plot(mountData.rotationTorques["torque0"], label="Torque0", c=lineColors[colorCounter % nColors])
     colorCounter += 1
     ax6.plot(mountData.rotationTorques["torque1"], label="Torque1", c=lineColors[colorCounter % nColors])
-    ax6.set_ylabel("Rotator torque (Nm)")
     ax6.set_xlabel("Time (UTC)")  # yes, it really is UTC, matplotlib converts this automatically!
     # put the ticks at an angle, and right align with the tick marks
     ax6.set_xticks(ax6.get_xticks())  # needed to supress a user warning
