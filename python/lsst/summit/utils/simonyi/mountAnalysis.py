@@ -257,6 +257,9 @@ def plotMountErrors(
     figure=None,
     saveFilename: str = "",
 ) -> Figure:
+    mountData = copy.deepcopy(mountData)  # Ensure we don't modify the original data
+    mountErrors = copy.deepcopy(mountErrors)
+
     imageImpactRms = mountErrors.imageImpactRms
     expRecord = mountData.expRecord
     if expRecord is not None:
