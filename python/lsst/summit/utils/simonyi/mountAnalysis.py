@@ -21,8 +21,16 @@
 
 from __future__ import annotations
 
-__all__ = ["calculateMountErrors", "plotMountErrors"]
+__all__ = [
+    "calculateMountErrors",
+    "plotMountErrors",
+    "MountErrors",
+    "getLinearRates",
+    "getAltAzOverPeriod",
+    "calculateHexRms",
+]
 
+import copy
 import logging
 from dataclasses import dataclass
 from typing import TYPE_CHECKING
@@ -38,8 +46,9 @@ from matplotlib.ticker import FuncFormatter
 
 from lsst.summit.utils.tmaUtils import filterBadValues
 from lsst.summit.utils.utils import dayObsIntToString
+from lsst.utils.plotting.figures import make_figure
 
-from .mountData import getAzElRotDataForExposure
+from .mountData import getAzElRotHexDataForExposure
 
 if TYPE_CHECKING:
     from astropy.time import Time
@@ -73,6 +82,8 @@ class MountErrors:
     azRms: float
     elRms: float
     rotRms: float
+    camHexRms: float
+    m2HexRms: float
     imageAzRms: float
     imageElRms: float
     imageRotRms: float
@@ -129,7 +140,7 @@ def calculateMountErrors(
         logger.info(f"Skipping mount torques for non-tracking image type {imgType} for {expRecord.id}")
         return None, None
 
-    mountData = getAzElRotDataForExposure(client, expRecord)
+    mountData = getAzElRotHexDataForExposure(client, expRecord)
 
     elevation = 90 - expRecord.zenith_angle
 
@@ -218,12 +229,16 @@ def calculateMountErrors(
     imageAzRms = azRms * np.cos(elevation * np.pi / 180.0)
     imageElRms = elRms
     imageRotRms = rotRms * LSSTCAM_ANGLE_TO_EDGE_OF_FIELD_ARCSEC * np.pi / 180.0 / 3600.0
-    imageImpactRms = np.sqrt(imageAzRms**2 + imageElRms**2 + imageRotRms**2)
+    camHexRms, m2HexRms = calculateHexRms(mountData)
+    # TODO should the hex RMS values be added in quadrature?
+    imageImpactRms = np.sqrt(imageAzRms**2 + imageElRms**2 + imageRotRms**2 + camHexRms**2 + m2HexRms**2)
 
     mountErrors = MountErrors(
         azRms=float(azRms),
         elRms=float(elRms),
         rotRms=float(rotRms),
+        camHexRms=float(camHexRms),
+        m2HexRms=float(m2HexRms),
         imageAzRms=float(imageAzRms),
         imageElRms=float(imageElRms),
         imageRotRms=float(imageRotRms),
@@ -242,6 +257,9 @@ def plotMountErrors(
     figure=None,
     saveFilename: str = "",
 ) -> Figure:
+    mountData = copy.deepcopy(mountData)  # Ensure we don't modify the original data
+    mountErrors = copy.deepcopy(mountErrors)
+
     imageImpactRms = mountErrors.imageImpactRms
     expRecord = mountData.expRecord
     if expRecord is not None:
@@ -252,7 +270,7 @@ def plotMountErrors(
         title = "Mount Errors"  # if the data is of unknown provenance
 
     if figure is None:
-        figure = plt.figure(figsize=(12, 8))
+        figure = make_figure(figsize=(12, 8))
     else:
         figure.clear()
         ax = figure.gca()
@@ -273,15 +291,37 @@ def plotMountErrors(
         2,
         sharex="col",
         sharey=False,
-        gridspec_kw={"wspace": 0.25, "hspace": 0, "height_ratios": [2.5, 1, 1], "width_ratios": [1.5, 1]},
+        gridspec_kw={
+            "wspace": 0.35,
+            "hspace": 0,
+            "height_ratios": [2.5, 1, 1],
+            "width_ratios": [1.4, 1],
+            "left": 0.07,
+            "right": 0.60,
+        },
+    )
+    [ax7, ax8] = figure.subplots(
+        2,
+        1,
+        sharex="col",
+        sharey=False,
+        gridspec_kw={
+            "wspace": 0.35,
+            "hspace": 0,
+            "height_ratios": [1, 1],
+            "width_ratios": [1],
+            "left": 0.73,
+            "right": 0.94,
+        },
     )
     # [ax1, ax4] = [azimuth, rotator]
     # [ax2, ax5] = [azError, rotError]
     # [ax3, ax6] = [azTorque, rotTorque]
+    # [ax7, ax8] = [camHex, m2Hex]
 
     # Use the native color cycle for the lines. Because they're on
     # different axes they don't cycle by themselves
-    axs = [ax1, ax2, ax3, ax4, ax5, ax6]
+    axs = [ax1, ax2, ax3, ax4, ax5, ax6, ax7, ax8]
     lineColors = [p["color"] for p in plt.rcParams["axes.prop_cycle"]]
     nColors = len(lineColors)
     colorCounter = 0
@@ -336,8 +376,8 @@ def plotMountErrors(
     ax2.set_xticks([])  # remove x tick labels on the hidden upper x-axis
     ax2.set_ylim(-0.05, 0.05)
     ax2.set_yticks([-0.04, -0.02, 0.0, 0.02, 0.04])
-    ax2.legend()
-    ax2.text(0.1, 0.9, f"Image impact RMS = {imageImpactRms:.3f} arcsec (with rot).", transform=ax2.transAxes)
+    ax2.legend(loc="lower center")
+    ax2.text(0.1, 0.9, f"Image impact = {imageImpactRms:.3f} arcsec (w/ rot&hex).", transform=ax2.transAxes)
     if mountErrors.residualFiltering:
         ax2.text(
             0.1,
@@ -362,7 +402,6 @@ def plotMountErrors(
     )
     colorCounter += 1
     ax3.set_ylabel("Azimuth torque (Nm)")
-    ax3_twin.set_ylabel("Elevation torque (Nm)")
     ax3.set_xlabel("Time (UTC)")  # yes, it really is UTC, matplotlib converts this automatically!
 
     # put the ticks at an angle, and right align with the tick marks
@@ -409,7 +448,6 @@ def plotMountErrors(
     ax6.plot(mountData.rotationTorques["torque0"], label="Torque0", c=lineColors[colorCounter % nColors])
     colorCounter += 1
     ax6.plot(mountData.rotationTorques["torque1"], label="Torque1", c=lineColors[colorCounter % nColors])
-    ax6.set_ylabel("Rotator torque (Nm)")
     ax6.set_xlabel("Time (UTC)")  # yes, it really is UTC, matplotlib converts this automatically!
     # put the ticks at an angle, and right align with the tick marks
     ax6.set_xticks(ax6.get_xticks())  # needed to supress a user warning
@@ -421,6 +459,73 @@ def plotMountErrors(
     ax6.yaxis.tick_right()
     ax6.yaxis.set_label_position("right")
     ax6.legend()
+
+    hexNames = ["X", "Y", "Z", "U", "V", "W"]
+    for i in [0, 1, 2]:
+        camhex = mountData.camhexData[f"position{i}"]
+        camhex -= np.median(camhex)
+        ax7.plot(
+            camhex,
+            label=hexNames[i],
+            c=lineColors[colorCounter % nColors],
+        )
+        colorCounter += 1
+    ax7.yaxis.set_major_formatter(FuncFormatter(tickFormatter))
+    ax7.set_ylabel("CamHex XYZ(micron) (minus median)")
+    ax7.legend()
+    ax7_twin = ax7.twinx()
+    for i in [3, 4]:
+        camhex = mountData.camhexData[f"position{i}"]
+        camhex *= 3600.0  # convert to arcseconds
+        camhex -= np.median(camhex)
+        ax7_twin.plot(
+            camhex,
+            label=hexNames[i],
+            c=lineColors[colorCounter % nColors],
+        )
+        colorCounter += 1
+    ax7_twin.yaxis.set_major_formatter(FuncFormatter(tickFormatter))
+    ax7_twin.set_ylabel("CamHex UV(arcsec) (minus median)")
+    # ax7_twin.yaxis.tick_right()
+    # ax7.yaxis.set_label_position("right")
+    ax7_twin.legend()
+
+    for i in [0, 1, 2]:
+        m2hex = mountData.m2hexData[f"position{i}"]
+        m2hex -= np.median(m2hex)
+        ax8.plot(
+            m2hex,
+            label=hexNames[i],
+            c=lineColors[colorCounter % nColors],
+        )
+        colorCounter += 1
+    ax8.legend()
+    ax8.yaxis.set_major_formatter(FuncFormatter(tickFormatter))
+    ax8.set_ylabel("M2Hex XYZ(micron) (minus median)")
+    ax8.set_xlabel("Time (UTC)")  # yes, it really is UTC, matplotlib converts this automatically!
+    # put the ticks at an angle, and right align with the tick marks
+    ax8.set_xticks(ax8.get_xticks())  # needed to supress a user warning
+    xlabels = ax8.get_xticks()
+    ax8.set_xticklabels(xlabels)
+    ax8.tick_params(axis="x", rotation=45)
+    ax8.xaxis.set_major_locator(mdates.AutoDateLocator())
+    ax8.xaxis.set_major_formatter(mdates.DateFormatter("%H:%M:%S"))
+    ax8_twin = ax8.twinx()
+    for i in [3, 4]:
+        m2hex = mountData.m2hexData[f"position{i}"]
+        m2hex *= 3600.0  # Convert to arcseconds
+        m2hex -= np.median(m2hex)
+        ax8_twin.plot(
+            m2hex,
+            label=hexNames[i],
+            c=lineColors[colorCounter % nColors],
+        )
+        colorCounter += 1
+    ax8_twin.yaxis.set_major_formatter(FuncFormatter(tickFormatter))
+    ax8_twin.set_ylabel("M2Hex UV(arcsec) (minus median)")
+    # ax7_twin.yaxis.tick_right()
+    # ax7.yaxis.set_label_position("right")
+    ax8_twin.legend()
 
     ax1_twin.yaxis.set_major_formatter(FuncFormatter(tickFormatter))
     ax1_twin.set_ylabel("Elevation (degrees)")
@@ -440,6 +545,7 @@ def plotMountErrors(
 
     ax1.set_title("Azimuth and Elevation")
     ax4.set_title("Rotator")
+    ax7.set_title("Hexapods")
     ax4.legend()
     figure.subplots_adjust(top=0.85)  # Adjust the top margin to make room for the suptitle
     figure.suptitle(title, fontsize=14, y=1.04)  # Adjust y to move the title up
@@ -466,6 +572,17 @@ def plotMountErrors(
     ax4_twiny.set_xticklabels([tick.strftime("%H:%M:%S") for tick in chileTickLabels])
     ax4_twiny.tick_params(axis="x", rotation=45)
     ax4_twiny.set_xlabel("Time (Chilean Time)")
+
+    ax7_twiny = ax7.twiny()
+    ax7_twiny.set_xlim(ax7.get_xlim())  # Set the limits of the upper axis to match the lower axis
+    utcTicks = ax7.get_xticks()  # Use the same ticks as the lower UTC axis
+    utcTickLabels = [num2date(tick, tz=utc) for tick in utcTicks]
+    chileTickLabels = [offset_time_aware(label) for label in utcTickLabels]
+    # Set the same tick positions but with Chilean time labels
+    ax7_twiny.set_xticks(utcTicks)
+    ax7_twiny.set_xticklabels([tick.strftime("%H:%M:%S") for tick in chileTickLabels])
+    ax7_twiny.tick_params(axis="x", rotation=45)
+    ax7_twiny.set_xlabel("Time (Chilean Time)")
 
     # Add exposure start and end:
     for ax in axs:
@@ -549,4 +666,54 @@ def getAltAzOverPeriod(
     target = SkyCoord(expRecord.tracking_ra * u.deg, expRecord.tracking_dec * u.deg)
     altAzFrame = AltAz(obstime=times, location=SIMONYI_LOCATION)
     targetAltAz = target.transform_to(altAzFrame)
-    return targetAltAz.az.degree, targetAltAz.alt.degree
+    az = targetAltAz.az
+    az_wrapped = az.wrap_at(180 * u.deg)
+    return az_wrapped.degree, targetAltAz.alt.degree
+
+
+def calculateHexRms(mountData: MountData) -> tuple[float, float]:
+    """Calculate the image impact of hexapod motions.
+
+    Parameters
+    ----------
+    mountData : MountData
+        The EFD data associated with the exposure
+
+    Returns
+    -------
+    tuple[float, float]
+        The image motions associated with the CamHex and M2Hex motions.
+    """
+    # The below image motion coefficients were calculated
+    # with a Batoid simulation by Josh Meyers
+    camHexXY = 1.00  # microns(image) / micron(hexapod)
+    camHexUV = 4.92  # microns(image) / arcsecond(hexapod)
+    m2HexXY = 1.13  # microns(image) / micron(hexapod)
+    m2HexUV = 37.26  # microns(image) / arcsecond(hexapod)
+
+    # Convert these to image impact in arcseconds
+    # The 10.0 is microns / pixel
+    pixelScale = 0.2  # arcseconds / pixel - find this elsewhere?
+    camHexXY = camHexXY / 10.0 * pixelScale  # arcseconds(image) / micron(hexapod)
+    camHexUV = camHexUV / 10.0 * pixelScale  # arcseconds(image) / arcsecond(hexapod)
+    camCoefs = [camHexXY, camHexXY, 0, camHexUV, camHexUV, 0]
+    m2HexXY = m2HexXY / 10.0 * pixelScale  # arcseconds(image) / micron(hexapod)
+    m2HexUV = m2HexUV / 10.0 * pixelScale  # arcseconds(image) / arcsecond(hexapod)
+    m2Coefs = [m2HexXY, m2HexXY, 0, m2HexUV, m2HexUV, 0]
+
+    camHexMs = 0.0
+    for i in [0, 1, 3, 4]:
+        camhex = copy.deepcopy(mountData.camhexData[f"position{i}"])
+        camhex -= np.median(camhex)
+        camhex *= camCoefs[i]
+        camHexMs += np.mean(camhex * camhex)
+    camHexRms = np.sqrt(camHexMs)  # in arcseconds image impact
+
+    m2HexMs = 0.0
+    for i in [0, 1, 3, 4]:
+        m2hex = copy.deepcopy(mountData.m2hexData[f"position{i}"])
+        m2hex -= np.median(m2hex)
+        m2hex *= m2Coefs[i]
+        m2HexMs += np.mean(m2hex * m2hex)
+    m2HexRms = np.sqrt(m2HexMs)  # in arcseconds image impact
+    return (float(camHexRms), float(m2HexRms))

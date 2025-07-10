@@ -21,6 +21,12 @@
 
 from __future__ import annotations
 
+__all__ = [
+    "MountData",
+    "getAzElRotHexDataForPeriod",
+    "getAzElRotHexDataForExposure",
+]
+
 from dataclasses import dataclass
 from typing import TYPE_CHECKING
 
@@ -45,6 +51,8 @@ class MountData:
     elevationData: DataFrame
     rotationData: DataFrame
     rotationTorques: DataFrame
+    camhexData: DataFrame
+    m2hexData: DataFrame
     includedPrePadding: float
     includedPostPadding: float
     expRecord: DimensionRecord | None
@@ -60,7 +68,7 @@ class MountData:
         )
 
 
-def getAzElRotDataForPeriod(
+def getAzElRotHexDataForPeriod(
     client: EfdClient,
     begin: Time,
     end: Time,
@@ -100,6 +108,16 @@ def getAzElRotDataForPeriod(
         prePadding=prePadding,
         postPadding=postPadding,
     )
+    hexData = getEfdData(
+        client,
+        "lsst.sal.MTHexapod.application",
+        begin=begin,
+        end=end,
+        prePadding=prePadding,
+        postPadding=postPadding,
+    )
+    camhexData = hexData[hexData["salIndex"] == 1]
+    m2hexData = hexData[hexData["salIndex"] == 2]
 
     def calcDeltaT(params, args):
         # This calculates the deltaT needed
@@ -146,17 +164,27 @@ def getAzElRotDataForPeriod(
     rotationData["rotError"] = rotError
 
     mountData = MountData(
-        begin, end, azimuthData, elevationData, rotationData, rotationTorques, prePadding, postPadding, None
+        begin,
+        end,
+        azimuthData,
+        elevationData,
+        rotationData,
+        rotationTorques,
+        camhexData,
+        m2hexData,
+        prePadding,
+        postPadding,
+        None,
     )
     return mountData
 
 
-def getAzElRotDataForExposure(
+def getAzElRotHexDataForExposure(
     client: EfdClient, expRecord: DimensionRecord, prePadding: float = 0, postPadding: float = 0
 ) -> MountData:
 
     begin = expRecord.timespan.begin
     end = expRecord.timespan.end
-    mountData = getAzElRotDataForPeriod(client, begin, end, prePadding, postPadding)
+    mountData = getAzElRotHexDataForPeriod(client, begin, end, prePadding, postPadding)
     mountData.expRecord = expRecord
     return mountData
