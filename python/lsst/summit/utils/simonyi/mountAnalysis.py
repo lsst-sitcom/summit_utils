@@ -21,7 +21,14 @@
 
 from __future__ import annotations
 
-__all__ = ["calculateMountErrors", "plotMountErrors"]
+__all__ = [
+    "calculateMountErrors",
+    "plotMountErrors",
+    "MountErrors",
+    "getLinearRates",
+    "getAltAzOverPeriod",
+    "calculateHexRms",
+]
 
 import copy
 import logging
