@@ -191,7 +191,7 @@ class GuiderDataReader:
         perDetectorData = self.getDataForAllDetectors(dayObs, seqNum)
         header = self.getHeaderInfo(perDetectorData[self.detNames[0]])  # assume all the same for now
         roiAmpNames = self.getRoiAmpNames(perDetectorData)
-        timestamps = self.getTimestamps(header)
+        timestamps = self.getTimestamps(perDetectorData, header)
 
         if self.verbose:
             self.printHeaderInfo(header)
@@ -206,16 +206,20 @@ class GuiderDataReader:
         )
         return guiderData
 
-    def getTimestamps(self, header: dict[str, str | float]) -> list[Time]:
-        nPoints = header["n_stamps"]
-        samples = np.arange(nPoints, dtype=float)
-
-        t0 = Time(header["start_time"], format="isot", scale="utc")
-
-        dt = (1.0 / FREQ) * u.second
-        dt += DELAY * u.second
-        timestamp = t0 + samples * dt
-        return list(timestamp)
+    def getTimestamps(self, perDetectorData, header: dict[str, str | float]) -> list[Time]:
+        timestamps_all = []
+        for detName in perDetectorData.keys():
+            stamps = perDetectorData[detName]
+            timestamps = []
+            for i in range(len(stamps)):
+                # if stamps[i].metadata is not None and "STMPTMJD" in stamps[i].metadata:
+                mjd = stamps[i].metadata["STMPTMJD"]
+                timestamps.append(Time(mjd, format="mjd", scale="utc"))
+            timestamps_all.append(timestamps)
+        # ascending list
+        timestamps = np.sort(np.unique(np.concatenate(timestamps_all)))
+        return timestamps.tolist()
+        
 
     def getDataForAllDetectors(self, dayObs: int, seqNum: int) -> dict[str, Stamps]:
         """Load the data from the butler for all guider detectors.
