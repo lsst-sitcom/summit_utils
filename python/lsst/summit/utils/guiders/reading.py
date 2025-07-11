@@ -41,7 +41,6 @@ from lsst.summit.utils.guiders.transformation import convert_roi, mk_ccd_to_dvcs
 FREQ = 5.0  # Hz, frequency of the guider data acquisition
 DELAY = 20 / 1000  # seconds
 
-
 @dataclass
 class GuiderData:
     """Data class to hold guider data information."""
@@ -273,6 +272,7 @@ class GuiderDataReader:
     def getHeaderInfo(self, raw: Stamps) -> dict[str, str | float]:
         info: dict[str, str | float] = {}
         m = raw.metadata.toDict()
+        info["expid"] = int(m["DAYOBS"]) * 100000 + int(m["SEQNUM"])
         info["roi_col"] = m["ROICOL"]
         info["roi_row"] = m["ROIROW"]
         info["roi_cols"] = m["ROICOLS"]
@@ -286,7 +286,7 @@ class GuiderDataReader:
 
     def printHeaderInfo(self, header: dict[str, str | float]) -> None:
         # TODO: reinstate dataId and filter if necessary
-        # print(f"Data Id: {self.dataId}, filter-band: {self.filter}")
+        print(f"Data Id: {header['expid']}, filter-band: {header['filter']}")
         print(f"ROI Row: {header['roi_row']}, ROI Col: {header['roi_col']}")
         print(f"ROI Rows: {header['roi_rows']}, ROI Cols: {header['roi_cols']}")
         print(f"Number of Stamps: {header['n_stamps']}")
@@ -302,7 +302,7 @@ class GuiderDataReader:
         """Get the ids of the guider detectors."""
         return list(self.guiderNameMap.values())
 
-
+# TODO: Timestamps
 def getGuiderStamps(
     detNum: int,
     seqNum: int,
@@ -400,7 +400,18 @@ def getGuiderStamps(
         # build a Stamp Object
         output_masked_im = MaskedImageF(roi_dvcs)
         archive_element = [ccd_view_bbox, ft, bt]
-        stamp_list.append(Stamp(output_masked_im, archive_element))
+
+        # fix metadata if missing
+        # this happens for exposures before 2025-06
+        if raw_stamps[i].metadata is None:
+            print(f"Warning: stamp {i} has no metadata, creating empty metadata")
+            timestamp = Time(md['GDSSTART'], format='isot', scale='utc') + (i / FREQ + DELAY) * u.second
+
+            raw_stamps[i].metadata = md
+            raw_stamps[i].metadata["DAQSTAMP"] = i
+            raw_stamps[i].metadata["STMPTMJD"] = timestamp.mjd
+
+        stamp_list.append(Stamp(output_masked_im, archive_element,metadata=raw_stamps[i].metadata))
 
     output_stamps = Stamps(stamp_list, md, use_archive=True)
     return output_stamps
