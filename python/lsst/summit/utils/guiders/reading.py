@@ -44,7 +44,6 @@ DELAY = 20 / 1000  # seconds
 @dataclass
 class GuiderData:
     """Data class to hold guider data information."""
-
     dayObs: int
     seqNum: int
     header: dict[str, str | float]
@@ -52,6 +51,7 @@ class GuiderData:
     timestamps: list[Time]
     datasets: dict[str, Stamps]  # TODO: Consider renaming this & making private
     freq: float = FREQ  # TODO: Stop hard coding this, once that's possible from upstream
+    view: str = "dvcs"  # view type, either 'dvcs' or 'ccd' or 'roi'
     # TODO: Add these properties back in if needed
     # filter_band: str
 
@@ -99,6 +99,26 @@ class GuiderData:
         stack = np.nanmedian(roiarr, axis=0)
         return stack
 
+    def getGuiderAmpName(self, detName: str) -> str:
+        """Get the amplifier name for a given guider detector.
+
+        Parameters
+        ----------
+        detName : `str`
+            The name of the detector.
+
+        Returns
+        -------
+        ampName : `str`
+            The name of the amplifier used for the ROI for the specified guider detector.
+        """
+        if detName not in self.roiAmpNames:
+            raise ValueError(f"Detector {detName} not found in roiAmpNames.")
+        return self.roiAmpNames[detName]
+    
+    def getGuiderNames(self) -> list[str]:
+        """Get the names of the guider detectors."""
+        return list(self.datasets.keys())
 
 class GuiderDataReader:
     """Class to read and unpack the Guider data from Butler.
@@ -203,6 +223,7 @@ class GuiderDataReader:
             roiAmpNames=roiAmpNames,
             timestamps=timestamps,
             datasets=perDetectorData,
+            view=self.view,
         )
         return guiderData
 
