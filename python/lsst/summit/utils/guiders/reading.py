@@ -42,6 +42,8 @@ from lsst.summit.utils.guiders.transformation import convert_roi, mk_ccd_to_dvcs
 FREQ = 5.0  # Hz, frequency of the guider data acquisition
 DELAY = 20 / 1000  # seconds
 
+# TODO: getGuiderAmpMinXY
+
 
 @dataclass(slots=True)
 class GuiderData:
@@ -54,6 +56,7 @@ class GuiderData:
     guiderNameMap: dict[str, int]
     datasets: dict[str, Stamps]  # TODO: Consider renaming this & making private
     header: dict[str, str | float]
+    wcs: object | None = None  # WCS object, if available
     freq: float = FREQ  # TODO: Stop hard coding this, once that's possible from upstream
     view: str = "dvcs"  # view type, either 'dvcs' or 'ccd' or 'roi'
     # TODO: Add these properties back in if needed
@@ -100,7 +103,7 @@ class GuiderData:
             raise ValueError(f"Detector {detName} not found in datasets.")
         stamps = self.datasets[detName]
         roiarr = []
-        for stamp in stamps:
+        for stamp in stamps[1:]:  # skip the first stamp (shutter opening)
             img = stamp.stamp_im.image.array
             # simple bias subtraction over the columns
             if is_isr:
@@ -213,8 +216,8 @@ class GuiderReader:
         seqNum : `int`
             Sequence number of the observation.
         detectors : `list[int]`, optional
-            List of detector IDs to filter the data. If ``None``, all detectors
-            will be included.
+            List of detector IDs to filter the data.
+            If ``None``, all detectors will be included.
 
         Returns
         -------
@@ -224,6 +227,8 @@ class GuiderReader:
         if detectors is not None:
             # TODO: Add option to only get data for some detectors
             raise NotImplementedError("Filtering by specific detectors is not yet implemented.")
+
+        wcs = self.butler.get("raw.wcs", day_obs=dayObs, seq_num=seqNum, detector=23, instrument="LSSTCam")
 
         perDetectorData = self.getDataForAllDetectors(dayObs, seqNum)
         header = self.getHeaderInfo(perDetectorData[self.detNames[0]])  # assume all the same for now
@@ -242,6 +247,7 @@ class GuiderReader:
             roiAmpNames=roiAmpNames,
             guiderNameMap=self.guiderNameMap,
             datasets=perDetectorData,
+            wcs=wcs,
         )
         return guiderData
 
@@ -457,3 +463,19 @@ def getGuiderStamps(
 
     output_stamps = Stamps(stamp_list, md, use_archive=True)
     return output_stamps
+
+
+if __name__ == "__main__":
+    butler = Butler("embargo", collections=["LSSTCam/raw/guider", "LSSTCam/raw/all"])
+
+    seqNum, dayObs = 461, 20250425
+    reader = GuiderReader(butler, view="dvcs", verbose=True)
+    guider = reader.get(dayObs=dayObs, seqNum=seqNum)
+
+    # The GuiderData class has all you need
+    print(10 * "-----")
+    # The object now holds everything you need:
+    print("Guider detectors available :", list(guider.datasets.keys()))
+    print("Timestamp first value [MJD]:", guider.timestamps[0])
+    print("Header fields              :", guider.header)
+    print(10 * "-----")
