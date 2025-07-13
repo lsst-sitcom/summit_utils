@@ -27,6 +27,8 @@ import seaborn as sns
 from astropy.stats import mad_std
 from matplotlib.patches import Circle
 
+from lsst.summit.utils.guiders.reading import GuiderData
+
 __all__ = ["GuiderMosaicPlotter", "GuiderPlotter"]
 
 
@@ -52,9 +54,11 @@ class GuiderPlotter:
     COLOR_MAP = ["black", "firebrick", "grey", "lightgrey"]
     MARKERS = [".", "x", "+", "s", "o", "^"]
 
-    def __init__(self, stars_df, stats_df=None, expId=None):
-        self.exp_id = expId if expId else stars_df["expId"].iloc[0]
-        self.stars_df = stars_df[stars_df["expId"] == self.exp_id]
+    def __init__(
+        self, stars_df: pd.DataFrame, stats_df: pd.DataFrame | None = None, expid: int = None
+    ) -> None:
+        self.exp_id = expid if expid else stars_df["expid"].iloc[0]
+        self.stars_df = stars_df[stars_df["expid"] == self.exp_id]
 
         if stats_df is None:
             self.stats_df = self.assemble_stats()
@@ -70,7 +74,7 @@ class GuiderPlotter:
         if stars.empty:
             cols = [
                 "n_guiders",
-                "n_unique_stars",
+                "n_stars",
                 "fraction_valid_stamps",
                 "n_measurements",
             ]
@@ -84,19 +88,19 @@ class GuiderPlotter:
                 "offset_zero_az",
                 "offset_zero_alt",
             ]
-            example_phot = ["mag_offset_rate", "mag_offset_zero", "mag_offset_rms"]
+            example_phot = ["magoffset_rate", "magoffset_zero", "magoffset_rms"]
             guider_names = stars["detector"].unique()
             cols += [f"N_{det}" for det in guider_names]
             cols += example_std_centroid + example_phot
             return pd.DataFrame(columns=cols)
 
         n_guiders = stars["detector"].nunique()
-        n_unique = stars["star_id"].nunique()
-        counts = stars.groupby("detector")["star_id"].nunique().to_dict()
+        n_unique = stars["starid"].nunique()
+        counts = stars.groupby("detector")["starid"].nunique().to_dict()
         guider_names = stars["detector"].unique()
         stars_per_guiders = {f"N_{det}": counts.get(det, 0) for det in guider_names}
 
-        mask_valid = (stars["stamp"] >= 0) & (stars["xpixel"].notna())
+        mask_valid = (stars["stamp"] >= 0) & (stars["xccd"].notna())
         n_meas = int(mask_valid.sum())
 
         std_centroid = measure_std_centroid_stats(stars)
@@ -106,8 +110,9 @@ class GuiderPlotter:
         frac_valid = n_meas / total_possible if total_possible > 0 else np.nan
 
         summary = {
+            "expid": self.exp_id,
             "n_guiders": n_guiders,
-            "n_unique_stars": n_unique,
+            "n_stars": n_unique,
             "n_measurements": n_meas,
             "fraction_valid_stamps": frac_valid,
             **stars_per_guiders,
@@ -116,14 +121,14 @@ class GuiderPlotter:
         }
         return pd.DataFrame([summary])
 
-    def print_metrics(self):
-        filtered_stats_df = self.stats_df[self.stats_df["expId"] == self.exp_id].copy()
+    def print_metrics(self) -> None:
+        filtered_stats_df = self.stats_df[self.stats_df["expid"] == self.exp_id].copy()
 
         print(self.format_stats_summary(filtered_stats_df))
         print(self.format_std_centroid_summary(filtered_stats_df))
         print(self.format_photometric_summary(filtered_stats_df))
 
-    def strip_plot(self, plot_type="centroidAltAz"):
+    def strip_plot(self, plot_type: str = "centroidAltAz") -> None:
         plot_kwargs = {
             "centroidAltAz": {
                 "ylabel": "Centroid Offset [arcsec]",
@@ -137,7 +142,7 @@ class GuiderPlotter:
             },
             "flux": {
                 "ylabel": "Magnitude Offset [mag]",
-                "col": ["mag_offset"],
+                "col": ["magoffset"],
                 "title": "Flux Magnitude Offsets",
             },
             "secondMoments": {
@@ -172,17 +177,22 @@ class GuiderPlotter:
             # compute binned stats
             df["bin"] = pd.cut(df["stamp"], bins=bins, labels=False)
             stats = df.groupby("bin")[col].agg(["mean", "std"]).reset_index()
+
+            valid = stats["bin"].notna()
+            bin_idx = stats.loc[valid, "bin"].astype(int).values
+            means = stats.loc[valid, "mean"].values * scale
+            errs = stats.loc[valid, "std"].values * scale
+
             # plot error bars
             ax.errorbar(
-                bin_centers[stats["bin"]],
-                stats["mean"] * scale,
-                yerr=stats["std"] * scale,
+                bin_centers[bin_idx],
+                means,
+                yerr=errs,
                 fmt="o",
                 color="#6495ED",
                 ecolor="#6495ED",
                 capsize=3,
             )
-
             ax.set_ylabel(cfg["ylabel"])
             ax.set_xlabel("# stamp")
             ax.legend(fontsize=12, loc="upper right")
@@ -206,7 +216,7 @@ class GuiderPlotter:
         Build a dict mapping each detector to the centroid of the star with
         highest SNR. If no stars for a detector, value is (None, None).
         Returns:
-            centroids: dict of {detector: (xcentroid, ycentroid)}
+            centroids: dict of {detector: (xroi, yroi)}
         """
         centroids = {}
         detectors = self.DETNAMES
@@ -214,27 +224,37 @@ class GuiderPlotter:
             sub = self.stars_df[self.stars_df["detector"] == det]
             if len(sub) > 0:
                 best = sub.loc[sub["snr"].idxmax()]
-                centroids[det] = (best["xcentroid_ref"], best["ycentroid_ref"])
+                centroids[det] = (best["xroi"].mean(), best["yroi"].mean())
             else:
                 centroids[det] = (None, None)
         self.centroids = centroids
         pass
 
-    def load_image(self, reader, detname, stamp_num=2):
+    def load_image(self, guider: GuiderData, detname: str, stamp_num: int = 2) -> np.ndarray:
         # read full stamp
-        img = reader.read(stamp_num, detname) if stamp_num >= 0 else reader.read_stacked(detname)
-        return img - np.nanmedian(img, axis=0)
+        if stamp_num >= len(guider.timestamps):
+            raise ValueError(
+                f"stamp_num {stamp_num} is out of range for guider with {len(guider.timestamps)} stamps."
+            )
+        elif stamp_num < 0:
+            return guider.getStackedStampArray(detName=detname)
+        else:
+            img = guider.getStampArray(stampNum=stamp_num, detName=detname)
+            return img - np.nanmedian(img, axis=0)
 
-    def star_mosaic(self, reader, stamp_num=2, fig=None, axs=None, plo=90.0, phi=99.0, cutout_size=30):
+    def star_mosaic(
+        self, guider: GuiderData, stamp_num: int = 2, fig=None, axs=None, plo=90.0, phi=99.0, cutout_size=30
+    ) -> list:
         """Plot the stamp array for all the guiders.
         Args:
+            guider (GuiderData): guider data object
             stamp_num (int): stamp number
             fig (matplotlib.figure.Figure): figure object
             axs (matplotlib.axes.Axes): axes object
         """
-        # the reader view should be 'dvcs'
-        if reader.view != "dvcs":
-            raise ValueError("Reader view must be 'dvcs' for mosaic plotting.")
+        # the guider view should be 'dvcs'
+        if guider.view != "dvcs":
+            raise ValueError("Guider view must be 'dvcs' for mosaic plotting.")
 
         if fig is None:
             gs = dict(hspace=0.0, wspace=0.0)
@@ -249,7 +269,7 @@ class GuiderPlotter:
         for detname in self.DETNAMES:
             xcen, ycen = self.centroids.get(detname, (None, None))
 
-            img = self.load_image(reader, detname, stamp_num)
+            img = self.load_image(guider, detname, stamp_num)
             cutout = make_cutout(img, xcen, ycen, size=cutout_size)
             vmin, vmax = np.nanpercentile(cutout, plo), np.nanpercentile(cutout, phi)
 
@@ -313,9 +333,9 @@ class GuiderPlotter:
         """Annotate the center panel with exposure and stamp info."""
         self.clear_axis_ticks(ax)
         text = (
-            f"ExpId: {self.exp_id}\nStamp #: {stamp_num + 1:02d}"
+            f"expid: {self.exp_id}\nStamp #: {stamp_num + 1:02d}"
             if stamp_num >= 0
-            else f"ExpId: {self.exp_id}\nStacked w/ {self.stars_df['stamp'].nunique()} stamps"
+            else f"expid: {self.exp_id}\nStacked w/ {self.stars_df['stamp'].nunique()} stamps"
         )
         text += f"\nCenter Stdev.: {jitter:.2f} arcsec" if jitter > 0 else ""
         txt = ax.text(
@@ -338,10 +358,10 @@ class GuiderPlotter:
         ax.add_patch(circ)
         return circ
 
-    def make_gif(self, reader, n_stamp_max=60, fps=5, dpi=80, plo=90.0, phi=99.0, cutout_size=30):
-        # the reader view should be 'dvcs'
-        if reader.view != "dvcs":
-            raise ValueError("Reader view must be 'dvcs' for mosaic GIF creation.")
+    def make_gif(self, guider: GuiderData, n_stamp_max=60, fps=5, dpi=80, plo=90.0, phi=99.0, cutout_size=30):
+        # the guider view should be 'dvcs'
+        if guider.view != "dvcs":
+            raise ValueError("Guider view must be 'dvcs' for mosaic GIF creation.")
 
         from matplotlib import animation
 
@@ -350,11 +370,13 @@ class GuiderPlotter:
             self.LAYOUT, figsize=(10, 10), gridspec_kw=dict(hspace=0.0, wspace=0.0), constrained_layout=False
         )
         # number of frames
-        total = min(reader.n_stamps, n_stamp_max)
+        n_stamps = len(guider.timestamps)
+        total = min(n_stamps, n_stamp_max)
+
         print("Number of stamps: ", total)
         # initial (stacked) frame
         artists0 = self.star_mosaic(
-            reader, stamp_num=-1, fig=fig, axs=axs, plo=plo, phi=phi, cutout_size=cutout_size
+            guider, stamp_num=-1, fig=fig, axs=axs, plo=plo, phi=phi, cutout_size=cutout_size
         )
 
         frames = 2 * [artists0]
@@ -362,7 +384,7 @@ class GuiderPlotter:
         # sequential stamps
         for i in range(1, total):
             artists = self.star_mosaic(
-                reader, stamp_num=i, fig=fig, axs=axs, plo=plo, phi=phi, cutout_size=cutout_size
+                guider, stamp_num=i, fig=fig, axs=axs, plo=plo, phi=phi, cutout_size=cutout_size
             )
             frames.append(artists)
         frames += 2 * [artists0]
@@ -425,9 +447,9 @@ class GuiderPlotter:
         return (
             "\nPhotometric Variation Summary\n"
             "-------------------------------\n"
-            f"  - Mag Drift Rate:      {stats['mag_offset_rate']:.5f} mag/sec\n"
-            f"  - Mag Zero Offset:     {stats['mag_offset_zero']:.5f} mag\n"
-            f"  - Mag RMS (detrended): {stats['mag_offset_rms']:.5f} mag"
+            f"  - Mag Drift Rate:      {stats['magoffset_rate']:.5f} mag/sec\n"
+            f"  - Mag Zero Offset:     {stats['magoffset_zero']:.5f} mag\n"
+            f"  - Mag RMS (detrended): {stats['magoffset_rms']:.5f} mag"
         )
 
     @staticmethod
@@ -436,7 +458,7 @@ class GuiderPlotter:
         Pretty-print only the stats that are present in `summary`.
         Expects keys like:
           n_guiders, n_unique_stars, n_measurements, fraction_valid_stamps,
-          N_<detector>, std_centroid_*, mag_offset_*, etc.
+          N_<detector>, std_centroid_*, magoffset_*, etc.
         """
         if (isinstance(summary, pd.DataFrame) and summary.empty) or (
             isinstance(summary, dict) and not summary
@@ -521,7 +543,7 @@ class GuiderMosaicPlotter:
         self.view = reader.view
         self.dayObs = reader.dayObs
         self.seqNum = reader.seqNum
-        self.exp_id = reader.expId
+        self.exp_id = reader.expid
         self.n_stamps = reader.nStamps
         self.detnames = reader.getGuiderNames()
 
@@ -745,29 +767,28 @@ def measure_std_centroid_stats(stars: pd.DataFrame) -> pd.DataFrame:
 
 def measure_photometric_variation(stars: pd.DataFrame) -> tuple[pd.DataFrame, dict]:
     """
-    Fit mag_offset vs time across all rows, compute drift rate,
+    Fit magoffset vs time across all rows, compute drift rate,
       zero-point, and RMS scatter,
     then add these as constant columns to `stars`.
     """
-    mo = stars["mag_offset"].to_numpy()
+    mo = stars["magoffset"].to_numpy()
     mask = np.isfinite(mo)
-    if not mask.any():
+    if np.sum(mask) < 3:
         phot_stats = {
-            "mag_offset_rate": np.nan,
-            "mag_offset_zero": np.nan,
-            "mag_offset_rms": np.nan,
+            "magoffset_rate": np.nan,
+            "magoffset_zero": np.nan,
+            "magoffset_rms": np.nan,
         }
     else:
         time = (stars["stamp"].to_numpy()[mask] + 0.5) * 0.3  # seconds
         mo_valid = mo[mask]
-        coef = np.polyfit(time, mo_valid, 1)
+        coef = np.polyfit(np.asarray(time, dtype=float), np.asarray(mo_valid, dtype=float), 1)
         rate, zero = coef
         resid = mo_valid - np.polyval(coef, time)
         rms = mad_std(resid)
         phot_stats = {
-            "mag_offset_rate": rate,
-            "mag_offset_zero": zero,
-            "mag_offset_rms": rms,
+            "magoffset_rate": rate,
+            "magoffset_zero": zero,
+            "magoffset_rms": rms,
         }
-
     return phot_stats
