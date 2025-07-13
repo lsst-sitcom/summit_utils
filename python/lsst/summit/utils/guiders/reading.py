@@ -21,8 +21,9 @@
 from __future__ import annotations
 
 __all__ = [
-    "GuiderDataReader",
+    "GuiderReader",
     "getGuiderStamps",
+    "GuiderData",
 ]
 from dataclasses import dataclass
 
@@ -41,15 +42,18 @@ from lsst.summit.utils.guiders.transformation import convert_roi, mk_ccd_to_dvcs
 FREQ = 5.0  # Hz, frequency of the guider data acquisition
 DELAY = 20 / 1000  # seconds
 
-@dataclass
+
+@dataclass(slots=True)
 class GuiderData:
     """Data class to hold guider data information."""
+
     dayObs: int
     seqNum: int
-    header: dict[str, str | float]
-    roiAmpNames: dict[str, str]
     timestamps: list[Time]
+    roiAmpNames: dict[str, str]
+    guiderNameMap: dict[str, int]
     datasets: dict[str, Stamps]  # TODO: Consider renaming this & making private
+    header: dict[str, str | float]
     freq: float = FREQ  # TODO: Stop hard coding this, once that's possible from upstream
     view: str = "dvcs"  # view type, either 'dvcs' or 'ccd' or 'roi'
     # TODO: Add these properties back in if needed
@@ -77,13 +81,15 @@ class GuiderData:
             raise IndexError(f"Stamp number {stampNum} out of range for detector {detName}.")
         return stamps[stampNum].stamp_im.image.array
 
-    def getStackedStampArray(self, detName: str) -> np.ndarray:
+    def getStackedStampArray(self, detName: str, is_isr: bool = False) -> np.ndarray:
         """Get the stacked stamp for a given detector name.
 
         Parameters
         ----------
         detName : `str`
             The name of the detector for which to retrieve the stacked stamp.
+        is_isr : `bool`, optional
+            If True, subtract the median bias over the columns.
 
         Returns
         -------
@@ -95,7 +101,11 @@ class GuiderData:
         stamps = self.datasets[detName]
         roiarr = []
         for stamp in stamps:
-            roiarr.append(stamp.stamp_im.image.array)
+            img = stamp.stamp_im.image.array
+            # simple bias subtraction over the columns
+            if is_isr:
+                img = img - np.median(img, axis=0)
+            roiarr.append(img)
         stack = np.nanmedian(roiarr, axis=0)
         return stack
 
@@ -110,17 +120,36 @@ class GuiderData:
         Returns
         -------
         ampName : `str`
-            The name of the amplifier used for the ROI for the specified guider detector.
+            The name of the amplifier used for the ROI
+            for the specified guider detector.
         """
         if detName not in self.roiAmpNames:
             raise ValueError(f"Detector {detName} not found in roiAmpNames.")
         return self.roiAmpNames[detName]
-    
+
     def getGuiderNames(self) -> list[str]:
         """Get the names of the guider detectors."""
-        return list(self.datasets.keys())
+        return list(self.guiderNameMap.keys())
 
-class GuiderDataReader:
+    def getGuiderDetNum(self, detName: str) -> int:
+        """Get the detector number for a given guider detector name.
+
+        Parameters
+        ----------
+        detName : `str`
+            The name of the detector.
+
+        Returns
+        -------
+        detNum : `int`
+            The detector number for the specified guider detector.
+        """
+        if detName not in self.guiderNameMap:
+            raise ValueError(f"Detector {detName} not found in guiderNameMap.")
+        return self.guiderNameMap[detName]
+
+
+class GuiderReader:
     """Class to read and unpack the Guider data from Butler.
 
     Works in the summit and usdf environments.
@@ -130,33 +159,21 @@ class GuiderDataReader:
         guiders (dict): Dictionary of guider detector information
 
     Example:
-        from lsst.summit.utils.guiders.reading import GuiderDataReader
+        from lsst.summit.utils.guiders.reading import GuiderReader
+        from lsst.daf.butler import Butler
+        butler = Butler("embargo", collections="LSSTCam/raw/guider")
 
-        seqNum, dayObs = 591, 20250425
+        seqNum, dayObs = 461, 20250425
+        reader = GuiderReader(butler, view="dvcs", verbose=True)
+        guider = reader.get(dayObs=dayObs, seqNum=seqNum)
 
-        # Load the data from the butler
-        reader = GuiderDataReader(seqNum, dayObs, view='dvcs', verbose=True)
-        reader.init_guiders()
-        reader.getDataForAllDetectors()
-
-        # reader makes a dictionary of the guider data
-        # with the keys being the guider names
-        # and the values being the stamps object
-        # the stamps orientation are defined by view, default 'dvcs'
-        print("Guider names: ", reader.get_guider_names())
-        print("Guider ids: ", reader.get_guider_ids())
-        print("Data orientation: ", reader.view)
-        print("Guider data: ", reader.dataset)
-
-        # Create the plotter object
-        plotter = plotGuiderCCDStamps(reader)
-
-        # Plot the initial stamp
-        plotter.plot_stamp_array(stampNum=0, nStampsMax=10)
-
-        # Make a gif of the stamps
-        plotter.make_gif(nStampsMax=10, fps=5)
-
+        # The GuiderData class has all you need
+        print(10*'-----')
+        # The object now holds everything you need:
+        print("Guider detectors available :", guider.getGuiderNames())
+        print("Timestamp first value [MJD]:", guider.timestamps[0])
+        print("Header fields              :", guider.header)
+        print(10*'-----')
     """
 
     def __init__(
@@ -220,10 +237,11 @@ class GuiderDataReader:
             dayObs=dayObs,
             seqNum=seqNum,
             header=header,
-            roiAmpNames=roiAmpNames,
             timestamps=timestamps,
-            datasets=perDetectorData,
             view=self.view,
+            roiAmpNames=roiAmpNames,
+            guiderNameMap=self.guiderNameMap,
+            datasets=perDetectorData,
         )
         return guiderData
 
@@ -233,14 +251,12 @@ class GuiderDataReader:
             stamps = perDetectorData[detName]
             timestamps = []
             for i in range(len(stamps)):
-                # if stamps[i].metadata is not None and "STMPTMJD" in stamps[i].metadata:
                 mjd = stamps[i].metadata["STMPTMJD"]
                 timestamps.append(Time(mjd, format="mjd", scale="utc"))
             timestamps_all.append(timestamps)
-        # ascending list
-        timestamps = np.sort(np.unique(np.concatenate(timestamps_all)))
-        return timestamps.tolist()
-        
+        # ascending array
+        timestamps = np.unique(np.concatenate(timestamps_all)).tolist()
+        return timestamps
 
     def getDataForAllDetectors(self, dayObs: int, seqNum: int) -> dict[str, Stamps]:
         """Load the data from the butler for all guider detectors.
@@ -326,6 +342,7 @@ class GuiderDataReader:
     def guiderIds(self):
         """Get the ids of the guider detectors."""
         return list(self.guiderNameMap.values())
+
 
 # TODO: Timestamps
 def getGuiderStamps(
@@ -430,13 +447,13 @@ def getGuiderStamps(
         # this happens for exposures before 2025-06
         if raw_stamps[i].metadata is None:
             print(f"Warning: stamp {i} has no metadata, creating empty metadata")
-            timestamp = Time(md['GDSSTART'], format='isot', scale='utc') + (i / FREQ + DELAY) * u.second
+            timestamp = Time(md["GDSSTART"], format="isot", scale="utc") + (i / FREQ + DELAY) * u.second
 
             raw_stamps[i].metadata = md
             raw_stamps[i].metadata["DAQSTAMP"] = i
             raw_stamps[i].metadata["STMPTMJD"] = timestamp.mjd
 
-        stamp_list.append(Stamp(output_masked_im, archive_element,metadata=raw_stamps[i].metadata))
+        stamp_list.append(Stamp(output_masked_im, archive_element, metadata=raw_stamps[i].metadata))
 
     output_stamps = Stamps(stamp_list, md, use_archive=True)
     return output_stamps
