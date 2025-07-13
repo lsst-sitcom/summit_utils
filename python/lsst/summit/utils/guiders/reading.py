@@ -79,9 +79,13 @@ class GuiderData:
         """
         if detName not in self.datasets:
             raise ValueError(f"Detector {detName} not found in datasets.")
+
         stamps = self.datasets[detName]
         if stampNum >= len(stamps):
-            raise IndexError(f"Stamp number {stampNum} out of range for detector {detName}.")
+            print(f"Warning: Stamp number {stampNum} out of range for detector {detName}.")
+
+            return np.zeros((self.header["roi_rows"], self.header["roi_cols"]), dtype=float)
+
         return stamps[stampNum].stamp_im.image.array
 
     def getStackedStampArray(self, detName: str, is_isr: bool = False) -> np.ndarray:
