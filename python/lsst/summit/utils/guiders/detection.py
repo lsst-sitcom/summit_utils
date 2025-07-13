@@ -214,8 +214,6 @@ class GuiderStarTracker:
         amp_name = self.guider.getGuiderAmpName(guiderName)
 
         fwhm = self.psf_fwhm
-        # stamp_nums = self.guider.stampnums[guiderName]
-        # image_list = [self.guider.getStampArray(i - 1, detName=guiderName) for i in stamp_nums]
         image_list = self.guider.datasets[guiderName]
         rows = []
 
@@ -279,7 +277,7 @@ class GuiderStarTracker:
         """
         view = self.guider.view
         if view == "dvcs":
-            # Convert xcentroid/ycentroid to CCD pixels
+            # Convert xroi/yroi to CCD pixels
             stamps = self.guider.datasets[guiderName]
 
             # get CCD<->DVCS translation from the stamps
