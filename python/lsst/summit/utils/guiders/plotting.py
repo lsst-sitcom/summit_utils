@@ -26,6 +26,7 @@ import pandas as pd
 import seaborn as sns
 from astropy.stats import mad_std
 from matplotlib.patches import Circle
+from matplotlib import animation
 
 from lsst.summit.utils.guiders.reading import GuiderData
 
@@ -307,14 +308,14 @@ class GuiderPlotter:
             self.clear_axis_ticks(ax)
         return artists
 
-    def clear_axis_ticks(self, ax):
+    def clear_axis_ticks(self, ax) -> None:
         """Remove all ticks and tick labels from an axis."""
         ax.set_xticks([])
         ax.set_yticks([])
         ax.set_xticklabels([])
         ax.set_yticklabels([])
 
-    def annotate_detector(self, detname, ax):
+    def annotate_detector(self, detname, ax) -> plt.Text:
         """Annotate a detector panel with its name."""
         txt = ax.text(
             0.025,
@@ -329,7 +330,7 @@ class GuiderPlotter:
         )
         return txt
 
-    def annotate_center(self, stamp_num, ax, jitter=-1):
+    def annotate_center(self, stamp_num, ax, jitter=-1) -> plt.Text:
         """Annotate the center panel with exposure and stamp info."""
         self.clear_axis_ticks(ax)
         text = (
@@ -350,7 +351,7 @@ class GuiderPlotter:
         )
         return txt
 
-    def plot_circle(self, ax, xcen, ycen, radius=5, color="firebrick", lw=1.0):
+    def plot_circle(self, ax, xcen, ycen, radius=5, color="firebrick", lw=1.0) -> Circle:
         """
         Add a circular patch at (xcen, ycen) with given radius on the axis.
         """
@@ -358,7 +359,9 @@ class GuiderPlotter:
         ax.add_patch(circ)
         return circ
 
-    def make_gif(self, guider: GuiderData, n_stamp_max=60, fps=5, dpi=80, plo=90.0, phi=99.0, cutout_size=30):
+    def make_gif(
+        self, guider: GuiderData, n_stamp_max=60, fps=5, dpi=80, plo=90.0, phi=99.0, cutout_size=30
+    ) -> None:
         # the guider view should be 'dvcs'
         if guider.view != "dvcs":
             raise ValueError("Guider view must be 'dvcs' for mosaic GIF creation.")
@@ -486,7 +489,7 @@ class GuiderPlotter:
         return "\n".join(lines)
 
 
-def make_cutout(image, xcen, ycen, size=30):
+def make_cutout(image, xcen, ycen, size=30) -> np.ndarray:
     if xcen is not None:
         x0, x1 = int(xcen - size / 2.0), int(xcen + size / 2.0)
         y0, y1 = int(ycen - size / 2.0), int(ycen + size / 2.0)
@@ -496,7 +499,7 @@ def make_cutout(image, xcen, ycen, size=30):
     return cutout
 
 
-def plot_guide_circles(ax, center, radii, colors, labels=None, text_offset=1, **circle_kwargs):
+def plot_guide_circles(ax, center, radii, colors, labels=None, text_offset=1, **circle_kwargs) -> list:
     x0, y0 = center
     txt_list = []
     for i, r in enumerate(radii):
@@ -555,7 +558,7 @@ class GuiderMosaicPlotter:
             [".", "R00_SG0", "R04_SG1", "."],
         ]
 
-    def plot_stamp_ccd(self, raft_ccd_key, stamp_num=-1, axs=None, plo=10.0, phi=99.0):
+    def plot_stamp_ccd(self, raft_ccd_key, stamp_num=-1, axs=None, plo=10.0, phi=99.0) -> plt.AxesImage:
         if axs is None:
             axs = plt.gca()
             plt.title(f"{self.exp_id}")
@@ -578,7 +581,7 @@ class GuiderMosaicPlotter:
         axs.set_yticks([], minor=True)
         return im
 
-    def get_stamp_number_info(self, stamp_num=0):
+    def get_stamp_number_info(self, stamp_num=0) -> str:
         text = f"day_obs: {self.dayObs}" + "\n" + f"seq_num: {self.seqNum}" + "\n"
         text += f"orientation: {self.view}" + "\n"
         if stamp_num > 0:
@@ -587,7 +590,7 @@ class GuiderMosaicPlotter:
             text += f"Stacked Image w/ {self.n_stamps} stamps"
         return text
 
-    def plot_stamp_info(self, stamp_num=0, axs=None, more_text=None):
+    def plot_stamp_info(self, stamp_num=0, axs=None, more_text=None) -> plt.Text:
         if axs is None:
             axs = plt.gca()
 
@@ -615,7 +618,7 @@ class GuiderMosaicPlotter:
         self.stamp_id_more_text = more_text
         return stamp_id_text
 
-    def plot_text_ccd_name(self, detname, axs=None):
+    def plot_text_ccd_name(self, detname, axs=None) -> plt.Text:
         if axs is None:
             axs = plt.gca()
         txt = axs.text(
@@ -631,7 +634,7 @@ class GuiderMosaicPlotter:
         )
         return txt
 
-    def plot_stamp_array(self, stamp_num=0, fig=None, axs=None, plo=90.0, phi=99.0):
+    def plot_stamp_array(self, stamp_num=0, fig=None, axs=None, plo=90.0, phi=99.0) -> list:
         """Plot the stamp array for all the guiders.
         Args:
             stamp_num (int): stamp number
@@ -653,7 +656,7 @@ class GuiderMosaicPlotter:
         artists.append(stamp_info)
         return artists
 
-    def plot_stacked_stamp_array(self, fig=None, axs=None):
+    def plot_stacked_stamp_array(self, fig=None, axs=None) -> list:
         """Plot the stamp array for all the guiders.
         Args:
             stamp_num (int): stamp number
@@ -663,9 +666,7 @@ class GuiderMosaicPlotter:
         artists = self.plot_stamp_array(stamp_num=-1, fig=fig, axs=axs)
         return artists
 
-    def make_gif(self, n_stamp_max=10, fps=5, dpi=80):
-        from matplotlib import animation
-
+    def make_gif(self, n_stamp_max=10, fps=5, dpi=80) -> animation.ArtistAnimation:
         # Create the animation
         fig, axs = plt.subplot_mosaic(
             self.layout,
