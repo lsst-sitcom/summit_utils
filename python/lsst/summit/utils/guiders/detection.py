@@ -32,7 +32,7 @@ from astropy.stats import sigma_clipped_stats
 from lsst.obs.lsst import LsstCam
 from lsst.summit.utils.guiders.transformation import convert_pixels_to_altaz, pixel_to_focal
 from lsst.summit.utils.guiders.reading import GuiderReader
-from lsst.summit.utils.guider.reading import GuiderData
+from lsst.summit.utils.guiders.reading import GuiderData
 
 DEFAULT_COLUMNS = [
     "xroi",
@@ -51,7 +51,7 @@ DEFAULT_COLUMNS = [
     "az_ref",
     "detector",
     "detid",
-    "amp_name",
+    "ampname",
     "expid",
     "starid",
     "stamp",
@@ -121,10 +121,6 @@ class GuiderStarTracker:
 
         # initialize outputs
         self.stars = pd.DataFrame(columns=DEFAULT_COLUMNS)
-        # self.output_catalog = pd.DataFrame(columns=DEFAULT_COLUMNS)
-
-        # compute amplifier offset
-        # self.get_amplifier_lowest_corner()
 
     # STOPPED HERE: SAT, 12, JULY, 2025
     def track_guider_stars(self, ref_catalog: None | pd.DataFrame = None) -> pd.DataFrame:
@@ -188,7 +184,7 @@ class GuiderStarTracker:
         ----------
         ref : pd.DataFrame
             One-row DataFrame with reference star info for this guider.
-            Must contain columns 'xroi', 'yroi', 'star_id'.
+            Must contain columns 'xroi', 'yroi', 'starid'.
         guiderName : str
             Name of the guider (e.g., 'R22_S11').
         Returns
@@ -197,7 +193,7 @@ class GuiderStarTracker:
             DataFrame with one row per stamp where the star was detected,
             or None if the star was not detected in any stamp.
             Columns include:
-              - star_id, stamp, ampName, filter
+              - starid, stamp, ampname, filter
               - xroi, yroi (centroid in roi coordinates)
               - xccd, yccd (centroid in CCD pixel coordinates)
               - xfp, yfp (centroid in focal plane coordinates)
@@ -209,22 +205,31 @@ class GuiderStarTracker:
             returns None.
 
         """
-        # rows = []
-        # # Pull ref-catalog row
-        ref_x, ref_y = ref["xroi"], ref["yroi"]
-        star_id = ref["starid"]
+        if ref.empty:
+            return pd.DataFrame(columns=DEFAULT_COLUMNS)  # no reference star for this guider
+
+        # Pull ref-catalog row
+        ref_x, ref_y = ref["xroi"].iloc[0], ref["yroi"].iloc[0]
+        starid = ref["starid"].iloc[0]
         amp_name = self.guider.getGuiderAmpName(guiderName)
 
         fwhm = self.psf_fwhm
-        image_list = [self.guider.getStampArray(i, detName=guiderName) for i in range(self.n_stamps)]
+        # stamp_nums = self.guider.stampnums[guiderName]
+        # image_list = [self.guider.getStampArray(i - 1, detName=guiderName) for i in stamp_nums]
+        image_list = self.guider.datasets[guiderName]
         rows = []
 
         # --- per‐stamp measurements ---
-        # Skip first stamp (shutter opening)
-        for si in range(1, self.n_stamps):
-            stamp = image_list[si]
-            isr = stamp - np.nanmedian(stamp, axis=0)
+        for i, stampObject in enumerate(image_list):
+            si = stampObject.metadata.get("DAQSTAMP", i)
+            stamp = stampObject.stamp_im.image.array
 
+            # Skip first stamp (shutter opening)
+            if si == 0:
+                continue
+
+            # make isr and cutout
+            isr = stamp - np.nanmedian(stamp, axis=0)
             cutout = Cutout2D(isr, (ref_x, ref_y), size=50, mode="partial", fill_value=np.nan)
 
             _, median, std = sigma_clipped_stats(cutout.data, sigma=3.0)
@@ -236,9 +241,9 @@ class GuiderStarTracker:
                 # No sources detected in this stamp, skip it
                 continue
 
-            sources["starid"] = star_id
+            sources["starid"] = starid
             sources["stamp"] = si
-            sources["ampName"] = amp_name
+            sources["ampname"] = amp_name
             sources["filter"] = self.guider.header["filter"]
 
             # Centroid in amplifier roi coordinates
@@ -258,7 +263,6 @@ class GuiderStarTracker:
             sources["alt"] = alt
             sources["az"] = az
             sources["detector"] = guiderName
-
             rows.append(sources.iloc[0])
 
         df = pd.DataFrame(rows)
@@ -268,7 +272,7 @@ class GuiderStarTracker:
             return df
 
     def convert_if_dvcs_to_ccd(
-        self, x_ccd: np.ndarray, y_ccd: np.ndarray, guiderName: str
+        self, x_dvcs: np.ndarray, y_dvcs: np.ndarray, guiderName: str
     ) -> tuple[np.ndarray, np.ndarray]:
         """
         Check if xccd/yccd CCD pixels are in DVCS coordinates system.
@@ -281,12 +285,12 @@ class GuiderStarTracker:
             # get CCD<->DVCS translation from the stamps
             _, _, dvcs = stamps.getArchiveElements()[0]
 
-            x_ccd, y_ccd = dvcs(x_ccd, y_ccd)
+            x_ccd, y_ccd = dvcs(x_dvcs, y_dvcs)
             return x_ccd, y_ccd
 
         elif view == "ccd":
             # No conversion needed for CCD view
-            return x_ccd, y_ccd
+            return x_dvcs, y_dvcs
 
         else:
             raise ValueError(f"Unknown guider view '{view}'. Expected 'dvcs' or 'ccd'.")
@@ -295,8 +299,8 @@ class GuiderStarTracker:
         # 1) Build a detector→index map (0,1,2,…)
         det_map = self.guider.guiderNameMap
 
-        # 2) Create a numeric “global” star_id:
-        #    global_id = det_index * 10000 + local star_id
+        # 2) Create a numeric “global” starid:
+        #    global_id = det_index * 10000 + local starid
         stars["detid"] = stars["detector"].map(det_map)
         stars["trackid"] = stars["starid"] * 100 + stars["stamp"]
         stars["expid"] = self.guider.header["expid"]
@@ -341,7 +345,7 @@ class GuiderStarTracker:
         """
         if len(xccd) > 0:
             detNum = self.guider.getGuiderDetNum(detName)
-            detector = LsstCam.get.getCamera()[detNum]
+            detector = LsstCam.getCamera()[detNum]
             # Convert the star positions to focal plane coordinates
             xfp, yfp = pixel_to_focal(xccd, yccd, detector)
         else:
@@ -371,6 +375,7 @@ class GuiderStarTracker:
 
         return alt, az
 
+    # TODO: Double-check this conversion
     def convert_roi_to_ccd(self, df: pd.DataFrame, guiderName: str) -> tuple[np.ndarray, np.ndarray]:
         """
         Convert roi coordinates to CCD pixel coordinates.
@@ -390,7 +395,8 @@ class GuiderStarTracker:
         if df.empty:
             return np.array([]), np.array([])
 
-        min_x, min_y = self.guider.getGuiderAmpMinXY(guiderName)
+        # min_x, min_y = self.guider.getGuiderAmpMinXY(guiderName)
+        min_x, min_y = 0.0, 0.0
         xccd = df["xroi"].to_numpy() + min_x
         yccd = df["yroi"].to_numpy() + min_y
 
@@ -539,7 +545,6 @@ def run_sextractor(
     aperture_radius: float = 5,
     max_ellipticity: float = 0.1,
     gain: float = 1.0,
-    mask: np.ndarray | None = None,
 ) -> pd.DataFrame:
     """
     Vectorized SEP photometry with centroid errors, outputs a pandas DataFrame.
@@ -560,7 +565,7 @@ def run_sextractor(
         img_sub = img_clean - median
 
     # Detection
-    objects = sep.extract(img_sub, th, err=std, mask=bad_mask | mask)
+    objects = sep.extract(img_sub, th, err=std, mask=bad_mask)
     if len(objects) == 0:
         return pd.DataFrame()
 
@@ -570,7 +575,7 @@ def run_sextractor(
     ixx_err, iyy_err, ixy_err = objects["errx2"], objects["erry2"], objects["errxy"]
 
     flux, fluxerr, _ = sep.sum_circle(
-        img_clean, xcen, ycen, aperture_radius, err=std, mask=bad_mask | mask, gain=gain
+        img_clean, xcen, ycen, aperture_radius, err=std, mask=bad_mask, gain=gain
     )
     fwhm = 2.355 * np.sqrt(0.5 * (ixx + iyy))
 
@@ -669,7 +674,7 @@ def build_reference_catalog(
         sources.reset_index(drop=True, inplace=True)
 
         # pick the brightest source only
-        bright = sources.iloc[[0]]
+        bright = sources.iloc[[0]].copy()
 
         detNum = guider.getGuiderDetNum(guiderName)
         bright["detector"] = guiderName
@@ -687,7 +692,7 @@ def build_reference_catalog(
 if __name__ == "__main__":
     from lsst.daf.butler import Butler
 
-    butler = Butler("embargo", collections="LSSTCam/raw/guider")
+    butler = Butler("embargo", collections=["LSSTCam/raw/guider", "LSSTCam/raw/all"])
 
     seqNum, dayObs = 461, 20250425
     reader = GuiderReader(butler, view="dvcs", verbose=True)
@@ -695,11 +700,10 @@ if __name__ == "__main__":
 
     star_tracker = GuiderStarTracker(guider, psf_fwhm=6.0)
     stars = star_tracker.track_guider_stars(ref_catalog=None)
-    print(f"Tracked {len(stars)} stars in {len(stars['star_id'].unique())} unique stars.")
+
+    print(f"Tracked {len(stars)} stars in {len(stars['starid'].unique())} unique stars.")
     stars.to_csv(f"tracked_stars_{dayObs}_{seqNum:06d}.csv", index=False)
     print(f"Wrote tracked stars to tracked_stars_{dayObs}_{seqNum:06d}.csv")
+
     print(stars.head())
-    print(stars.columns)
-    print(stars.describe())
     print(stars.groupby("detector").size())
-    print(stars.groupby("starid").size().describe())
