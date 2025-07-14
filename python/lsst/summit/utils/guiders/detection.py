@@ -30,7 +30,6 @@ import pandas as pd
 from astropy.nddata import Cutout2D
 from astropy.stats import sigma_clipped_stats
 
-# from lsst.obs.lsst.cameraTransforms import LsstCameraTransforms
 from lsst.obs.lsst import LsstCam
 from lsst.summit.utils.guiders.reading import GuiderReader
 from lsst.summit.utils.guiders.transformation import convert_pixels_to_altaz, pixel_to_focal
@@ -226,7 +225,15 @@ class GuiderStarTracker:
 
         # --- per‐stamp measurements ---
         for i, stampObject in enumerate(image_list):
-            si = stampObject.metadata.get("DAQSTAMP", i)
+            if not (si := stampObject.metadata.get("DAQSTAMP")):
+                self.log.warning(
+                    (
+                        f"Stamp {i} in {guiderName} has no DAQSTAMP metadata,",
+                        " defaulting to using position in list instead.",
+                    )
+                )
+                si = i
+
             stamp = stampObject.stamp_im.image.array
 
             # Skip first stamp (shutter opening)
