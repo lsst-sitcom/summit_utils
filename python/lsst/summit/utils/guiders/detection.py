@@ -557,6 +557,10 @@ def run_sextractor(
     """
     import sep
 
+    # from lsst.summit.utils.utils import detectObjectsInExp,
+    #   fluxesFromFootprints
+    # import galsim
+    # galsim.hsm.FindAdaptiveMom(galsim.Image(array))
     # Mask bad pixels
     bad_mask = ~np.isfinite(img) | (img < 0)
     img_clean = np.where(bad_mask, 0.0, img)
