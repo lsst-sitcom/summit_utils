@@ -22,6 +22,7 @@ from __future__ import annotations
 
 __all__ = ["GuiderStarTracker"]
 
+import logging
 from typing import TYPE_CHECKING, Any
 
 import numpy as np
@@ -105,15 +106,16 @@ class GuiderStarTracker:
 
     def __init__(
         self,
-        guider: GuiderData,
+        guiderData: GuiderData,
         psf_fwhm: float = 6.0,
         min_snr: float = 3.0,
         min_stamp_detections: int = 30,
         edge_margin: int = 20,
         max_ellipticity: float = 0.2,
     ) -> None:
-        self.guider = guider
-        self.n_stamps = len(self.guider.timestamps)
+        self.log = logging.getLogger(__name__)
+        self.guiderData = guiderData
+        self.n_stamps = len(self.guiderData.timestamps)
 
         # detection and QC parameters
         self.psf_fwhm = psf_fwhm
@@ -142,15 +144,16 @@ class GuiderStarTracker:
             including positions, fluxes, and residual offsets.
         """
         if ref_catalog is None:
+            self.log.info("Using self-generated refcat")
             ref_catalog = build_reference_catalog(
-                self.guider,
+                self.guiderData,
                 min_snr=self.min_snr,
                 edge_margin=self.edge_margin,
                 aperture_radius=self.psf_fwhm,
                 max_ellipticity=self.max_ellipticity,
             )
         tracked_star_tables = []
-        for guiderName in self.guider.getGuiderNames():
+        for guiderName in self.guiderData.getGuiderNames():
             ref = ref_catalog[ref_catalog["detector"] == guiderName].copy()
             if len(ref) > 1:
                 raise ValueError(f"Multiple rows found for guider {guiderName} in the reference catalog.")
@@ -162,6 +165,7 @@ class GuiderStarTracker:
             tracked_star_catalog = pd.concat(tracked_star_tables, ignore_index=True)
 
         else:
+            self.log.warning("No stars detected in any guider. Returning empty catalog.")
             tracked_star_catalog = pd.DataFrame(columns=DEFAULT_COLUMNS)
             return tracked_star_catalog
 
@@ -214,10 +218,10 @@ class GuiderStarTracker:
         # Pull ref-catalog row
         ref_x, ref_y = ref["xroi"].iloc[0], ref["yroi"].iloc[0]
         starid = ref["starid"].iloc[0]
-        amp_name = self.guider.getGuiderAmpName(guiderName)
+        amp_name = self.guiderData.getGuiderAmpName(guiderName)
 
         fwhm = self.psf_fwhm
-        image_list = self.guider.datasets[guiderName]
+        image_list = self.guiderData.datasets[guiderName]
         rows = []
 
         # --- per‐stamp measurements ---
@@ -245,7 +249,7 @@ class GuiderStarTracker:
             sources["starid"] = starid
             sources["stamp"] = si
             sources["ampname"] = amp_name
-            sources["filter"] = self.guider.header["filter"]
+            sources["filter"] = self.guiderData.header["filter"]
 
             # Centroid in amplifier roi coordinates
             sources["xroi"] += cutout.xmin_original
@@ -254,7 +258,7 @@ class GuiderStarTracker:
             # Convert roi to ccd/focal-plane and alt/az coordinates
             xccd, yccd = self.convert_roi_to_ccd(sources, guiderName)
             xfp, yfp = self.convert_to_focal_plane(xccd, yccd, guiderName)
-            alt, az = self.convert_to_altaz(xccd, yccd, self.guider.wcs)
+            alt, az = self.convert_to_altaz(xccd, yccd, self.guiderData.wcs)
 
             # Add reference positions
             sources["xccd"] = xccd
@@ -278,10 +282,10 @@ class GuiderStarTracker:
         """
         Check if xccd/yccd CCD pixels are in DVCS coordinates system.
         """
-        view = self.guider.view
+        view = self.guiderData.view
         if view == "dvcs":
             # Convert xroi/yroi to CCD pixels
-            stamps = self.guider.datasets[guiderName]
+            stamps = self.guiderData.datasets[guiderName]
 
             # get CCD<->DVCS translation from the stamps
             _, _, dvcs = stamps.getArchiveElements()[0]
@@ -298,14 +302,14 @@ class GuiderStarTracker:
 
     def set_unique_id(self, stars) -> pd.DataFrame:
         # 1) Build a detector→index map (0,1,2,…)
-        det_map = self.guider.guiderNameMap
+        det_map = self.guiderData.guiderNameMap
 
         # 2) Create a numeric “global” starid:
         #    global_id = det_index * 10000 + local starid
         stars["detid"] = stars["detector"].map(det_map)
-        stars["trackid"] = stars["starid"] * 100 + stars["stamp"]
-        stars["expid"] = self.guider.header["expid"]
-        stars["filter"] = self.guider.header["filter"]
+        stars["trackid"] = stars["starid"] * 1000 + stars["stamp"]
+        stars["expid"] = self.guiderData.header["expid"]
+        stars["filter"] = self.guiderData.header["filter"]
         return stars
 
     def compute_offsets(self, stars: pd.DataFrame) -> pd.DataFrame:
@@ -345,7 +349,7 @@ class GuiderStarTracker:
         Convert the star positions to focal plane coordinates.
         """
         if len(xccd) > 0:
-            detNum = self.guider.getGuiderDetNum(detName)
+            detNum = self.guiderData.getGuiderDetNum(detName)
             detector = LsstCam.getCamera()[detNum]
             # Convert the star positions to focal plane coordinates
             xfp, yfp = pixel_to_focal(xccd, yccd, detector)
@@ -367,7 +371,7 @@ class GuiderStarTracker:
             WCS object for the guider detector.
         """
         nmid = self.n_stamps // 2
-        obs_time = self.guider.timestamps[nmid]
+        obs_time = self.guiderData.timestamps[nmid]
 
         if len(xccd) > 0:
             alt, az = convert_pixels_to_altaz(wcs, obs_time, xccd, yccd)
@@ -396,7 +400,7 @@ class GuiderStarTracker:
         if df.empty:
             return np.array([]), np.array([])
 
-        # min_x, min_y = self.guider.getGuiderAmpMinXY(guiderName)
+        # min_x, min_y = self.guiderData.getGuiderAmpMinXY(guiderName)
         min_x, min_y = 0.0, 0.0
         xccd = df["xroi"].to_numpy() + min_x
         yccd = df["yroi"].to_numpy() + min_y
