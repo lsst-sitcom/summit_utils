@@ -20,6 +20,8 @@
 # along with this program.  If not, see <https://www.gnu.org/licenses/>.
 from __future__ import annotations
 
+from typing import Any, cast, Optional
+
 import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
@@ -43,29 +45,24 @@ class GuiderPlotter:
     }
 
     # for plotting
-    LAYOUT = [
-        [".", "R40_SG1", "R44_SG0", "."],
-        ["R40_SG0", "center", ".", "R44_SG1"],
-        ["R00_SG1", ".", ".", "R04_SG0"],
-        [".", "R00_SG0", "R04_SG1", "."],
+    LAYOUT: list[tuple[str, ...]] = [
+        (".", "R40_SG1", "R44_SG0", "."),
+        ("R40_SG0", "center", ".", "R44_SG1"),
+        ("R00_SG1", ".", ".", "R04_SG0"),
+        (".", "R00_SG0", "R04_SG1", "."),
     ]
-
     DETNAMES = [cell for row in LAYOUT for cell in row if (cell != ".") & (cell != "center")]
 
     COLOR_MAP = ["black", "firebrick", "grey", "lightgrey"]
     MARKERS = [".", "x", "+", "s", "o", "^"]
 
     def __init__(
-        self, stars_df: pd.DataFrame, stats_df: pd.DataFrame | None = None, expid: int = None
+        self, stars_df: pd.DataFrame, expid: Optional[int] = None
     ) -> None:
         self.exp_id = expid if expid else stars_df["expid"].iloc[0]
         self.stars_df = stars_df[stars_df["expid"] == self.exp_id]
-
-        if stats_df is None:
-            self.stats_df = self.assemble_stats()
-        else:
-            self.stats_df = stats_df
-
+        self.stats_df = self.assemble_stats()
+    
         sns.set_style("white")
         sns.set_context("talk", font_scale=0.8)
 
@@ -130,7 +127,8 @@ class GuiderPlotter:
         print(self.format_photometric_summary(filtered_stats_df))
 
     def strip_plot(self, plot_type: str = "centroidAltAz") -> None:
-        plot_kwargs = {
+        # plot_kwargs dtype is dict[str, Any]
+        plot_kwargs: dict[str, dict] = {
             "centroidAltAz": {
                 "ylabel": "Centroid Offset [arcsec]",
                 "col": ["dalt", "daz"],
@@ -153,8 +151,8 @@ class GuiderPlotter:
             },
             "psf": {"ylabel": "PSF FWHM [arcsec]", "col": ["fwhm"], "scale": 0.2, "title": "PSF FWHM"},
         }
-        cfg = plot_kwargs[plot_type]
-        scale = cfg.get("scale", 1.0)
+        cfg = plot_kwargs[plot_type]  # type: dict[str, Any]
+        scale = cfg.get("scale", 1.0) # type: float
         cols = cfg["col"]
 
         # filter and prepare
@@ -229,7 +227,7 @@ class GuiderPlotter:
             else:
                 centroids[det] = (None, None)
         self.centroids = centroids
-        pass
+        return centroids
 
     def load_image(self, guider: GuiderData, detname: str, stamp_num: int = 2) -> np.ndarray:
         # read full stamp
@@ -260,7 +258,7 @@ class GuiderPlotter:
         if fig is None:
             gs = dict(hspace=0.0, wspace=0.0)
             fig, axs = plt.subplot_mosaic(
-                self.LAYOUT, figsize=(9.5, 9.5), gridspec_kw=gs, constrained_layout=False
+                cast(Any, self.LAYOUT), figsize=(9.5, 9.5), gridspec_kw=gs, constrained_layout=False
             )
 
         if not hasattr(self, "centroids"):
@@ -361,7 +359,7 @@ class GuiderPlotter:
 
     def make_gif(
         self, guider: GuiderData, n_stamp_max=60, fps=5, dpi=80, plo=90.0, phi=99.0, cutout_size=30
-    ) -> None:
+    ) -> animation.ArtistAnimation:
         # the guider view should be 'dvcs'
         if guider.view != "dvcs":
             raise ValueError("Guider view must be 'dvcs' for mosaic GIF creation.")
@@ -369,9 +367,10 @@ class GuiderPlotter:
         from matplotlib import animation
 
         # build canvas
-        fig, axs = plt.subplot_mosaic(
-            self.LAYOUT, figsize=(10, 10), gridspec_kw=dict(hspace=0.0, wspace=0.0), constrained_layout=False
+        fig, axs  = plt.subplot_mosaic(
+            cast(Any, self.LAYOUT), figsize=(10, 10), gridspec_kw=dict(hspace=0.0, wspace=0.0), constrained_layout=False
         )
+
         # number of frames
         n_stamps = len(guider.timestamps)
         total = min(n_stamps, n_stamp_max)
@@ -766,7 +765,7 @@ def measure_std_centroid_stats(stars: pd.DataFrame) -> pd.DataFrame:
     return std_centroid_stats
 
 
-def measure_photometric_variation(stars: pd.DataFrame) -> tuple[pd.DataFrame, dict]:
+def measure_photometric_variation(stars: pd.DataFrame) -> dict[str, float]:
     """
     Fit magoffset vs time across all rows, compute drift rate,
       zero-point, and RMS scatter,
