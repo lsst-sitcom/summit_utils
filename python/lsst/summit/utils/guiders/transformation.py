@@ -30,6 +30,11 @@ __all__ = [
     "focal_to_pixel",
     "pixel_to_focal",
     "amp_to_ccdview",
+    "convert_focal_to_altaz",
+    "convert_pixels_to_altaz",
+    "convert_to_focal_plane",
+    "convert_roi_to_ccd",
+    "convert_ccd_to_roi",
 ]
 
 from typing import TYPE_CHECKING, Any
@@ -165,7 +170,10 @@ def mk_rot(det_nquarter: int, direction: int = 1) -> AffineTransform:
     return rotation
 
 
-def mk_ccd_to_dvcs(bbox_ccd: Box2I, det_nquarter: int) -> tuple[AffineTransform, AffineTransform]:
+def mk_ccd_to_dvcs(
+    bbox_ccd: Box2I,
+    det_nquarter: int,
+) -> tuple[AffineTransform, AffineTransform]:
     """
     Make transformations suitable for Guider stamps, to go from a view of the
     stamp in CCD pixel coordinates (ie. with 0,0 in the Lower Left of C00) to
@@ -234,7 +242,8 @@ def mk_ccd_to_dvcs(bbox_ccd: Box2I, det_nquarter: int) -> tuple[AffineTransform,
     ftranslation = AffineTransform.makeTranslation(-llpt_ccd)
     frotation = AffineTransform(rot[nq])
     fboxtranslation = AffineTransform.makeTranslation(boxtranslation[nq])
-    forwards = fboxtranslation * frotation * ftranslation  # ordering is third*second*first
+    # ordering is third*second*first
+    forwards = fboxtranslation * frotation * ftranslation
 
     btranslation = AffineTransform.makeTranslation(llpt_ccd)
     brotation = AffineTransform(irot[nq])
@@ -623,3 +632,47 @@ def convert_roi_to_ccd(
         raise ValueError(f"Unsupported view '{view}' in convert_roi_to_ccd", "must be 'ccd' or 'dvcs'")
 
     return xccd, yccd
+
+
+def convert_ccd_to_roi(
+    xccd: np.ndarray, yccd: np.ndarray, guiderData: GuiderData, guiderName: str
+) -> tuple[np.ndarray, np.ndarray]:
+    """
+    Convert CCD pixel coordinates to ROI coordinates.
+
+    Parameters
+    ----------
+    xccd : np.ndarray
+        Array of x CCD pixel coordinates.
+    yccd : np.ndarray
+        Array of y CCD pixel coordinates.
+    guiderData : GuiderData
+        GuiderData object containing the guider datasets and view information.
+    guiderName : str
+        Name of the guider (e.g., 'R44_SG0', etc.)
+
+    Returns
+    -------
+    xroi, yroi : np.ndarray
+        Arrays of ROI pixel coordinates.
+    """
+    view = guiderData.view
+    stamps = guiderData.datasets[guiderName]
+
+    if len(xccd) == 0:
+        return np.array([]), np.array([])
+
+    box, ccd2roi, _ = stamps.getArchiveElements()[0]
+
+    if view == "ccd":
+        lower_left_corner = box.getMin()
+        xmin, ymin = lower_left_corner.getX(), lower_left_corner.getY()
+        xroi, yroi = xccd - xmin, yccd - ymin
+
+    elif view == "dvcs":
+        xroi, yroi = ccd2roi(xccd, yccd)
+
+    else:
+        raise ValueError(f"Unsupported view '{view}' in convert_ccd_to_roi", "must be 'ccd' or 'dvcs'")
+
+    return xroi, yroi
