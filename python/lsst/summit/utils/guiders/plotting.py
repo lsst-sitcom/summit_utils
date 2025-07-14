@@ -56,13 +56,11 @@ class GuiderPlotter:
     COLOR_MAP = ["black", "firebrick", "grey", "lightgrey"]
     MARKERS = [".", "x", "+", "s", "o", "^"]
 
-    def __init__(
-        self, stars_df: pd.DataFrame, expid: Optional[int] = None
-    ) -> None:
+    def __init__(self, stars_df: pd.DataFrame, expid: Optional[int] = None) -> None:
         self.exp_id = expid if expid else stars_df["expid"].iloc[0]
         self.stars_df = stars_df[stars_df["expid"] == self.exp_id]
         self.stats_df = self.assemble_stats()
-    
+
         sns.set_style("white")
         sns.set_context("talk", font_scale=0.8)
 
@@ -152,7 +150,7 @@ class GuiderPlotter:
             "psf": {"ylabel": "PSF FWHM [arcsec]", "col": ["fwhm"], "scale": 0.2, "title": "PSF FWHM"},
         }
         cfg = plot_kwargs[plot_type]  # type: dict[str, Any]
-        scale = cfg.get("scale", 1.0) # type: float
+        scale = cfg.get("scale", 1.0)  # type: float
         cols = cfg["col"]
 
         # filter and prepare
@@ -367,8 +365,11 @@ class GuiderPlotter:
         from matplotlib import animation
 
         # build canvas
-        fig, axs  = plt.subplot_mosaic(
-            cast(Any, self.LAYOUT), figsize=(10, 10), gridspec_kw=dict(hspace=0.0, wspace=0.0), constrained_layout=False
+        fig, axs = plt.subplot_mosaic(
+            cast(Any, self.LAYOUT),
+            figsize=(10, 10),
+            gridspec_kw=dict(hspace=0.0, wspace=0.0),
+            constrained_layout=False,
         )
 
         # number of frames
