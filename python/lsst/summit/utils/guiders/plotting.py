@@ -31,6 +31,7 @@ from matplotlib import animation
 from matplotlib.patches import Circle
 
 from lsst.summit.utils.guiders.reading import GuiderData
+from lsst.summit.utils.guiders.transformation import convert_ccd_to_roi
 
 __all__ = ["GuiderMosaicPlotter", "GuiderPlotter"]
 
@@ -142,12 +143,12 @@ class GuiderPlotter:
                 "col": ["magoffset"],
                 "title": "Flux Magnitude Offsets",
             },
-            "secondMoments": {
-                "ylabel": "Second Moments [pixels²]",
-                "col": ["ixx", "iyy"],
-                "title": "Second Moments",
+            "psf": {
+                "ylabel": "PSF FWHM [arcsec]",
+                "col": ["fwhm"],
+                "scale": 0.2,
+                "title": "PSF FWHM",
             },
-            "psf": {"ylabel": "PSF FWHM [arcsec]", "col": ["fwhm"], "scale": 0.2, "title": "PSF FWHM"},
         }
         cfg = plot_kwargs[plot_type]  # type: dict[str, Any]
         scale = cfg.get("scale", 1.0)  # type: float
@@ -155,6 +156,13 @@ class GuiderPlotter:
 
         # filter and prepare
         df = self.stars_df[self.stars_df["stamp"] > 0][["stamp"] + cols].copy()
+
+        # Compute overall mean and sigma for y-axis limits
+        all_data = df[cols].values.flatten()
+        all_data *= scale
+        mean_val = np.nanmean(all_data)
+        sigma_val = np.nanstd(all_data)
+        ylims = (mean_val - 5 * sigma_val, mean_val + 5 * sigma_val)
 
         # setup subplots
         n = len(cols)
@@ -192,13 +200,13 @@ class GuiderPlotter:
             )
             ax.set_ylabel(cfg["ylabel"])
             ax.set_xlabel("# stamp")
+            ax.set_ylim(*ylims)  # <-- Set y-axis limits here
             ax.legend(fontsize=12, loc="upper right")
 
             # top axis for elapsed time
             xstampers = np.arange(0, max_stamp + 10, 10)
             ax.set_xticks(xstampers)
             ax2 = ax.twiny()
-            # xt = ax.get_xticks()
             elapsed = 15.0 * xstampers / max_stamp
             ax2.set_xticks(xstampers)
             ax2.set_xticklabels([f"{e:.1f}" for e in elapsed])
@@ -206,24 +214,29 @@ class GuiderPlotter:
 
         fig.suptitle(cfg["title"], fontsize=14, fontweight="bold")
         fig.tight_layout()
-        # plt.show()
+        # return fig
 
-    def select_best_star(self) -> dict:
+    def select_best_star(self, guiderData: GuiderData) -> dict[str, tuple[np.ndarray, np.ndarray]]:
         """
-        Build a dict mapping each detector to the centroid of the star with
-        highest SNR. If no stars for a detector, value is (None, None).
+        Convert the best star centroid in each guider to ROI coordinates.
+
+        The conversion depends on the guider view (dvcs, ccd, etc).
+
         Returns:
             centroids: dict of {detector: (xroi, yroi)}
         """
-        centroids = {}
-        detectors = self.DETNAMES
-        for det in detectors:
+        centroids: dict[str, tuple[np.ndarray, np.ndarray]] = {}
+        for det in self.DETNAMES:
             sub = self.stars_df[self.stars_df["detector"] == det]
             if len(sub) > 0:
                 best = sub.loc[sub["snr"].idxmax()]
-                centroids[det] = (best["xroi"].mean(), best["yroi"].mean())
+                xccd = np.array([best["xccd_ref"]])
+                yccd = np.array([best["yccd_ref"]])
+
+                args = (xccd, yccd, guiderData, det)
+                centroids[det] = convert_ccd_to_roi(*args)
             else:
-                centroids[det] = (None, None)
+                centroids[det] = (np.array([]), np.array([]))
         self.centroids = centroids
         return centroids
 
@@ -240,7 +253,14 @@ class GuiderPlotter:
             return img - np.nanmedian(img, axis=0)
 
     def star_mosaic(
-        self, guider: GuiderData, stamp_num: int = 2, fig=None, axs=None, plo=90.0, phi=99.0, cutout_size=30
+        self,
+        guiderData: GuiderData,
+        stamp_num: int = 2,
+        fig: Optional[plt.Figure] = None,
+        axs=None,
+        plo=90.0,
+        phi=99.0,
+        cutout_size=30,
     ) -> list:
         """Plot the stamp array for all the guiders.
         Args:
@@ -250,23 +270,26 @@ class GuiderPlotter:
             axs (matplotlib.axes.Axes): axes object
         """
         # the guider view should be 'dvcs'
-        if guider.view != "dvcs":
+        if guiderData.view != "dvcs":
             raise ValueError("Guider view must be 'dvcs' for mosaic plotting.")
 
         if fig is None:
             gs = dict(hspace=0.0, wspace=0.0)
             fig, axs = plt.subplot_mosaic(
-                cast(Any, self.LAYOUT), figsize=(9.5, 9.5), gridspec_kw=gs, constrained_layout=False
+                cast(Any, self.LAYOUT),
+                figsize=(9.5, 9.5),
+                gridspec_kw=gs,
+                constrained_layout=False,
             )
 
         if not hasattr(self, "centroids"):
-            self.select_best_star()
+            self.select_best_star(guiderData)
 
         artists = []
         for detname in self.DETNAMES:
             xcen, ycen = self.centroids.get(detname, (None, None))
 
-            img = self.load_image(guider, detname, stamp_num)
+            img = self.load_image(guiderData, detname, stamp_num)
             cutout = make_cutout(img, xcen, ycen, size=cutout_size)
             vmin, vmax = np.nanpercentile(cutout, plo), np.nanpercentile(cutout, phi)
 
@@ -286,9 +309,9 @@ class GuiderPlotter:
                 axs_img,
                 center,
                 radii=[5, 10],
-                colors=["firebrick", "firebrick"],
+                colors=["#6495ED", "#6495ED"],
                 labels=["1″", "2″"],
-                linewidth=1,
+                linewidth=2.0,
             )
 
             artists.extend([im_object, txt_object])
@@ -343,7 +366,7 @@ class GuiderPlotter:
             ha="center",
             va="center",
             fontsize=14,
-            color="firebrick",
+            color="grey",
         )
         return txt
 
@@ -351,12 +374,26 @@ class GuiderPlotter:
         """
         Add a circular patch at (xcen, ycen) with given radius on the axis.
         """
-        circ = Circle((xcen, ycen), radius=radius, edgecolor=color, facecolor="none", lw=lw, ls="--")
+        circ = Circle(
+            (xcen, ycen),
+            radius=radius,
+            edgecolor=color,
+            facecolor="none",
+            lw=lw,
+            ls="--",
+        )
         ax.add_patch(circ)
         return circ
 
     def make_gif(
-        self, guider: GuiderData, n_stamp_max=60, fps=5, dpi=80, plo=90.0, phi=99.0, cutout_size=30
+        self,
+        guider: GuiderData,
+        n_stamp_max=60,
+        fps=5,
+        dpi=80,
+        plo=90.0,
+        phi=99.0,
+        cutout_size=30,
     ) -> animation.ArtistAnimation:
         # the guider view should be 'dvcs'
         if guider.view != "dvcs":
@@ -379,7 +416,13 @@ class GuiderPlotter:
         print("Number of stamps: ", total)
         # initial (stacked) frame
         artists0 = self.star_mosaic(
-            guider, stamp_num=-1, fig=fig, axs=axs, plo=plo, phi=phi, cutout_size=cutout_size
+            guider,
+            stamp_num=-1,
+            fig=fig,
+            axs=axs,
+            plo=plo,
+            phi=phi,
+            cutout_size=cutout_size,
         )
 
         frames = 2 * [artists0]
@@ -387,7 +430,13 @@ class GuiderPlotter:
         # sequential stamps
         for i in range(1, total):
             artists = self.star_mosaic(
-                guider, stamp_num=i, fig=fig, axs=axs, plo=plo, phi=phi, cutout_size=cutout_size
+                guider,
+                stamp_num=i,
+                fig=fig,
+                axs=axs,
+                plo=plo,
+                phi=phi,
+                cutout_size=cutout_size,
             )
             frames.append(artists)
         frames += 2 * [artists0]
@@ -503,10 +552,24 @@ def plot_guide_circles(ax, center, radii, colors, labels=None, text_offset=1, **
     x0, y0 = center
     txt_list = []
     for i, r in enumerate(radii):
-        c = Circle((x0, y0), r, edgecolor=colors[i], facecolor="none", linestyle="--", **circle_kwargs)
+        c = Circle(
+            (x0, y0),
+            r,
+            edgecolor=colors[i],
+            facecolor="none",
+            linestyle="--",
+            **circle_kwargs,
+        )
         ax.add_patch(c)
 
-        txt = ax.text(x0 + r + text_offset, y0 - r / 4.0, labels[i], color=colors[i], va="center", fontsize=8)
+        txt = ax.text(
+            x0 + r + text_offset,
+            y0 - r / 4.0,
+            labels[i],
+            color=colors[i],
+            va="center",
+            fontsize=8,
+        )
         txt_list.append([txt])
     return txt_list
 
