@@ -706,12 +706,8 @@ def build_reference_catalog(
 
 
 if __name__ == "__main__":
-    from lsst.daf.butler import Butler
-
-    butler = Butler("embargo", collections=["LSSTCam/raw/guider", "LSSTCam/raw/all"])
-
     seqNum, dayObs = 461, 20250425
-    reader = GuiderReader(butler, view="dvcs", verbose=True)
+    reader = GuiderReader(view="dvcs", verbose=True)
     guider = reader.get(dayObs=dayObs, seqNum=seqNum)
 
     star_tracker = GuiderStarTracker(guider, psf_fwhm=6.0)
