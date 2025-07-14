@@ -25,8 +25,8 @@ import numpy as np
 import pandas as pd
 import seaborn as sns
 from astropy.stats import mad_std
-from matplotlib.patches import Circle
 from matplotlib import animation
+from matplotlib.patches import Circle
 
 from lsst.summit.utils.guiders.reading import GuiderData
 
