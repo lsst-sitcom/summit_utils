@@ -159,8 +159,10 @@ class GuiderStarTracker:
         tracked_star_tables = []
         for guiderName in self.guiderData.getGuiderNames():
             ref = ref_catalog[ref_catalog["detector"] == guiderName].copy()
+            # take the first star only
             if len(ref) > 1:
-                raise ValueError(f"Multiple rows found for guider {guiderName} in the reference catalog.")
+                ref = ref.sort_values(by="snr", ascending=False).iloc[[0]].copy()
+
             stars = self.track_star_across_stamps(ref, guiderName)
             tracked_star_tables.append(stars)
 
@@ -217,7 +219,8 @@ class GuiderStarTracker:
 
         """
         if ref.empty:
-            return pd.DataFrame(columns=DEFAULT_COLUMNS)  # no reference star for this guider
+            # no reference star for this guider
+            return pd.DataFrame(columns=DEFAULT_COLUMNS)
 
         # Pull ref-catalog row
         ref_x, ref_y = ref["xroi"].iloc[0], ref["yroi"].iloc[0]
@@ -555,10 +558,12 @@ def run_galsim_detection(
         results.append(result)
 
     df = pd.DataFrame(results)
-    df.sort_values("snr", ascending=False, inplace=True)
-
-    dfout = df[(df["snr"] >= th) & (df["flux"] > 0) & (df["flux_err"] > 0)]
-    return dfout.reset_index(drop=True)
+    if df.empty:
+        return df
+    else:
+        df.sort_values("snr", ascending=False, inplace=True)
+        dfout = df[(df["snr"] >= th) & (df["flux"] > 0) & (df["flux_err"] > 0)]
+        return dfout.reset_index(drop=True)
 
 
 # TODO: Replace SEP with galsim
@@ -588,17 +593,17 @@ def build_reference_catalog(
     """
     table_list = []
     for guiderName in guider.getGuiderNames():
-        stamp = guider.getStackedStampArray(detName=guiderName, is_isr=True)  # np.ndarray
-        _, median, std = sigma_clipped_stats(stamp, sigma=3.0)
+        array = guider.getStackedStampArray(detName=guiderName, is_isr=True)
+        _, median, std = sigma_clipped_stats(array, sigma=3.0)
         sources = run_galsim_detection(
-            stamp, th=min_snr, max_ellipticity=max_ellipticity, bkg_std=std + median
+            array, th=min_snr, max_ellipticity=max_ellipticity, bkg_std=std + median
         )
 
         if len(sources) == 0:
             continue
 
         # Filter out edge sources
-        h, w = stamp.shape
+        h, w = array.shape
         sources = sources[
             (sources["xroi"] > edge_margin)
             & (sources["xroi"] < w - edge_margin)
@@ -619,7 +624,7 @@ def build_reference_catalog(
         detNum = guider.getGuiderDetNum(guiderName)
         bright["detector"] = guiderName
         bright["detid"] = detNum
-        bright["starid"] = detNum * 1000 + 1
+        bright["starid"] = detNum * 100
         table_list.append(bright)
 
     if len(table_list) == 0:
