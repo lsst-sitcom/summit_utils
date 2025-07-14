@@ -32,7 +32,7 @@ __all__ = [
     "amp_to_ccdview",
 ]
 
-from typing import Any, TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 import astropy.units as u
 import numpy as np
@@ -47,10 +47,10 @@ from lsst.obs.lsst import LsstCam
 from lsst.obs.lsst.cameraTransforms import LsstCameraTransforms
 from lsst.obs.lsst.translators.lsst import SIMONYI_LOCATION
 
-
 if TYPE_CHECKING:
+    from astropy.time import Time  # noqa F811
+
     from lsst.summit.utils.guiders.reading import GuiderData
-    from astropy.time import Time
 
 
 def convert_pixel_to_radec(wcs: Any, x_flat: np.ndarray, y_flat: np.ndarray) -> tuple[np.ndarray, np.ndarray]:
@@ -607,17 +607,19 @@ def convert_roi_to_ccd(
 
     box, _, roi2ccd = stamps.getArchiveElements()[0]
     if view == "ccd":
-        # convert roi coords to ccd coords by adding the lower left corner of the box
+        # convert roi coords to ccd coords
+        # by adding the lower left corner of the box
         lower_left_corner = box.getMin()
         xmin, ymin = lower_left_corner.getX(), lower_left_corner.getY()
         xccd, yccd = xroi + xmin, yroi + ymin
 
     elif view == "dvcs":
         # convert roi coords to ccd coords using the roi2ccd transform
-        # roi2ccd is an AffineTransform that converts from roi coords to ccd coords
+        # roi2ccd is an AffineTransform that converts
+        # from roi coords to ccd coords
         xccd, yccd = roi2ccd(xroi, yroi)
 
     else:
-        raise ValueError(f"Unsupported view '{view}' in convert_roi_to_ccd, must be 'ccd' or 'dvcs'")
+        raise ValueError(f"Unsupported view '{view}' in convert_roi_to_ccd", "must be 'ccd' or 'dvcs'")
 
     return xccd, yccd

@@ -20,7 +20,7 @@
 # along with this program.  If not, see <https://www.gnu.org/licenses/>.
 from __future__ import annotations
 
-from typing import Any, cast, Optional
+from typing import Any, Optional, cast
 
 import matplotlib.pyplot as plt
 import numpy as np
