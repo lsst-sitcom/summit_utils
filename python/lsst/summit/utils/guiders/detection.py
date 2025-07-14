@@ -25,22 +25,20 @@ __all__ = ["GuiderStarTracker"]
 import logging
 from typing import TYPE_CHECKING
 
+import galsim
 import numpy as np
 import pandas as pd
 from astropy.nddata import Cutout2D
 from astropy.stats import sigma_clipped_stats
 
-import galsim
-from lsst.afw.image import ExposureF, MaskedImageF, ImageF
-from lsst.summit.utils.utils import detectObjectsInExp
-
-
+from lsst.afw.image import ExposureF, ImageF, MaskedImageF
 from lsst.summit.utils.guiders.reading import GuiderReader
 from lsst.summit.utils.guiders.transformation import (
-    convert_to_focal_plane,
-    convert_to_altaz,
     convert_roi_to_ccd,
+    convert_to_altaz,
+    convert_to_focal_plane,
 )
+from lsst.summit.utils.utils import detectObjectsInExp
 
 if TYPE_CHECKING:
     from lsst.summit.utils.guiders.reading import GuiderData
@@ -471,91 +469,6 @@ def measure_star_in_aperture(
     )
 
 
-# # TODO: Replace SEP with galsim
-# def run_sextractor(
-#     img: np.ndarray,
-#     th: float = 10,
-#     median: float = 0,
-#     std: float | None = None,
-#     bkg_size: int = 50,
-#     aperture_radius: float = 5,
-#     max_ellipticity: float = 0.1,
-#     gain: float = 1.0,
-# ) -> pd.DataFrame:
-#     """
-#     Vectorized SEP photometry with centroid errors, outputs a pandas DataFrame.
-#     Only returns nearly round, bright sources.
-#     """
-#     import sep
-
-#     # from lsst.summit.utils.utils import detectObjectsInExp,
-#     #   fluxesFromFootprints
-#     # import galsim
-#     # galsim.hsm.FindAdaptiveMom(galsim.Image(array))
-#     # Mask bad pixels
-#     bad_mask = ~np.isfinite(img) | (img < 0)
-#     img_clean = np.where(bad_mask, 0.0, img)
-
-#     # Background subtraction
-#     if std is None:
-#         bkg = sep.Background(img_clean, mask=bad_mask, bw=bkg_size, bh=bkg_size)
-#         img_sub = img_clean - bkg
-#         std = bkg.globalrms
-#     else:
-#         img_sub = img_clean - median
-
-#     # Detection
-#     objects = sep.extract(img_sub, th, err=std, mask=bad_mask)
-#     if len(objects) == 0:
-#         return pd.DataFrame()
-
-#     # Gather properties
-#     xcen, ycen = objects["x"], objects["y"]
-#     ixx, iyy, ixy = objects["x2"], objects["y2"], objects["xy"]
-#     ixx_err, iyy_err, ixy_err = objects["errx2"], objects["erry2"], objects["errxy"]
-
-#     flux, fluxerr, _ = sep.sum_circle(
-#         img_clean, xcen, ycen, aperture_radius, err=std, mask=bad_mask, gain=gain
-#     )
-#     fwhm = 2.355 * np.sqrt(0.5 * (ixx + iyy))
-
-#     denom = ixx + iyy + 1e-12
-#     e1 = (ixx - iyy) / denom
-#     e2 = (2 * ixy) / denom
-
-#     # Filter: round and bright sources only
-#     mask = np.abs(e1) < max_ellipticity  # nearly round
-#     mask &= np.abs(e2) < max_ellipticity  # nearly round
-
-#     # Compute centroid errors from moment errors (astrometry error estimate)
-#     # For a Gaussian, σ_xcentroid ≈ sqrt(ixx_err) / sqrt(flux)
-#     # (cf. https://irsa.ipac.caltech.edu/data/SPITZER/docs/irac/iracinstrumenthandbook/IRAC_Instrument_Handbook.pdf, Table 2.9)  # noqa: W505 E501
-#     centroid_x_err = np.sqrt(np.abs(ixx_err)) / np.sqrt(np.maximum(flux, 1e-6))
-#     centroid_y_err = np.sqrt(np.abs(iyy_err)) / np.sqrt(np.maximum(flux, 1e-6))
-
-#     df = pd.DataFrame(
-#         {
-#             "xroi": xcen[mask],
-#             "yroi": ycen[mask],
-#             "xerr": centroid_x_err[mask],
-#             "yerr": centroid_y_err[mask],
-#             "ixx": ixx[mask],
-#             "iyy": iyy[mask],
-#             "ixy": ixy[mask],
-#             "ixx_err": ixx_err[mask],
-#             "iyy_err": iyy_err[mask],
-#             "ixy_err": ixy_err[mask],
-#             "fwhm": fwhm[mask],
-#             "e1": e1[mask],
-#             "e2": e2[mask],
-#             "flux": flux[mask],
-#             "flux_err": fluxerr[mask],
-#             "snr": flux[mask] / np.maximum(fluxerr[mask], 1e-6),
-#         }
-#     )
-#     return df
-
-
 def run_galsim_detection(
     image: np.ndarray,
     th: float = 10,
@@ -709,8 +622,9 @@ if __name__ == "__main__":
 
     star_tracker = GuiderStarTracker(guider, psf_fwhm=6.0)
 
-    # if reference catalog is provided, it will be used instead of self-generated one
-    # the self-generated one is based on the stack of the stamps of each guider
+    # the ref catalog will be provided by the user, .e.g gaia
+    # if not, the class will self-generate one is based on the stack
+    # of the stamps of each guider
     stars = star_tracker.track_guider_stars(ref_catalog=None)
 
     print(stars.head())
