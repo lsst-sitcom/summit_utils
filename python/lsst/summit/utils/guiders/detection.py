@@ -30,8 +30,17 @@ import pandas as pd
 from astropy.nddata import Cutout2D
 from astropy.stats import sigma_clipped_stats
 
+import galsim
+from lsst.afw.image import ExposureF, MaskedImageF, ImageF
+from lsst.summit.utils.utils import detectObjectsInExp
+
+
 from lsst.summit.utils.guiders.reading import GuiderReader
-from lsst.summit.utils.guiders.transformation import (convert_to_focal_plane, convert_to_altaz, convert_roi_to_ccd)
+from lsst.summit.utils.guiders.transformation import (
+    convert_to_focal_plane,
+    convert_to_altaz,
+    convert_roi_to_ccd,
+)
 
 if TYPE_CHECKING:
     from lsst.summit.utils.guiders.reading import GuiderData
@@ -124,7 +133,6 @@ class GuiderStarTracker:
 
         # initialize outputs
         self.stars = pd.DataFrame(columns=DEFAULT_COLUMNS)
-
 
     def track_guider_stars(self, ref_catalog: None | pd.DataFrame = None) -> pd.DataFrame:
         """
@@ -226,7 +234,7 @@ class GuiderStarTracker:
         detNum = self.guiderData.getGuiderDetNum(guiderName)
         nmid = len(self.guiderData.timestamps) // 2
         obstime = self.guiderData.timestamps[nmid]
-    
+
         # --- per‐stamp measurements ---
         for i, stampObject in enumerate(image_list):
             if not (si := stampObject.metadata.get("DAQSTAMP")):
@@ -267,7 +275,9 @@ class GuiderStarTracker:
             sources["yroi"] += cutout.ymin_original
 
             # Convert roi to ccd/focal-plane and alt/az coordinates
-            xccd, yccd = convert_roi_to_ccd(sources["xroi"].values, sources["yroi"].values, self.guiderData, guiderName)
+            xccd, yccd = convert_roi_to_ccd(
+                sources["xroi"].values, sources["yroi"].values, self.guiderData, guiderName
+            )
             xfp, yfp = convert_to_focal_plane(xccd, yccd, detNum)
             alt, az = convert_to_altaz(xccd, yccd, self.guiderData.wcs, obstime)
 
@@ -328,6 +338,7 @@ class GuiderStarTracker:
         stars["magoffset"] = stars["magoffset"].replace([np.inf, -np.inf], np.nan)
 
         return stars
+
 
 def measure_star_in_aperture(
     cutout_data: np.ndarray,
@@ -460,91 +471,170 @@ def measure_star_in_aperture(
     )
 
 
-def run_sextractor(
-    img: np.ndarray,
+# # TODO: Replace SEP with galsim
+# def run_sextractor(
+#     img: np.ndarray,
+#     th: float = 10,
+#     median: float = 0,
+#     std: float | None = None,
+#     bkg_size: int = 50,
+#     aperture_radius: float = 5,
+#     max_ellipticity: float = 0.1,
+#     gain: float = 1.0,
+# ) -> pd.DataFrame:
+#     """
+#     Vectorized SEP photometry with centroid errors, outputs a pandas DataFrame.
+#     Only returns nearly round, bright sources.
+#     """
+#     import sep
+
+#     # from lsst.summit.utils.utils import detectObjectsInExp,
+#     #   fluxesFromFootprints
+#     # import galsim
+#     # galsim.hsm.FindAdaptiveMom(galsim.Image(array))
+#     # Mask bad pixels
+#     bad_mask = ~np.isfinite(img) | (img < 0)
+#     img_clean = np.where(bad_mask, 0.0, img)
+
+#     # Background subtraction
+#     if std is None:
+#         bkg = sep.Background(img_clean, mask=bad_mask, bw=bkg_size, bh=bkg_size)
+#         img_sub = img_clean - bkg
+#         std = bkg.globalrms
+#     else:
+#         img_sub = img_clean - median
+
+#     # Detection
+#     objects = sep.extract(img_sub, th, err=std, mask=bad_mask)
+#     if len(objects) == 0:
+#         return pd.DataFrame()
+
+#     # Gather properties
+#     xcen, ycen = objects["x"], objects["y"]
+#     ixx, iyy, ixy = objects["x2"], objects["y2"], objects["xy"]
+#     ixx_err, iyy_err, ixy_err = objects["errx2"], objects["erry2"], objects["errxy"]
+
+#     flux, fluxerr, _ = sep.sum_circle(
+#         img_clean, xcen, ycen, aperture_radius, err=std, mask=bad_mask, gain=gain
+#     )
+#     fwhm = 2.355 * np.sqrt(0.5 * (ixx + iyy))
+
+#     denom = ixx + iyy + 1e-12
+#     e1 = (ixx - iyy) / denom
+#     e2 = (2 * ixy) / denom
+
+#     # Filter: round and bright sources only
+#     mask = np.abs(e1) < max_ellipticity  # nearly round
+#     mask &= np.abs(e2) < max_ellipticity  # nearly round
+
+#     # Compute centroid errors from moment errors (astrometry error estimate)
+#     # For a Gaussian, σ_xcentroid ≈ sqrt(ixx_err) / sqrt(flux)
+#     # (cf. https://irsa.ipac.caltech.edu/data/SPITZER/docs/irac/iracinstrumenthandbook/IRAC_Instrument_Handbook.pdf, Table 2.9)  # noqa: W505 E501
+#     centroid_x_err = np.sqrt(np.abs(ixx_err)) / np.sqrt(np.maximum(flux, 1e-6))
+#     centroid_y_err = np.sqrt(np.abs(iyy_err)) / np.sqrt(np.maximum(flux, 1e-6))
+
+#     df = pd.DataFrame(
+#         {
+#             "xroi": xcen[mask],
+#             "yroi": ycen[mask],
+#             "xerr": centroid_x_err[mask],
+#             "yerr": centroid_y_err[mask],
+#             "ixx": ixx[mask],
+#             "iyy": iyy[mask],
+#             "ixy": ixy[mask],
+#             "ixx_err": ixx_err[mask],
+#             "iyy_err": iyy_err[mask],
+#             "ixy_err": ixy_err[mask],
+#             "fwhm": fwhm[mask],
+#             "e1": e1[mask],
+#             "e2": e2[mask],
+#             "flux": flux[mask],
+#             "flux_err": fluxerr[mask],
+#             "snr": flux[mask] / np.maximum(fluxerr[mask], 1e-6),
+#         }
+#     )
+#     return df
+
+
+def run_galsim_detection(
+    image: np.ndarray,
     th: float = 10,
-    median: float = 0,
-    std: float | None = None,
-    bkg_size: int = 50,
+    bkg_std: float = 15,
     aperture_radius: float = 5,
     max_ellipticity: float = 0.1,
     gain: float = 1.0,
 ) -> pd.DataFrame:
     """
-    Vectorized SEP photometry with centroid errors, outputs a pandas DataFrame.
-    Only returns nearly round, bright sources.
+    Replaces SEP with LSST's detectObjectsInExp and GalSim moments.
     """
-    import sep
+    # Step 1: Convert numpy image to MaskedImage and Exposure
+    exposure = ExposureF(MaskedImageF(ImageF(image)))
 
-    # from lsst.summit.utils.utils import detectObjectsInExp,
-    #   fluxesFromFootprints
-    # import galsim
-    # galsim.hsm.FindAdaptiveMom(galsim.Image(array))
-    # Mask bad pixels
-    bad_mask = ~np.isfinite(img) | (img < 0)
-    img_clean = np.where(bad_mask, 0.0, img)
+    # Step 3: Detect sources
+    footprints = detectObjectsInExp(exposure, th)
 
-    # Background subtraction
-    if std is None:
-        bkg = sep.Background(img_clean, mask=bad_mask, bw=bkg_size, bh=bkg_size)
-        img_sub = img_clean - bkg
-        std = bkg.globalrms
-    else:
-        img_sub = img_clean - median
+    if not footprints:
+        return pd.DataFrame(
+            columns=["xroi", "yroi", "xerr", "yerr", "fwhm", "e1", "e2", "flux", "flux_err", "snr"]
+        )
 
-    # Detection
-    objects = sep.extract(img_sub, th, err=std, mask=bad_mask)
-    if len(objects) == 0:
-        return pd.DataFrame()
+    results = []
 
-    # Gather properties
-    xcen, ycen = objects["x"], objects["y"]
-    ixx, iyy, ixy = objects["x2"], objects["y2"], objects["xy"]
-    ixx_err, iyy_err, ixy_err = objects["errx2"], objects["erry2"], objects["errxy"]
+    for fp in footprints.getFootprints():
+        # Create a cutout of the image around the footprint
+        bbox = fp.getBBox()
+        try:
+            subimage = exposure.getMaskedImage().getImage()[bbox]
+        except Exception:
+            continue
 
-    flux, fluxerr, _ = sep.sum_circle(
-        img_clean, xcen, ycen, aperture_radius, err=std, mask=bad_mask, gain=gain
-    )
-    fwhm = 2.355 * np.sqrt(0.5 * (ixx + iyy))
+        array = subimage.array
+        if not np.isfinite(array).all():
+            continue
 
-    denom = ixx + iyy + 1e-12
-    e1 = (ixx - iyy) / denom
-    e2 = (2 * ixy) / denom
+        # GalSim adaptive moment
+        try:
+            gs_img = galsim.Image(array)
+            hsm_res = galsim.hsm.FindAdaptiveMom(gs_img, strict=False)
+            flag = hsm_res.error_message == ""
+            xcentroid_gs = hsm_res.moments_centroid.x if flag else np.nan
+            ycentroid_gs = hsm_res.moments_centroid.y if flag else np.nan
+            flux_gs = hsm_res.moments_amp if flag else np.nan
+            sigma_gs = hsm_res.moments_sigma if flag else np.nan
+            fwhm_gs = 2.355 * sigma_gs if flag else np.nan
+            n_pix = np.pi * fwhm_gs**2
+            flux_err = np.sqrt(flux_gs / gain + n_pix * bkg_std**2)
 
-    # Filter: round and bright sources only
-    mask = np.abs(e1) < max_ellipticity  # nearly round
-    mask &= np.abs(e2) < max_ellipticity  # nearly round
+        except (galsim.errors.GalSimError, RuntimeError):
+            continue
 
-    # Compute centroid errors from moment errors (astrometry error estimate)
-    # For a Gaussian, σ_xcentroid ≈ sqrt(ixx_err) / sqrt(flux)
-    # (cf. https://irsa.ipac.caltech.edu/data/SPITZER/docs/irac/iracinstrumenthandbook/IRAC_Instrument_Handbook.pdf, Table 2.9)  # noqa: W505 E501
-    centroid_x_err = np.sqrt(np.abs(ixx_err)) / np.sqrt(np.maximum(flux, 1e-6))
-    centroid_y_err = np.sqrt(np.abs(iyy_err)) / np.sqrt(np.maximum(flux, 1e-6))
+        # Ellipticity filtering using axis ratio
+        if np.hypot(hsm_res.observed_shape.e1, hsm_res.observed_shape.e2) > max_ellipticity:
+            continue
 
-    df = pd.DataFrame(
-        {
-            "xroi": xcen[mask],
-            "yroi": ycen[mask],
-            "xerr": centroid_x_err[mask],
-            "yerr": centroid_y_err[mask],
-            "ixx": ixx[mask],
-            "iyy": iyy[mask],
-            "ixy": ixy[mask],
-            "ixx_err": ixx_err[mask],
-            "iyy_err": iyy_err[mask],
-            "ixy_err": ixy_err[mask],
-            "fwhm": fwhm[mask],
-            "e1": e1[mask],
-            "e2": e2[mask],
-            "flux": flux[mask],
-            "flux_err": fluxerr[mask],
-            "snr": flux[mask] / np.maximum(fluxerr[mask], 1e-6),
+        # Build row
+        result = {
+            "xroi": xcentroid_gs + bbox.getMinX(),
+            "yroi": ycentroid_gs + bbox.getMinY(),
+            "xerr": sigma_gs / np.sqrt(flux_gs) if flux_gs > 0 else np.nan,
+            "yerr": sigma_gs / np.sqrt(flux_gs) if flux_gs > 0 else np.nan,
+            "fwhm": fwhm_gs,
+            "e1": hsm_res.observed_shape.e1,
+            "e2": hsm_res.observed_shape.e2,
+            "flux": flux_gs,
+            "flux_err": flux_err,
+            "snr": flux_gs / flux_err if flux_err > 0 else 0.0,
         }
-    )
+        results.append(result)
 
-    return df
+    df = pd.DataFrame(results)
+    df.sort_values("snr", ascending=False, inplace=True)
+
+    dfout = df[(df["snr"] >= th) & (df["flux"] > 0) & (df["flux_err"] > 0)]
+    return dfout.reset_index(drop=True)
 
 
+# TODO: Replace SEP with galsim
 def build_reference_catalog(
     guider: GuiderData,
     aperture_radius: float = 6.0,
@@ -571,17 +661,12 @@ def build_reference_catalog(
     """
     table_list = []
     for guiderName in guider.getGuiderNames():
-        stamp = guider.getStackedStampArray(detName=guiderName, is_isr=True)
+        stamp = guider.getStackedStampArray(detName=guiderName, is_isr=True)  # np.ndarray
         _, median, std = sigma_clipped_stats(stamp, sigma=3.0)
-        sources = run_sextractor(
-            stamp - median,
-            th=min_snr * std,
-            median=median,
-            std=std,
-            aperture_radius=aperture_radius,
-            max_ellipticity=max_ellipticity,
-            gain=1.0,
+        sources = run_galsim_detection(
+            stamp, th=min_snr, max_ellipticity=max_ellipticity, bkg_std=std + median
         )
+
         if len(sources) == 0:
             continue
 
@@ -623,11 +708,10 @@ if __name__ == "__main__":
     guider = reader.get(dayObs=dayObs, seqNum=seqNum)
 
     star_tracker = GuiderStarTracker(guider, psf_fwhm=6.0)
-    stars = star_tracker.track_guider_stars(ref_catalog=None)
 
-    print(f"Tracked {len(stars)} stars in {len(stars['starid'].unique())} unique stars.")
-    stars.to_csv(f"tracked_stars_{dayObs}_{seqNum:06d}.csv", index=False)
-    print(f"Wrote tracked stars to tracked_stars_{dayObs}_{seqNum:06d}.csv")
+    # if reference catalog is provided, it will be used instead of self-generated one
+    # the self-generated one is based on the stack of the stamps of each guider
+    stars = star_tracker.track_guider_stars(ref_catalog=None)
 
     print(stars.head())
     print(stars.groupby("detector").size())
