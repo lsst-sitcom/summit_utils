@@ -52,6 +52,7 @@ def make_init_guider_wcs(camera, visitInfo):
     for det in camera:
         if det.getType() == cameraGeom.DetectorType.GUIDER:
             # get WCS
-            cam_wcs[det.getId()] = createInitialSkyWcsFromBoresight(boresight, orientation, det, flipX=False)
+            args = boresight, orientation, det
+            cam_wcs[det.getId()] = createInitialSkyWcsFromBoresight(*args, flipX=False)
 
     return cam_wcs
