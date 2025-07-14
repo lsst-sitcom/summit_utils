@@ -211,7 +211,7 @@ def makeDefaultButler(
 
     repo = instrument if embargo is False else "embargo"
 
-    collections = itertools.chain(baseCollection, raCollection)
+    collections = [baseCollection, raCollection]
     if extraCollections is not None:
         assert extraCollections is not None  # just for mypy
         extraCollectionsList = ensure_iterable(extraCollections)
