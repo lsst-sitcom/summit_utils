@@ -19,6 +19,7 @@
 # You should have received a copy of the GNU General Public License
 # along with this program.  If not, see <https://www.gnu.org/licenses/>.
 from __future__ import annotations
+from typing import Optional
 
 __all__ = [
     "GuiderReader",
@@ -84,7 +85,8 @@ class GuiderData:
         if stampNum >= len(stamps):
             print(f"Warning: Stamp number {stampNum} out of range for detector {detName}.")
 
-            return np.zeros((self.header["roi_rows"], self.header["roi_cols"]), dtype=float)
+            nrows, ncols = int(self.header["roi_rows"]), int(self.header["roi_cols"])
+            return np.zeros((nrows, ncols), dtype=float)
 
         return stamps[stampNum].stamp_im.image.array
 
@@ -185,13 +187,15 @@ class GuiderReader:
 
     def __init__(
         self,
-        butler: Butler | None = None,
+        butler: Optional[Butler] = None,
         view: str = "dvcs",
         verbose: bool = False,
     ):
-        self.butler = butler
         if butler is None:
             self.butler = butlerUtils.makeDefaultButler("LSSTCam")
+        else:
+            self.butler = butler
+
         assert self.butler is not None, "Butler must be provided or created."
 
         # Define camera objects
@@ -398,6 +402,7 @@ def getGuiderStamps(
 
     # for dayObs of 20250509 or before, the ROIs are swapped between SG0 and
     # SG1. Fix here
+    ccd_swapped: str = ""
     if dayObs < 20250509:
         detName = camera[detNum].getName()
         raft = detName[0:3]
@@ -470,10 +475,8 @@ def getGuiderStamps(
 
 
 if __name__ == "__main__":
-    butler = Butler("embargo", collections=["LSSTCam/raw/guider", "LSSTCam/raw/all"])
-
     seqNum, dayObs = 461, 20250425
-    reader = GuiderReader(butler, view="dvcs", verbose=True)
+    reader = GuiderReader(view="dvcs", verbose=True)
     guider = reader.get(dayObs=dayObs, seqNum=seqNum)
 
     # The GuiderData class has all you need
