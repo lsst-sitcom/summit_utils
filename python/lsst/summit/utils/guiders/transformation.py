@@ -52,6 +52,7 @@ if TYPE_CHECKING:
     from lsst.summit.utils.guiders.reading import GuiderData
     from astropy.time import Time
 
+
 def convert_pixel_to_radec(wcs: Any, x_flat: np.ndarray, y_flat: np.ndarray) -> tuple[np.ndarray, np.ndarray]:
     """
     Map detector-pixel → ICRS RA/Dec (radians).
@@ -517,11 +518,10 @@ def amp_to_ccdview(stamp, detector, ampName):
         img = np.flipud(img)
     return img
 
-def convert_to_focal_plane(
-    xccd: np.ndarray, yccd: np.ndarray, detNum: int
-) -> tuple[np.ndarray, np.ndarray]:
+
+def convert_to_focal_plane(xccd: np.ndarray, yccd: np.ndarray, detNum: int) -> tuple[np.ndarray, np.ndarray]:
     """
-    Convert the star positions to focal plane coordinates.
+    Convert from ccd pixels coordinates to focal plane coordinates.
 
     Parameters
     ----------
@@ -546,9 +546,12 @@ def convert_to_focal_plane(
         xfp, yfp = np.array([]), np.array([])
     return xfp, yfp
 
-def convert_to_altaz(xccd: np.ndarray, yccd: np.ndarray, wcs: Any, obs_time: Time) -> tuple[np.ndarray, np.ndarray]:
+
+def convert_to_altaz(
+    xccd: np.ndarray, yccd: np.ndarray, wcs: Any, obs_time: Time
+) -> tuple[np.ndarray, np.ndarray]:
     """
-    Convert the star positions to altaz coordinates.
+    Convert the ccd pixel coordinates to altaz coordinates.
 
     Parameters
     ----------
@@ -573,8 +576,10 @@ def convert_to_altaz(xccd: np.ndarray, yccd: np.ndarray, wcs: Any, obs_time: Tim
 
     return alt, az
 
-# TODO: Double-check this conversion
-def convert_roi_to_ccd(xroi: np.ndarray, yroi: np.ndarray, guiderData: GuiderData, guiderName: str) -> tuple[np.ndarray, np.ndarray]:
+
+def convert_roi_to_ccd(
+    xroi: np.ndarray, yroi: np.ndarray, guiderData: GuiderData, guiderName: str
+) -> tuple[np.ndarray, np.ndarray]:
     """
     Convert roi coordinates to CCD pixel coordinates.
 
@@ -584,46 +589,35 @@ def convert_roi_to_ccd(xroi: np.ndarray, yroi: np.ndarray, guiderData: GuiderDat
         Array of x roi coordinates (pixels within the ROI).
     yroi : np.ndarray
         Array of y roi coordinates (pixels within the ROI).
+    guiderData : GuiderData
+        GuiderData object containing the guider datasets and view information.
     guiderName : str
-        Name of the guider (e.g., 'R22_S11').
+        Name of the guider (e.g., 'R44_SG0', etc.)
 
     Returns
     -------
     xccd, yccd : np.ndarray
         Arrays of CCD pixel coordinates.
     """
+    view = guiderData.view
+    stamps = guiderData.datasets[guiderName]
+
     if len(xroi) == 0:
         return np.array([]), np.array([])
 
-    # min_x, min_y = self.guiderData.getGuiderAmpMinXY(guiderName)
-    min_x, min_y = 0.0, 0.0
-    xccd = xroi + min_x
-    yccd = yroi + min_y
+    box, _, roi2ccd = stamps.getArchiveElements()[0]
+    if view == "ccd":
+        # convert roi coords to ccd coords by adding the lower left corner of the box
+        lower_left_corner = box.getMin()
+        xmin, ymin = lower_left_corner.getX(), lower_left_corner.getY()
+        xccd, yccd = xroi + xmin, yroi + ymin
 
-    # convert to ccd pixel if dvcs view is set
-    xccd, yccd = convert_if_dvcs_to_ccd(xccd, yccd, guiderData, guiderName)
-    return xccd, yccd
-
-def convert_if_dvcs_to_ccd(
-    x_dvcs: np.ndarray, y_dvcs: np.ndarray, guiderData: GuiderData, guiderName: str
-) -> tuple[np.ndarray, np.ndarray]:
-    """
-    Check if xccd/yccd CCD pixels are in DVCS coordinates system.
-    """
-    view = guiderData.view
-    if view == "dvcs":
-        # Convert xroi/yroi to CCD pixels
-        stamps = guiderData.datasets[guiderName]
-
-        # get CCD<->DVCS translation from the stamps
-        _, _, dvcs = stamps.getArchiveElements()[0]
-
-        x_ccd, y_ccd = dvcs(x_dvcs, y_dvcs)
-        return x_ccd, y_ccd
-
-    elif view == "ccd":
-        # No conversion needed for CCD view
-        return x_dvcs, y_dvcs
+    elif view == "dvcs":
+        # convert roi coords to ccd coords using the roi2ccd transform
+        # roi2ccd is an AffineTransform that converts from roi coords to ccd coords
+        xccd, yccd = roi2ccd(xroi, yroi)
 
     else:
-        raise ValueError(f"Unknown guider view '{view}'. Expected 'dvcs' or 'ccd'.")
+        raise ValueError(f"Unsupported view '{view}' in convert_roi_to_ccd, must be 'ccd' or 'dvcs'")
+
+    return xccd, yccd
