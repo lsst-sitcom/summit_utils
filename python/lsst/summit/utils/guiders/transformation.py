@@ -32,7 +32,7 @@ __all__ = [
     "amp_to_ccdview",
 ]
 
-from typing import Any
+from typing import Any, TYPE_CHECKING
 
 import astropy.units as u
 import numpy as np
@@ -43,9 +43,14 @@ from lsst.afw import cameraGeom
 from lsst.afw.cameraGeom import Detector
 from lsst.afw.image import ImageF
 from lsst.geom import AffineTransform, Box2D, Box2I, Extent2D, Point2D
+from lsst.obs.lsst import LsstCam
 from lsst.obs.lsst.cameraTransforms import LsstCameraTransforms
 from lsst.obs.lsst.translators.lsst import SIMONYI_LOCATION
 
+
+if TYPE_CHECKING:
+    from lsst.summit.utils.guiders.reading import GuiderData
+    from astropy.time import Time
 
 def convert_pixel_to_radec(wcs: Any, x_flat: np.ndarray, y_flat: np.ndarray) -> tuple[np.ndarray, np.ndarray]:
     """
@@ -511,3 +516,114 @@ def amp_to_ccdview(stamp, detector, ampName):
     if amp.getRawFlipY():
         img = np.flipud(img)
     return img
+
+def convert_to_focal_plane(
+    xccd: np.ndarray, yccd: np.ndarray, detNum: int
+) -> tuple[np.ndarray, np.ndarray]:
+    """
+    Convert the star positions to focal plane coordinates.
+
+    Parameters
+    ----------
+    xccd : np.ndarray
+        Array of x CCD pixel coordinates.
+    yccd : np.ndarray
+        Array of y CCD pixel coordinates.
+    detNum : int
+        Detector number (e.g., 189 for R22_S11).
+
+    Returns
+    -------
+    xfp, yfp : np.ndarray
+        Arrays of x and y focal plane coordinates (mm).
+
+    """
+    if len(xccd) > 0:
+        detector = LsstCam.getCamera()[detNum]
+        # Convert the star positions to focal plane coordinates
+        xfp, yfp = pixel_to_focal(xccd, yccd, detector)
+    else:
+        xfp, yfp = np.array([]), np.array([])
+    return xfp, yfp
+
+def convert_to_altaz(xccd: np.ndarray, yccd: np.ndarray, wcs: Any, obs_time: Time) -> tuple[np.ndarray, np.ndarray]:
+    """
+    Convert the star positions to altaz coordinates.
+
+    Parameters
+    ----------
+    xccd : np.ndarray
+        Array of x CCD pixel coordinates.
+    yccd : np.ndarray
+        Array of y CCD pixel coordinates.
+    wcs : lsst.afw.image.Wcs
+        WCS object for the guider detector.
+    obs_time : astropy.time.Time
+        Observation time.
+
+    Returns
+    -------
+    alt, az : np.ndarray
+        Arrays of alt and az coordinates (degrees).
+    """
+    if len(xccd) > 0:
+        alt, az = convert_pixels_to_altaz(wcs, obs_time, xccd, yccd)
+    else:
+        alt, az = np.array([]), np.array([])
+
+    return alt, az
+
+# TODO: Double-check this conversion
+def convert_roi_to_ccd(xroi: np.ndarray, yroi: np.ndarray, guiderData: GuiderData, guiderName: str) -> tuple[np.ndarray, np.ndarray]:
+    """
+    Convert roi coordinates to CCD pixel coordinates.
+
+    Parameters
+    ----------
+    xroi : np.ndarray
+        Array of x roi coordinates (pixels within the ROI).
+    yroi : np.ndarray
+        Array of y roi coordinates (pixels within the ROI).
+    guiderName : str
+        Name of the guider (e.g., 'R22_S11').
+
+    Returns
+    -------
+    xccd, yccd : np.ndarray
+        Arrays of CCD pixel coordinates.
+    """
+    if len(xroi) == 0:
+        return np.array([]), np.array([])
+
+    # min_x, min_y = self.guiderData.getGuiderAmpMinXY(guiderName)
+    min_x, min_y = 0.0, 0.0
+    xccd = xroi + min_x
+    yccd = yroi + min_y
+
+    # convert to ccd pixel if dvcs view is set
+    xccd, yccd = convert_if_dvcs_to_ccd(xccd, yccd, guiderData, guiderName)
+    return xccd, yccd
+
+def convert_if_dvcs_to_ccd(
+    x_dvcs: np.ndarray, y_dvcs: np.ndarray, guiderData: GuiderData, guiderName: str
+) -> tuple[np.ndarray, np.ndarray]:
+    """
+    Check if xccd/yccd CCD pixels are in DVCS coordinates system.
+    """
+    view = guiderData.view
+    if view == "dvcs":
+        # Convert xroi/yroi to CCD pixels
+        stamps = guiderData.datasets[guiderName]
+
+        # get CCD<->DVCS translation from the stamps
+        _, _, dvcs = stamps.getArchiveElements()[0]
+
+        x_ccd, y_ccd = dvcs(x_dvcs, y_dvcs)
+        return x_ccd, y_ccd
+
+    elif view == "ccd":
+        # No conversion needed for CCD view
+        return x_dvcs, y_dvcs
+
+    else:
+        raise ValueError(f"Unknown guider view '{view}'. Expected 'dvcs' or 'ccd'.")

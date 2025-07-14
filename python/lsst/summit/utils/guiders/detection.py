@@ -23,16 +23,15 @@ from __future__ import annotations
 __all__ = ["GuiderStarTracker"]
 
 import logging
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING
 
 import numpy as np
 import pandas as pd
 from astropy.nddata import Cutout2D
 from astropy.stats import sigma_clipped_stats
 
-from lsst.obs.lsst import LsstCam
 from lsst.summit.utils.guiders.reading import GuiderReader
-from lsst.summit.utils.guiders.transformation import convert_pixels_to_altaz, pixel_to_focal
+from lsst.summit.utils.guiders.transformation import (convert_to_focal_plane, convert_to_altaz, convert_roi_to_ccd)
 
 if TYPE_CHECKING:
     from lsst.summit.utils.guiders.reading import GuiderData
@@ -126,7 +125,7 @@ class GuiderStarTracker:
         # initialize outputs
         self.stars = pd.DataFrame(columns=DEFAULT_COLUMNS)
 
-    # STOPPED HERE: SAT, 12, JULY, 2025
+
     def track_guider_stars(self, ref_catalog: None | pd.DataFrame = None) -> pd.DataFrame:
         """
         Track stars across guider exposures using a reference catalog.
@@ -156,7 +155,7 @@ class GuiderStarTracker:
             ref = ref_catalog[ref_catalog["detector"] == guiderName].copy()
             if len(ref) > 1:
                 raise ValueError(f"Multiple rows found for guider {guiderName} in the reference catalog.")
-            stars = self.run_tracking_star(ref, guiderName)
+            stars = self.track_star_across_stamps(ref, guiderName)
             tracked_star_tables.append(stars)
 
         # Concatenate all stars into a single DataFrame
@@ -175,7 +174,7 @@ class GuiderStarTracker:
         tracked_star_catalog = self.compute_offsets(tracked_star_catalog)
         return tracked_star_catalog
 
-    def run_tracking_star(
+    def track_star_across_stamps(
         self,
         ref: pd.DataFrame,
         guiderName: str,
@@ -223,6 +222,11 @@ class GuiderStarTracker:
         image_list = self.guiderData.datasets[guiderName]
         rows = []
 
+        # get some basic info
+        detNum = self.guiderData.getGuiderDetNum(guiderName)
+        nmid = len(self.guiderData.timestamps) // 2
+        obstime = self.guiderData.timestamps[nmid]
+    
         # --- per‐stamp measurements ---
         for i, stampObject in enumerate(image_list):
             if not (si := stampObject.metadata.get("DAQSTAMP")):
@@ -263,9 +267,9 @@ class GuiderStarTracker:
             sources["yroi"] += cutout.ymin_original
 
             # Convert roi to ccd/focal-plane and alt/az coordinates
-            xccd, yccd = self.convert_roi_to_ccd(sources, guiderName)
-            xfp, yfp = self.convert_to_focal_plane(xccd, yccd, guiderName)
-            alt, az = self.convert_to_altaz(xccd, yccd, self.guiderData.wcs)
+            xccd, yccd = convert_roi_to_ccd(sources["xroi"].values, sources["yroi"].values, self.guiderData, guiderName)
+            xfp, yfp = convert_to_focal_plane(xccd, yccd, detNum)
+            alt, az = convert_to_altaz(xccd, yccd, self.guiderData.wcs, obstime)
 
             # Add reference positions
             sources["xccd"] = xccd
@@ -282,30 +286,6 @@ class GuiderStarTracker:
             return pd.DataFrame(columns=DEFAULT_COLUMNS)  # only one detection, ignore it
         else:
             return df
-
-    def convert_if_dvcs_to_ccd(
-        self, x_dvcs: np.ndarray, y_dvcs: np.ndarray, guiderName: str
-    ) -> tuple[np.ndarray, np.ndarray]:
-        """
-        Check if xccd/yccd CCD pixels are in DVCS coordinates system.
-        """
-        view = self.guiderData.view
-        if view == "dvcs":
-            # Convert xroi/yroi to CCD pixels
-            stamps = self.guiderData.datasets[guiderName]
-
-            # get CCD<->DVCS translation from the stamps
-            _, _, dvcs = stamps.getArchiveElements()[0]
-
-            x_ccd, y_ccd = dvcs(x_dvcs, y_dvcs)
-            return x_ccd, y_ccd
-
-        elif view == "ccd":
-            # No conversion needed for CCD view
-            return x_dvcs, y_dvcs
-
-        else:
-            raise ValueError(f"Unknown guider view '{view}'. Expected 'dvcs' or 'ccd'.")
 
     def set_unique_id(self, stars) -> pd.DataFrame:
         # 1) Build a detector→index map (0,1,2,…)
@@ -348,74 +328,6 @@ class GuiderStarTracker:
         stars["magoffset"] = stars["magoffset"].replace([np.inf, -np.inf], np.nan)
 
         return stars
-
-    def convert_to_focal_plane(
-        self, xccd: np.ndarray, yccd: np.ndarray, detName: str
-    ) -> tuple[np.ndarray, np.ndarray]:
-        """
-        Convert the star positions to focal plane coordinates.
-        """
-        if len(xccd) > 0:
-            detNum = self.guiderData.getGuiderDetNum(detName)
-            detector = LsstCam.getCamera()[detNum]
-            # Convert the star positions to focal plane coordinates
-            xfp, yfp = pixel_to_focal(xccd, yccd, detector)
-        else:
-            xfp, yfp = np.array([]), np.array([])
-        return xfp, yfp
-
-    def convert_to_altaz(self, xccd: np.ndarray, yccd: np.ndarray, wcs: Any) -> tuple[np.ndarray, np.ndarray]:
-        """
-        Convert the star positions to altaz coordinates.
-
-        Parameters
-        ----------
-        xccd : np.ndarray
-            Array of x CCD pixel coordinates.
-        yccd : np.ndarray
-            Array of y CCD pixel coordinates.
-        wcs : lsst.afw.image.Wcs
-            WCS object for the guider detector.
-        """
-        nmid = self.n_stamps // 2
-        obs_time = self.guiderData.timestamps[nmid]
-
-        if len(xccd) > 0:
-            alt, az = convert_pixels_to_altaz(wcs, obs_time, xccd, yccd)
-        else:
-            alt, az = np.array([]), np.array([])
-
-        return alt, az
-
-    # TODO: Double-check this conversion
-    def convert_roi_to_ccd(self, df: pd.DataFrame, guiderName: str) -> tuple[np.ndarray, np.ndarray]:
-        """
-        Convert roi coordinates to CCD pixel coordinates.
-
-        Parameters
-        ----------
-        df : pd.DataFrame
-            DataFrame with 'xroi' and 'yroi' columns.
-        guiderName : str
-            Name of the guider (e.g., 'R22_S11').
-
-        Returns
-        -------
-        xccd, yccd : np.ndarray
-            Arrays of CCD pixel coordinates.
-        """
-        if df.empty:
-            return np.array([]), np.array([])
-
-        # min_x, min_y = self.guiderData.getGuiderAmpMinXY(guiderName)
-        min_x, min_y = 0.0, 0.0
-        xccd = df["xroi"].to_numpy() + min_x
-        yccd = df["yroi"].to_numpy() + min_y
-
-        # convert to ccd pixel if dvcs view is set
-        xccd, yccd = self.convert_if_dvcs_to_ccd(xccd, yccd, guiderName)
-        return xccd, yccd
-
 
 def measure_star_in_aperture(
     cutout_data: np.ndarray,
