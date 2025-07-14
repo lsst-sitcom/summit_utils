@@ -274,7 +274,10 @@ class GuiderStarTracker:
 
             # Convert roi to ccd/focal-plane and alt/az coordinates
             xccd, yccd = convert_roi_to_ccd(
-                sources["xroi"].values, sources["yroi"].values, self.guiderData, guiderName
+                sources["xroi"].values,
+                sources["yroi"].values,
+                self.guiderData,
+                guiderName,
             )
             xfp, yfp = convert_to_focal_plane(xccd, yccd, detNum)
             alt, az = convert_to_altaz(xccd, yccd, self.guiderData.wcs, obstime)
@@ -488,7 +491,18 @@ def run_galsim_detection(
 
     if not footprints:
         return pd.DataFrame(
-            columns=["xroi", "yroi", "xerr", "yerr", "fwhm", "e1", "e2", "flux", "flux_err", "snr"]
+            columns=[
+                "xroi",
+                "yroi",
+                "xerr",
+                "yerr",
+                "fwhm",
+                "e1",
+                "e2",
+                "flux",
+                "flux_err",
+                "snr",
+            ]
         )
 
     results = []
