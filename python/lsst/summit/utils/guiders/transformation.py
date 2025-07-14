@@ -154,6 +154,8 @@ def mk_rot(det_nquarter: int, direction: int = 1) -> AffineTransform:
         rotation = AffineTransform(rot[nq])
     elif direction == -1:
         rotation = AffineTransform(irot[nq])
+    else:
+        raise ValueError(f"direction must be either +/- 1, got {direction}")
     return rotation
 
 
