@@ -579,7 +579,7 @@ def convert_to_altaz(
         Arrays of alt and az coordinates (degrees).
     """
     if len(xccd) > 0:
-        alt, az = convert_pixels_to_altaz(wcs, obs_time, xccd, yccd)
+        az, alt = convert_pixels_to_altaz(wcs, obs_time, xccd, yccd)
     else:
         alt, az = np.array([]), np.array([])
 
