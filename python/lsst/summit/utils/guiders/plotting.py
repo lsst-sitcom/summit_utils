@@ -35,6 +35,8 @@ from lsst.summit.utils.guiders.transformation import convert_ccd_to_roi
 
 __all__ = ["GuiderMosaicPlotter", "GuiderPlotter"]
 
+LIGHT_BLUE = "#6495ED"
+
 
 class GuiderPlotter:
     UNIT_DICT = {
@@ -50,9 +52,11 @@ class GuiderPlotter:
         (".", "R40_SG1", "R44_SG0", "."),
         ("R40_SG0", "center", ".", "R44_SG1"),
         ("R00_SG1", ".", ".", "R04_SG0"),
-        (".", "R00_SG0", "R04_SG1", "."),
+        ("arrow", "R00_SG0", "R04_SG1", "."),
     ]
-    DETNAMES = [cell for row in LAYOUT for cell in row if (cell != ".") & (cell != "center")]
+    DETNAMES = [
+        cell for row in LAYOUT for cell in row if (cell != ".") & (cell != "center") & (cell != "arrow")
+    ]
 
     COLOR_MAP = ["black", "firebrick", "grey", "lightgrey"]
     MARKERS = [".", "x", "+", "s", "o", "^"]
@@ -194,8 +198,8 @@ class GuiderPlotter:
                 means,
                 yerr=errs,
                 fmt="o",
-                color="#6495ED",
-                ecolor="#6495ED",
+                color=LIGHT_BLUE,
+                ecolor=LIGHT_BLUE,
                 capsize=3,
             )
             ax.set_ylabel(cfg["ylabel"])
@@ -309,7 +313,7 @@ class GuiderPlotter:
                 axs_img,
                 center,
                 radii=[5, 10],
-                colors=["#6495ED", "#6495ED"],
+                colors=[LIGHT_BLUE, LIGHT_BLUE],
                 labels=["1″", "2″"],
                 linewidth=2.0,
             )
@@ -321,6 +325,21 @@ class GuiderPlotter:
         stamp_info = self.annotate_center(stamp_num, axs["center"], jitter=std)
         axs["center"].axis("off")
         artists.append(stamp_info)
+
+        xmin1, ymin1 = draw_altaz_reference_arrow(axs["arrow"], cutout_size=cutout_size)
+        xmin2, ymin2 = draw_altaz_reference_arrow(
+            axs["arrow"],
+            -self.rot_angle,
+            color="lightgrey",
+            altlabel=" y",
+            azlabel="x",
+            cutout_size=cutout_size,
+        )
+        axs["arrow"].axis("off")
+        xmin = np.min([xmin1, xmin2]) - 3
+        ymin = np.min([ymin1, ymin2]) - 3
+        axs["arrow"].set_xlim(xmin, xmin + cutout_size)
+        axs["arrow"].set_ylim(ymin, ymin + cutout_size)
 
         # Clear ticks and labels
         for ax in axs.values():
@@ -856,3 +875,77 @@ def measure_photometric_variation(stars: pd.DataFrame) -> dict[str, float]:
             "magoffset_rms": rms,
         }
     return phot_stats
+
+
+def draw_altaz_reference_arrow(
+    ax,
+    rot_angle=0,
+    altlabel="Alt",
+    azlabel="az",
+    color=LIGHT_BLUE,
+    length=None,
+    cutout_size=30,
+    center=(None, None),
+) -> tuple[float, float]:
+    """Draw Alt/Az coordinate reference arrows in the bottom-left corner."""
+    length = cutout_size / 4 if length is None else length
+    # x0, y0 = cutout_size // 2, cutout_size // 2
+
+    theta = np.radians(rot_angle)
+    dx_az, dy_az = length * np.cos(theta), length * np.sin(theta)
+    dx_alt, dy_alt = -length * np.sin(theta), length * np.cos(theta)
+
+    # Offset to lower-left corner
+    if center[0] is not None and center[1] is not None:
+        x0, y0 = center
+    else:
+        x0, y0 = cutout_size // 2, cutout_size // 2
+
+    # Az arrow
+    ax.arrow(
+        x0,
+        y0,
+        dx_az,
+        dy_az,
+        color=color,
+        width=0.25,
+        head_width=1.0,
+        head_length=1.5,
+        length_includes_head=True,
+        zorder=10,
+    )
+    ax.text(
+        x0 + dx_az + 0.5,
+        y0 + dy_az,
+        azlabel,
+        color=color,
+        fontsize=9,
+        fontweight="bold",
+    )
+
+    # Alt arrow
+    ax.arrow(
+        x0,
+        y0,
+        dx_alt,
+        dy_alt,
+        color=color,
+        width=0.25,
+        head_width=1.0,
+        head_length=1.5,
+        length_includes_head=True,
+        zorder=10,
+    )
+    ax.text(
+        x0 + dx_alt + 0.5,
+        y0 + dy_alt,
+        altlabel,
+        color=color,
+        fontsize=9,
+        fontweight="bold",
+    )
+
+    ax.set_xlim(x0, cutout_size)
+    ax.set_ylim(y0, cutout_size)
+
+    return np.min([dx_alt + x0, dx_az + x0]), np.min([dy_alt + y0, dy_az + y0])
