@@ -54,9 +54,7 @@ class GuiderPlotter:
         ("R00_SG1", ".", ".", "R04_SG0"),
         ("arrow", "R00_SG0", "R04_SG1", "."),
     ]
-    DETNAMES = [
-        cell for row in LAYOUT for cell in row if (cell != ".") & (cell != "center") & (cell != "arrow")
-    ]
+    DETNAMES = [cell for row in LAYOUT for cell in row if (cell[0] == "R")]
 
     COLOR_MAP = ["black", "firebrick", "grey", "lightgrey"]
     MARKERS = [".", "x", "+", "s", "o", "^"]
@@ -341,9 +339,12 @@ class GuiderPlotter:
         axs["arrow"].set_xlim(xmin, xmin + cutout_size)
         axs["arrow"].set_ylim(ymin, ymin + cutout_size)
 
-        # Clear ticks and labels
+        # Clear ticks, labels, and remove borders
         for ax in axs.values():
             self.clear_axis_ticks(ax)
+            for spine in ax.spines.values():
+                spine.set_visible(False)
+
         return artists
 
     def clear_axis_ticks(self, ax) -> None:
