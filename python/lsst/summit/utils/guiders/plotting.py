@@ -64,6 +64,9 @@ class GuiderPlotter:
         self.stars_df = stars_df[stars_df["expid"] == self.exp_id]
         self.stats_df = self.assemble_stats()
 
+        # compute camera angle for reference arrow (sky -> focal-plane)
+        self.rot_angle = compute_camera_angle(self.stars_df, view="fp")
+
         sns.set_style("white")
         sns.set_context("talk", font_scale=0.8)
 
@@ -246,7 +249,7 @@ class GuiderPlotter:
         # read full stamp
         if stamp_num >= len(guider.timestamps):
             raise ValueError(
-                f"stamp_num {stamp_num} is out of range for guider with {len(guider.timestamps)} stamps."
+                f"stamp_num {stamp_num} is out of range for guider" + f"with {len(guider.timestamps)} stamps."
             )
         elif stamp_num < 0:
             return guider.getStackedStampArray(detName=detname)
@@ -263,6 +266,7 @@ class GuiderPlotter:
         plo=90.0,
         phi=99.0,
         cutout_size=30,
+        is_animated=False,
     ) -> list:
         """Plot the stamp array for all the guiders.
         Args:
@@ -272,8 +276,8 @@ class GuiderPlotter:
             axs (matplotlib.axes.Axes): axes object
         """
         # the guider view should be 'dvcs'
-        if guiderData.view != "dvcs":
-            raise ValueError("Guider view must be 'dvcs' for mosaic plotting.")
+        # if guiderData.view != "dvcs":
+        # raise ValueError("Guider view must be 'dvcs' for mosaic plotting.")
 
         if fig is None:
             gs = dict(hspace=0.0, wspace=0.0)
@@ -289,34 +293,52 @@ class GuiderPlotter:
 
         artists = []
         for detname in self.DETNAMES:
-            xcen, ycen = self.centroids.get(detname, (None, None))
+            xcen, ycen = self.centroids.get(detname, (0, 0))
+            center = (float(xcen), float(ycen))
+
+            # compute rotation angle
+            df = self.stars_df[self.stars_df["detector"] == detname]
+            rot_angle = compute_camera_angle(df, view=guiderData.view)
+            theta_ccd_to_sky = (-rot_angle) % 360.0
+            # print(f"Rotation angle for {detname} is {rot_angle:.2f} deg")
+            # make cutout/ rotate to alt/az
+            half = cutout_size // 2
 
             img = self.load_image(guiderData, detname, stamp_num)
-            cutout = make_cutout(img, xcen, ycen, size=cutout_size)
+            cropped = crop_around_center(img, center, cutout_size)
+            # cropped[:, half] = np.nanmax(cropped)
+            cutout = rotate_around_center(cropped, theta_ccd_to_sky, (half, half))
             vmin, vmax = np.nanpercentile(cutout, plo), np.nanpercentile(cutout, phi)
 
             axs_img = axs[detname]
             im_object = axs_img.imshow(
-                cutout, origin="lower", cmap="Greys", animated=True, vmin=vmin, vmax=vmax
+                cutout,
+                origin="lower",
+                cmap="Greys",
+                animated=True,
+                vmin=vmin,
+                vmax=vmax,
             )
-            txt_object = self.annotate_detector(detname, axs_img)
 
-            center = (cutout_size / 2.0, cutout_size / 2.0)
-            # if xcen is not None:
-            # crosshairs
-            axs_img.axvline(cutout_size / 2.0, color="grey", linestyle="--", linewidth=1)
-            axs_img.axhline(cutout_size / 2.0, color="grey", linestyle="--", linewidth=1)
             axs_img.set_aspect("equal", "box")
-            _ = plot_guide_circles(
-                axs_img,
-                center,
-                radii=[5, 10],
-                colors=[LIGHT_BLUE, LIGHT_BLUE],
-                labels=["1″", "2″"],
-                linewidth=2.0,
-            )
 
-            artists.extend([im_object, txt_object])
+            if not is_animated:
+                _ = self.annotate_detector(detname, axs_img)
+
+                # crosshairs
+                axs_img.axvline(half, color="grey", linestyle="--", linewidth=1)
+                axs_img.axhline(half, color="grey", linestyle="--", linewidth=1)
+                # cricles
+                _ = plot_guide_circles(
+                    axs_img,
+                    (half, half),
+                    radii=[5, 10],
+                    colors=[LIGHT_BLUE, LIGHT_BLUE],
+                    labels=["1″", "2″"],
+                    linewidth=2.0,
+                )
+
+            artists.extend([im_object])
 
         # Annotate the center
         std = np.nanstd(np.hypot(self.stars_df["dalt"], self.stars_df["daz"]))
@@ -324,20 +346,21 @@ class GuiderPlotter:
         axs["center"].axis("off")
         artists.append(stamp_info)
 
-        xmin1, ymin1 = draw_altaz_reference_arrow(axs["arrow"], cutout_size=cutout_size)
-        xmin2, ymin2 = draw_altaz_reference_arrow(
-            axs["arrow"],
-            -self.rot_angle,
-            color="lightgrey",
-            altlabel=" y",
-            azlabel="x",
-            cutout_size=cutout_size,
-        )
-        axs["arrow"].axis("off")
-        xmin = np.min([xmin1, xmin2]) - 3
-        ymin = np.min([ymin1, ymin2]) - 3
-        axs["arrow"].set_xlim(xmin, xmin + cutout_size)
-        axs["arrow"].set_ylim(ymin, ymin + cutout_size)
+        if not is_animated:
+            xmin1, ymin1 = draw_altaz_reference_arrow(axs["arrow"], cutout_size=cutout_size)
+            xmin2, ymin2 = draw_altaz_reference_arrow(
+                axs["arrow"],
+                self.rot_angle,
+                color="lightgrey",
+                altlabel="yfp",
+                azlabel="xfp",
+                cutout_size=cutout_size,
+            )
+            axs["arrow"].axis("off")
+            xmin = np.min([xmin1, xmin2]) - 3
+            ymin = np.min([ymin1, ymin2]) - 3
+            axs["arrow"].set_xlim(xmin, xmin + cutout_size)
+            axs["arrow"].set_ylim(ymin, ymin + cutout_size)
 
         # Clear ticks, labels, and remove borders
         for ax in axs.values():
@@ -372,12 +395,13 @@ class GuiderPlotter:
     def annotate_center(self, stamp_num, ax, jitter=-1) -> plt.Text:
         """Annotate the center panel with exposure and stamp info."""
         self.clear_axis_ticks(ax)
-        text = (
+        text = f"Center Stdev.: {jitter:.2f} arcsec\n" if jitter > 0 else ""
+        text += (
             f"expid: {self.exp_id}\nStamp #: {stamp_num + 1:02d}"
             if stamp_num >= 0
             else f"expid: {self.exp_id}\nStacked w/ {self.stars_df['stamp'].nunique()} stamps"
         )
-        text += f"\nCenter Stdev.: {jitter:.2f} arcsec" if jitter > 0 else ""
+
         txt = ax.text(
             1.085,
             -0.10,
@@ -416,8 +440,8 @@ class GuiderPlotter:
         cutout_size=30,
     ) -> animation.ArtistAnimation:
         # the guider view should be 'dvcs'
-        if guider.view != "dvcs":
-            raise ValueError("Guider view must be 'dvcs' for mosaic GIF creation.")
+        # if guider.view != "dvcs":
+        # raise ValueError("Guider view must be 'dvcs' for mosaic GIF creation
 
         from matplotlib import animation
 
@@ -443,6 +467,7 @@ class GuiderPlotter:
             plo=plo,
             phi=phi,
             cutout_size=cutout_size,
+            is_animated=False,
         )
 
         frames = 2 * [artists0]
@@ -457,6 +482,7 @@ class GuiderPlotter:
                 plo=plo,
                 phi=phi,
                 cutout_size=cutout_size,
+                is_animated=True,
             )
             frames.append(artists)
         frames += 2 * [artists0]
@@ -808,8 +834,6 @@ class GuiderMosaicPlotter:
         plt.close(fig)
         return ani
 
-    # TODO: add the Alt/Az orientation
-
 
 def measure_std_centroid_stats(stars: pd.DataFrame) -> pd.DataFrame:
     """
@@ -847,6 +871,61 @@ def measure_std_centroid_stats(stars: pd.DataFrame) -> pd.DataFrame:
         "offset_zero_alt": coefs_alt[1],
     }
     return std_centroid_stats
+
+
+def crop_around_center(image: np.ndarray, center: tuple[float, float], size: int) -> np.ndarray:
+    """
+    Crop a square region from the image centered at a specific point.
+
+    Parameters
+    ----------
+    image : np.ndarray
+        Input 2D image.
+    center : tuple
+        The (x, y) center of the crop, in image pixel coordinates.
+    size : int
+        The size of the square crop (in pixels).
+
+    Returns
+    -------
+    np.ndarray
+        Cropped image of shape (size, size).
+    """
+    x, y = center
+    x, y = int(round(x)), int(round(y))
+    half = size // 2
+
+    y0 = max(0, y - half)
+    y1 = min(image.shape[0], y + half)
+    x0 = max(0, x - half)
+    x1 = min(image.shape[1], x + half)
+
+    cropped = image[y0:y1, x0:x1]
+
+    # Optional: pad if crop hits the edge
+    pad_y = size - (y1 - y0)
+    pad_x = size - (x1 - x0)
+    if pad_y > 0 or pad_x > 0:
+        cropped = np.pad(cropped, ((0, pad_y), (0, pad_x)), mode="constant", constant_values=np.nan)
+
+    return cropped
+
+
+def rotate_around_center(image: np.ndarray, angle_deg: float, center: tuple[float, float]) -> np.ndarray:
+    from scipy.ndimage import affine_transform
+
+    angle_rad = np.deg2rad(angle_deg)
+    cos_a = np.cos(angle_rad)
+    sin_a = np.sin(angle_rad)
+
+    # Rotation matrix in (row, col) = (y, x) order
+    R = np.array([[cos_a, sin_a], [-sin_a, cos_a]])
+
+    center_np = np.array(center)  # array
+    offset = center_np - R @ center_np
+
+    rotated = affine_transform(image, R, offset=offset, order=3, mode="nearest")
+    return rotated  # nd.array rotated
 
 
 def measure_photometric_variation(stars: pd.DataFrame) -> dict[str, float]:
@@ -950,3 +1029,37 @@ def draw_altaz_reference_arrow(
     ax.set_ylim(y0, cutout_size)
 
     return np.min([dx_alt + x0, dx_az + x0]), np.min([dy_alt + y0, dy_az + y0])
+
+
+def compute_camera_angle(df: pd.DataFrame, view="ccd") -> float:
+    """Compute the camera angle (degrees)
+    from a DataFrame of star measurements."""
+    if len(df) < 3:
+        raise ValueError("At least 3 stars are required to compute the camera angle.")
+
+    if view == "ccd":
+        xcol, ycol = "dx", "dy"
+    elif view == "dvcs":
+        xcol, ycol = "dx_dvcs", "dy_dvcs"
+    elif view == "fp":
+        xcol, ycol = "dxfp", "dyfp"
+    else:
+        raise ValueError("view must be 'ccd', 'dvcs' of 'fp'.")
+
+    xccd = df[xcol].values
+    yccd = df[ycol].values
+    az = df["daz"].values
+    alt = df["dalt"].values
+
+    # Centered coordinates
+    X_roi = np.vstack([xccd - np.mean(xccd), yccd - np.mean(yccd)])
+    X_sky = np.vstack([az - np.mean(az), alt - np.mean(alt)])
+
+    # Rotation from sky → ROI
+    U, _, Vt = np.linalg.svd(X_sky @ X_roi.T)
+    R = U @ Vt
+    theta = np.arctan2(R[1, 0], R[0, 0])
+    angle_deg = np.degrees(theta) % 360.0
+
+    # print(f"Computed camera angle: {angle_deg:.2f} degrees")
+    return angle_deg
