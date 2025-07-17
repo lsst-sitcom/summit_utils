@@ -27,24 +27,23 @@ __all__ = [
     "getGuiderStamps",
     "GuiderData",
 ]
+
+
 from dataclasses import dataclass
 
-import astropy.units as u
 import numpy as np
 from astropy.time import Time
 
 import lsst.summit.utils.butlerUtils as butlerUtils
 from lsst.afw import cameraGeom
-from lsst.afw.image import MaskedImageF
+from lsst.afw.image import ExposureF, ImageF, MaskedImageF
 from lsst.daf.butler import Butler
 from lsst.meas.algorithms.stamps import Stamp, Stamps
-from lsst.obs.lsst import LsstCam
+from lsst.obs.lsst import LsstCam  # pylint: disable=unused-import
 from lsst.summit.utils.guiders.transformation import convert_roi, mk_ccd_to_dvcs, mk_roi_bboxes
 
 FREQ = 5.0  # Hz, frequency of the guider data acquisition
 DELAY = 20 / 1000  # seconds
-
-# TODO: getGuiderAmpMinXY
 
 
 @dataclass(slots=True)
@@ -214,7 +213,13 @@ class GuiderReader:
         self.detNames = list(self.guiderNameMap.keys())
         self.nGuiders = len(self.guiderNameMap)
 
-    def get(self, dayObs: int, seqNum: int, detectors: list[int] | None = None) -> GuiderData:
+    def get(
+        self,
+        dayObs: int,
+        seqNum: int,
+        detectors: list[int] | None = None,
+        nstamps: int | None = 50,
+    ) -> GuiderData:
         """Get the guider data for a given day of observation and sequence
         number.
 
@@ -239,7 +244,7 @@ class GuiderReader:
 
         wcs = self.butler.get("raw.wcs", day_obs=dayObs, seq_num=seqNum, detector=23, instrument="LSSTCam")
 
-        perDetectorData = self.getDataForAllDetectors(dayObs, seqNum)
+        perDetectorData = self.getDataForAllDetectors(dayObs, seqNum, nstamps)
         header = self.getHeaderInfo(perDetectorData[self.detNames[0]])  # assume all the same for now
         roiAmpNames = self.getRoiAmpNames(perDetectorData)
         timestamps = self.getTimestamps(perDetectorData, header)
@@ -264,16 +269,21 @@ class GuiderReader:
         timestamps_all = []
         for detName in perDetectorData.keys():
             stamps = perDetectorData[detName]
-            timestamps = []
+            mjd_list = []
             for i in range(len(stamps)):
                 mjd = stamps[i].metadata["STMPTMJD"]
-                timestamps.append(Time(mjd, format="mjd", scale="utc"))
-            timestamps_all.append(timestamps)
+                mjd_list.append(mjd if np.isfinite(mjd) else np.nan)
+
+            mjd_array = np.ma.masked_invalid(mjd_list)
+            tdet = Time(mjd_array, format="mjd", scale="utc")
+            timestamps_all.append(tdet)
         # ascending array
         timestamps = np.unique(np.concatenate(timestamps_all)).tolist()
         return timestamps
 
-    def getDataForAllDetectors(self, dayObs: int, seqNum: int) -> dict[str, Stamps]:
+    def getDataForAllDetectors(
+        self, dayObs: int, seqNum: int, nstamps: int | None = None
+    ) -> dict[str, Stamps]:
         """Load the data from the butler for all guider detectors.
 
         Parameters
@@ -298,9 +308,23 @@ class GuiderReader:
                     "guider_raw", day_obs=dayObs, seq_num=seqNum, detector=detNum
                 )
             elif self.view == "dvcs":
-                dataset[detName] = getGuiderStamps(detNum, seqNum, dayObs, butler=self.butler, view="dvcs")
+                dataset[detName] = getGuiderStamps(
+                    detNum,
+                    seqNum,
+                    dayObs,
+                    butler=self.butler,
+                    view="dvcs",
+                    nstamps=nstamps,
+                )
             elif self.view == "ccd":
-                dataset[detName] = getGuiderStamps(detNum, seqNum, dayObs, butler=self.butler, view="ccd")
+                dataset[detName] = getGuiderStamps(
+                    detNum,
+                    seqNum,
+                    dayObs,
+                    butler=self.butler,
+                    view="ccd",
+                    nstamps=nstamps,
+                )
             else:
                 raise ValueError(f"Unknown view type: {self.view}. Use 'roi', 'dvcs', or 'ccd'.")
 
@@ -359,13 +383,14 @@ class GuiderReader:
         return list(self.guiderNameMap.values())
 
 
-# TODO: Timestamps
+# TODO: Check missing stamps
 def getGuiderStamps(
     detNum: int,
     seqNum: int,
     dayObs: int,
     butler: Butler,
     view: str = "dvcs",
+    nstamps: int | None = None,
     whichstamps: list[int] | None = None,
 ) -> Stamps:
     """
@@ -417,9 +442,19 @@ def getGuiderStamps(
         detector_swapped = camera[detName_swapped]
         detNum_swapped = detector_swapped.getId()
 
-        dataId = {"instrument": "LSSTCam", "detector": detNum_swapped, "day_obs": dayObs, "seq_num": seqNum}
+        dataId = {
+            "instrument": "LSSTCam",
+            "detector": detNum_swapped,
+            "day_obs": dayObs,
+            "seq_num": seqNum,
+        }
     else:
-        dataId = {"instrument": "LSSTCam", "detector": detNum, "day_obs": dayObs, "seq_num": seqNum}
+        dataId = {
+            "instrument": "LSSTCam",
+            "detector": detNum,
+            "day_obs": dayObs,
+            "seq_num": seqNum,
+        }
 
     # finally read from the Butler
     raw_stamps = butler.get("guider_raw", dataId)
@@ -440,17 +475,21 @@ def getGuiderStamps(
     # from CCD view -> DVCS view and the reverse
     ft, bt = mk_ccd_to_dvcs(ccd_view_bbox, detector.getOrientation().getNQuarter())
 
-    # now loop over the individual ROIs
-    stamp_list: list[Stamp] = []
-    iterstamps: list[int] = []
-    if whichstamps is None:
-        iterstamps = list(np.arange(len(raw_stamps.getMaskedImages())))
-    else:
-        iterstamps = whichstamps
+    if nstamps is None:
+        nstamps = md["N_STAMPS"]
 
-    for i in iterstamps:
+    timestamps = get_timestamps(raw_stamps, nstamps)  # to populate the metadata timestamps
+    # freq = timestamps.freq * 86400.0  # seconds
 
+    goodstamps = np.where(~timestamps.mask)[0].tolist()
+    badstamps = np.where(timestamps.mask)[0].tolist()
+    stampsDict = {}
+    i = 0
+    for index in goodstamps:
         masked_ims = raw_stamps.getMaskedImages()[i]
+        rmd = raw_stamps[i].metadata
+        rmd["DAQSTAMP"] = rmd.get("DAQSTAMP", index)
+
         # convert to DVCS or CCD view
         raw_roi = masked_ims.getImage().getArray()
         roi_dvcs = convert_roi(raw_roi, md, detector, ampName, camera, view=view)
@@ -458,21 +497,62 @@ def getGuiderStamps(
         # build a Stamp Object
         output_masked_im = MaskedImageF(roi_dvcs)
         archive_element = [ccd_view_bbox, ft, bt]
+        stampsDict[index] = Stamp(output_masked_im, archive_element, metadata=rmd)
+        i += 1
 
-        # fix metadata if missing
-        # this happens for exposures before 2025-06
-        if raw_stamps[i].metadata is None:
-            print(f"Warning: stamp {i} has no metadata, creating empty metadata")
-            timestamp = Time(md["GDSSTART"], format="isot", scale="utc") + (i / FREQ + DELAY) * u.second
+    for index in badstamps:
+        # print(
+        #     f"Warning: The stamp {i} is missing ind detector {detNum},""
+        #     "inserting empty stamp"
+        # )
+        nrows, ncols = int(md["ROIROWS"]), int(md["ROICOLS"])
+        img0 = ImageF(array=np.zeros((nrows, ncols), dtype=np.float32))
+        output_masked_im = ExposureF(MaskedImageF(img0))
+        archive_element = [ccd_view_bbox, ft, bt]
+        # create empty metadata
+        md_empty = md.toDict().copy()
+        md_empty["DAQSTAMP"] = index
+        md_empty["STMPTMJD"] = np.nan
+        stampsDict[index] = Stamp(output_masked_im, archive_element, metadata=md_empty)
 
-            raw_stamps[i].metadata = md
-            raw_stamps[i].metadata["DAQSTAMP"] = i
-            raw_stamps[i].metadata["STMPTMJD"] = timestamp.mjd
-
-        stamp_list.append(Stamp(output_masked_im, archive_element, metadata=raw_stamps[i].metadata))
-
+    stamp_list = [stampsDict[i] for i in range(nstamps)]
     output_stamps = Stamps(stamp_list, md, use_archive=True)
     return output_stamps
+
+
+def get_timestamps(raw_stamps: Stamps, nstamps: int = 50) -> Time:
+    timestamps_list = [stamp.metadata.get("STMPTMJD", np.nan) for stamp in raw_stamps]
+    mjd_array = np.ma.masked_invalid(timestamps_list)
+    timestamps = Time(mjd_array, format="mjd", scale="utc")
+
+    # infer frequency from valid timestamps
+    dt = np.diff(timestamps.jd)
+    freq = np.nanmedian(dt)
+    start = timestamps[0].jd
+    timestamps_ideal = Time(start + np.arange(nstamps) * freq, format="jd", scale="utc")
+
+    tolerance = 0.5 * freq
+    actual_jd = timestamps.jd
+
+    # Build aligned timestamp list with np.nan where missing
+    mjd_list = []
+    for t_ideal in timestamps_ideal.jd:
+        # check if any actual timestamp is close to this ideal timestamp
+        if np.any(np.abs(actual_jd - t_ideal) < tolerance):
+            # match found — find the closest
+            idx = np.argmin(np.abs(actual_jd - t_ideal))
+            mjd_list.append(actual_jd[idx])
+        else:
+            # no match — this is a missing timestamp
+            mjd_list.append(np.nan)
+
+    mjd_array = np.ma.masked_invalid(mjd_list)
+    full_timestamps = Time(mjd_array, format="mjd", scale="utc")
+    return full_timestamps
+
+
+# dt = np.nanmedian(np.diff(timestamps.jd)) * 86400.0
+# nmissing = np.count_nonzero(timestamps.mask)
 
 
 if __name__ == "__main__":

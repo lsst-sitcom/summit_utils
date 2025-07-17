@@ -250,6 +250,10 @@ class GuiderStarTracker:
 
             stamp = stampObject.stamp_im.image.array
 
+            if np.count_nonzero(stamp != 0) < 1:
+                self.log.warning(f"Stamp {si} in {guiderName} is empty, skipping it.")
+                continue
+
             # Skip first stamp (shutter opening)
             if si == 0:
                 continue

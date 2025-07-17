@@ -1028,7 +1028,7 @@ def draw_altaz_reference_arrow(
     ax.set_xlim(x0, cutout_size)
     ax.set_ylim(y0, cutout_size)
 
-    return np.min([dx_alt + x0, dx_az + x0]), np.min([dy_alt + y0, dy_az + y0])
+    return np.nanmin([dx_alt + x0, dx_az + x0]), np.nanmin([dy_alt + y0, dy_az + y0])
 
 
 def compute_camera_angle(df: pd.DataFrame, view="ccd") -> float:
@@ -1046,20 +1046,26 @@ def compute_camera_angle(df: pd.DataFrame, view="ccd") -> float:
     else:
         raise ValueError("view must be 'ccd', 'dvcs' of 'fp'.")
 
-    xccd = df[xcol].values
-    yccd = df[ycol].values
-    az = df["daz"].values
-    alt = df["dalt"].values
+    dfn = df.dropna(subset=[xcol, ycol, "daz", "dalt"]).copy()
+    if len(dfn) < 3:
+        raise ValueError("At least 3 stars with valid coordinates are required.")
+    xccd = dfn[xcol].values
+    yccd = dfn[ycol].values
+    az = dfn["daz"].values
+    alt = dfn["dalt"].values
 
     # Centered coordinates
     X_roi = np.vstack([xccd - np.mean(xccd), yccd - np.mean(yccd)])
     X_sky = np.vstack([az - np.mean(az), alt - np.mean(alt)])
 
     # Rotation from sky → ROI
-    U, _, Vt = np.linalg.svd(X_sky @ X_roi.T)
-    R = U @ Vt
-    theta = np.arctan2(R[1, 0], R[0, 0])
-    angle_deg = np.degrees(theta) % 360.0
+    try:
+        U, _, Vt = np.linalg.svd(X_sky @ X_roi.T)
+        R = U @ Vt
+        theta = np.arctan2(R[1, 0], R[0, 0])
+        angle_deg = np.degrees(theta) % 360.0
+    except np.linalg.LinAlgError:
+        angle_deg = np.nan
 
     # print(f"Computed camera angle: {angle_deg:.2f} degrees")
     return angle_deg
