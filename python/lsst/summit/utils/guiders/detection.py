@@ -34,6 +34,7 @@ from astropy.stats import sigma_clipped_stats
 from lsst.afw.image import ExposureF, ImageF, MaskedImageF
 from lsst.summit.utils.guiders.reading import GuiderReader
 from lsst.summit.utils.guiders.transformation import (
+    convert_ccd_to_dvcs,
     convert_roi_to_ccd,
     convert_to_altaz,
     convert_to_focal_plane,
@@ -282,12 +283,15 @@ class GuiderStarTracker:
                 self.guiderData,
                 guiderName,
             )
+            xdvcs, ydvcs = convert_ccd_to_dvcs(xccd, yccd, self.guiderData, guiderName)
             xfp, yfp = convert_to_focal_plane(xccd, yccd, detNum)
             alt, az = convert_to_altaz(xccd, yccd, self.guiderData.wcs, obstime)
 
             # Add reference positions
             sources["xccd"] = xccd
             sources["yccd"] = yccd
+            sources["xdvcs"] = xdvcs
+            sources["ydvcs"] = ydvcs
             sources["xfp"] = xfp
             sources["yfp"] = yfp
             sources["alt"] = alt
@@ -318,6 +322,8 @@ class GuiderStarTracker:
         Compute the offsets for each star in the catalog.
         """
         # make reference positions
+        stars["xdvcs_ref"] = stars.groupby("starid")["xdvcs"].transform("median")
+        stars["ydvcs_ref"] = stars.groupby("starid")["ydvcs"].transform("median")
         stars["xccd_ref"] = stars.groupby("starid")["xccd"].transform("median")
         stars["yccd_ref"] = stars.groupby("starid")["yccd"].transform("median")
         stars["xfp_ref"] = stars.groupby("starid")["xfp"].transform("median")
@@ -328,6 +334,8 @@ class GuiderStarTracker:
         # Compute all your offsets
         stars["dx"] = stars["xccd"] - stars["xccd_ref"]
         stars["dy"] = stars["yccd"] - stars["yccd_ref"]
+        stars["dx_dvcs"] = stars["xdvcs"] - stars["xdvcs_ref"]
+        stars["dy_dvcs"] = stars["ydvcs"] - stars["ydvcs_ref"]
         stars["dxfp"] = stars["xfp"] - stars["xfp_ref"]
         stars["dyfp"] = stars["yfp"] - stars["yfp_ref"]
         stars["dalt"] = (stars["alt"] - stars["alt_ref"]) * 3600
