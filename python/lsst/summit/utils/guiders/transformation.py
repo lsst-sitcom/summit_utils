@@ -35,6 +35,7 @@ __all__ = [
     "convert_to_focal_plane",
     "convert_roi_to_ccd",
     "convert_ccd_to_roi",
+    "convert_ccd_to_dvcs",
 ]
 
 from typing import TYPE_CHECKING, Any
@@ -662,7 +663,7 @@ def convert_ccd_to_roi(
     if len(xccd) == 0:
         return np.array([]), np.array([])
 
-    box, ccd2roi, _ = stamps.getArchiveElements()[0]
+    box, ccd2dvcs, _ = stamps.getArchiveElements()[0]
 
     if view == "ccd":
         lower_left_corner = box.getMin()
@@ -670,9 +671,41 @@ def convert_ccd_to_roi(
         xroi, yroi = xccd - xmin, yccd - ymin
 
     elif view == "dvcs":
-        xroi, yroi = ccd2roi(xccd, yccd)
+        xroi, yroi = ccd2dvcs(xccd, yccd)
 
     else:
         raise ValueError(f"Unsupported view '{view}' in convert_ccd_to_roi", "must be 'ccd' or 'dvcs'")
 
     return xroi, yroi
+
+
+def convert_ccd_to_dvcs(
+    xccd: np.ndarray, yccd: np.ndarray, guiderData: GuiderData, guiderName: str
+) -> tuple[np.ndarray, np.ndarray]:
+    """
+    Convert CCD pixel coordinates to DVCS focal plane coordinates (mm).
+
+    Parameters
+    ----------
+    xccd : np.ndarray
+        Array of x CCD pixel coordinates.
+    yccd : np.ndarray
+        Array of y CCD pixel coordinates.
+    guiderData : GuiderData
+        GuiderData object containing the guider datasets and view information.
+    guiderName : str
+        Name of the guider (e.g., 'R44_SG0', etc.)
+
+    Returns
+    -------
+    xdvcs, ydvcs : np.ndarray
+        Arrays of x and y DVCS focal plane coordinates (pixel).
+    """
+    stamps = guiderData.datasets[guiderName]
+
+    if len(xccd) == 0:
+        return np.array([]), np.array([])
+
+    box, ccd2dvcs, _ = stamps.getArchiveElements()[0]
+    xdvcs, ydvcs = ccd2dvcs(xccd, yccd)
+    return xdvcs, ydvcs
