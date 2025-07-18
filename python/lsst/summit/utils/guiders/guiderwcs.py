@@ -25,10 +25,11 @@ __all__ = [
 ]
 
 from lsst.afw import cameraGeom
+from lsst.geom import Angle, degrees
 from lsst.obs.base import createInitialSkyWcsFromBoresight
 
 
-def make_init_guider_wcs(camera, visitInfo):
+def make_init_guider_wcs(camera, visitInfo) -> dict[str, any]:
     """
     Parameters
     ----------
@@ -53,6 +54,28 @@ def make_init_guider_wcs(camera, visitInfo):
         if det.getType() == cameraGeom.DetectorType.GUIDER:
             # get WCS
             args = boresight, orientation, det
-            cam_wcs[det.getId()] = createInitialSkyWcsFromBoresight(*args, flipX=False)
+            cam_wcs[det.getName()] = createInitialSkyWcsFromBoresight(*args, flipX=False)
 
     return cam_wcs
+
+
+def get_camera_rot_angle(visitinfo) -> float:
+    """Get the camera rotation angle from visitInfo
+
+    Parameters
+    ----------
+    visitInfo : lsst.afw.image.VisitInfo
+        visit info from an Image
+
+    Returns
+    -------
+    orientation : float
+        Camera rotation angle in radians
+
+    """
+    camRot = (
+        visitinfo.getBoresightParAngle().asDegrees() - visitinfo.getBoresightRotAngle().asDegrees() - 90.0
+    )
+    camRotAngle = Angle(camRot, degrees)
+    camRotAngleW = camRotAngle.wrapNear(Angle(0.0))
+    return camRotAngleW.asDegrees()
