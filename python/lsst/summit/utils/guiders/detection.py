@@ -30,11 +30,11 @@ import numpy as np
 import pandas as pd
 from astropy.nddata import Cutout2D
 from astropy.stats import sigma_clipped_stats
+from astropy.time import Time
 
 from lsst.afw.image import ExposureF, ImageF, MaskedImageF
 from lsst.summit.utils.guiders.reading import GuiderReader
 from lsst.summit.utils.guiders.transformation import (
-    convert_ccd_to_dvcs,
     convert_roi_to_ccd,
     convert_to_altaz,
     convert_to_focal_plane,
@@ -158,7 +158,7 @@ class GuiderStarTracker:
                 max_ellipticity=self.max_ellipticity,
             )
         tracked_star_tables = []
-        for guiderName in self.guiderData.getGuiderNames():
+        for guiderName in self.guiderData.guiderNames:
             ref = ref_catalog[ref_catalog["detector"] == guiderName].copy()
             # take the first star only
             if len(ref) > 1:
@@ -228,17 +228,15 @@ class GuiderStarTracker:
         starid = ref["starid"].iloc[0]
         amp_name = self.guiderData.getGuiderAmpName(guiderName)
 
-        fwhm = self.psf_fwhm
         image_list = self.guiderData.datasets[guiderName]
         rows = []
 
         # get some basic info
         detNum = self.guiderData.getGuiderDetNum(guiderName)
-        nmid = len(self.guiderData.timestamps) // 2
-        obstime = self.guiderData.timestamps[nmid]
+        obstime = Time(self.guiderData.header["start_time"])
 
         # --- per‐stamp measurements ---
-        for i, stampObject in enumerate(image_list):
+        for i, stampObject in enumerate(image_list[1:]):
             if not (si := stampObject.metadata.get("DAQSTAMP")):
                 self.log.warning(
                     (
@@ -263,14 +261,15 @@ class GuiderStarTracker:
             cutout = Cutout2D(isr, (ref_x, ref_y), size=50, mode="partial", fill_value=np.nan)
 
             _, median, std = sigma_clipped_stats(cutout.data, sigma=3.0)
-            sources = measure_star_in_aperture(
-                cutout.data - median, aperture_radius=fwhm, std_bkg=std, gain=1.0
-            )
-
+            # sources = measure_star_in_aperture(
+            # cutout.data - median, aperture_radius=fwhm, std_bkg=std, gain=1.0
+            # )
+            sources = run_galsim(cutout.data - median, bkg_std=std, gain=1.0)
             if len(sources) == 0:
                 # No sources detected in this stamp, skip it
                 continue
 
+            sources = pd.DataFrame(sources, index=np.arange(len(sources)))
             sources["starid"] = starid
             sources["stamp"] = si
             sources["ampname"] = amp_name
@@ -282,20 +281,18 @@ class GuiderStarTracker:
 
             # Convert roi to ccd/focal-plane and alt/az coordinates
             xccd, yccd = convert_roi_to_ccd(
-                sources["xroi"].values,
-                sources["yroi"].values,
+                sources["xroi"],
+                sources["yroi"],
                 self.guiderData,
                 guiderName,
             )
-            xdvcs, ydvcs = convert_ccd_to_dvcs(xccd, yccd, self.guiderData, guiderName)
+            wcs = self.guiderData.wcs[guiderName]
             xfp, yfp = convert_to_focal_plane(xccd, yccd, detNum)
-            alt, az = convert_to_altaz(xccd, yccd, self.guiderData.wcs, obstime)
+            alt, az = convert_to_altaz(xccd, yccd, wcs, obstime)
 
             # Add reference positions
             sources["xccd"] = xccd
             sources["yccd"] = yccd
-            sources["xdvcs"] = xdvcs
-            sources["ydvcs"] = ydvcs
             sources["xfp"] = xfp
             sources["yfp"] = yfp
             sources["alt"] = alt
@@ -307,6 +304,7 @@ class GuiderStarTracker:
         if len(df) < 1:
             return pd.DataFrame(columns=DEFAULT_COLUMNS)  # only one detection, ignore it
         else:
+            # df = df[df["snr"] >= self.min_snr]
             return df
 
     def set_unique_id(self, stars) -> pd.DataFrame:
@@ -326,8 +324,8 @@ class GuiderStarTracker:
         Compute the offsets for each star in the catalog.
         """
         # make reference positions
-        stars["xdvcs_ref"] = stars.groupby("starid")["xdvcs"].transform("median")
-        stars["ydvcs_ref"] = stars.groupby("starid")["ydvcs"].transform("median")
+        stars["xroi_ref"] = stars.groupby("starid")["xroi"].transform("median")
+        stars["yroi_ref"] = stars.groupby("starid")["yroi"].transform("median")
         stars["xccd_ref"] = stars.groupby("starid")["xccd"].transform("median")
         stars["yccd_ref"] = stars.groupby("starid")["yccd"].transform("median")
         stars["xfp_ref"] = stars.groupby("starid")["xfp"].transform("median")
@@ -338,8 +336,6 @@ class GuiderStarTracker:
         # Compute all your offsets
         stars["dx"] = stars["xccd"] - stars["xccd_ref"]
         stars["dy"] = stars["yccd"] - stars["yccd_ref"]
-        stars["dx_dvcs"] = stars["xdvcs"] - stars["xdvcs_ref"]
-        stars["dy_dvcs"] = stars["ydvcs"] - stars["ydvcs_ref"]
         stars["dxfp"] = stars["xfp"] - stars["xfp_ref"]
         stars["dyfp"] = stars["yfp"] - stars["yfp_ref"]
         stars["dalt"] = (stars["alt"] - stars["alt_ref"]) * 3600
@@ -487,11 +483,10 @@ def measure_star_in_aperture(
     )
 
 
-def run_galsim_detection(
+def run_source_detection(
     image: np.ndarray,
     th: float = 10,
     bkg_std: float = 15,
-    aperture_radius: float = 5,
     max_ellipticity: float = 0.1,
     gain: float = 1.0,
 ) -> pd.DataFrame:
@@ -505,80 +500,28 @@ def run_galsim_detection(
     footprints = detectObjectsInExp(exposure, th)
 
     if not footprints:
-        return pd.DataFrame(
-            columns=[
-                "xroi",
-                "yroi",
-                "xerr",
-                "yerr",
-                "fwhm",
-                "e1",
-                "e2",
-                "flux",
-                "flux_err",
-                "snr",
-            ]
-        )
+        return pd.DataFrame(columns=DEFAULT_COLUMNS)
 
     results = []
 
     for fp in footprints.getFootprints():
         # Create a cutout of the image around the footprint
         bbox = fp.getBBox()
-        try:
-            subimage = exposure.getMaskedImage().getImage()[bbox]
-        except Exception:
-            continue
+        subimage = exposure.getMaskedImage().getImage()[bbox]
 
         array = subimage.array
         if not np.isfinite(array).all():
             continue
 
-        # GalSim adaptive moment
-        try:
-            gs_img = galsim.Image(array)
-            hsm_res = galsim.hsm.FindAdaptiveMom(gs_img, strict=False)
-            flag = hsm_res.error_message == ""
-            xcentroid_gs = hsm_res.moments_centroid.x if flag else np.nan
-            ycentroid_gs = hsm_res.moments_centroid.y if flag else np.nan
-            flux_gs = hsm_res.moments_amp if flag else np.nan
-            sigma_gs = hsm_res.moments_sigma if flag else np.nan
-            fwhm_gs = 2.355 * sigma_gs if flag else np.nan
-            n_pix = np.pi * fwhm_gs**2
-            flux_err = np.sqrt(flux_gs / gain + n_pix * bkg_std**2)
+        result = run_galsim(array, gain=gain, bkg_std=bkg_std)
+        result["xroi"] += bbox.getMinX()
+        result["yroi"] += bbox.getMinY()
 
-        except (galsim.errors.GalSimError, RuntimeError):
-            continue
-
-        # Ellipticity filtering using axis ratio
-        if np.hypot(hsm_res.observed_shape.e1, hsm_res.observed_shape.e2) > max_ellipticity:
-            continue
-
-        # Build row
-        result = {
-            "xroi": xcentroid_gs + bbox.getMinX(),
-            "yroi": ycentroid_gs + bbox.getMinY(),
-            "xerr": sigma_gs / np.sqrt(flux_gs) if flux_gs > 0 else np.nan,
-            "yerr": sigma_gs / np.sqrt(flux_gs) if flux_gs > 0 else np.nan,
-            "fwhm": fwhm_gs,
-            "e1": hsm_res.observed_shape.e1,
-            "e2": hsm_res.observed_shape.e2,
-            "flux": flux_gs,
-            "flux_err": flux_err,
-            "snr": flux_gs / flux_err if flux_err > 0 else 0.0,
-        }
         results.append(result)
-
     df = pd.DataFrame(results)
-    if df.empty:
-        return df
-    else:
-        df.sort_values("snr", ascending=False, inplace=True)
-        dfout = df[(df["snr"] >= th) & (df["flux"] > 0) & (df["flux_err"] > 0)]
-        return dfout.reset_index(drop=True)
+    return df
 
 
-# TODO: Replace SEP with galsim
 def build_reference_catalog(
     guider: GuiderData,
     aperture_radius: float = 6.0,
@@ -604,15 +547,12 @@ def build_reference_catalog(
         Reference catalog with default columns
     """
     table_list = []
-    for guiderName in guider.getGuiderNames():
+    for guiderName in guider.guiderNames:
         array = guider.getStackedStampArray(detName=guiderName, is_isr=True)
         _, median, std = sigma_clipped_stats(array, sigma=3.0)
-        sources = run_galsim_detection(
+        sources = run_source_detection(
             array, th=min_snr, max_ellipticity=max_ellipticity, bkg_std=std + median
         )
-
-        if len(sources) == 0:
-            continue
 
         # Filter out edge sources
         h, w = array.shape
@@ -623,10 +563,18 @@ def build_reference_catalog(
             & (sources["yroi"] < h - edge_margin)
         ]
         if len(sources) == 0:
+            logging.warning(f"Guider {guiderName} has no sources after edge cut.")
             continue
 
         # select only bright sources
         sources = sources[sources["snr"] >= min_snr]
+        max_ellip = np.sqrt(sources["e1"] ** 2 + sources["e2"] ** 2) <= max_ellipticity
+        sources = sources[max_ellip]
+
+        if len(sources) == 0:
+            logging.warning(f"Guider {guiderName} has no sources after SNR/ellip cut.")
+            continue
+
         sources.sort_values(by="snr", ascending=False, inplace=True)
         sources.reset_index(drop=True, inplace=True)
 
@@ -644,6 +592,73 @@ def build_reference_catalog(
 
     ref_catalog = pd.concat(table_list, ignore_index=True)
     return ref_catalog
+
+
+def run_galsim(
+    array: np.ndarray,
+    gain: float = 1.0,
+    bkg_std: float = 0.0,
+) -> pd.DataFrame:
+    """
+    Measure star properties using GalSim adaptive moments.
+
+    Parameters
+    ----------
+    array : np.ndarray
+        2D image array.
+    gain : float
+        Detector gain (e-/ADU).
+    bkg_std : float
+        Background RMS per pixel.
+
+    Returns
+    -------
+    pd.DataFrame
+        DataFrame with measured properties (one row).
+    """
+    gs_img = galsim.Image(array)
+    hsm_res = galsim.hsm.FindAdaptiveMom(gs_img, strict=False)
+    success = hsm_res.error_message == ""
+
+    if success:
+        xcentroid = hsm_res.moments_centroid.x
+        ycentroid = hsm_res.moments_centroid.y
+        flux = hsm_res.moments_amp
+        sigma = hsm_res.moments_sigma
+        e1 = hsm_res.observed_shape.e1
+        e2 = hsm_res.observed_shape.e2
+        g1 = hsm_res.observed_shape.g1
+        g2 = hsm_res.observed_shape.g2
+        fwhm = 2.355 * sigma
+        n_pix = np.pi * fwhm**2
+        flux_err = np.sqrt(flux / gain + n_pix * bkg_std**2)
+        snr = flux / flux_err if flux_err > 0 else 0.0
+        xerr = sigma / np.sqrt(flux) if flux > 0 else np.nan
+        yerr = sigma / np.sqrt(flux) if flux > 0 else np.nan
+        ixx = sigma**2 * (1 + g1)
+        iyy = sigma**2 * (1 - g1)
+        ixy = sigma**2 * g2
+    else:
+        xcentroid = ycentroid = sigma = flux = fwhm = np.nan
+        e1 = e2 = g1 = g2 = ixx = iyy = ixy = np.nan
+        flux_err = snr = xerr = yerr = 0.0
+
+    result = {
+        "xroi": xcentroid,
+        "yroi": ycentroid,
+        "xerr": xerr,
+        "yerr": yerr,
+        "e1": e1,
+        "e2": e2,
+        "ixx": ixx,
+        "iyy": iyy,
+        "ixy": ixy,
+        "fwhm": fwhm,
+        "flux": flux,
+        "flux_err": flux_err,
+        "snr": snr,
+    }
+    return result
 
 
 if __name__ == "__main__":
