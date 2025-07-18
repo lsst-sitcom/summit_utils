@@ -20,7 +20,7 @@
 # along with this program.  If not, see <https://www.gnu.org/licenses/>.
 from __future__ import annotations
 
-from typing import Optional
+from typing import Any, Optional
 
 __all__ = [
     "GuiderReader",
@@ -40,6 +40,7 @@ from lsst.afw.image import ExposureF, ImageF, MaskedImageF
 from lsst.daf.butler import Butler
 from lsst.meas.algorithms.stamps import Stamp, Stamps
 from lsst.obs.lsst import LsstCam  # pylint: disable=unused-import
+from lsst.summit.utils.guiders.guiderwcs import get_camera_rot_angle, make_init_guider_wcs
 from lsst.summit.utils.guiders.transformation import convert_roi, mk_ccd_to_dvcs, mk_roi_bboxes
 
 FREQ = 5.0  # Hz, frequency of the guider data acquisition
@@ -52,16 +53,20 @@ class GuiderData:
 
     dayObs: int
     seqNum: int
-    timestamps: list[Time]
+    timestamps: Time
     roiAmpNames: dict[str, str]
     guiderNameMap: dict[str, int]
     datasets: dict[str, Stamps]  # TODO: Consider renaming this & making private
     header: dict[str, str | float]
-    wcs: object | None = None  # WCS object, if available
-    freq: float = FREQ  # TODO: Stop hard coding this, once that's possible from upstream
+    wcs: dict[str, Any]
     view: str = "dvcs"  # view type, either 'dvcs' or 'ccd' or 'roi'
     # TODO: Add these properties back in if needed
     # filter_band: str
+
+    @property
+    def guiderNames(self) -> list[str]:
+        """Get the names of the guider detectors."""
+        return list(self.guiderNameMap.keys())
 
     def getStampArray(self, stampNum: int, detName: str) -> np.ndarray:
         """Get the stamp for a given stamp number and detector name.
@@ -136,10 +141,6 @@ class GuiderData:
             raise ValueError(f"Detector {detName} not found in roiAmpNames.")
         return self.roiAmpNames[detName]
 
-    def getGuiderNames(self) -> list[str]:
-        """Get the names of the guider detectors."""
-        return list(self.guiderNameMap.keys())
-
     def getGuiderDetNum(self, detName: str) -> int:
         """Get the detector number for a given guider detector name.
 
@@ -179,7 +180,7 @@ class GuiderReader:
         # The GuiderData class has all you need
         print(10*'-----')
         # The object now holds everything you need:
-        print("Guider detectors available :", guider.getGuiderNames())
+        print("Guider detectors available :", guider.guiderNames)
         print("Timestamp first value [MJD]:", guider.timestamps[0])
         print("Header fields              :", guider.header)
         print(10*'-----')
@@ -213,13 +214,7 @@ class GuiderReader:
         self.detNames = list(self.guiderNameMap.keys())
         self.nGuiders = len(self.guiderNameMap)
 
-    def get(
-        self,
-        dayObs: int,
-        seqNum: int,
-        detectors: list[int] | None = None,
-        nstamps: int | None = 50,
-    ) -> GuiderData:
+    def get(self, dayObs: int, seqNum: int, detectors: list[int] | None = None) -> GuiderData:
         """Get the guider data for a given day of observation and sequence
         number.
 
@@ -241,17 +236,29 @@ class GuiderReader:
         if detectors is not None:
             # TODO: Add option to only get data for some detectors
             raise NotImplementedError("Filtering by specific detectors is not yet implemented.")
+        # 0. Get the WCS map for all guiders
+        wcs = self.getWCSMap(dayObs, seqNum)
 
-        wcs = self.butler.get("raw.wcs", day_obs=dayObs, seq_num=seqNum, detector=23, instrument="LSSTCam")
+        # 1. Get timestamps for the guider with the maximum number of stamps
+        timestamps = self.getTimestamps(dayObs, seqNum)
+        nstamps = len(timestamps)
+        freq = timestamps.freq * 86400.0  # seconds
 
+        # 2. Get data for all guiders, padding with empty stamps if necessary
         perDetectorData = self.getDataForAllDetectors(dayObs, seqNum, nstamps)
-        header = self.getHeaderInfo(perDetectorData[self.detNames[0]])  # assume all the same for now
+
+        # 3. Get header info, expId, filter, etc.
+        header = self.getHeaderInfo(
+            perDetectorData[self.detNames[0]], nstamps, freq, wcs["camera_rot_angle_deg"]
+        )  # assume all the same for now
+
+        # 4. Get the amplifier names for each guider
         roiAmpNames = self.getRoiAmpNames(perDetectorData)
-        timestamps = self.getTimestamps(perDetectorData, header)
 
         if self.verbose:
             self.printHeaderInfo(header)
 
+        # 5. Pack everything into a GuiderData object
         guiderData = GuiderData(
             dayObs=dayObs,
             seqNum=seqNum,
@@ -265,20 +272,51 @@ class GuiderReader:
         )
         return guiderData
 
-    def getTimestamps(self, perDetectorData, header: dict[str, str | float]) -> list[Time]:
-        timestamps_all = []
-        for detName in perDetectorData.keys():
-            stamps = perDetectorData[detName]
-            mjd_list = []
-            for i in range(len(stamps)):
-                mjd = stamps[i].metadata["STMPTMJD"]
-                mjd_list.append(mjd if np.isfinite(mjd) else np.nan)
+    def getTimestamps(self, dayObs: int, seqNum: int) -> Time:
+        """
+        Get timestamps for the guider with the maximum number of stamps.
 
-            mjd_array = np.ma.masked_invalid(mjd_list)
-            tdet = Time(mjd_array, format="mjd", scale="utc")
-            timestamps_all.append(tdet)
-        # ascending array
-        timestamps = np.unique(np.concatenate(timestamps_all)).tolist()
+        Parameters
+        ----------
+        dayObs : int
+            Day of observation in YYYYMMDD format.
+        seqNum : int
+            Sequence number of the observation.
+
+        Returns
+        -------
+        timestamps : astropy.time.Time
+            Time array for each stamp (possibly masked for missing).
+        """
+        # find the guider with the maximum number of stamps
+        nstamps = {}
+
+        # loop over all guiders to find the max number of stamps
+        for detName, detNum in self.guiderNameMap.items():
+            n = self.butler.get(
+                "guider_raw",
+                day_obs=dayObs,
+                seq_num=seqNum,
+                detector=detNum,
+                instrument="LSSTCam",
+            ).metadata["N_STAMPS"]
+            nstamps[detName] = n
+        nstamp = max(nstamps.values())
+
+        # get the name of the guider witxh the max number of stamps
+        detNameMax = [k for k, v in nstamps.items() if v == nstamp][0]
+
+        # read the data for that guider
+        raw_stamps = self.butler.get(
+            "guider_raw",
+            day_obs=dayObs,
+            seq_num=seqNum,
+            detector=self.guiderNameMap[detNameMax],
+            instrument="LSSTCam",
+        )
+
+        # build the timestamps array
+        timestamps = get_timestamps(raw_stamps, nstamp)
         return timestamps
 
     def getDataForAllDetectors(
@@ -301,6 +339,8 @@ class GuiderReader:
         """
         assert self.butler is not None, "Butler must be provided or created."  # make mypy happy
         dataset: dict[str, Stamps] = {}
+
+        # max(ntampsGuiders)
         for detName, detNum in self.guiderNameMap.items():
             if self.view == "roi":
                 # TODO: Fix this!
@@ -330,6 +370,37 @@ class GuiderReader:
 
         return dataset
 
+    def getWCSMap(self, dayObs: int, seqNum: int) -> dict[str, Any]:
+        """Get the WCS map for all guider detectors.
+
+        Parameters
+        ----------
+        dayObs : `int`
+            Day of observation in YYYYMMDD format.
+        seqNum : `int`
+            Sequence number of the observation.
+
+        Returns
+        -------
+        wcsMap : `dict[str, Any]`
+            Dictionary for detector names as keys and WCS objects as values.
+        """
+        wcsGuideMap: dict[str, Any] = {}
+        dataId = {
+            "instrument": "LSSTCam",
+            "day_obs": dayObs,
+            "seq_num": seqNum,
+            "detector": 94,  # any guider detector will do
+        }
+        # Get visitInfo from any detector
+        visitInfo = self.butler.get("raw.visitInfo", dataId)
+        # this is a dict with the WCS for each guider detector
+        wcsGuideMap = make_init_guider_wcs(self.camera, visitInfo)
+
+        # Add the camera rotation angle in degrees
+        wcsGuideMap["camera_rot_angle_deg"] = get_camera_rot_angle(visitInfo)
+        return wcsGuideMap
+
     def getRoiAmpNames(self, dataset: dict[str, Stamps]) -> dict[str, str]:
         """Get the name of the amplifier used for the ROI for each guider
         detector in the focal plane.
@@ -349,27 +420,32 @@ class GuiderReader:
             ampNames[detName] = ampName
         return ampNames
 
-    def getHeaderInfo(self, raw: Stamps) -> dict[str, str | float]:
+    def getHeaderInfo(
+        self, raw: Stamps, nstamps: int, freq: float, cam_rot_angle: float = 0.0
+    ) -> dict[str, str | float]:
         info: dict[str, str | float] = {}
         m = raw.metadata.toDict()
-        info["expid"] = int(m["DAYOBS"]) * 100000 + int(m["SEQNUM"])
-        info["roi_col"] = m["ROICOL"]
-        info["roi_row"] = m["ROIROW"]
+        info["n_stamps"] = nstamps
+        info["start_time"] = m["GDSSTART"]
         info["roi_cols"] = m["ROICOLS"]
         info["roi_rows"] = m["ROIROWS"]
-        info["roiUnder"] = m.get("ROIUNDER", m.get("ROIUNDRC", 6))
-        info["n_stamps"] = m["N_STAMPS"]
-        info["start_time"] = m["GDSSTART"]
+        info["FREQ"] = float(freq)
+        info["expid"] = int(m["DAYOBS"]) * 100000 + int(m["SEQNUM"])
         info["filter"] = m["FILTBAND"]
-        info["FREQ"] = FREQ
+        info["SHUTTIME"] = float(m.get("SHUTTIME", 30.0))
+        info["AZSTART"] = float(m.get("AZSTART", 0))
+        info["ELSTART"] = float(m.get("ELSTART", 0))
+        info["AZEND"] = m.get("AZEND", None)
+        info["ELEND"] = m.get("ELEND", None)
+        info["SEEING"] = m.get("SEEING", None)
+        info["CAM_ROT_ANGLE"] = cam_rot_angle
         return info
 
     def printHeaderInfo(self, header: dict[str, str | float]) -> None:
         # TODO: reinstate dataId and filter if necessary
         print(f"Data Id: {header['expid']}, filter-band: {header['filter']}")
-        print(f"ROI Row: {header['roi_row']}, ROI Col: {header['roi_col']}")
-        print(f"ROI Rows: {header['roi_rows']}, ROI Cols: {header['roi_cols']}")
-        print(f"Number of Stamps: {header['n_stamps']}")
+        print(f"ROI Shape (row, col): {header['roi_rows']}, {header['roi_cols']}")
+        print(f"With nstamps {header['n_stamps']} at freq {1 / header['FREQ']:0.1f} Hz")
         print(f"Acq. Start Time: {header['start_time']}")
 
     @property
@@ -548,11 +624,12 @@ def get_timestamps(raw_stamps: Stamps, nstamps: int = 50) -> Time:
 
     mjd_array = np.ma.masked_invalid(mjd_list)
     full_timestamps = Time(mjd_array, format="mjd", scale="utc")
+    full_timestamps.freq = freq
     return full_timestamps
 
 
 # dt = np.nanmedian(np.diff(timestamps.jd)) * 86400.0
-# nmissing = np.count_nonzero(timestamps.mask)
+# nmissing = np.count_nonzero(~timestamps.mask)
 
 
 if __name__ == "__main__":
@@ -563,7 +640,7 @@ if __name__ == "__main__":
     # The GuiderData class has all you need
     print(10 * "-----")
     # The object now holds everything you need:
-    print("Guider detectors available :", list(guider.datasets.keys()))
+    print("Guider detectors available :", guider.guiderNames)
     print("Timestamp first value [MJD]:", guider.timestamps[0])
     print("Header fields              :", guider.header)
     print(10 * "-----")
