@@ -49,9 +49,9 @@ from lsst.afw import cameraGeom
 from lsst.afw.cameraGeom import Detector
 from lsst.afw.image import ImageF
 from lsst.geom import AffineTransform, Box2D, Box2I, Extent2D, Point2D
-from lsst.obs.lsst import LsstCam
-from lsst.obs.lsst.cameraTransforms import LsstCameraTransforms
-from lsst.obs.lsst.translators.lsst import SIMONYI_LOCATION
+from lsst.obs.lsst import LsstCam  # noqa F401
+from lsst.obs.lsst.cameraTransforms import LsstCameraTransforms  # noqa F401
+from lsst.obs.lsst.translators.lsst import SIMONYI_LOCATION  # noqa F401
 
 if TYPE_CHECKING:
     from astropy.time import Time  # noqa F811
@@ -107,7 +107,6 @@ def convert_pixels_to_altaz(
         obstime=time,
         location=SIMONYI_LOCATION,
     )
-
     # Transform to AltAz
     sc_altaz = sc_icrs.transform_to(AltAz(obstime=time, location=SIMONYI_LOCATION))
 
@@ -612,6 +611,11 @@ def convert_roi_to_ccd(
     view = guiderData.view
     stamps = guiderData.datasets[guiderName]
 
+    if np.isscalar(xroi):
+        xroi = np.array([xroi])
+    if np.isscalar(yroi):
+        yroi = np.array([yroi])
+
     if len(xroi) == 0:
         return np.array([]), np.array([])
 
@@ -628,7 +632,6 @@ def convert_roi_to_ccd(
         # roi2ccd is an AffineTransform that converts
         # from roi coords to ccd coords
         xccd, yccd = roi2ccd(xroi, yroi)
-
     else:
         raise ValueError(f"Unsupported view '{view}' in convert_roi_to_ccd", "must be 'ccd' or 'dvcs'")
 
