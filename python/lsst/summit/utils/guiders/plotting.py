@@ -74,11 +74,18 @@ class GuiderPlotter:
     COLOR_MAP = ["black", "firebrick", "grey", "lightgrey"]
     MARKERS = [".", "x", "+", "s", "o", "^"]
 
-    def __init__(self, stars_df: pd.DataFrame, guiderData: GuiderData, expid: Optional[int] = None) -> None:
+    def __init__(
+        self,
+        stars_df: pd.DataFrame,
+        guiderData: GuiderData,
+        expid: Optional[int] = None,
+        isIsr: bool = True,
+    ) -> None:
         self.exp_id = expid if expid else stars_df["expid"].iloc[0]
         self.stars_df = stars_df[stars_df["expid"] == self.exp_id]
         self.stats_df = self.assemble_stats()
         self.guiderData = guiderData
+        self.isIsr = isIsr  # apply or not parrallel over scan bias correction
 
         # Some metadata information
         self.exptime = self.guiderData.header["SHUTTIME"]
@@ -94,10 +101,6 @@ class GuiderPlotter:
         )
         self.el = 0.5 * (elstart + elstop)
         self.az = 0.5 * (azstart + azstop)
-
-        # Siderial rate is 15 arcsec/sec
-        self.dEl = (elstop - elstart) * 3600 - 15 * self.exptime  # arcsec
-        self.dAz = (azstop - azstart) * 3600 - 15 * self.exptime  # arcsec
 
         sns.set_style("white")
         sns.set_context("talk", font_scale=0.8)
@@ -192,7 +195,7 @@ class GuiderPlotter:
         cols = cfg["col"]
 
         # filter and prepare
-        df = self.stars_df[self.stars_df["stamp"] > 0][["stamp"] + cols].copy()
+        df = self.stars_df[self.stars_df["stamp"] > 0][["stamp", "detector"] + cols].copy()
 
         # Compute overall mean and sigma for y-axis limits
         all_data = df[cols].values.flatten()
@@ -216,9 +219,6 @@ class GuiderPlotter:
 
         count = 0
         for ax, col in zip(axes, cols):
-            # scatter points
-            ax.scatter(df["stamp"], df[col] * scale, color="lightgrey", alpha=0.7, label=col)
-
             # compute binned stats
             df["bin"] = pd.cut(df["stamp"], bins=bins, labels=False)
             stats = df.groupby("bin")[col].agg(["mean", "std"]).reset_index()
@@ -228,24 +228,32 @@ class GuiderPlotter:
             means = stats.loc[valid, "mean"].values * scale
             errs = stats.loc[valid, "std"].values * scale
 
+            # horizontal line at zero
             if col == "daz":
-                ax.axhline(
-                    +self.dAz / 2.0,
-                    color="firebrick",
-                    ls="--",
-                    lw=1.0,
-                    label=f"AZEND-AZSTART: {self.dAz:.2f} arcsec",
-                )
-                ax.axhline(-self.dAz / 2.0, color="firebrick", ls="--", lw=1.0)
+                ax.axhline(0, color="grey", ls="--", label=f"Az: {self.az:.5f} deg")
             if col == "dalt":
-                ax.axhline(
-                    +self.dEl / 2.0,
-                    color="firebrick",
-                    ls="--",
-                    lw=1.0,
-                    label=f"ELEND-ELSTART: {self.dEl:.2f} arcsec",
+                ax.axhline(0, color="grey", ls="--", label=f"Alt: {self.el:.5f} deg")
+
+            if col == "dx":
+                ax.axhline(0, color="grey", ls="--", label="CCD X")
+            if col == "dy":
+                ax.axhline(0, color="grey", ls="--", label="CCD Y")
+
+            # scatter points
+            # Use different markers for each guider detector
+            unique_starids = df["detector"].unique()
+            for i, starid in enumerate(unique_starids):
+                marker = self.MARKERS[i % len(self.MARKERS)]
+                mask = df["detector"] == starid
+                ax.scatter(
+                    df.loc[mask, "stamp"],
+                    df.loc[mask, col] * scale,
+                    color="lightgrey",
+                    alpha=0.7,
+                    marker=marker,
+                    label=f"{starid}" if count == 0 else "",
+                    # avoid duplicate legend entries
                 )
-                ax.axhline(-self.dEl / 2.0, color="firebrick", ls="--", lw=1.0)
 
             # plot error bars
             ax.errorbar(
@@ -257,11 +265,12 @@ class GuiderPlotter:
                 ecolor=LIGHT_BLUE,
                 capsize=3,
             )
+
             if count == 0:
                 ax.set_ylabel(cfg["ylabel"])
             ax.set_xlabel("# stamp")
             ax.set_ylim(*ylims)  # <-- Set y-axis limits here
-            ax.legend(fontsize=12, loc="upper right")
+            ax.legend(fontsize=10, ncol=4, loc="best")
 
             # top axis for elapsed time
             xstampers = np.arange(0, max_stamp + 10, 10)
@@ -299,16 +308,21 @@ class GuiderPlotter:
         self.centroids = centroids
         return centroids
 
-    def load_image(self, guider: GuiderData, detname: str, stamp_num: int = 2) -> np.ndarray:
+    def load_image(
+        self,
+        guider: GuiderData,
+        detname: str,
+        stamp_num: int = 2,
+    ) -> np.ndarray:
         # read full stamp
         if stamp_num >= len(guider.timestamps):
             raise ValueError(
                 f"stamp_num {stamp_num} is out of range for guider" + f"with {len(guider.timestamps)} stamps."
             )
         elif stamp_num < 0:
-            return guider.getStackedStampArray(detName=detname)
+            return guider.getStackedStampArray(detName=detname, isIsr=self.isIsr)
         else:
-            img = guider.getStampArray(stampNum=stamp_num, detName=detname)
+            img = guider.getStampArray(stampNum=stamp_num, detName=detname, isIsr=self.isIsr)
             return img - np.nanmedian(img, axis=0)
 
     def star_mosaic(
@@ -350,7 +364,12 @@ class GuiderPlotter:
             center = (float(xcen), float(ycen))
 
             img = self.load_image(self.guiderData, detname, stamp_num)
-            cutout, centerCutout = crop_around_center(img, center, cutout_size)
+
+            if cutout_size > 0:
+                cutout, centerCutout = crop_around_center(img, center, cutout_size)
+            else:
+                cutout, centerCutout = img, center
+
             vmin, vmax = np.nanpercentile(cutout, plo), np.nanpercentile(cutout, phi)
 
             axs_img = axs[detname]
@@ -361,8 +380,9 @@ class GuiderPlotter:
                 animated=True,
                 vmin=vmin,
                 vmax=vmax,
+                interpolation="nearest",
+                extent=(0, cutout.shape[1], 0, cutout.shape[0]),
             )
-
             axs_img.set_aspect("equal", "box")
 
             if not is_animated:
@@ -371,15 +391,21 @@ class GuiderPlotter:
                 # crosshairs
                 axs_img.axvline(centerCutout[0], color="grey", linestyle="--", linewidth=1)
                 axs_img.axhline(centerCutout[1], color="grey", linestyle="--", linewidth=1)
+                if cutout_size > 0:
+                    radii = [10, 5]
+                else:
+                    radii = [10]
+
                 # cricles
                 _ = plot_guide_circles(
                     axs_img,
                     centerCutout,
-                    radii=[5, 10],
+                    radii=radii,
                     colors=[LIGHT_BLUE, LIGHT_BLUE],
-                    labels=["1″", "2″"],
+                    labels=["2″", "1″"],
                     linewidth=2.0,
                 )
+
             artists.extend([im_object])
 
         # Annotate the Stamp into the center panel
@@ -388,28 +414,50 @@ class GuiderPlotter:
         artists.append(stamp_info)
 
         if not is_animated:
-            self.draw_arrows(axs, cutout_size, self.cam_rot_angle)
+            self.draw_arrows(axs, max(cutout.shape), self.cam_rot_angle)
 
         # Clear ticks, labels, and remove borders
         for ax in axs.values():
-            self.clear_axis_ticks(ax)
+            self.clear_axis_ticks(ax, is_spine=cutout_size < 0)
+
+        for detname in self.DETNAMES:
+            axs[detname].set_xlim(0, cutout.shape[1])
+            axs[detname].set_ylim(0, cutout.shape[0])
 
         return artists
 
-    def clear_axis_ticks(self, ax) -> None:
+    def mosaic(self, stamp_num: int = 2, **kwargs) -> None:
+        """Wrapper to plot a single guider mosaic."""
+        fig, axs = plt.subplot_mosaic(
+            cast(Any, self.LAYOUT),
+            figsize=(12, 12),
+            gridspec_kw=dict(hspace=0.0, wspace=0.0),
+            constrained_layout=False,
+            sharey=False,
+            sharex=False,
+        )
+        _ = self.star_mosaic(stamp_num=stamp_num, cutout_size=-1, fig=fig, axs=axs, **kwargs)
+
+        plt.suptitle(f"Guider Mosaic for expid: {self.exp_id}\n stamp #: {stamp_num + 1:02d}")
+        plt.show()
+        return None
+
+    def clear_axis_ticks(self, ax, is_spine=False) -> None:
         """Remove all ticks and tick labels from an axis."""
         ax.set_xticks([])
         ax.set_yticks([])
         ax.set_xticklabels([])
         ax.set_yticklabels([])
-        for spine in ax.spines.values():
-            spine.set_visible(False)
+
+        if not is_spine:
+            for spine in ax.spines.values():
+                spine.set_visible(False)
 
     def annotate_detector(self, detname, ax) -> plt.Text:
         """Annotate a detector panel with its name."""
         txt = ax.text(
             0.025,
-            0.025,
+            0.925,
             detname,
             transform=ax.transAxes,
             ha="left",
@@ -458,17 +506,19 @@ class GuiderPlotter:
         return circ
 
     def draw_arrows(self, axs, cutout_size, rot_angle=0):
-        xmin1, ymin1 = draw_altaz_reference_arrow(axs["arrow"], rot_angle, cutout_size=cutout_size)
+        xmin1, ymin1 = draw_altaz_reference_arrow(axs["arrow"], 0, cutout_size=cutout_size)
         xmin2, ymin2 = draw_altaz_reference_arrow(
             axs["arrow"],
+            rot_angle=rot_angle,
             color="lightgrey",
-            altlabel="yfp",
-            azlabel="xfp",
+            altlabel="Alt",
+            azlabel="Az",
             cutout_size=cutout_size,
         )
         axs["arrow"].axis("off")
-        xmin = np.min([xmin1, xmin2]) - 3
-        ymin = np.min([ymin1, ymin2]) - 3
+        border = cutout_size * 0.10
+        xmin = np.min([xmin1, xmin2]) - border
+        ymin = np.min([ymin1, ymin2]) - border
         axs["arrow"].set_xlim(xmin, xmin + cutout_size)
         axs["arrow"].set_ylim(ymin, ymin + cutout_size)
 
@@ -1006,8 +1056,8 @@ def measure_photometric_variation(stars: pd.DataFrame) -> dict[str, float]:
 def draw_altaz_reference_arrow(
     ax,
     rot_angle=0,
-    altlabel="Alt",
-    azlabel="az",
+    altlabel="Y DVCS",
+    azlabel="X DVCS",
     color=LIGHT_BLUE,
     length=None,
     cutout_size=30,
@@ -1034,9 +1084,9 @@ def draw_altaz_reference_arrow(
         dx_az,
         dy_az,
         color=color,
-        width=0.25,
-        head_width=1.0,
-        head_length=1.5,
+        width=cutout_size / 120,
+        head_width=cutout_size / 30,
+        head_length=cutout_size / 20,
         length_includes_head=True,
         zorder=10,
     )
@@ -1056,9 +1106,9 @@ def draw_altaz_reference_arrow(
         dx_alt,
         dy_alt,
         color=color,
-        width=0.25,
-        head_width=1.0,
-        head_length=1.5,
+        width=cutout_size / 120,
+        head_width=cutout_size / 30,
+        head_length=cutout_size / 20,
         length_includes_head=True,
         zorder=10,
     )
