@@ -548,7 +548,7 @@ def build_reference_catalog(
     """
     table_list = []
     for guiderName in guider.guiderNames:
-        array = guider.getStackedStampArray(detName=guiderName, is_isr=True)
+        array = guider.getStackedStampArray(detName=guiderName, isIsr=True)
         _, median, std = sigma_clipped_stats(array, sigma=3.0)
         sources = run_source_detection(
             array, th=min_snr, max_ellipticity=max_ellipticity, bkg_std=std + median
