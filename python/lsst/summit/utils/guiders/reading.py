@@ -59,6 +59,7 @@ class GuiderData:
     datasets: dict[str, Stamps]  # TODO: Consider renaming this & making private
     header: dict[str, str | float]
     wcs: dict[str, Any]
+    axisRowMap: dict[str, int]  # 0 for Y, 1 for X
     view: str = "dvcs"  # view type, either 'dvcs' or 'ccd' or 'roi'
     # TODO: Add these properties back in if needed
     # filter_band: str
@@ -68,7 +69,24 @@ class GuiderData:
         """Get the names of the guider detectors."""
         return list(self.guiderNameMap.keys())
 
-    def getStampArray(self, stampNum: int, detName: str) -> np.ndarray:
+    def getRowAxis(self, detName: str) -> int:
+        """Get the axis corresponding to the rows for a given guider detector.
+
+        Parameters
+        ----------
+        detName : `str`
+            The name of the detector.
+
+        Returns
+        -------
+        axis : `int`
+            The axis corresponding to the rows for a given detector.
+        """
+        if detName not in self.axisRowMap:
+            raise ValueError(f"Detector {detName} not found in axisRowMap.")
+        return self.axisRowMap[detName]
+
+    def getStampArray(self, stampNum: int, detName: str, isIsr: bool = False) -> np.ndarray:
         """Get the stamp for a given stamp number and detector name.
 
         Parameters
@@ -77,6 +95,8 @@ class GuiderData:
             The index of the stamp to retrieve.
         detName : `str`
             The name of the detector for which to retrieve the stamp.
+        isIsr : `bool`, optional
+            If True, subtract the median bias over the rows.
 
         Returns
         -------
@@ -87,23 +107,21 @@ class GuiderData:
             raise ValueError(f"Detector {detName} not found in datasets.")
 
         stamps = self.datasets[detName]
-        if stampNum >= len(stamps):
-            print(f"Warning: Stamp number {stampNum} out of range for detector {detName}.")
+        array = stamps[stampNum].stamp_im.image.array
+        if isIsr:
+            whichaxis = self.getRowAxis(detName)
+            array = array - np.median(array, axis=whichaxis)
+        return array
 
-            nrows, ncols = int(self.header["roi_rows"]), int(self.header["roi_cols"])
-            return np.zeros((nrows, ncols), dtype=float)
-
-        return stamps[stampNum].stamp_im.image.array
-
-    def getStackedStampArray(self, detName: str, is_isr: bool = False) -> np.ndarray:
+    def getStackedStampArray(self, detName: str, isIsr: bool = False) -> np.ndarray:
         """Get the stacked stamp for a given detector name.
 
         Parameters
         ----------
         detName : `str`
             The name of the detector for which to retrieve the stacked stamp.
-        is_isr : `bool`, optional
-            If True, subtract the median bias over the columns.
+        isIsr : `bool`, optional
+            If True, subtract the median bias over the rows.
 
         Returns
         -------
@@ -117,9 +135,11 @@ class GuiderData:
         for stamp in stamps[1:]:  # skip the first stamp (shutter opening)
             img = stamp.stamp_im.image.array
             # simple bias subtraction over the columns
-            if is_isr:
-                img = img - np.median(img, axis=0)
+            if isIsr:
+                whichaxis = self.getRowAxis(detName)
+                img = img - np.median(img, axis=whichaxis)
             roiarr.append(img)
+
         stack = np.nanmedian(roiarr, axis=0)
         return stack
 
@@ -213,6 +233,7 @@ class GuiderReader:
 
         self.detNames = list(self.guiderNameMap.keys())
         self.nGuiders = len(self.guiderNameMap)
+        self.axisRowMap = self.getAxisRowMapping()  # 0 for Y, 1 for X
 
     def get(self, dayObs: int, seqNum: int, detectors: list[int] | None = None) -> GuiderData:
         """Get the guider data for a given day of observation and sequence
@@ -269,6 +290,7 @@ class GuiderReader:
             guiderNameMap=self.guiderNameMap,
             datasets=perDetectorData,
             wcs=wcs,
+            axisRowMap=self.axisRowMap,
         )
         return guiderData
 
@@ -400,6 +422,23 @@ class GuiderReader:
         # Add the camera rotation angle in degrees
         wcsGuideMap["camera_rot_angle_deg"] = get_camera_rot_angle(visitInfo)
         return wcsGuideMap
+
+    def getAxisRowMapping(self) -> dict[str, int]:
+        """Get the axis mapping for the rows for all guider detectors.
+
+        Returns
+        -------
+        axisMap : `dict[str, int]`
+            Dictionary with detector names as keys and axis mapping as values.
+            The axis mapping is 1 for X and 0 for Y.
+        """
+        axisMap: dict[str, int] = {}
+        for detName in self.guiderNameMap.keys():
+            detNum = self.guiderNameMap[detName]
+            detector = self.camera[detNum]
+            nq = detector.getOrientation().getNQuarter()
+            axisMap[detName] = 0 if nq % 2 == 0 else 1
+        return axisMap
 
     def getRoiAmpNames(self, dataset: dict[str, Stamps]) -> dict[str, str]:
         """Get the name of the amplifier used for the ROI for each guider
