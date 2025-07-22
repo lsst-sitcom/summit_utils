@@ -24,12 +24,17 @@ __all__ = [
     "make_init_guider_wcs",
 ]
 
+from typing import TYPE_CHECKING
+
 from lsst.afw import cameraGeom
 from lsst.geom import Angle, degrees
 from lsst.obs.base import createInitialSkyWcsFromBoresight
 
+if TYPE_CHECKING:
+    from lsst.geom import SkyWcs
 
-def make_init_guider_wcs(camera, visitInfo) -> dict[str, any]:
+
+def make_init_guider_wcs(camera, visitInfo) -> dict[str, SkyWcs]:
     """
     Parameters
     ----------
