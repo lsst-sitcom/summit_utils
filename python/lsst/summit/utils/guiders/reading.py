@@ -20,7 +20,7 @@
 # along with this program.  If not, see <https://www.gnu.org/licenses/>.
 from __future__ import annotations
 
-from typing import Any, Optional
+from typing import TYPE_CHECKING, Optional
 
 __all__ = [
     "GuiderReader",
@@ -43,8 +43,8 @@ from lsst.obs.lsst import LsstCam  # pylint: disable=unused-import
 from lsst.summit.utils.guiders.guiderwcs import get_camera_rot_angle, make_init_guider_wcs
 from lsst.summit.utils.guiders.transformation import convert_roi, mk_ccd_to_dvcs, mk_roi_bboxes
 
-FREQ = 5.0  # Hz, frequency of the guider data acquisition
-DELAY = 20 / 1000  # seconds
+if TYPE_CHECKING:
+    from lsst.geom import SkyWcs
 
 
 @dataclass(slots=True)
@@ -58,7 +58,7 @@ class GuiderData:
     guiderNameMap: dict[str, int]
     datasets: dict[str, Stamps]  # TODO: Consider renaming this & making private
     header: dict[str, str | float]
-    wcs: dict[str, Any]
+    wcs: dict[str, SkyWcs]
     axisRowMap: dict[str, int]  # 0 for Y, 1 for X
     view: str = "dvcs"  # view type, either 'dvcs' or 'ccd' or 'roi'
     # TODO: Add these properties back in if needed
@@ -392,7 +392,7 @@ class GuiderReader:
 
         return dataset
 
-    def getWCSMap(self, dayObs: int, seqNum: int) -> dict[str, Any]:
+    def getWCSMap(self, dayObs: int, seqNum: int) -> dict[str, SkyWcs]:
         """Get the WCS map for all guider detectors.
 
         Parameters
@@ -404,10 +404,10 @@ class GuiderReader:
 
         Returns
         -------
-        wcsMap : `dict[str, Any]`
+        wcsMap : `dict[str, SkyWcs]`
             Dictionary for detector names as keys and WCS objects as values.
         """
-        wcsGuideMap: dict[str, Any] = {}
+        wcsGuideMap: dict[str, SkyWcs] = {}
         dataId = {
             "instrument": "LSSTCam",
             "day_obs": dayObs,
@@ -484,7 +484,9 @@ class GuiderReader:
         # TODO: reinstate dataId and filter if necessary
         print(f"Data Id: {header['expid']}, filter-band: {header['filter']}")
         print(f"ROI Shape (row, col): {header['roi_rows']}, {header['roi_cols']}")
-        print(f"With nstamps {header['n_stamps']} at freq {1 / header['FREQ']:0.1f} Hz")
+        mystr = f"With nstamps {int(header['n_stamps'])}"
+        mystr = mystr + f" at {header['FREQ']} Hz"
+        print(mystr)
         print(f"Acq. Start Time: {header['start_time']}")
 
     @property
