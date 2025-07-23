@@ -667,7 +667,10 @@ def getAltAzOverPeriod(
     altAzFrame = AltAz(obstime=times, location=SIMONYI_LOCATION)
     targetAltAz = target.transform_to(altAzFrame)
     az = targetAltAz.az
-    az_wrapped = az.wrap_at(180 * u.deg)
+    if abs(az[0].degree) < 90.0:
+        az_wrapped = az.wrap_at(180.0 * u.deg)
+    else:
+        az_wrapped = az.wrap_at(0.0 * u.deg)
     return az_wrapped.degree, targetAltAz.alt.degree
 
 
