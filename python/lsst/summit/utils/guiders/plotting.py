@@ -54,6 +54,52 @@ LIGHT_BLUE = "#6495ED"
 
 
 class GuiderPlotter:
+    def add_static_overlays(self, axs_img, detname, centerCutout, cutout_size):
+        _ = self.annotate_detector(detname, axs_img)
+        axs_img.axvline(centerCutout[0], color=LIGHT_BLUE, lw=1.25, linestyle="--", alpha=0.75)
+        axs_img.axhline(centerCutout[1], color=LIGHT_BLUE, lw=1.25, linestyle="--", alpha=0.75)
+        plot_crosshair_rotated(
+            centerCutout,
+            90 + self.cam_rot_angle,
+            axs=axs_img,
+            color="grey",
+            size=cutout_size,
+        )
+        radii = [10, 5] if cutout_size > 0 else [10]
+        _ = plot_guide_circles(
+            axs_img,
+            centerCutout,
+            radii=radii,
+            colors=[LIGHT_BLUE, LIGHT_BLUE],
+            labels=["2″", "1″"],
+            linewidth=2.0,
+        )
+
+    def plot_star_centroid(self, axs_img, detname, stamp_num, centerCutout, xcen, ycen):
+        if stamp_num >= 0:
+            star = self.stars_df[
+                (self.stars_df["detector"] == detname) & (self.stars_df["stamp"] == stamp_num)
+            ]
+            if not star.empty:
+                xroi, yroi = star.iloc[0][["xroi", "yroi"]]
+                xroi, yroi = (
+                    centerCutout[0] + xroi - xcen,
+                    centerCutout[1] + yroi - ycen,
+                )
+            else:
+                xroi, yroi = centerCutout[0], centerCutout[1]
+        else:
+            xroi, yroi = centerCutout[0], centerCutout[1]
+
+        return axs_img.plot(
+            xroi,
+            yroi,
+            marker="o",
+            color="red",
+            markersize=5,
+            label="Star Centroid",
+        )
+
     UNIT_DICT = {
         "centroidAltAz": "arcsec",
         "centroidPixel": "pixels",
@@ -71,8 +117,18 @@ class GuiderPlotter:
     ]
     DETNAMES = [cell for row in LAYOUT for cell in row if (cell[0] == "R")]
 
-    COLOR_MAP = ["black", "firebrick", "grey", "lightgrey"]
-    MARKERS = [".", "x", "+", "s", "o", "^"]
+    # The COLOR_MAP and MARKERS lists are used for plotting different detector
+    COLOR_MAP = [
+        "black",
+        "firebrick",
+        "grey",
+        "lightgrey",
+        "blue",
+        "green",
+        "orange",
+        "purple",
+    ]
+    MARKERS = ["o", "x", "+", "*", "^", "v", "s", "p"]
 
     def __init__(
         self,
@@ -88,9 +144,9 @@ class GuiderPlotter:
         self.isIsr = isIsr  # apply or not parrallel over scan bias correction
 
         # Some metadata information
-        self.exptime = self.guiderData.header["SHUTTIME"]
+        self.exptime = int(self.guiderData.header["SHUTTIME"])
         self.seeing = self.guiderData.header.get("SEEING", np.nan)
-        self.cam_rot_angle = self.guiderData.header["CAM_ROT_ANGLE"]
+        self.cam_rot_angle = float(self.guiderData.header["CAM_ROT_ANGLE"])
         elstart, elstop = (
             float(self.guiderData.header["ELSTART"]),
             float(self.guiderData.header["ELEND"]),
@@ -140,7 +196,7 @@ class GuiderPlotter:
         mask_valid = (stars["stamp"] >= 0) & (stars["xccd"].notna())
         n_meas = int(mask_valid.sum())
 
-        std_centroid = measure_std_centroid_stats(stars)
+        std_centroid = measure_std_centroid_stats(stars, snr_th=5, flux_th=5)
         phot = measure_photometric_variation(stars)
 
         total_possible = n_unique * stars["stamp"].nunique()
@@ -201,7 +257,7 @@ class GuiderPlotter:
         all_data = df[cols].values.flatten()
         all_data *= scale
         plow, phigh = np.nanpercentile(all_data, [16, 84])
-        sigma_val = mad_std(all_data)
+        sigma_val = mad_std(all_data, ignore_nan=True)
         ylims = (plow - 2.5 * sigma_val, phigh + 2.5 * sigma_val)
 
         # setup subplots
@@ -219,13 +275,17 @@ class GuiderPlotter:
 
         count = 0
         for ax, col in zip(axes, cols):
+            # mask outliers
+            mask = (df[col] < (ylims[1] / scale)) & (df[col] > (ylims[0] / scale))
+
             # compute binned stats
             df["bin"] = pd.cut(df["stamp"], bins=bins, labels=False)
-            stats = df.groupby("bin")[col].agg(["mean", "std"]).reset_index()
+            stats = df[mask].groupby("bin")[col].agg(["mean", "std"]).reset_index()
 
             valid = stats["bin"].notna()
             bin_idx = stats.loc[valid, "bin"].astype(int).values
             means = stats.loc[valid, "mean"].values * scale
+
             errs = stats.loc[valid, "std"].values * scale
 
             # horizontal line at zero
@@ -286,7 +346,7 @@ class GuiderPlotter:
             fig.tight_layout()
         # return fig
 
-    def select_best_star(self, guiderData: GuiderData) -> dict[str, tuple[np.ndarray, np.ndarray]]:
+    def get_star_centroid_ref(self, guiderData: GuiderData) -> dict[str, tuple[float | None, float | None]]:
         """
         Convert the best star centroid in each guider to ROI coordinates.
 
@@ -295,16 +355,16 @@ class GuiderPlotter:
         Returns:
             centroids: dict of {detector: (xroi, yroi)}
         """
-        centroids: dict[str, tuple[np.ndarray, np.ndarray]] = {}
+        centroids: dict[str, tuple[float | None, float | None]] = {}
         for det in self.DETNAMES:
             sub = self.stars_df[self.stars_df["detector"] == det]
             if len(sub) > 0:
                 best = sub.loc[sub["snr"].idxmax()]
                 xroi = np.nanmedian([best["xroi_ref"]])
                 yroi = np.nanmedian([best["yroi_ref"]])
-                centroids[det] = xroi, yroi
+                centroids[det] = float(xroi), float(yroi)
             else:
-                centroids[det] = (np.array([]), np.array([]))
+                centroids[det] = (None, None)
         self.centroids = centroids
         return centroids
 
@@ -335,14 +395,7 @@ class GuiderPlotter:
         cutout_size=30,
         is_animated=False,
     ) -> list:
-        """Plot the stamp array for all the guiders.
-        Args:
-            guider (GuiderData): guider data object
-            stamp_num (int): stamp number
-            fig (matplotlib.figure.Figure): figure object
-            axs (matplotlib.axes.Axes): axes object
-        """
-        # the guider view should be 'dvcs'
+        """Plot the stamp array for all the guiders."""
         if self.guiderData.view != "dvcs":
             raise ValueError("Guider view must be 'dvcs' for mosaic plotting.")
 
@@ -356,75 +409,75 @@ class GuiderPlotter:
             )
 
         if not hasattr(self, "centroids"):
-            self.select_best_star(self.guiderData)
+            self.get_star_centroid_ref(self.guiderData)
 
         artists = []
+        cutout_shape_list = []
+
         for detname in self.DETNAMES:
-            xcen, ycen = self.centroids.get(detname, (0, 0))
-            center = (float(xcen), float(ycen))
-
-            img = self.load_image(self.guiderData, detname, stamp_num)
-
-            if cutout_size > 0:
-                cutout, centerCutout = crop_around_center(img, center, cutout_size)
-            else:
-                cutout, centerCutout = img, center
-
-            vmin, vmax = np.nanpercentile(cutout, plo), np.nanpercentile(cutout, phi)
-
-            axs_img = axs[detname]
-            im_object = axs_img.imshow(
-                cutout,
-                origin="lower",
-                cmap="Greys",
-                animated=True,
-                vmin=vmin,
-                vmax=vmax,
-                interpolation="nearest",
-                extent=(0, cutout.shape[1], 0, cutout.shape[0]),
+            im_object, star_cross, cutout_shape = self._plot_detector_panel(
+                detname, stamp_num, axs, plo, phi, cutout_size, is_animated
             )
-            axs_img.set_aspect("equal", "box")
+            artists.append(im_object)
+            artists.extend(star_cross)
+            cutout_shape_list.append(cutout_shape)
 
-            if not is_animated:
-                _ = self.annotate_detector(detname, axs_img)
-
-                # crosshairs
-                axs_img.axvline(centerCutout[0], color="grey", linestyle="--", linewidth=1)
-                axs_img.axhline(centerCutout[1], color="grey", linestyle="--", linewidth=1)
-                if cutout_size > 0:
-                    radii = [10, 5]
-                else:
-                    radii = [10]
-
-                # cricles
-                _ = plot_guide_circles(
-                    axs_img,
-                    centerCutout,
-                    radii=radii,
-                    colors=[LIGHT_BLUE, LIGHT_BLUE],
-                    labels=["2″", "1″"],
-                    linewidth=2.0,
-                )
-
-            artists.extend([im_object])
-
-        # Annotate the Stamp into the center panel
         std = np.nanstd(np.hypot(self.stars_df["dalt"], self.stars_df["daz"]))
         stamp_info = self.annotate_center(stamp_num, axs["center"], jitter=std)
         artists.append(stamp_info)
 
+        cutout_size = np.max(cutout_shape_list) if cutout_shape_list else 30
         if not is_animated:
-            self.draw_arrows(axs, max(cutout.shape), self.cam_rot_angle)
+            self.draw_arrows(axs, cutout_size, 90.0 + self.cam_rot_angle)
 
-        # Clear ticks, labels, and remove borders
         for ax in axs.values():
             self.clear_axis_ticks(ax, is_spine=cutout_size < 0)
-
-        for detname in self.DETNAMES:
-            axs[detname].set_xlim(0, cutout.shape[1])
-            axs[detname].set_ylim(0, cutout.shape[0])
-
         return artists
+
+    def _plot_detector_panel(
+        self,
+        detname: str,
+        stamp_num: int,
+        axs,
+        plo: float,
+        phi: float,
+        cutout_size: int,
+        is_animated: bool,
+    ):
+        img = self.load_image(self.guiderData, detname, stamp_num)
+        mx, my = img.shape[0] // 2, img.shape[1] // 2
+        xcen, ycen = self.centroids.get(detname, (mx, my))
+        if xcen is None or ycen is None:
+            xcen, ycen = mx, my
+        center = (float(xcen), float(ycen))
+
+        if cutout_size > 0:
+            cutout, centerCutout = crop_around_center(img, center, cutout_size)
+        else:
+            cutout, centerCutout = img, center
+
+        vmin, vmax = np.nanpercentile(cutout, plo), np.nanpercentile(cutout, phi)
+        axs_img = axs[detname]
+        im_object = axs_img.imshow(
+            cutout,
+            origin="lower",
+            cmap="Greys",
+            animated=True,
+            vmin=vmin,
+            vmax=vmax,
+            interpolation="nearest",
+            extent=(0, cutout.shape[1], 0, cutout.shape[0]),
+        )
+        axs_img.set_aspect("equal", "box")
+
+        if not is_animated:
+            self.add_static_overlays(axs_img, detname, centerCutout, cutout_size)
+
+        star_cross = self.plot_star_centroid(axs_img, detname, stamp_num, centerCutout, xcen, ycen)
+
+        axs_img.set_xlim(0, cutout.shape[1])
+        axs_img.set_ylim(0, cutout.shape[0])
+        return im_object, star_cross, cutout.shape
 
     def mosaic(self, stamp_num: int = 2, **kwargs) -> None:
         """Wrapper to plot a single guider mosaic."""
@@ -526,7 +579,7 @@ class GuiderPlotter:
         self,
         n_stamp_max=60,
         fps=5,
-        dpi=80,
+        dpi=100,
         plo=90.0,
         phi=99.0,
         cutout_size=30,
@@ -925,7 +978,7 @@ class GuiderMosaicPlotter:
         return ani
 
 
-def measure_std_centroid_stats(stars: pd.DataFrame) -> pd.DataFrame:
+def measure_std_centroid_stats(stars: pd.DataFrame, snr_th: int = 5, flux_th: int = 5) -> pd.DataFrame:
     """
     Compute global std_centroid statistics across all guiders.
 
@@ -940,10 +993,12 @@ def measure_std_centroid_stats(stars: pd.DataFrame) -> pd.DataFrame:
         DataFrame with new std_centroid statistic
         columns broadcasted to all rows.
     """
-    time = (stars.stamp.to_numpy() + 0.5) * 0.3  # seconds
+    # mask the objects w/ very low flux and SNR
+    mask = (stars.snr > snr_th) & (stars.flux > flux_th)
+    time = (stars.stamp[mask].to_numpy() + 0.5) * 0.3  # seconds
     time = time.astype(np.float64)
-    az = stars.daz.to_numpy()
-    alt = stars.dalt.to_numpy()
+    az = stars.daz[mask].to_numpy()
+    alt = stars.dalt[mask].to_numpy()
 
     # Linear fits
     coefs_az = np.polyfit(time, az, 1)
@@ -1125,6 +1180,39 @@ def draw_altaz_reference_arrow(
     ax.set_ylim(y0, cutout_size)
 
     return np.nanmin([dx_alt + x0, dx_az + x0]), np.nanmin([dy_alt + y0, dy_az + y0])
+
+
+def plot_crosshair_rotated(center, angle, axs=None, color="grey", size=30):
+    if axs is None:
+        axs = plt.gca()
+    # make a cross rotated by the camera rotation angle
+    cross_length = 1.5 * size if size > 0 else 30
+    theta = np.radians(angle)
+
+    # Cross center
+    cx, cy = center
+    # Horizontal line (rotated)
+    dx = cross_length * np.cos(theta) / 2
+    dy = cross_length * np.sin(theta) / 2
+    axs.plot(
+        [cx - dx, cx + dx],
+        [cy - dy, cy + dy],
+        color=color,
+        ls="--",
+        lw=1.0,
+        alpha=0.5,
+    )
+    # Vertical line (rotated)
+    dx_v = cross_length * np.cos(theta + np.pi / 2) / 2
+    dy_v = cross_length * np.sin(theta + np.pi / 2) / 2
+    axs.plot(
+        [cx - dx_v, cx + dx_v],
+        [cy - dy_v, cy + dy_v],
+        color=color,
+        ls="--",
+        lw=1.0,
+        alpha=0.5,
+    )
 
 
 def compute_camera_angle(df: pd.DataFrame, view="ccd") -> float:
