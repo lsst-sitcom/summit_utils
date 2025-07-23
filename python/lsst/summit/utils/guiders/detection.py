@@ -556,26 +556,25 @@ def build_reference_catalog(
 
         # Filter out edge sources
         h, w = array.shape
-        sources = sources[
+        mask = (
             (sources["xroi"] > edge_margin)
             & (sources["xroi"] < w - edge_margin)
             & (sources["yroi"] > edge_margin)
             & (sources["yroi"] < h - edge_margin)
-        ]
-        if len(sources) == 0:
-            logging.warning(f"Guider {guiderName} has no sources after edge cut.")
-            continue
-
-        # select only bright sources
-        sources = sources[sources["snr"] >= min_snr]
-        max_ellip = np.sqrt(sources["e1"] ** 2 + sources["e2"] ** 2) <= max_ellipticity
-        sources = sources[max_ellip]
+            & (sources["snr"] >= min_snr)
+            & (np.sqrt(sources["e1"] ** 2 + sources["e2"] ** 2) <= max_ellipticity)
+            & (sources["flux"] > 0)  # Ensure positive flux
+            & (sources["flux_err"] > 0)  # Ensure positive flux error
+            & (sources["fwhm"] > 1)  # Ensure positive FWHM at least 1 pixel
+        )
+        sources = sources[mask]
 
         if len(sources) == 0:
             logging.warning(f"Guider {guiderName} has no sources after SNR/ellip cut.")
             continue
 
-        sources.sort_values(by="snr", ascending=False, inplace=True)
+        sources["fwhm_inv"] = 1 / sources["fwhm"]
+        sources.sort_values(by=["snr", "fwhm_inv"], ascending=False, inplace=True)
         sources.reset_index(drop=True, inplace=True)
 
         # pick the brightest source only
