@@ -30,6 +30,7 @@ import astropy.units as u
 import matplotlib
 import numpy as np
 import numpy.typing as npt
+import statsmodels.api as sm
 from astro_metadata_translator import ObservationInfo
 from astropy.coordinates import AltAz, EarthLocation, SkyCoord, get_sun
 from astropy.time import Time
@@ -37,6 +38,7 @@ from dateutil.tz import gettz
 from deprecated.sphinx import deprecated
 from matplotlib.patches import Rectangle
 from scipy.ndimage import gaussian_filter
+from sklearn.linear_model import LinearRegression, RANSACRegressor
 
 import lsst.afw.detection as afwDetect
 import lsst.afw.detection as afwDetection
@@ -102,6 +104,7 @@ __all__ = [
     "getDetectorIds",
     "getImageArray",
     "getSunAngle",
+    "RobustFitter",
 ]
 
 
@@ -1419,3 +1422,156 @@ def getSunAngle(time: Time | None = None) -> float:
         time = Time.now()
     sun_altaz = get_sun(time).transform_to(AltAz(obstime=time, location=SIMONYI_LOCATION))
     return sun_altaz.alt.deg
+
+
+class RobustFitter:
+    """
+    Robust linear fit using RANSAC,
+    with confidence and prediction intervals from statsmodels.
+    """
+
+    def __init__(self, min_samples=0.2, residual_threshold=0.35, random_state=42):
+        self.min_samples = min_samples
+        self.residual_threshold = residual_threshold
+        self.random_state = random_state
+        self.is_fit = False
+
+    def fit(self, x, y):
+        x = np.asarray(x).reshape(-1, 1)
+        y = np.asarray(y)
+        self.model = RANSACRegressor(
+            estimator=LinearRegression(),
+            min_samples=self.min_samples,
+            residual_threshold=self.residual_threshold,
+            random_state=self.random_state,
+        )
+        self.model.fit(x, y)
+        self.slope = self.model.estimator_.coef_[0]
+        self.intercept = self.model.estimator_.intercept_
+        self.y_pred = self.model.predict(x)
+        self.residuals = y - self.y_pred
+        self.x = x.flatten()
+        self.y = y
+
+        # Use only inliers for statistics
+        inlier_mask = self.model.inlier_mask_
+        x_in = self.x[inlier_mask]
+        y_in = self.y[inlier_mask]
+
+        # OLS with statsmodels for CI and p-value
+        X_design = sm.add_constant(x_in)
+        ols_model = sm.OLS(y_in, X_design).fit()
+
+        # statsmodels reports [intercept, slope]
+        ci = ols_model.conf_int(alpha=0.32)  # 68% CI
+        self.ci_intercept = ci[0]
+        self.ci_slope = ci[1]
+
+        self.slope_pvalue = ols_model.pvalues[1]
+        self.slope_stderr = ols_model.bse[1]
+        self.slope_tvalue = ols_model.tvalues[1]
+        self.scatter = np.std(ols_model.resid)
+        self.ols_model = ols_model  # Expose full model if needed
+        self.is_fit = True
+
+    def report_best_values(self, print_output=False):
+        if not self.is_fit:
+            raise RuntimeError("Run .fit(x, y) first.")
+        msg = (
+            f"Intercept: {self.intercept:.4f} "
+            f"(68% CI: {self.ci_intercept[0]:.4f}-{self.ci_intercept[1]:.4f})\n"
+            f"Slope: {self.slope:.4f} "
+            f"(68% CI: {self.ci_slope[0]:.4f}-{self.ci_slope[1]:.4f})\n"
+            f"Slope tvalue: {self.slope_tvalue:.1f}\n"
+            f"Slope p-value: {self.slope_pvalue:.3g}\n"
+            f"Scatter (resid std): {self.scatter:.4f}"
+        )
+        if print_output:
+            print(msg)
+        return {
+            "intercept": self.intercept,
+            "slope": self.slope,
+            "scatter": self.scatter,
+            "slope_pvalue": self.slope_pvalue,
+            "slope_stderr": self.slope_stderr,
+            "slope_tvalue": self.slope_tvalue,
+            "intercept_pvalue": self.ols_model.pvalues[0],
+            "intercept_stderr": self.ols_model.bse[0],
+            "intercept_tvalue": self.ols_model.tvalues[0],
+        }
+
+    def plot_best_fit(
+        self,
+        ax=None,
+        label=None,
+        color=None,
+        alpha_band=0.2,
+        lw=2,
+        nbins=5,
+    ):
+        if not self.is_fit:
+            raise RuntimeError("Run .fit(x, y) first.")
+
+        import matplotlib.pyplot as plt
+
+        if ax is None:
+            ax = plt.gca()
+
+        xx = np.linspace(self.x.min(), self.x.max(), 200)
+        X_design = sm.add_constant(xx)
+
+        pred = self.ols_model.get_prediction(X_design)
+        summary_frame = pred.summary_frame(alpha=0.05)  # 95% intervals
+
+        mean = summary_frame["mean"]
+        ci_lo = summary_frame["mean_ci_lower"]
+        ci_hi = summary_frame["mean_ci_upper"]
+
+        # Plot best fit
+        ax.plot(xx, mean, color=color, label=label, lw=lw)
+        # Plot confidence interval band
+        ax.fill_between(xx, ci_lo, ci_hi, color=color, alpha=alpha_band, label="68% CI")
+
+        if hasattr(self.model, "inlier_mask_"):
+            mask = self.model.inlier_mask_
+            xout, yout = self.x[~mask], self.y[~mask]
+            xclean, yclean = self.x[mask], self.y[mask]
+
+            # Plot inliers and outliers as before
+            ax.scatter(xclean, yclean, color="lightgrey", alpha=0.9)
+            ylims = ax.get_ylim()
+            ax.scatter(xout, yout, color="firebrick", alpha=0.2)
+            ax.set_ylim(*ylims)
+
+            # Bin data in nbins
+            bins = np.linspace(xclean.min(), xclean.max(), nbins + 1)
+            bin_centers = 0.5 * (bins[:-1] + bins[1:])
+            digitized = np.digitize(xclean, bins) - 1
+            means = []
+            stds = []
+            bin_counts = []
+            for i in range(nbins):
+                bin_y = yclean[digitized == i]
+                if len(bin_y) > 0:
+                    means.append(bin_y.mean())
+                    stds.append(bin_y.std() / len(bin_y) ** 0.5)
+                    bin_counts.append(len(bin_y))
+                else:
+                    means.append(np.nan)
+                    stds.append(np.nan)
+                    bin_counts.append(0)
+
+            # Plot binned means and stds
+            ax.errorbar(
+                bin_centers,
+                means,
+                yerr=stds,
+                fmt="o",
+                color=color if color else "black",
+                capsize=4,
+                markersize=6,
+                alpha=0.7,
+                zorder=10,
+            )
+
+        return ax
