@@ -136,6 +136,7 @@ class GuiderPlotter:
         guiderData: GuiderData,
         expid: Optional[int] = None,
         isIsr: bool = True,
+        path: str = "./",
     ) -> None:
         self.exp_id = expid if expid else stars_df["expid"].iloc[0]
         self.stars_df = stars_df[stars_df["expid"] == self.exp_id]
@@ -176,8 +177,8 @@ class GuiderPlotter:
                 "std_centroid_alt",
                 "std_centroid_corr_az",
                 "std_centroid_corr_alt",
-                "offset_rate_az",
-                "offset_rate_alt",
+                "drift_rate_az",
+                "drift_rate_alt",
                 "offset_zero_az",
                 "offset_zero_alt",
             ]
@@ -196,7 +197,7 @@ class GuiderPlotter:
         mask_valid = (stars["stamp"] >= 0) & (stars["xccd"].notna())
         n_meas = int(mask_valid.sum())
 
-        std_centroid = measure_std_centroid_stats(stars, snr_th=5, flux_th=5)
+        std_centroid = measure_std_centroid_stats(stars)
         phot = measure_photometric_variation(stars)
 
         total_possible = n_unique * stars["stamp"].nunique()
@@ -221,7 +222,7 @@ class GuiderPlotter:
         print(self.format_std_centroid_summary(filtered_stats_df))
         print(self.format_photometric_summary(filtered_stats_df))
 
-    def strip_plot(self, plot_type: str = "centroidAltAz") -> None:
+    def strip_plot(self, plot_type: str = "centroidAltAz", is_save: bool = False) -> None:
         # plot_kwargs dtype is dict[str, Any]
         plot_kwargs: dict[str, dict] = {
             "centroidAltAz": {
@@ -238,6 +239,11 @@ class GuiderPlotter:
                 "ylabel": "Magnitude Offset [mag]",
                 "col": ["magoffset"],
                 "title": "Flux Magnitude Offsets",
+            },
+            "ellip": {
+                "ylabel": "Ellipticity",
+                "col": ["e1", "e2"],
+                "title": "",
             },
             "psf": {
                 "ylabel": "PSF FWHM [arcsec]",
@@ -344,6 +350,12 @@ class GuiderPlotter:
         fig.suptitle(cfg["title"], fontsize=14, fontweight="bold")
         if count == 0:
             fig.tight_layout()
+
+        if is_save:
+            fname = self.path + f"guider_strip_{self.exp_id}_{plot_type}.png"
+            fig.savefig(fname, dpi=120, bbox_inches="tight")
+            print(f"Saved strip plot to {fname}")
+
         # return fig
 
     def get_star_centroid_ref(self, guiderData: GuiderData) -> dict[str, tuple[float | None, float | None]]:
@@ -394,6 +406,7 @@ class GuiderPlotter:
         phi=99.0,
         cutout_size=30,
         is_animated=False,
+        is_save=False,
     ) -> list:
         """Plot the stamp array for all the guiders."""
         if self.guiderData.view != "dvcs":
@@ -432,6 +445,12 @@ class GuiderPlotter:
 
         for ax in axs.values():
             self.clear_axis_ticks(ax, is_spine=cutout_size < 0)
+
+        if is_save:
+            fname = self.get_fname_mosaic_plot(stamp_num)
+            fig.savefig(fname, dpi=120, bbox_inches="tight")
+            print(f"Saved mosaic plot to {fname}")
+
         return artists
 
     def _plot_detector_panel(
@@ -632,10 +651,34 @@ class GuiderPlotter:
 
         # create animation
         ani = animation.ArtistAnimation(fig, frames, interval=1000 / fps, blit=True, repeat_delay=1000)
-        filepath = f"guider_mosaic_{self.exp_id}.gif"
+        filepath = self.get_fname_gif_plot()
         ani.save(filepath, fps=fps, dpi=dpi, writer="pillow")
         plt.close(fig)
         return ani
+
+    def set_path(self, path: str) -> None:
+        """
+        Set the path for saving plots.
+        """
+        self.path = path
+        if not self.path.endswith("/"):
+            self.path += "/"
+        print(f"Plot path set to: {self.path}")
+
+    def get_fname_mosaic_plot(self, stamp_num: int = 2) -> str:
+        """
+        Get the filename for the mosaic plot.
+        """
+        if stamp_num < 0:
+            return self.path + f"guider_mosaic_{self.exp_id}_stacked.pngf"
+        else:
+            return self.path + f"guider_mosaic_{self.exp_id}_stamp_{stamp_num + 1:02d}.png"
+
+    def get_fname_gif_plot(self) -> str:
+        """
+        Get the filename for the mosaic GIF plot.
+        """
+        return self.path + f"guider_mosaic_{self.exp_id}.gif"
 
     @staticmethod
     def format_std_centroid_summary(stats_df: pd.DataFrame) -> str:
@@ -978,7 +1021,7 @@ class GuiderMosaicPlotter:
         return ani
 
 
-def measure_std_centroid_stats(stars: pd.DataFrame, snr_th: int = 5, flux_th: int = 5) -> pd.DataFrame:
+def measure_std_centroid_stats(stars: pd.DataFrame) -> pd.DataFrame:
     """
     Compute global std_centroid statistics across all guiders.
 
@@ -993,27 +1036,34 @@ def measure_std_centroid_stats(stars: pd.DataFrame, snr_th: int = 5, flux_th: in
         DataFrame with new std_centroid statistic
         columns broadcasted to all rows.
     """
-    # mask the objects w/ very low flux and SNR
-    mask = (stars.snr > snr_th) & (stars.flux > flux_th)
-    time = (stars.stamp[mask].to_numpy() + 0.5) * 0.3  # seconds
+    # # mask the objects w/ very low flux and SNR
+    # mask = (stars.snr > snr_th) & (stars.flux > flux_th)
+    time = (stars.stamp.to_numpy() + 0.5) * 0.3  # seconds
     time = time.astype(np.float64)
-    az = stars.daz[mask].to_numpy()
-    alt = stars.dalt[mask].to_numpy()
+    az = stars.daz.to_numpy()
+    alt = stars.dalt.to_numpy()
+    from lsst.summit.utils.utils import RobustFitter
 
-    # Linear fits
-    coefs_az = np.polyfit(time, az, 1)
-    coefs_alt = np.polyfit(time, alt, 1)
+    rf_alt = RobustFitter(residual_threshold=0.2)
+    rf_alt.fit(time, alt)
+    coefs_alt = rf_alt.report_best_values()
+
+    rf_az = RobustFitter(residual_threshold=0.2)
+    rf_az.fit(time, az)
+    coefs_az = rf_az.report_best_values()
 
     # Stats
     std_centroid_stats = {
         "std_centroid_az": mad_std(az),
         "std_centroid_alt": mad_std(alt),
-        "std_centroid_corr_az": mad_std(az - np.polyval(coefs_az, time)),
-        "std_centroid_corr_alt": mad_std(alt - np.polyval(coefs_alt, time)),
-        "drift_rate_az": coefs_az[0],
-        "drift_rate_alt": coefs_alt[0],
-        "offset_zero_az": coefs_az[1],
-        "offset_zero_alt": coefs_alt[1],
+        "std_centroid_corr_az": coefs_az["scatter"],
+        "std_centroid_corr_alt": coefs_alt["scatter"],
+        "drift_rate_az": coefs_az["slope"],
+        "drift_rate_alt": coefs_alt["slope"],
+        "drift_rate_signficance_az": coefs_az["slope_tvalue"],
+        "drift_rate_signficance_alt": coefs_alt["slope_tvalue"],
+        "offset_zero_az": coefs_az["intercept"],
+        "offset_zero_alt": coefs_alt["intercept"],
     }
     return std_centroid_stats
 

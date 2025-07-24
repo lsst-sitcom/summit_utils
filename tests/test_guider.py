@@ -83,7 +83,17 @@ class GuiderTestCase(unittest.TestCase):
 
     def test_detection(self):
         self.assertIsInstance(self.stars, pd.DataFrame)
-        requiredColumns = ("xroi", "yroi", "dx", "dy", "dalt", "daz", "fwhm", "trackid", "expid")
+        requiredColumns = (
+            "xroi",
+            "yroi",
+            "dx",
+            "dy",
+            "dalt",
+            "daz",
+            "fwhm",
+            "trackid",
+            "expid",
+        )
         self.assertTrue(
             all(col in self.stars.columns for col in requiredColumns),
             "Not all required columns are present in the stars DataFrame.",
@@ -96,26 +106,36 @@ class GuiderTestCase(unittest.TestCase):
 
     def test_plotting(self):
         plotter = GuiderPlotter(self.stars, self.guiderData, isIsr=True)
-        plotter.print_metrics()  # just to check that it runs without error
+
+        # set a path for saving plots
+        path = "test_plots/"
+        plotter.set_path(path)
+
+        # just to check that it runs without error
+        plotter.print_metrics()
 
         # TODO: add saving code and check the file size
         # check the -1 plotting option
-        _ = plotter.star_mosaic(stamp_num=-1, cutout_size=-1, plo=50, phi=98)
+        _ = plotter.star_mosaic(stamp_num=-1, cutout_size=-1, plo=50, phi=98, is_save=True)
 
         # check zooming in works
-        _ = plotter.star_mosaic(stamp_num=-1, cutout_size=30, plo=50, phi=98)
+        _ = plotter.star_mosaic(stamp_num=-1, cutout_size=30, plo=50, phi=98, is_save=True)
 
         # TODO: add saving code and check the file size
-        _ = plotter.strip_plot()
+        _ = plotter.strip_plot(is_save=True)
 
-        _ = plotter.strip_plot(plot_type="centroidPixel")
+        _ = plotter.strip_plot(plot_type="centroidPixel", is_save=True)
 
-        _ = plotter.strip_plot(plot_type="flux")
+        _ = plotter.strip_plot(plot_type="flux", is_save=True)
 
-        _ = plotter.strip_plot(plot_type="psf")
+        _ = plotter.strip_plot(plot_type="psf", is_save=True)
 
     def test_animation(self):
         plotter = GuiderPlotter(self.stars, self.guiderData, isIsr=True)
+
+        # set a path for saving plots
+        path = "test_plots/"
+        plotter.set_path(path)
 
         # TODO: add saving code and check the file size
         plotter.make_gif(n_stamp_max=50, cutout_size=14, plo=50, phi=98)
