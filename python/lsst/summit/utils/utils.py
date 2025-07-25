@@ -31,7 +31,7 @@ import astropy.units as u
 import matplotlib
 import numpy as np
 import numpy.typing as npt
-import statsmodels.api as sm
+import statsmodels.api as sm  # type: ignore
 from astro_metadata_translator import ObservationInfo
 from astropy.coordinates import AltAz, EarthLocation, SkyCoord, get_sun
 from astropy.stats import mad_std
@@ -40,7 +40,7 @@ from dateutil.tz import gettz
 from deprecated.sphinx import deprecated
 from matplotlib.patches import Rectangle
 from scipy.ndimage import gaussian_filter
-from sklearn.linear_model import LinearRegression, RANSACRegressor
+from sklearn.linear_model import LinearRegression, RANSACRegressor  # type: ignore
 
 import lsst.afw.detection as afwDetect
 import lsst.afw.detection as afwDetection
