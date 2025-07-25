@@ -66,6 +66,7 @@ DEFAULT_COLUMNS = (
     "starid",
     "stamp",
     "timestamp",
+    "elapsed_time",
     "filter",
     "magoffset",
     "ixx",
@@ -187,6 +188,7 @@ class GuiderStarTracker:
         self,
         ref: pd.DataFrame,
         guiderName: str,
+        cutout_size: int = 25,
     ) -> pd.DataFrame:
         """
         Track one star across all stamps for one guider.
@@ -234,6 +236,7 @@ class GuiderStarTracker:
         # get some basic info
         detNum = self.guiderData.getGuiderDetNum(guiderName)
         obstime = Time(self.guiderData.header["start_time"])
+        elapsed_time = self.guiderData.timestamps - self.guiderData.timestamps[0]
 
         # --- per‐stamp measurements ---
         for i, stampObject in enumerate(image_list[1:]):
@@ -258,8 +261,7 @@ class GuiderStarTracker:
 
             # make isr and cutout
             isr = stamp - np.nanmedian(stamp, axis=0)
-            cutout = Cutout2D(isr, (ref_x, ref_y), size=50, mode="partial", fill_value=np.nan)
-
+            cutout = Cutout2D(isr, (ref_x, ref_y), size=cutout_size, mode="partial", fill_value=np.nan)
             _, median, std = sigma_clipped_stats(cutout.data, sigma=3.0)
             # sources = measure_star_in_aperture(
             # cutout.data - median, aperture_radius=fwhm, std_bkg=std, gain=1.0
@@ -274,6 +276,8 @@ class GuiderStarTracker:
             sources["stamp"] = si
             sources["ampname"] = amp_name
             sources["filter"] = self.guiderData.header["filter"]
+            sources["timestamp"] = self.guiderData.timestamps[si]
+            sources["elapsed_time"] = elapsed_time[si].sec
 
             # Centroid in amplifier roi coordinates
             sources["xroi"] += cutout.xmin_original
@@ -289,6 +293,10 @@ class GuiderStarTracker:
             wcs = self.guiderData.wcs[guiderName]
             xfp, yfp = convert_to_focal_plane(xccd, yccd, detNum)
             alt, az = convert_to_altaz(xccd, yccd, wcs, obstime)
+
+            # Convert fwhm to arcseconds
+            pixel_scale = wcs.getPixelScale().asArcseconds()
+            sources["fwhm"] *= pixel_scale
 
             # Add reference positions
             sources["xccd"] = xccd
