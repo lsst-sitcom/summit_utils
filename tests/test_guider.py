@@ -81,7 +81,7 @@ class GuiderTestCase(unittest.TestCase):
 
         return
 
-    def test_detection(self):
+    def test_detection(self) -> None:
         self.assertIsInstance(self.stars, pd.DataFrame)
         requiredColumns = (
             "xroi",
@@ -104,7 +104,7 @@ class GuiderTestCase(unittest.TestCase):
         # we skip the first stamp, so the max index should be nStamps - 1
         self.assertEqual(maxStampIndex, nStamps - 1, "Did not get detections for all expected stamps")
 
-    def test_plotting(self):
+    def test_plotting(self) -> None:
         plotter = GuiderPlotter(self.stars, self.guiderData, isIsr=True)
 
         # set a path for saving plots
@@ -130,7 +130,7 @@ class GuiderTestCase(unittest.TestCase):
 
         _ = plotter.strip_plot(plot_type="psf", is_save=True)
 
-    def test_animation(self):
+    def test_animation(self) -> None:
         plotter = GuiderPlotter(self.stars, self.guiderData, isIsr=True)
 
         # set a path for saving plots
