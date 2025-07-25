@@ -107,38 +107,34 @@ class GuiderTestCase(unittest.TestCase):
     def test_plotting(self) -> None:
         plotter = GuiderPlotter(self.stars, self.guiderData, isIsr=True)
 
-        # set a path for saving plots
-        path = "test_plots/"
-        plotter.set_path(path)
-
         # just to check that it runs without error
         plotter.print_metrics()
 
         # TODO: add saving code and check the file size
         # check the -1 plotting option
-        _ = plotter.star_mosaic(stamp_num=-1, cutout_size=-1, plo=50, phi=98, is_save=True)
+        _ = plotter.star_mosaic(stamp_num=-1, cutout_size=-1, plo=50, phi=98, save_as="test_mosaic.png")
 
         # check zooming in works
-        _ = plotter.star_mosaic(stamp_num=-1, cutout_size=30, plo=50, phi=98, is_save=True)
+        _ = plotter.star_mosaic(
+            stamp_num=-1, cutout_size=30, plo=50, phi=98, save_as="test_mosaic_zoomed.png"
+        )
 
         # TODO: add saving code and check the file size
-        _ = plotter.strip_plot(is_save=True)
+        _ = plotter.strip_plot(save_as="test_strip_altaz_plot.png")
 
-        _ = plotter.strip_plot(plot_type="centroidPixel", is_save=True)
+        _ = plotter.strip_plot(plot_type="centroidPixel", save_as="test_strip_xypixel_plot.png")
 
-        _ = plotter.strip_plot(plot_type="flux", is_save=True)
+        _ = plotter.strip_plot(plot_type="flux", save_as="test_strip_flux_plot.png")
 
-        _ = plotter.strip_plot(plot_type="psf", is_save=True)
+        _ = plotter.strip_plot(plot_type="psf", save_as="test_strip_psf_plot.png")
+
+        _ = plotter.strip_plot(plot_type="ellip", save_as="test_strip_e1e2_plot.png")
 
     def test_animation(self) -> None:
         plotter = GuiderPlotter(self.stars, self.guiderData, isIsr=True)
 
-        # set a path for saving plots
-        path = "test_plots/"
-        plotter.set_path(path)
-
         # TODO: add saving code and check the file size
-        plotter.make_gif(n_stamp_max=50, cutout_size=14, plo=50, phi=98)
+        plotter.make_gif(n_stamp_max=50, cutout_size=14, plo=50, phi=98, save_as="test_animation.gif")
 
 
 class TestMemory(lsst.utils.tests.MemoryTestCase):

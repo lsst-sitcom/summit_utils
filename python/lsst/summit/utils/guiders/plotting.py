@@ -222,7 +222,7 @@ class GuiderPlotter:
         print(self.format_std_centroid_summary(filtered_stats_df, exptime=self.exptime))
         print(self.format_photometric_summary(filtered_stats_df, exptime=self.exptime))
 
-    def strip_plot(self, plot_type: str = "centroidAltAz", fname: str | None = None) -> None:
+    def strip_plot(self, plot_type: str = "centroidAltAz", save_as: str | None = None) -> None:
         # plot_kwargs dtype is dict[str, Any]
         plot_kwargs: dict[str, dict] = {
             "centroidAltAz": {
@@ -394,9 +394,9 @@ class GuiderPlotter:
         if count == 0:
             fig.tight_layout()
 
-        if fname:
-            fig.savefig(fname, dpi=120, bbox_inches="tight")
-            print(f"Saved strip plot to {fname}")
+        if save_as:
+            fig.savefig(save_as, dpi=120, bbox_inches="tight")
+            print(f"Saved strip plot to {save_as}")
 
         # return fig
 
@@ -448,7 +448,7 @@ class GuiderPlotter:
         phi=99.0,
         cutout_size=30,
         is_animated=False,
-        fname=None,
+        save_as=None,
     ) -> list:
         """Plot the stamp array for all the guiders."""
         if self.guiderData.view != "dvcs":
@@ -490,9 +490,9 @@ class GuiderPlotter:
         for ax in axs.values():
             self.clear_axis_ticks(ax, is_spine=cutout_size < 0)
 
-        if fname:
-            fig.savefig(fname, dpi=120, bbox_inches="tight")
-            print(f"Saved mosaic plot to {fname}")
+        if save_as:
+            fig.savefig(save_as, dpi=120, bbox_inches="tight")
+            print(f"Saved mosaic plot to {save_as}")
 
         return artists
 
@@ -645,7 +645,7 @@ class GuiderPlotter:
         plo=90.0,
         phi=99.0,
         cutout_size=30,
-        fname=None,
+        save_as=None,
     ) -> animation.ArtistAnimation:
         # the guider view should be 'dvcs'
         # if guider.view != "dvcs":
@@ -696,10 +696,10 @@ class GuiderPlotter:
         # create animation
         ani = animation.ArtistAnimation(fig, frames, interval=1000 / fps, blit=True, repeat_delay=1000)
 
-        if fname is None:
-            fname = f"guider_mosaic_{self.exp_id}.gif"
+        if save_as is None:
+            save_as = f"guider_mosaic_{self.exp_id}.gif"
 
-        ani.save(fname, fps=fps, dpi=dpi, writer="pillow")
+        ani.save(save_as, fps=fps, dpi=dpi, writer="pillow")
         plt.close(fig)
         return ani
 
@@ -984,7 +984,7 @@ class GuiderMosaicPlotter:
         artists = self.plot_stamp_array(stamp_num=-1, fig=fig, axs=axs)
         return artists
 
-    def make_gif(self, n_stamp_max=10, fps=5, dpi=80, fname=None) -> animation.ArtistAnimation:
+    def make_gif(self, n_stamp_max=10, fps=5, dpi=80, save_as=None) -> animation.ArtistAnimation:
         # Create the animation
         fig, axs = plt.subplot_mosaic(
             self.layout,
@@ -1010,12 +1010,12 @@ class GuiderMosaicPlotter:
         # update the stamps
         ani = animation.ArtistAnimation(fig, frame_list, interval=1000 / fps, blit=True, repeat_delay=1000)
 
-        ani.save(fname, fps=fps, dpi=dpi, writer="pillow")
+        ani.save(save_as, fps=fps, dpi=dpi, writer="pillow")
         plt.close(fig)
         return ani
 
     def make_mp4(
-        self, n_stamp_max=10, fps=5, dpi=80, fname="guider_ccd_array.mp4"
+        self, n_stamp_max=10, fps=5, dpi=80, save_as="guider_ccd_array.mp4"
     ) -> animation.ArtistAnimation:
         from matplotlib import animation
 
@@ -1042,7 +1042,7 @@ class GuiderMosaicPlotter:
 
         # update the stamps
         ani = animation.ArtistAnimation(fig, frame_list, interval=1000 / fps, blit=True, repeat_delay=1000)
-        ani.save(fname, fps=fps, dpi=dpi)
+        ani.save(save_as, fps=fps, dpi=dpi)
         plt.close(fig)
         return ani
 
