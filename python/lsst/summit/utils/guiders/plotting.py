@@ -31,6 +31,7 @@ from matplotlib import animation
 from matplotlib.patches import Circle
 
 from lsst.summit.utils.guiders.reading import GuiderData
+from lsst.summit.utils.utils import RobustFitter
 
 sns.set_context("talk", font_scale=1.1)
 
@@ -197,8 +198,8 @@ class GuiderPlotter:
         mask_valid = (stars["stamp"] >= 0) & (stars["xccd"].notna())
         n_meas = int(mask_valid.sum())
 
-        std_centroid = measure_std_centroid_stats(stars)
-        phot = measure_photometric_variation(stars)
+        std_centroid = measure_std_centroid_stats(stars, snr_th=5)
+        phot = measure_photometric_variation(stars, snr_th=5)
 
         total_possible = n_unique * stars["stamp"].nunique()
         frac_valid = n_meas / total_possible if total_possible > 0 else np.nan
@@ -219,45 +220,53 @@ class GuiderPlotter:
         filtered_stats_df = self.stats_df[self.stats_df["expid"] == self.exp_id].copy()
 
         print(self.format_stats_summary(filtered_stats_df))
-        print(self.format_std_centroid_summary(filtered_stats_df))
-        print(self.format_photometric_summary(filtered_stats_df))
+        print(self.format_std_centroid_summary(filtered_stats_df, exptime=self.exptime))
+        print(self.format_photometric_summary(filtered_stats_df, exptime=self.exptime))
 
     def strip_plot(self, plot_type: str = "centroidAltAz", is_save: bool = False) -> None:
         # plot_kwargs dtype is dict[str, Any]
         plot_kwargs: dict[str, dict] = {
             "centroidAltAz": {
                 "ylabel": "Centroid Offset [arcsec]",
+                "unit": "arcsec",
                 "col": ["dalt", "daz"],
                 "title": "Alt/Az Centroid Offsets",
             },
             "centroidPixel": {
                 "ylabel": "Centroid Offset [pixels]",
                 "col": ["dx", "dy"],
+                "unit": "pixels",
                 "title": "CCD Pixel Centroid Offsets",
             },
             "flux": {
                 "ylabel": "Magnitude Offset [mag]",
                 "col": ["magoffset"],
+                "unit": "mmag",
+                "scale": 1e3,  # scale to mmag
                 "title": "Flux Magnitude Offsets",
             },
             "ellip": {
                 "ylabel": "Ellipticity",
                 "col": ["e1", "e2"],
+                "unit": "",
                 "title": "",
             },
             "psf": {
                 "ylabel": "PSF FWHM [arcsec]",
                 "col": ["fwhm"],
-                "scale": 0.2,
+                "scale": 1.0,
+                "unit": "arcsec",
                 "title": "PSF FWHM",
             },
         }
         cfg = plot_kwargs[plot_type]  # type: dict[str, Any]
         scale = cfg.get("scale", 1.0)  # type: float
         cols = cfg["col"]
+        unit = cfg.get("unit", "")
+        exp = float(self.exptime)
 
         # filter and prepare
-        df = self.stars_df[self.stars_df["stamp"] > 0][["stamp", "detector"] + cols].copy()
+        df = self.stars_df[self.stars_df["elapsed_time"] > 0][["elapsed_time", "detector"] + cols].copy()
 
         # Compute overall mean and sigma for y-axis limits
         all_data = df[cols].values.flatten()
@@ -274,36 +283,58 @@ class GuiderPlotter:
         if n == 1:
             axes = [axes]
 
-        # define bins
-        max_stamp = int(df["stamp"].max()) + 1
-        bins = np.arange(1, max_stamp + 6, 5)
-        bin_centers = bins[:-1] + 2.5
-
         count = 0
         for ax, col in zip(axes, cols):
-            # mask outliers
-            mask = (df[col] < (ylims[1] / scale)) & (df[col] > (ylims[0] / scale))
-
-            # compute binned stats
-            df["bin"] = pd.cut(df["stamp"], bins=bins, labels=False)
-            stats = df[mask].groupby("bin")[col].agg(["mean", "std"]).reset_index()
-
-            valid = stats["bin"].notna()
-            bin_idx = stats.loc[valid, "bin"].astype(int).values
-            means = stats.loc[valid, "mean"].values * scale
-
-            errs = stats.loc[valid, "std"].values * scale
-
             # horizontal line at zero
             if col == "daz":
-                ax.axhline(0, color="grey", ls="--", label=f"Az: {self.az:.5f} deg")
+                ax.axhline(0, color="grey", ls="--", label="Az")
             if col == "dalt":
-                ax.axhline(0, color="grey", ls="--", label=f"Alt: {self.el:.5f} deg")
+                ax.axhline(0, color="grey", ls="--", label="Alt")
 
             if col == "dx":
                 ax.axhline(0, color="grey", ls="--", label="CCD X")
             if col == "dy":
                 ax.axhline(0, color="grey", ls="--", label="CCD Y")
+
+            if col == "e1":
+                ax.axhline(0, color="grey", ls="--", label="e1")
+            if col == "e2":
+                ax.axhline(0, color="grey", ls="--", label="e2")
+
+            if col == "magoffset":
+                ax.axhline(0, color="grey", ls="--", label="Magnitude Offset")
+
+            if col == "fwhm":
+                ax.axhline(np.nanmedian(df[col] * scale), color="grey", ls="--", label="PSF FWHM")
+
+            model = RobustFitter(
+                x=df["elapsed_time"].values,
+                y=df[col].values * scale,
+                residual_threshold=1.5 * sigma_val,
+            )
+
+            results = model.report_best_values()
+            # Format best-fit stats as text
+            txt = (
+                f"Slope: {exp * results.slope:.2f} {unit}/exposure\n"
+                f"Significance: {np.abs(results.slope_tvalue):.0f} σ\n"
+                # f"Intercept: {results.intercept:.1f} {unit}\n"
+                f"scatter: {results.scatter:.3f} {unit}\n"
+            )
+
+            # Place text on the plot (top left, inside axes)
+            ax.text(
+                0.02,
+                0.98,
+                txt,
+                transform=ax.transAxes,
+                fontsize=11,
+                color="black",
+                ha="left",
+                va="top",
+                bbox=dict(facecolor="white", alpha=0.75, edgecolor="none", boxstyle="round,pad=0.3"),
+            )
+            model.plot_best_fit(ax=ax, color=LIGHT_BLUE, label="", lw=2, is_scatter=False)
 
             # scatter points
             # Use different markers for each guider detector
@@ -311,41 +342,54 @@ class GuiderPlotter:
             for i, starid in enumerate(unique_starids):
                 marker = self.MARKERS[i % len(self.MARKERS)]
                 mask = df["detector"] == starid
+                mask2 = mask & (model.outlier_mask)
+
                 ax.scatter(
-                    df.loc[mask, "stamp"],
+                    df.loc[mask, "elapsed_time"],
                     df.loc[mask, col] * scale,
                     color="lightgrey",
-                    alpha=0.7,
+                    alpha=0.6,
                     marker=marker,
                     label=f"{starid}" if count == 0 else "",
                     # avoid duplicate legend entries
                 )
 
-            # plot error bars
-            ax.errorbar(
-                bin_centers[bin_idx],
-                means,
-                yerr=errs,
-                fmt="o",
-                color=LIGHT_BLUE,
-                ecolor=LIGHT_BLUE,
-                capsize=3,
-            )
+                # plot outliers
+                ax.scatter(
+                    df.loc[mask2, "elapsed_time"],
+                    df.loc[mask2, col] * scale,
+                    color=LIGHT_BLUE,
+                    alpha=0.2,
+                    marker=marker,
+                )
+
+            # # plot error bars
+            # ax.errorbar(
+            #     bin_centers[bin_idx],
+            #     means,
+            #     yerr=errs,
+            #     fmt="o",
+            #     color=LIGHT_BLUE,
+            #     ecolor=LIGHT_BLUE,
+            #     capsize=3,
+            # )
 
             if count == 0:
                 ax.set_ylabel(cfg["ylabel"])
-            ax.set_xlabel("# stamp")
+            # ax.set_xlabel("# stamp")
+            ax.set_xlabel("Elapsed time [sec]")
             ax.set_ylim(*ylims)  # <-- Set y-axis limits here
-            ax.legend(fontsize=10, ncol=4, loc="best")
+            ax.legend(fontsize=10, ncol=4, loc="lower left")
 
             # top axis for elapsed time
-            xstampers = np.arange(0, max_stamp + 10, 10)
-            ax.set_xticks(xstampers)
-            ax2 = ax.twiny()
-            elapsed = self.exptime * xstampers / max_stamp
-            ax2.set_xticks(xstampers)
-            ax2.set_xticklabels([f"{e:.1f}" for e in elapsed])
-            ax2.set_xlabel("Elapsed time [s]")
+            # xstampers = np.arange(0, max_stamp + 10, 10)
+            # ax.set_xticks(xstampers)
+            # ax2 = ax.twiny()
+            # elapsed = self.exptime * xstampers / max_stamp
+            # ax2.set_xticks(xstampers)
+            # ax2.set_xticklabels([f"{e:.1f}" for e in elapsed])
+            # ax2.set_xlabel("Elapsed Time [s]")
+
             count += 1
         fig.suptitle(cfg["title"], fontsize=14, fontweight="bold")
         if count == 0:
@@ -435,7 +479,9 @@ class GuiderPlotter:
             artists.extend(star_cross)
             cutout_shape_list.append(cutout_shape)
 
-        std = np.nanstd(np.hypot(self.stars_df["dalt"], self.stars_df["daz"]))
+        std_az = self.stats_df.loc[self.stats_df["expid"] == self.exp_id, "std_centroid_corr_az"].values[0]
+        std_alt = self.stats_df.loc[self.stats_df["expid"] == self.exp_id, "std_centroid_corr_alt"].values[0]
+        std = np.hypot(std_az, std_alt)
         stamp_info = self.annotate_center(stamp_num, axs["center"], jitter=std)
         artists.append(stamp_info)
 
@@ -681,7 +727,7 @@ class GuiderPlotter:
         return self.path + f"guider_mosaic_{self.exp_id}.gif"
 
     @staticmethod
-    def format_std_centroid_summary(stats_df: pd.DataFrame) -> str:
+    def format_std_centroid_summary(stats_df: pd.DataFrame, exptime=1) -> str:
         """
         Pretty string summary of centroid stdev. stats from run_all_guiders.
         """
@@ -705,15 +751,15 @@ class GuiderPlotter:
             f"  - centroid stdev. (ALT): {js['std_centroid_alt']:.3f} arcsec (raw)\n"
             f"  - centroid stdev.  (AZ): {js['std_centroid_corr_az']:.3f} arcsec (linear corr)\n"
             f"  - centroid stdev. (ALT): {js['std_centroid_corr_alt']:.3f} arcsec (linear corr)\n"
-            f"  - Drift Rate       (AZ): {15 * js['drift_rate_az']:.3f} arcsec per exposure\n"
-            f"  - Drift Rate      (ALT): {15 * js['drift_rate_alt']:.3f} arcsec per exposure\n"
+            f"  - Drift Rate       (AZ): {exptime * js['drift_rate_az']:.2f} arcsec per exposure\n"
+            f"  - Drift Rate      (ALT): {exptime * js['drift_rate_alt']:.2f} arcsec per exposure\n"
             f"  - Zero Offset      (AZ): {js['offset_zero_az']:.3f} arcsec\n"
             f"  - Zero Offset     (ALT): {js['offset_zero_alt']:.3f} arcsec"
         )
         return summary
 
     @staticmethod
-    def format_photometric_summary(phot_stats: pd.DataFrame) -> str:
+    def format_photometric_summary(phot_stats: pd.DataFrame, exptime=1) -> str:
         """
         Pretty-print summary of photometric variation statistics.
         """
@@ -731,9 +777,9 @@ class GuiderPlotter:
         return (
             "\nPhotometric Variation Summary\n"
             "-------------------------------\n"
-            f"  - Mag Drift Rate:      {stats['magoffset_rate']:.5f} mag/sec\n"
-            f"  - Mag Zero Offset:     {stats['magoffset_zero']:.5f} mag\n"
-            f"  - Mag RMS (detrended): {stats['magoffset_rms']:.5f} mag"
+            f"  - Mag Drift Rate:      {exptime * stats['magoffset_rate'] * 1e3:.1f} mmag/exposure\n"
+            f"  - Mag Zero Offset:     {stats['magoffset_zero'] * 1e3 :.1f} mmag\n"
+            f"  - Mag RMS (detrended): {stats['magoffset_rms'] * 1e3:.1f} mmag"
         )
 
     @staticmethod
@@ -1021,7 +1067,7 @@ class GuiderMosaicPlotter:
         return ani
 
 
-def measure_std_centroid_stats(stars: pd.DataFrame) -> pd.DataFrame:
+def measure_std_centroid_stats(stars: pd.DataFrame, snr_th=5, flux_th=10.0) -> pd.DataFrame:
     """
     Compute global std_centroid statistics across all guiders.
 
@@ -1036,34 +1082,31 @@ def measure_std_centroid_stats(stars: pd.DataFrame) -> pd.DataFrame:
         DataFrame with new std_centroid statistic
         columns broadcasted to all rows.
     """
-    # # mask the objects w/ very low flux and SNR
-    # mask = (stars.snr > snr_th) & (stars.flux > flux_th)
-    time = (stars.stamp.to_numpy() + 0.5) * 0.3  # seconds
-    time = time.astype(np.float64)
-    az = stars.daz.to_numpy()
-    alt = stars.dalt.to_numpy()
-    from lsst.summit.utils.utils import RobustFitter
+    # mask the objects w/ very low flux and SNR
+    mask = (stars.snr > snr_th) & (stars.flux > flux_th)
+    time = stars["elapsed_time"][mask].to_numpy()
+    az = stars.daz[mask].to_numpy()
+    alt = stars.dalt[mask].to_numpy()
 
-    rf_alt = RobustFitter(residual_threshold=0.2)
-    rf_alt.fit(time, alt)
+    # Make a robust fit
+    rf_alt = RobustFitter(time, alt)
     coefs_alt = rf_alt.report_best_values()
 
-    rf_az = RobustFitter(residual_threshold=0.2)
-    rf_az.fit(time, az)
+    rf_az = RobustFitter(time, az)
     coefs_az = rf_az.report_best_values()
 
     # Stats
     std_centroid_stats = {
         "std_centroid_az": mad_std(az),
         "std_centroid_alt": mad_std(alt),
-        "std_centroid_corr_az": coefs_az["scatter"],
-        "std_centroid_corr_alt": coefs_alt["scatter"],
-        "drift_rate_az": coefs_az["slope"],
-        "drift_rate_alt": coefs_alt["slope"],
-        "drift_rate_signficance_az": coefs_az["slope_tvalue"],
-        "drift_rate_signficance_alt": coefs_alt["slope_tvalue"],
-        "offset_zero_az": coefs_az["intercept"],
-        "offset_zero_alt": coefs_alt["intercept"],
+        "std_centroid_corr_az": coefs_az.scatter,
+        "std_centroid_corr_alt": coefs_alt.scatter,
+        "drift_rate_az": coefs_az.slope,
+        "drift_rate_alt": coefs_alt.slope,
+        "drift_rate_signficance_az": coefs_az.slope_tvalue,
+        "drift_rate_signficance_alt": coefs_alt.slope_tvalue,
+        "offset_zero_az": np.nanmedian(az),
+        "offset_zero_alt": np.nanmedian(alt),
     }
     return std_centroid_stats
 
@@ -1129,7 +1172,7 @@ def rotate_around_center(image: np.ndarray, angle_deg: float, center: tuple[floa
     return rotated  # nd.array rotated
 
 
-def measure_photometric_variation(stars: pd.DataFrame) -> dict[str, float]:
+def measure_photometric_variation(stars: pd.DataFrame, snr_th=5) -> dict[str, float]:
     """
     Fit magoffset vs time across all rows, compute drift rate,
       zero-point, and RMS scatter,
@@ -1137,24 +1180,26 @@ def measure_photometric_variation(stars: pd.DataFrame) -> dict[str, float]:
     """
     mo = stars["magoffset"].to_numpy()
     mask = np.isfinite(mo)
+    mask &= stars["snr"] > snr_th
     if np.sum(mask) < 3:
         phot_stats = {
             "magoffset_rate": np.nan,
             "magoffset_zero": np.nan,
             "magoffset_rms": np.nan,
+            "magoffset_signficance": np.nan,
         }
-    else:
-        time = (stars["stamp"].to_numpy()[mask] + 0.5) * 0.3  # seconds
-        mo_valid = mo[mask]
-        coef = np.polyfit(np.asarray(time, dtype=float), np.asarray(mo_valid, dtype=float), 1)
-        rate, zero = coef
-        resid = mo_valid - np.polyval(coef, time)
-        rms = mad_std(resid)
-        phot_stats = {
-            "magoffset_rate": rate,
-            "magoffset_zero": zero,
-            "magoffset_rms": rms,
-        }
+
+    time = stars["elapsed_time"][mask].to_numpy()
+    rf_mag = RobustFitter(time, mo[mask])
+    coefs_mag = rf_mag.report_best_values()
+
+    # Stats
+    phot_stats = {
+        "magoffset_rate": coefs_mag.slope,
+        "magoffset_signficance": coefs_mag.slope_tvalue,
+        "magoffset_zero": np.nanmedian(mo[mask]),
+        "magoffset_rms": coefs_mag.scatter,
+    }
     return phot_stats
 
 
