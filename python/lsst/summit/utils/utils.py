@@ -24,6 +24,7 @@ import datetime
 import logging
 import os
 from collections.abc import Iterable, Sequence
+from dataclasses import dataclass
 from typing import TYPE_CHECKING
 
 import astropy.units as u
@@ -33,6 +34,7 @@ import numpy.typing as npt
 import statsmodels.api as sm
 from astro_metadata_translator import ObservationInfo
 from astropy.coordinates import AltAz, EarthLocation, SkyCoord, get_sun
+from astropy.stats import mad_std
 from astropy.time import Time
 from dateutil.tz import gettz
 from deprecated.sphinx import deprecated
@@ -1328,6 +1330,7 @@ def calcEclipticCoords(ra: float, dec: float) -> tuple[float, float]:
     Matches the results of:
 
       from astropy.coordinates import SkyCoord, HeliocentricEclipticIAU76
+        from dataclasses import dataclass
       import astropy.units as u
 
       p = SkyCoord(ra=ra0*u.deg, dec=dec0*u.deg, distance=1*u.au, frame='hcrs')
@@ -1424,43 +1427,84 @@ def getSunAngle(time: Time | None = None) -> float:
     return sun_altaz.alt.deg
 
 
+@dataclass
+class RobustFitResult:
+    intercept: float
+    slope: float
+    scatter: float
+    slope_pvalue: float
+    slope_stderr: float
+    slope_tvalue: float
+    intercept_pvalue: float
+    intercept_stderr: float
+    intercept_tvalue: float
+
+
 class RobustFitter:
     """
     Robust linear fit using RANSAC,
     with confidence and prediction intervals from statsmodels.
     """
 
-    def __init__(self, min_samples=0.2, residual_threshold=0.35, random_state=42):
+    def __init__(
+        self,
+        x: np.ndarray,
+        y: np.ndarray,
+        min_samples: float = 0.2,
+        residual_threshold: float | None = None,
+        random_state: int = 42,
+    ):
         self.min_samples = min_samples
         self.residual_threshold = residual_threshold
         self.random_state = random_state
-        self.is_fit = False
+
+        if self.residual_threshold is None:
+            # Set a default residual threshold based on the data
+            if np.isnan(x).all() or np.isnan(y).all():
+                raise ValueError("Cannot fit model: all input data is NaN.")
+            self.residual_threshold = mad_std(y)
+
+        self.fit(x, y)
 
     def fit(self, x, y):
-        x = np.asarray(x).reshape(-1, 1)
+        # Ensure x and y are numpy arrays
+        x = np.asarray(x)
         y = np.asarray(y)
+
+        # check for NaNs
+        is_nan = np.isnan(x) | np.isnan(y)
+        if np.all(is_nan):
+            raise ValueError("All input data is NaN. Cannot fit a model.")
+
+        X = np.asarray(x[~is_nan]).reshape(-1, 1)
+        yfit = np.asarray(y[~is_nan])
+
         self.model = RANSACRegressor(
             estimator=LinearRegression(),
             min_samples=self.min_samples,
             residual_threshold=self.residual_threshold,
             random_state=self.random_state,
         )
-        self.model.fit(x, y)
+        self.model.fit(X, yfit)
         self.slope = self.model.estimator_.coef_[0]
         self.intercept = self.model.estimator_.intercept_
-        self.y_pred = self.model.predict(x)
-        self.residuals = y - self.y_pred
+
+        # Flatten x to ensure it is 1D for statsmodels
         self.x = x.flatten()
-        self.y = y
+        self.y = np.asarray(y)
 
         # Use only inliers for statistics
-        inlier_mask = self.model.inlier_mask_
-        x_in = self.x[inlier_mask]
-        y_in = self.y[inlier_mask]
+        self.outlier_mask = np.full(self.x.shape, False, dtype=bool)
+        self.outlier_mask[is_nan] = True  # Keep NaNs as outliers
+        # Mark outliers as True, inliers as False
+        self.outlier_mask[~is_nan] = ~self.model.inlier_mask_
+
+        x_inlier = self.x[~self.outlier_mask]
+        y_inlier = self.y[~self.outlier_mask]
 
         # OLS with statsmodels for CI and p-value
-        X_design = sm.add_constant(x_in)
-        ols_model = sm.OLS(y_in, X_design).fit()
+        X_design = sm.add_constant(x_inlier)
+        ols_model = sm.OLS(y_inlier, X_design).fit()
 
         # statsmodels reports [intercept, slope]
         ci = ols_model.conf_int(alpha=0.32)  # 68% CI
@@ -1472,33 +1516,19 @@ class RobustFitter:
         self.slope_tvalue = ols_model.tvalues[1]
         self.scatter = np.std(ols_model.resid)
         self.ols_model = ols_model  # Expose full model if needed
-        self.is_fit = True
 
-    def report_best_values(self, print_output=False):
-        if not self.is_fit:
-            raise RuntimeError("Run .fit(x, y) first.")
-        msg = (
-            f"Intercept: {self.intercept:.4f} "
-            f"(68% CI: {self.ci_intercept[0]:.4f}-{self.ci_intercept[1]:.4f})\n"
-            f"Slope: {self.slope:.4f} "
-            f"(68% CI: {self.ci_slope[0]:.4f}-{self.ci_slope[1]:.4f})\n"
-            f"Slope tvalue: {self.slope_tvalue:.1f}\n"
-            f"Slope p-value: {self.slope_pvalue:.3g}\n"
-            f"Scatter (resid std): {self.scatter:.4f}"
+    def report_best_values(self):
+        return RobustFitResult(
+            slope=self.slope,
+            slope_pvalue=self.slope_pvalue,
+            slope_stderr=self.slope_stderr,
+            slope_tvalue=self.slope_tvalue,
+            intercept=self.intercept,
+            intercept_pvalue=self.ols_model.pvalues[0],
+            intercept_stderr=self.ols_model.bse[0],
+            intercept_tvalue=self.ols_model.tvalues[0],
+            scatter=self.scatter,
         )
-        if print_output:
-            print(msg)
-        return {
-            "intercept": self.intercept,
-            "slope": self.slope,
-            "scatter": self.scatter,
-            "slope_pvalue": self.slope_pvalue,
-            "slope_stderr": self.slope_stderr,
-            "slope_tvalue": self.slope_tvalue,
-            "intercept_pvalue": self.ols_model.pvalues[0],
-            "intercept_stderr": self.ols_model.bse[0],
-            "intercept_tvalue": self.ols_model.tvalues[0],
-        }
 
     def plot_best_fit(
         self,
@@ -1508,16 +1538,43 @@ class RobustFitter:
         alpha_band=0.2,
         lw=2,
         nbins=5,
+        is_scatter=False,
     ):
-        if not self.is_fit:
-            raise RuntimeError("Run .fit(x, y) first.")
+        """
+        Plot the best fit line, confidence interval,
+        and optionally scatter/binned data.
 
+        Parameters
+        ----------
+        ax : matplotlib.axes.Axes, optional
+            The axes to plot on. If None, uses current axes.
+        label : str, optional
+            Label for the best fit line.
+        color : str or None, optional
+            Color for the fit line and confidence band.
+        alpha_band : float, optional
+            Alpha transparency for the confidence interval band.
+        lw : int, optional
+            Line width for the best fit line.
+        nbins : int, optional
+            Number of bins for binned statistics.
+        is_scatter : bool, optional
+            If True, plot inliers and outliers as scatter points.
+
+        Returns
+        -------
+        ax : matplotlib.axes.Axes
+            The axes with the plot.
+        """
         import matplotlib.pyplot as plt
 
         if ax is None:
             ax = plt.gca()
 
-        xx = np.linspace(self.x.min(), self.x.max(), 200)
+        # Handle case where self.x contains only NaNs
+        if np.isnan(self.x).all():
+            raise ValueError("All x values are NaN; cannot plot best fit.")
+        xx = np.linspace(np.nanmin(self.x), np.nanmax(self.x), 200)
         X_design = sm.add_constant(xx)
 
         pred = self.ols_model.get_prediction(X_design)
@@ -1530,44 +1587,32 @@ class RobustFitter:
         # Plot best fit
         ax.plot(xx, mean, color=color, label=label, lw=lw)
         # Plot confidence interval band
-        ax.fill_between(xx, ci_lo, ci_hi, color=color, alpha=alpha_band, label="68% CI")
+        ax.fill_between(xx, ci_lo, ci_hi, color=color, alpha=alpha_band)
 
-        if hasattr(self.model, "inlier_mask_"):
-            mask = self.model.inlier_mask_
-            xout, yout = self.x[~mask], self.y[~mask]
-            xclean, yclean = self.x[mask], self.y[mask]
+        mask = self.outlier_mask
+        xin, yin = self.x[~mask], self.y[~mask]  # inliers
+        xout, yout = self.x[mask], self.y[mask]  # outliers
 
+        if is_scatter:
             # Plot inliers and outliers as before
-            ax.scatter(xclean, yclean, color="lightgrey", alpha=0.9)
+            ax.scatter(xin, yin, color=color or "black", alpha=0.7, label="Inliers", zorder=5)
             ylims = ax.get_ylim()
-            ax.scatter(xout, yout, color="firebrick", alpha=0.2)
-            ax.set_ylim(*ylims)
-
-            # Bin data in nbins
-            bins = np.linspace(xclean.min(), xclean.max(), nbins + 1)
-            bin_centers = 0.5 * (bins[:-1] + bins[1:])
-            digitized = np.digitize(xclean, bins) - 1
-            means = []
-            stds = []
-            bin_counts = []
-            for i in range(nbins):
-                bin_y = yclean[digitized == i]
-                if len(bin_y) > 0:
-                    means.append(bin_y.mean())
-                    stds.append(bin_y.std() / len(bin_y) ** 0.5)
-                    bin_counts.append(len(bin_y))
-                else:
-                    means.append(np.nan)
-                    stds.append(np.nan)
-                    bin_counts.append(0)
+            ax.scatter(xout, yout, color="firebrick", alpha=0.5, label="Outliers", zorder=5)
+            ax.set_ylim(ylims)
+        # Bin data in nbins
+        if np.all(np.isnan(xout)):
+            # Skip binning if all values are NaN
+            pass
+        else:
+            bin_centers, means, stds, bin_counts = get_binned_data(xin, yin, nbins)
 
             # Plot binned means and stds
             ax.errorbar(
                 bin_centers,
                 means,
+                color=color or "black",
                 yerr=stds,
                 fmt="o",
-                color=color if color else "black",
                 capsize=4,
                 markersize=6,
                 alpha=0.7,
@@ -1575,3 +1620,26 @@ class RobustFitter:
             )
 
         return ax
+
+
+def get_binned_data(x, y, nbins):
+    bins = np.linspace(np.nanmin(x), np.nanmax(x), nbins + 1)
+    bin_centers = 0.5 * (bins[:-1] + bins[1:])
+    digitized = np.digitize(x, bins) - 1
+    means = []
+    stds = []
+    bin_counts = []
+    for i in range(nbins):
+        bin_y = y[digitized == i]
+        if len(bin_y) > 0:
+            means.append(np.nanmedian(bin_y))
+            if len(bin_y) > 1:
+                stds.append(np.nanstd(bin_y, ddof=1) / np.sqrt(len(bin_y)))
+            else:
+                stds.append(np.nan)
+            bin_counts.append(len(bin_y))
+        else:
+            means.append(np.nan)
+            stds.append(np.nan)
+            bin_counts.append(0)
+    return bin_centers, means, stds, bin_counts
