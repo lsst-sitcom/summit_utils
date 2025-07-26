@@ -262,7 +262,9 @@ class GuiderStarTracker:
             # make isr and cutout
             isr = stamp - np.nanmedian(stamp, axis=0)
             cutout = Cutout2D(isr, (ref_x, ref_y), size=cutout_size, mode="partial", fill_value=np.nan)
-            _, median, std = sigma_clipped_stats(cutout.data, sigma=3.0)
+            _, median, std = sigma_clipped_stats(
+                cutout.data[: cutout_size // 2, : cutout_size // 2], sigma=3.0
+            )
             # sources = measure_star_in_aperture(
             # cutout.data - median, aperture_radius=fwhm, std_bkg=std, gain=1.0
             # )
@@ -637,11 +639,20 @@ def run_galsim(
         g1 = hsm_res.observed_shape.g1
         g2 = hsm_res.observed_shape.g2
         fwhm = 2.355 * sigma
-        n_pix = np.pi * fwhm**2
-        flux_err = np.sqrt(flux / gain + n_pix * bkg_std**2)
-        snr = flux / flux_err if flux_err > 0 else 0.0
-        xerr = sigma / np.sqrt(flux) if flux > 0 else np.nan
-        yerr = sigma / np.sqrt(flux) if flux > 0 else np.nan
+
+        # Calculate errors using GalSim's error estimation
+        gs_dict = galsim_error(array, hsm_res, gain=gain, bkg_std=bkg_std, is_gain=True)
+        xerr = gs_dict["M10"]
+        yerr = gs_dict["M01"]
+
+        # Calculate SNR and flux error
+        e = np.sqrt(e1**2 + e2**2)
+        n_eff = 2 * np.pi * sigma**2 * np.sqrt(1 - e**2)
+        shot_noise = np.sqrt(n_eff * bkg_std**2)
+        flux_err = np.sqrt(flux / gain + shot_noise**2)
+        snr = flux / shot_noise if flux > 0 else 0.0
+
+        # Calculate second moments
         ixx = sigma**2 * (1 + g1)
         iyy = sigma**2 * (1 - g1)
         ixy = sigma**2 * g2
@@ -682,3 +693,154 @@ if __name__ == "__main__":
 
     print(stars.head())
     print(stars.groupby("detector").size())
+
+
+def galsim_error(
+    array: np.ndarray, gs: galsim.hsm, gain: float = 1.0, bkg_std: float = 0.0, is_gain: bool = False
+) -> dict:
+    """
+    Estimate variance of second moments from a GalSim HSMShapeData object.
+
+    Code based on:
+    https://github.com/rmjarvis/Piff/blob/60286d107438dbc0d21e2fe215f0b63d0c107e6a/piff/util.py#L296
+
+    Parameters
+    ----------
+    array : np.ndarray
+        2D image data used for moment measurement.
+    gs : galsim.hsm.HSMShapeData
+        Result object from galsim.hsm.FindAdaptiveMom.
+    gain : float
+        Detector gain (e-/ADU).
+    bkg_std : float
+        Background RMS per pixel.
+
+    Returns
+    -------
+    dict
+        Dictionary with error estimates for M00, M10, M01, M11, M20, M02.
+    """
+    if not gs or gs.error_message != "":
+        return {}
+
+    # define galsim params
+    x0 = gs.moments_centroid.x
+    y0 = gs.moments_centroid.y
+    sigma = gs.moments_sigma
+    e1 = gs.observed_shape.e1
+    e2 = gs.observed_shape.e2
+    flux = gs.moments_amp
+
+    # make galsim gaussian kernel
+    kernel = make_elliptical_gaussian_star(
+        shape=(array.shape[0], array.shape[1]), e1=e1, e2=e2, flux=1, sigma=sigma, center=(x0, y0)
+    )
+
+    # make weight = 1/variance
+    weight = np.ones_like(array) / (bkg_std**2 + 1e-9)
+    if is_gain:
+        weight = np.ones_like(array) / (bkg_std**2 + np.abs(flux * kernel / gain))
+
+    mask = weight == 0.0
+    data = array.copy()
+    if np.any(mask):
+        kernel_masked = kernel.copy()
+        data[mask] = kernel_masked[mask] * np.sum(data[~mask]) / np.sum(kernel_masked[~mask])
+
+    # start the variance estimate
+    u, v = np.meshgrid(np.arange(array.shape[1]) - x0, np.arange(array.shape[0]) - y0)
+    usq = u**2
+    vsq = v**2
+    uv = u * v
+    rsq = usq + vsq
+    usqmvsq = usq - vsq
+
+    # Notation:
+    #   W = kernel
+    #   I = data
+    #   V = var(data) -- used below.
+    WI = kernel * data
+    M00 = np.nansum(WI)
+
+    # WV = W^2 1/w
+    WV = kernel**2
+    WV[~mask] /= weight[~mask]  # Only use 1/w where w != 0
+    WV[mask] /= np.median(weight[~mask])
+
+    # Set WV = W^2 1/w / M00^2
+    WV = WV / float(M00**2)
+    rsq2 = rsq * rsq
+    WIrsq = WI * rsq
+    WIuv = WI * uv
+    M11 = np.sum(WIrsq)
+    M22 = np.sum(WI * rsq2)
+    M20 = np.sum(WI * usqmvsq)
+    M02 = 2 * np.sum(WIuv)
+
+    A = 1 / (3 - M22 / M11**2)
+    B = 2 / (4 - M22 / M11**2)
+    dM00 = 1 - A * (rsq / M11 - 1)  # We'll need this combination a lot below, so save it.
+
+    varM00 = np.sum(WV * dM00**2)
+    varM10 = 4 * np.sum(WV * usq)
+    varM01 = 4 * np.sum(WV * vsq)
+    varM11 = 4 * A**2 * np.sum(WV * (rsq - M11) ** 2)
+    varM20 = 4 * np.sum(WV * (B * usqmvsq + A * M20 * (rsq / M11 - 1)) ** 2)
+    varM02 = 4 * np.sum(WV * (2 * B * uv + A * M02 * (rsq / M11 - 1)) ** 2)
+
+    err = np.sqrt(np.array([varM00, varM10, varM01, varM11, varM20, varM02]))
+    return dict(M00=err[0], M10=err[1], M01=err[2], M11=err[3], M20=err[4], M02=err[5])
+
+
+def make_elliptical_gaussian_star(
+    shape: tuple[int, int],
+    flux: float,
+    sigma: float,
+    e1: float,
+    e2: float,
+    center: tuple[float, float],
+) -> np.ndarray:
+    """
+    Create an elliptical 2D Gaussian star with flux, sigma, e1, and e2.
+
+    Parameters
+    ----------
+    shape : tuple
+        (size, size) of the output image.
+    flux : float
+        Total flux of the star.
+    sigma : float
+        Base Gaussian size.
+    e1, e2 : float
+        Ellipticity components.
+    center : tuple
+        (x0, y0) center of the Gaussian.
+
+    Returns
+    -------
+    image : np.ndarray
+        Image array with the elliptical Gaussian.
+    """
+    y, x = np.indices(shape)
+    x0, y0 = center
+    u = x - x0
+    v = y - y0
+
+    # Second-moment matrix elements
+    Ixx = sigma**2 * (1 + e1)
+    Iyy = sigma**2 * (1 - e1)
+    Ixy = sigma**2 * e2
+
+    # Inverse covariance matrix
+    det = Ixx * Iyy - Ixy**2
+    invIxx = Iyy / det
+    invIyy = Ixx / det
+    invIxy = -Ixy / det
+
+    # Quadratic form: u^2 * invIxx + v^2 * invIyy + 2uv * invIxy
+    r2 = invIxx * u**2 + invIyy * v**2 + 2 * invIxy * u * v
+
+    e = np.sqrt(e1**2 + e2**2)
+    norm = flux / (2 * np.pi * sigma**2 * np.sqrt(1 - e**2))
+    image = norm * np.exp(-0.5 * r2)
+    return image
