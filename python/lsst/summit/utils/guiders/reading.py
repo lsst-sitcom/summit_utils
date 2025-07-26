@@ -20,6 +20,7 @@
 # along with this program.  If not, see <https://www.gnu.org/licenses/>.
 from __future__ import annotations
 
+import logging
 from typing import TYPE_CHECKING, Optional
 
 __all__ = [
@@ -37,9 +38,10 @@ from astropy.time import Time
 import lsst.summit.utils.butlerUtils as butlerUtils
 from lsst.afw import cameraGeom
 from lsst.afw.image import ExposureF, ImageF, MaskedImageF
-from lsst.daf.butler import Butler
+from lsst.daf.butler import Butler, DatasetNotFoundError
 from lsst.meas.algorithms.stamps import Stamp, Stamps
 from lsst.obs.lsst import LsstCam  # pylint: disable=unused-import
+from lsst.summit.utils.guiders.exceptions import StampsNotFoundError
 from lsst.summit.utils.guiders.guiderwcs import get_camera_rot_angle, make_init_guider_wcs
 from lsst.summit.utils.guiders.transformation import convert_roi, mk_ccd_to_dvcs, mk_roi_bboxes
 
@@ -225,6 +227,7 @@ class GuiderReader:
         self.view = view
         self.verbose = verbose
         self.guiderNameMap: dict[str, int] = {}
+        self.log = logging.getLogger(__name__)
 
         for detector in self.camera:
             if detector.getType() == cameraGeom.DetectorType.GUIDER:
@@ -264,6 +267,12 @@ class GuiderReader:
         timestamps = self.getTimestamps(dayObs, seqNum)
         nstamps = len(timestamps)
         freq = timestamps.freq * 86400.0  # seconds
+
+        if nstamps <= 1:
+            raise StampsNotFoundError(
+                f"Only {nstamps} stamps found for dayObs {dayObs}, seqNum {seqNum}. "
+                "At least 2 stamps are required to create GuiderData."
+            )
 
         # 2. Get data for all guiders, padding with empty stamps if necessary
         perDetectorData = self.getDataForAllDetectors(dayObs, seqNum, nstamps)
@@ -315,15 +324,30 @@ class GuiderReader:
 
         # loop over all guiders to find the max number of stamps
         for detName, detNum in self.guiderNameMap.items():
-            n = self.butler.get(
-                "guider_raw",
-                day_obs=dayObs,
-                seq_num=seqNum,
-                detector=detNum,
-                instrument="LSSTCam",
-            ).metadata["N_STAMPS"]
+            try:
+                n = self.butler.get(
+                    "guider_raw",
+                    day_obs=dayObs,
+                    seq_num=seqNum,
+                    detector=detNum,
+                    instrument="LSSTCam",
+                ).metadata["N_STAMPS"]
+            except DatasetNotFoundError:
+                self.log.warning(
+                    f"No guider data found for dayObs {dayObs}, seqNum {seqNum}, detector {detName}."
+                )
+                n = 0
             nstamps[detName] = n
         nstamp = max(nstamps.values())
+
+        if nstamp <= 1:
+            self.log.warning(
+                f"Only {nstamp} stamps found for dayObs {dayObs}, seqNum {seqNum}. "
+                "Returning empty timestamps."
+            )
+            empty = Time(np.array([]), format="mjd", scale="utc")
+            empty.freq = 0.0
+            return empty
 
         # get the name of the guider witxh the max number of stamps
         detNameMax = [k for k, v in nstamps.items() if v == nstamp][0]
@@ -646,6 +670,13 @@ def get_timestamps(raw_stamps: Stamps, nstamps: int = 50) -> Time:
     dt = np.diff(timestamps.jd)
     freq = np.nanmedian(dt)
     start = timestamps[0].jd
+
+    if np.isnan(freq) or freq <= 0:
+        raise ValueError(
+            f"Invalid frequency {freq} derived from timestamps. "
+            "Ensure that the timestamps are valid and evenly spaced."
+        )
+
     timestamps_ideal = Time(start + np.arange(nstamps) * freq, format="jd", scale="utc")
 
     tolerance = 0.5 * freq
