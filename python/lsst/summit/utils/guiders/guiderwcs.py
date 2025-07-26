@@ -186,13 +186,13 @@ def calculate_drift(metadata, cWcs, rWcs):
                         exposure=expId, instrument=instrument)
     calExp = butler.get('preliminary_visit_image',
                         detector=94, visit=expId, instrument=instrument)
-    md = rawExp.getMetadata()
 
+    md = rawExp.getMetadata()
     cWcs = calExp.getWcs()
     rWcs = rawExp.getWcs()
 
     drift547 = calculate_drift(md, cWcs, rWcs)
-    drift547.summary()
+    drift547.summary(2025072300537)
     """
     wavelengths = {"u": 3671, "g": 4827, "r": 6223, "i": 7546, "z": 8691, "y": 9712}
     filter = metadata["FILTBAND"]

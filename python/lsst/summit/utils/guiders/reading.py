@@ -598,7 +598,13 @@ def getGuiderStamps(
         }
 
     # finally read from the Butler
-    raw_stamps = butler.get("guider_raw", dataId)
+    try:
+        raw_stamps = butler.get("guider_raw", dataId)
+    except DatasetNotFoundError:
+        raise StampsNotFoundError(
+            f"No guider data found for dayObs {dayObs}, seqNum {seqNum}, detector {detNum}."
+        )
+
     md = raw_stamps.metadata
 
     # fix CCD in the metadata
