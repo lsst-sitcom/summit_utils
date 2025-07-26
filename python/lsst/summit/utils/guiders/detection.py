@@ -23,6 +23,7 @@ from __future__ import annotations
 __all__ = ["GuiderStarTracker"]
 
 import logging
+import warnings
 from typing import TYPE_CHECKING
 
 import galsim
@@ -31,8 +32,10 @@ import pandas as pd
 from astropy.nddata import Cutout2D
 from astropy.stats import sigma_clipped_stats
 from astropy.time import Time
+from erfa import ErfaWarning
 
 from lsst.afw.image import ExposureF, ImageF, MaskedImageF
+from lsst.pex.exceptions import InvalidParameterError
 from lsst.summit.utils.guiders.reading import GuiderReader
 from lsst.summit.utils.guiders.transformation import (
     convert_roi_to_ccd,
@@ -158,6 +161,11 @@ class GuiderStarTracker:
                 aperture_radius=self.psf_fwhm,
                 max_ellipticity=self.max_ellipticity,
             )
+
+        if ref_catalog.empty:
+            self.log.warning("Reference catalog is empty. No stars to track.")
+            return pd.DataFrame(columns=DEFAULT_COLUMNS)
+
         tracked_star_tables = []
         for guiderName in self.guiderData.guiderNames:
             ref = ref_catalog[ref_catalog["detector"] == guiderName].copy()
@@ -168,14 +176,20 @@ class GuiderStarTracker:
             stars = self.track_star_across_stamps(ref, guiderName)
             tracked_star_tables.append(stars)
 
+        filtered_tables = [df for df in tracked_star_tables if not df.empty and not df.isna().all(axis=None)]
         # Concatenate all stars into a single DataFrame
-        if tracked_star_tables:
-            tracked_star_catalog = pd.concat(tracked_star_tables, ignore_index=True)
+        if filtered_tables:
+            tracked_star_catalog = pd.concat(filtered_tables, ignore_index=True)
 
         else:
             self.log.warning("No stars detected in any guider. Returning empty catalog.")
             tracked_star_catalog = pd.DataFrame(columns=DEFAULT_COLUMNS)
             return tracked_star_catalog
+
+        # Filter out stars with insufficient detections (xroi, yroi)
+        tracked_star_catalog = tracked_star_catalog.groupby("starid").filter(
+            lambda x: x["xroi"].notna().sum() >= self.min_stamp_detections
+        )
 
         # Set unique IDs
         tracked_star_catalog = self.set_unique_id(tracked_star_catalog)
@@ -236,7 +250,10 @@ class GuiderStarTracker:
         # get some basic info
         detNum = self.guiderData.getGuiderDetNum(guiderName)
         obstime = Time(self.guiderData.header["start_time"])
-        elapsed_time = self.guiderData.timestamps - self.guiderData.timestamps[0]
+
+        with warnings.catch_warnings():
+            warnings.simplefilter("ignore", ErfaWarning)
+            elapsed_time = self.guiderData.timestamps - self.guiderData.timestamps[0]
 
         # --- per‐stamp measurements ---
         for i, stampObject in enumerate(image_list[1:]):
@@ -300,6 +317,10 @@ class GuiderStarTracker:
             pixel_scale = wcs.getPixelScale().asArcseconds()
             sources["fwhm"] *= pixel_scale
 
+            # Rotate e1, e2 to alt/az coordinates
+            camera_angle = float(self.guiderData.header["CAM_ROT_ANGLE"])
+            e1_, e2_ = rotate_ellipticity(sources["e1"], sources["e2"], 90 + camera_angle)
+
             # Add reference positions
             sources["xccd"] = xccd
             sources["yccd"] = yccd
@@ -307,6 +328,8 @@ class GuiderStarTracker:
             sources["yfp"] = yfp
             sources["alt"] = alt
             sources["az"] = az
+            sources["e1_altaz"] = e1_
+            sources["e2_altaz"] = e2_
             sources["detector"] = guiderName
             rows.append(sources.iloc[0])
 
@@ -356,6 +379,8 @@ class GuiderStarTracker:
 
         # compute mag offset
         stars["flux_ref"] = stars.groupby("starid")["flux"].transform("median")
+        stars["flux_ref"] = pd.to_numeric(stars["flux_ref"], errors="coerce")
+        stars["flux"] = pd.to_numeric(stars["flux"], errors="coerce")
         stars["magoffset"] = -2.5 * np.log10((stars["flux"] + 1e-12) / (stars["flux_ref"] + 1e-12))
         stars["magoffset"] = stars["magoffset"].replace([np.inf, -np.inf], np.nan)
 
@@ -506,8 +531,14 @@ def run_source_detection(
     # Step 1: Convert numpy image to MaskedImage and Exposure
     exposure = ExposureF(MaskedImageF(ImageF(image)))
 
-    # Step 3: Detect sources
-    footprints = detectObjectsInExp(exposure, th)
+    try:
+        # Step 3: Detect sources
+        footprints = detectObjectsInExp(exposure, th)
+    except InvalidParameterError:
+        logging.warning(
+            "InvalidParameterError: Standard deviation must be > 0. Possibly empty or uniform image."
+        )
+        return pd.DataFrame(columns=DEFAULT_COLUMNS)
 
     if not footprints:
         return pd.DataFrame(columns=DEFAULT_COLUMNS)
@@ -563,6 +594,9 @@ def build_reference_catalog(
         sources = run_source_detection(
             array, th=min_snr, max_ellipticity=max_ellipticity, bkg_std=std + median
         )
+        if sources.empty:
+            # logging.warning(f"Guider {guiderName} has no sources detected.")
+            continue
 
         # Filter out edge sources
         h, w = array.shape
@@ -580,7 +614,8 @@ def build_reference_catalog(
         sources = sources[mask]
 
         if len(sources) == 0:
-            logging.warning(f"Guider {guiderName} has no sources after SNR/ellip cut.")
+            # logging.warning(f"Guider {guiderName}
+            # has no sources after SNR/ellip cut.")
             continue
 
         sources["fwhm_inv"] = 1 / sources["fwhm"]
@@ -597,7 +632,7 @@ def build_reference_catalog(
         table_list.append(bright)
 
     if len(table_list) == 0:
-        raise RuntimeError("No sources found in any guider for the reference catalog.")
+        return pd.DataFrame(columns=DEFAULT_COLUMNS)
 
     ref_catalog = pd.concat(table_list, ignore_index=True)
     return ref_catalog
@@ -844,3 +879,17 @@ def make_elliptical_gaussian_star(
     norm = flux / (2 * np.pi * sigma**2 * np.sqrt(1 - e**2))
     image = norm * np.exp(-0.5 * r2)
     return image
+
+
+def rotate_ellipticity(e1, e2, theta_deg):
+    """
+    Rotate ellipticity components (e1, e2) by theta_deg degrees.
+
+    Returns (e1_rot, e2_rot)
+    """
+    theta = np.deg2rad(theta_deg)
+    cos2t = np.cos(2 * theta)
+    sin2t = np.sin(2 * theta)
+    e1_rot = e1 * cos2t + e2 * sin2t
+    e2_rot = -e1 * sin2t + e2 * cos2t
+    return e1_rot, e2_rot
