@@ -1462,7 +1462,7 @@ class RobustFitter:
             # Set a default residual threshold based on the data
             if np.isnan(x).all() or np.isnan(y).all():
                 raise ValueError("Cannot fit model: all input data is NaN.")
-            self.residual_threshold = mad_std(y)
+            self.residual_threshold = 1.5 * mad_std(y)
 
         self.fit(x, y)
 
