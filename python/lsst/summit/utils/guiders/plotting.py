@@ -20,6 +20,7 @@
 # along with this program.  If not, see <https://www.gnu.org/licenses/>.
 from __future__ import annotations
 
+import logging
 from typing import Any, Optional, cast
 
 import matplotlib.pyplot as plt
@@ -76,30 +77,30 @@ class GuiderPlotter:
             linewidth=2.0,
         )
 
-    def plot_star_centroid(self, axs_img, detname, stamp_num, centerCutout, xcen, ycen):
-        if stamp_num >= 0:
-            star = self.stars_df[
-                (self.stars_df["detector"] == detname) & (self.stars_df["stamp"] == stamp_num)
-            ]
-            if not star.empty:
-                xroi, yroi = star.iloc[0][["xroi", "yroi"]]
-                xroi, yroi = (
-                    centerCutout[0] + xroi - xcen,
-                    centerCutout[1] + yroi - ycen,
-                )
-            else:
-                xroi, yroi = centerCutout[0], centerCutout[1]
-        else:
-            xroi, yroi = centerCutout[0], centerCutout[1]
+    def plot_star_centroid(self, axs_img, detname, stamp_num, centerCutout, xcen, ycen, markersize=8):
+        xroi, yroi = centerCutout[0], centerCutout[1]
+        xroi_err, yroi_err = 0.0, 0.0
 
-        return axs_img.plot(
-            xroi,
-            yroi,
-            marker="o",
-            color="red",
-            markersize=5,
-            label="Star Centroid",
+        star = self.stars_df[(self.stars_df["detector"] == detname)]
+        if not star.empty:
+            if stamp_num >= 0:
+                star = star[star["stamp"] == stamp_num]
+                if not star.empty:
+                    xroi, yroi = star.iloc[0][["xroi", "yroi"]]
+                    xroi_err, yroi_err = star.iloc[0][["xerr", "yerr"]]
+            elif markersize > 0:
+                xroi, yroi = star.iloc[0][["xroi_ref", "yroi_ref"]]
+                xroi_err, yroi_err = star[["xerr", "yerr"]].mean()
+
+        xroi, yroi = (
+            centerCutout[0] + xroi - xcen,
+            centerCutout[1] + yroi - ycen,
         )
+
+        (marker,) = axs_img.plot(xroi, yroi, "o", color="firebrick", markersize=markersize)
+        (hline,) = axs_img.plot([xroi - xroi_err, xroi + xroi_err], [yroi, yroi], color="firebrick", lw=2.5)
+        (vline,) = axs_img.plot([xroi, xroi], [yroi - yroi_err, yroi + yroi_err], color="firebrick", lw=2.5)
+        return [marker, hline, vline]
 
     UNIT_DICT = {
         "centroidAltAz": "arcsec",
@@ -135,12 +136,17 @@ class GuiderPlotter:
         self,
         stars_df: pd.DataFrame,
         guiderData: GuiderData,
-        expid: Optional[int] = None,
         isIsr: bool = True,
     ) -> None:
-        self.exp_id = expid if expid else stars_df["expid"].iloc[0]
+        self.log = logging.getLogger(__name__)
+        self.exp_id = guiderData.header.get("expid", 0)
+
+        if stars_df.empty:
+            self.log.warning("stars_df is empty. No data to plot.")
+            self.stats_df = pd.DataFrame(columns=["expid"])
+            return
+
         self.stars_df = stars_df[stars_df["expid"] == self.exp_id]
-        self.stats_df = self.assemble_stats()
         self.guiderData = guiderData
         self.isIsr = isIsr  # apply or not parrallel over scan bias correction
 
@@ -158,6 +164,9 @@ class GuiderPlotter:
         )
         self.el = 0.5 * (elstart + elstop)
         self.az = 0.5 * (azstart + azstop)
+
+        # assemble statistics
+        self.stats_df = self.assemble_stats()
 
         sns.set_style("white")
         sns.set_context("talk", font_scale=0.8)
@@ -199,6 +208,7 @@ class GuiderPlotter:
 
         std_centroid = measure_std_centroid_stats(stars, snr_th=5)
         phot = measure_photometric_variation(stars, snr_th=5)
+        psf_stats = measure_psf_stats(stars, snr_th=5)
 
         total_possible = n_unique * stars["stamp"].nunique()
         frac_valid = n_meas / total_possible if total_possible > 0 else np.nan
@@ -209,20 +219,34 @@ class GuiderPlotter:
             "n_stars": n_unique,
             "n_measurements": n_meas,
             "fraction_valid_stamps": frac_valid,
+            "seeing": self.seeing,
+            "filter": self.guiderData.header.get("filter", "unknown"),
+            "alt": self.el,
+            "az": self.az,
             **stars_per_guiders,
             **std_centroid,
             **phot,
+            **psf_stats,
         }
         return pd.DataFrame([summary])
 
     def print_metrics(self) -> None:
+        if self.stats_df.empty:
+            print("No statistics available for this exposure.")
+            return
+
         filtered_stats_df = self.stats_df[self.stats_df["expid"] == self.exp_id].copy()
 
         print(self.format_stats_summary(filtered_stats_df))
         print(self.format_std_centroid_summary(filtered_stats_df, exptime=self.exptime))
         print(self.format_photometric_summary(filtered_stats_df, exptime=self.exptime))
+        print(self.format_psf_summary(filtered_stats_df, exptime=self.exptime))
 
     def strip_plot(self, plot_type: str = "centroidAltAz", save_as: str | None = None) -> None:
+        if self.stars_df.empty:
+            self.log.warning("stars_df is empty. No data to plot.")
+            return
+
         # plot_kwargs dtype is dict[str, Any]
         plot_kwargs: dict[str, dict] = {
             "centroidAltAz": {
@@ -246,7 +270,7 @@ class GuiderPlotter:
             },
             "ellip": {
                 "ylabel": "Ellipticity",
-                "col": ["e1", "e2"],
+                "col": ["e1_altaz", "e2_altaz"],
                 "unit": "",
                 "title": "",
             },
@@ -295,9 +319,9 @@ class GuiderPlotter:
             if col == "dy":
                 ax.axhline(0, color="grey", ls="--", label="CCD Y")
 
-            if col == "e1":
+            if col == "e1_altaz":
                 ax.axhline(0, color="grey", ls="--", label="e1")
-            if col == "e2":
+            if col == "e2_altaz":
                 ax.axhline(0, color="grey", ls="--", label="e2")
 
             if col == "magoffset":
@@ -316,7 +340,7 @@ class GuiderPlotter:
             # Format best-fit stats as text
             txt = (
                 f"Slope: {exp * results.slope:.2f} {unit}/exposure\n"
-                f"Significance: {np.abs(results.slope_tvalue):.0f} σ\n"
+                f"Significance: {np.abs(results.slope_tvalue):.1f} σ\n"
                 # f"Intercept: {results.intercept:.1f} {unit}\n"
                 f"scatter: {results.scatter:.3f} {unit}\n"
             )
@@ -361,17 +385,6 @@ class GuiderPlotter:
                     alpha=0.2,
                     marker=marker,
                 )
-
-            # # plot error bars
-            # ax.errorbar(
-            #     bin_centers[bin_idx],
-            #     means,
-            #     yerr=errs,
-            #     fmt="o",
-            #     color=LIGHT_BLUE,
-            #     ecolor=LIGHT_BLUE,
-            #     capsize=3,
-            # )
 
             if count == 0:
                 ax.set_ylabel(cfg["ylabel"])
@@ -451,6 +464,10 @@ class GuiderPlotter:
         save_as=None,
     ) -> list:
         """Plot the stamp array for all the guiders."""
+        if self.stars_df.empty:
+            self.log.warning("stars_df is empty. No data to plot.")
+            return []
+
         if self.guiderData.view != "dvcs":
             raise ValueError("Guider view must be 'dvcs' for mosaic plotting.")
 
@@ -517,6 +534,7 @@ class GuiderPlotter:
             cutout, centerCutout = crop_around_center(img, center, cutout_size)
         else:
             cutout, centerCutout = img, center
+            stamp_num = -1  # do not plot star
 
         vmin, vmax = np.nanpercentile(cutout, plo), np.nanpercentile(cutout, phi)
         axs_img = axs[detname]
@@ -535,7 +553,9 @@ class GuiderPlotter:
         if not is_animated:
             self.add_static_overlays(axs_img, detname, centerCutout, cutout_size)
 
-        star_cross = self.plot_star_centroid(axs_img, detname, stamp_num, centerCutout, xcen, ycen)
+        star_cross = self.plot_star_centroid(
+            axs_img, detname, stamp_num, centerCutout, xcen, ycen, markersize=8 if cutout_size > 0 else 0
+        )
 
         axs_img.set_xlim(0, cutout.shape[1])
         axs_img.set_ylim(0, cutout.shape[0])
@@ -647,11 +667,11 @@ class GuiderPlotter:
         cutout_size=30,
         save_as=None,
     ) -> animation.ArtistAnimation:
-        # the guider view should be 'dvcs'
-        # if guider.view != "dvcs":
-        # raise ValueError("Guider view must be 'dvcs' for mosaic GIF creation
-
         from matplotlib import animation
+
+        if self.stars_df.empty:
+            self.log.warning("stars_df is empty. No data to plot.")
+            return animation.ArtistAnimation([], [], interval=1000 / fps, blit=True, repeat_delay=1000)
 
         # build canvas
         fig, axs = plt.subplot_mosaic(
@@ -790,6 +810,28 @@ class GuiderPlotter:
             lines.append("\nStars per Guider:")
             for k in guider_keys:
                 lines.append(f"  - {k[2:]}: {int(summary[k])}")
+        return "\n".join(lines)
+
+    @staticmethod
+    def format_psf_summary(psf_stats: pd.DataFrame, exptime=1) -> str:
+        """
+        Pretty-print summary of PSF statistics.
+        Expects keys like:
+          fwhm, e1, e2, etc.
+        """
+        if (isinstance(psf_stats, pd.DataFrame) and psf_stats.empty) or (
+            isinstance(psf_stats, dict) and not psf_stats
+        ):
+            return "No PSF statistics available."
+
+        # if it's a DataFrame, extract the one-row dict
+        if isinstance(psf_stats, pd.DataFrame):
+            psf_stats = psf_stats.iloc[0].to_dict()
+
+        lines = ["", "-" * 50]
+        lines.append("PSF Statistics Summary:")
+        lines.append(f"  - FWHM slope   : {exptime * psf_stats['fwhm_rate']:.3f} arcsec per exposure")
+        lines.append(f"  - FWHM scatter : {psf_stats['fwhm_rms']:.3f} arcsec")
         return "\n".join(lines)
 
 
@@ -1089,6 +1131,44 @@ def measure_std_centroid_stats(stars: pd.DataFrame, snr_th=5, flux_th=10.0) -> p
         "offset_zero_alt": np.nanmedian(alt),
     }
     return std_centroid_stats
+
+
+def measure_psf_stats(stars: pd.DataFrame, snr_th=5, flux_th=10) -> dict[str, float]:
+    # mask the objects w/ very low flux and SNR
+    mask = (stars.snr > snr_th) & (stars.flux > flux_th)
+    time = stars["elapsed_time"][mask].to_numpy()
+    psf = stars["fwhm"][mask].to_numpy()
+    # Make a robust fit
+    model = RobustFitter(time, psf)
+    coefs = model.report_best_values()
+
+    # Elipiticities
+    e1 = stars["e1_altaz"][mask].to_numpy()
+    # Make a robust fit
+    model = RobustFitter(time, e1)
+    coefs_e1 = model.report_best_values()
+
+    e2 = stars["e2_altaz"][mask].to_numpy()
+    # Make a robust fit
+    model = RobustFitter(time, e2)
+    coefs_e2 = model.report_best_values()
+
+    # Stats
+    psf_stats = {
+        "fwhm_rate": coefs.slope,
+        "fwhm_signficance": coefs.slope_tvalue,
+        "fwhm_zero": coefs.intercept,
+        "fwhm_rms": coefs.scatter,
+        "e1_rate": coefs_e1.slope,
+        "e1_signficance": coefs_e1.slope_tvalue,
+        "e1_zero": coefs.intercept,
+        "e1_rms": coefs_e1.scatter,
+        "e2_rate": coefs_e2.slope,
+        "e2_signficance": coefs_e2.slope_tvalue,
+        "e2_zero": coefs_e2.intercept,
+        "e2_rms": coefs_e2.scatter,
+    }
+    return psf_stats
 
 
 def crop_around_center(
