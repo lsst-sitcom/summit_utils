@@ -798,12 +798,11 @@ def galsim_error(
     M00 = np.nansum(WI)
 
     # WV = W^2 1/w
-    WV = kernel**2
+    WV = (kernel**2).astype(float)
     WV[~mask] /= weight[~mask]  # Only use 1/w where w != 0
     WV[mask] /= np.median(weight[~mask])
-
-    # Set WV = W^2 1/w / M00^2
     WV = WV / float(M00**2)
+
     rsq2 = rsq * rsq
     WIrsq = WI * rsq
     WIuv = WI * uv
