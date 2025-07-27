@@ -19,7 +19,10 @@
 # You should have received a copy of the GNU General Public License
 # along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
+import os
+import tempfile
 import unittest
+from functools import wraps
 
 import numpy as np
 import pandas as pd
@@ -31,6 +34,30 @@ from lsst.summit.utils.guiders.detection import GuiderStarTracker
 from lsst.summit.utils.guiders.plotting import GuiderPlotter
 from lsst.summit.utils.guiders.reading import GuiderReader
 from lsst.summit.utils.utils import getSite
+
+
+def check_plot_file_size(size_threshold=1000):
+    """Decorator factory to check that a plot file is created
+    and is of sufficient size (in bytes)."""
+
+    def decorator(func):
+        @wraps(func)
+        def wrapper(self, *args, **kwargs):
+            with tempfile.NamedTemporaryFile(suffix=".png", delete=True) as tmpfile:
+                # Call the test method, passing save_as=temp file
+                result = func(self, *args, save_as=tmpfile.name, **kwargs)
+                size = os.path.getsize(tmpfile.name)
+                self.assertGreater(
+                    size,
+                    size_threshold,
+                    f"{tmpfile.name} size ({size} bytes)"
+                    f" is below the threshold of {size_threshold} bytes.",
+                )
+                return result
+
+        return wrapper
+
+    return decorator
 
 
 class GuiderTestCase(unittest.TestCase):
@@ -52,6 +79,7 @@ class GuiderTestCase(unittest.TestCase):
         self.guiderData = self.reader.get(dayObs=self.dayObs, seqNum=self.seqNum)
         self.tracker = GuiderStarTracker(self.guiderData, min_snr=20, max_ellipticity=0.15, edge_margin=40)
         self.stars = self.tracker.track_guider_stars(ref_catalog=None)
+        self.plotter = GuiderPlotter(self.stars, self.guiderData, isIsr=True)
 
     def test_types(self) -> None:
         self.assertIsInstance(self.guiderData.header, dict)
@@ -104,37 +132,48 @@ class GuiderTestCase(unittest.TestCase):
         # we skip the first stamp, so the max index should be nStamps - 1
         self.assertEqual(maxStampIndex, nStamps - 1, "Did not get detections for all expected stamps")
 
-    def test_plotting(self) -> None:
-        plotter = GuiderPlotter(self.stars, self.guiderData, isIsr=True)
-
-        # just to check that it runs without error
-        plotter.print_metrics()
-
-        # TODO: add saving code and check the file size
-        # check the -1 plotting option
-        _ = plotter.star_mosaic(stamp_num=-1, cutout_size=-1, plo=50, phi=98, save_as="test_mosaic.png")
-
-        # check zooming in works
-        _ = plotter.star_mosaic(
-            stamp_num=-1, cutout_size=30, plo=50, phi=98, save_as="test_mosaic_zoomed.png"
+    @check_plot_file_size(size_threshold=1000)
+    def test_star_mosaic_plot(self, stamp_num=-1, cutout_size=-1, save_as=None) -> None:
+        """Test the star mosaic plot."""
+        self.plotter.star_mosaic(
+            stamp_num=stamp_num, cutout_size=cutout_size, plo=50, phi=98, save_as=save_as
         )
 
-        # TODO: add saving code and check the file size
-        _ = plotter.strip_plot(save_as="test_strip_altaz_plot.png")
+    @check_plot_file_size(size_threshold=1000)
+    def test_strip_plot(self, plot_type="psf", save_as=None) -> None:
+        """Test the strip plot."""
+        self.plotter.strip_plot(plot_type=plot_type, save_as=save_as)
 
-        _ = plotter.strip_plot(plot_type="centroidPixel", save_as="test_strip_xypixel_plot.png")
+    @check_plot_file_size(size_threshold=1000)
+    def test_make_gif(self, n_stamp_max=50, cutout_size=14, save_as=None) -> None:
+        """Test the GIF creation."""
+        self.plotter.make_gif(
+            n_stamp_max=n_stamp_max, cutout_size=cutout_size, plo=50, phi=98, save_as=save_as
+        )
 
-        _ = plotter.strip_plot(plot_type="flux", save_as="test_strip_flux_plot.png")
+    def test_plotting(self) -> None:
+        # just to check that it runs without error
+        self.plotter.print_metrics()
 
-        _ = plotter.strip_plot(plot_type="psf", save_as="test_strip_psf_plot.png")
+        # Check Star Mosaic Plot
+        # Stacked and full stamp size
+        self.test_star_mosaic_plot(stamp_num=-1, cutout_size=-1)
 
-        _ = plotter.strip_plot(plot_type="ellip", save_as="test_strip_e1e2_plot.png")
+        # check zooming in works
+        self.test_star_mosaic_plot(stamp_num=-1, cutout_size=14)
+
+        # check stamp number
+        self.test_star_mosaic_plot(stamp_num=0, cutout_size=14)
+
+        # Check Strip Plots
+        self.test_strip_plot(plot_type="centroidAltAz")
+        self.test_strip_plot(plot_type="centroidPixel")
+        self.test_strip_plot(plot_type="flux")
+        self.test_strip_plot(plot_type="ellip")
+        self.test_strip_plot(plot_type="psf")
 
     def test_animation(self) -> None:
-        plotter = GuiderPlotter(self.stars, self.guiderData, isIsr=True)
-
-        # TODO: add saving code and check the file size
-        plotter.make_gif(n_stamp_max=50, cutout_size=14, plo=50, phi=98, save_as="test_animation.gif")
+        self.test_make_gif(n_stamp_max=50, cutout_size=12)
 
 
 class TestMemory(lsst.utils.tests.MemoryTestCase):
