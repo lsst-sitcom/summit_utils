@@ -490,8 +490,8 @@ class ConsDbClient:
             Name of the instrument (e.g. ``LATISS``).
         table : `str`
             Name of the table to insert into.
-        obs_id : `int`
-            Unique observation id.
+        obs_id : `tuple` [ `int`, `int`] or `int`
+            Unique observation id or day_obs and seq_num.
         values : `dict` [ `str`, `Any` ], optional
             Dictionary of column/value pairs to add for the observation.
         allow_update : `bool`, optional
@@ -519,15 +519,28 @@ class ConsDbClient:
             values = kwargs
         if not values:
             raise ValueError(f"No values to insert for {instrument} {table} {obs_id}")
-        data = {"table": table, "obs_id": obs_id, "values": values}
-        url = _urljoin(
-            self.url,
-            "insert",
-            quote(instrument),
-            quote(table),
-            "obs",
-            quote(str(obs_id)),
-        )
+
+        if isinstance(obs_id, tuple):
+            data = {"table": table, "values": values}
+            url = _urljoin(
+                self.url,
+                "insert",
+                quote(instrument),
+                quote(table),
+                "by_seq_num",
+                quote(str(obs_id[0])),
+                quote(str(obs_id[1])),
+            )
+        else:
+            data = {"table": table, "obs_id": obs_id, "values": values}
+            url = _urljoin(
+                self.url,
+                "insert",
+                quote(instrument),
+                quote(table),
+                "obs",
+                quote(str(obs_id)),
+            )
         if allow_update:
             url += "?u=1"
         return self._handle_post(url, data)
