@@ -476,7 +476,7 @@ class ConsDbClient:
         self,
         instrument: str,
         table: str,
-        obs_id: int,
+        obs_id: tuple[int, int] | int,
         values: dict[str, Any],
         *,
         allow_update=False,
@@ -520,6 +520,7 @@ class ConsDbClient:
         if not values:
             raise ValueError(f"No values to insert for {instrument} {table} {obs_id}")
 
+        data: dict[str, Any]
         if isinstance(obs_id, tuple):
             data = {"table": table, "values": values}
             url = _urljoin(
