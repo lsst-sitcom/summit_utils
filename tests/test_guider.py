@@ -142,7 +142,7 @@ class GuiderTestCase(unittest.TestCase):
     @check_plot_file_size(size_threshold=1000)
     def test_strip_plot(self, plot_type="psf", save_as=None) -> None:
         """Test the strip plot."""
-        self.plotter.strip_plot(plot_type=plot_type, save_as=save_as)
+        self.plotter.stripPlot(plot_type=plot_type, save_as=save_as)
 
     @check_plot_file_size(size_threshold=1000)
     def test_make_gif(self, n_stamp_max=50, cutout_size=14, save_as=None) -> None:
@@ -153,7 +153,7 @@ class GuiderTestCase(unittest.TestCase):
 
     def test_plotting(self) -> None:
         # just to check that it runs without error
-        self.plotter.print_metrics()
+        self.plotter.printMetrics()
 
         # Check Star Mosaic Plot
         # Stacked and full stamp size

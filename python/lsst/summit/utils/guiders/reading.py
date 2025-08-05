@@ -43,8 +43,13 @@ from lsst.meas.algorithms.stamps import Stamp, Stamps
 from lsst.obs.lsst import LsstCam  # pylint: disable=unused-import
 
 from .exceptions import StampsNotFoundError
-from .guiderwcs import get_camera_rot_angle, make_init_guider_wcs
-from .transformation import makeCcdToDvcsTransform, makeRoiBbox, roiImageToDvcs
+from .transformation import (
+    getCamRotAngle,
+    makeCcdToDvcsTransform,
+    makeInitGuiderWcs,
+    makeRoiBbox,
+    roiImageToDvcs,
+)
 
 if TYPE_CHECKING:
     from lsst.geom import SkyWcs
@@ -442,10 +447,10 @@ class GuiderReader:
         # Get visitInfo from any detector
         visitInfo = self.butler.get("raw.visitInfo", dataId)
         # this is a dict with the WCS for each guider detector
-        wcsGuideMap = make_init_guider_wcs(self.camera, visitInfo)
+        wcsGuideMap = makeInitGuiderWcs(self.camera, visitInfo)
 
         # Add the camera rotation angle in degrees
-        wcsGuideMap["camera_rot_angle_deg"] = get_camera_rot_angle(visitInfo)
+        wcsGuideMap["camera_rot_angle_deg"] = getCamRotAngle(visitInfo)
         return wcsGuideMap
 
     def getAxisRowMapping(self) -> dict[str, int]:

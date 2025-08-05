@@ -30,6 +30,7 @@ import seaborn as sns
 from astropy.stats import mad_std
 from matplotlib import animation
 from matplotlib.patches import Circle
+from scipy.ndimage import affine_transform
 
 from lsst.summit.utils.utils import RobustFitter
 
@@ -57,20 +58,45 @@ LIGHT_BLUE = "#6495ED"
 
 
 class GuiderPlotter:
-    def add_static_overlays(self, axs_img, detname, centerCutout, cutout_size):
-        _ = self.annotate_detector(detname, axs_img)
-        axs_img.axvline(centerCutout[0], color=LIGHT_BLUE, lw=1.25, linestyle="--", alpha=0.75)
-        axs_img.axhline(centerCutout[1], color=LIGHT_BLUE, lw=1.25, linestyle="--", alpha=0.75)
+    def addStaticOverlays(
+        self,
+        axsImg: plt.Axes,
+        detName: str,
+        centerCutout: tuple[float, float],
+        cutoutSize: int,
+    ) -> None:
+        """
+        Add static overlays to a guider image axis, with detector annotation,
+        crosshairs, and guide circles.
+
+        Parameters
+        ----------
+        axs_img : matplotlib.axes.Axes
+            The axis to draw overlays on.
+        detname : str
+            Name of the detector.
+        centerCutout : tuple
+            Center of the cutout image.
+        cutout_size : int
+            Size of the cutout.
+
+        Returns
+        -------
+        None
+        """
+        _ = self.annotateDetector(detName, axsImg)
+        axsImg.axvline(centerCutout[0], color=LIGHT_BLUE, lw=1.25, linestyle="--", alpha=0.75)
+        axsImg.axhline(centerCutout[1], color=LIGHT_BLUE, lw=1.25, linestyle="--", alpha=0.75)
         plot_crosshair_rotated(
             centerCutout,
-            90 + self.cam_rot_angle,
-            axs=axs_img,
+            90 + self.camRotAngle,
+            axs=axsImg,
             color="grey",
-            size=cutout_size,
+            size=cutoutSize,
         )
-        radii = [10, 5] if cutout_size > 0 else [10]
+        radii = [10, 5] if cutoutSize > 0 else [10]
         _ = plot_guide_circles(
-            axs_img,
+            axsImg,
             centerCutout,
             radii=radii,
             colors=[LIGHT_BLUE, LIGHT_BLUE],
@@ -78,29 +104,63 @@ class GuiderPlotter:
             linewidth=2.0,
         )
 
-    def plot_star_centroid(self, axs_img, detname, stamp_num, centerCutout, xcen, ycen, markersize=8):
-        xroi, yroi = centerCutout[0], centerCutout[1]
-        xroi_err, yroi_err = 0.0, 0.0
+    def plotStarCentroid(
+        self,
+        axsImg: plt.Axes,
+        detName: str,
+        stampNum: int,
+        centerCutout: tuple[float, float],
+        xcen: float,
+        ycen: float,
+        markerSize: int = 8,
+    ) -> list:
+        """
+        Plot the centroid of a star on the detector cutout image.
 
-        star = self.stars_df[(self.stars_df["detector"] == detname)]
+        Parameters
+        ----------
+        axs_img : matplotlib.axes.Axes
+            Axis object to plot on.
+        detname : str
+            Detector name.
+        stamp_num : int
+            Stamp number, or -1 for stacked.
+        centerCutout : tuple
+            Center of the cutout image (x, y).
+        xcen : float
+            Reference x centroid.
+        ycen : float
+            Reference y centroid.
+        markersize : int, optional
+            Marker size for the centroid point.
+
+        Returns
+        -------
+        list
+            List of matplotlib artist objects for the centroid and error bars.
+        """
+        xroi, yroi = centerCutout[0], centerCutout[1]
+        xroiErr, yroiErr = 0.0, 0.0
+
+        star = self.starsDf[(self.starsDf["detector"] == detName)]
         if not star.empty:
-            if stamp_num >= 0:
-                star = star[star["stamp"] == stamp_num]
+            if stampNum >= 0:
+                star = star[star["stamp"] == stampNum]
                 if not star.empty:
                     xroi, yroi = star.iloc[0][["xroi", "yroi"]]
-                    xroi_err, yroi_err = star.iloc[0][["xerr", "yerr"]]
-            elif markersize > 0:
+                    xroiErr, yroiErr = star.iloc[0][["xerr", "yerr"]]
+            elif markerSize > 0:
                 xroi, yroi = star.iloc[0][["xroi_ref", "yroi_ref"]]
-                xroi_err, yroi_err = star[["xerr", "yerr"]].mean()
+                xroiErr, yroiErr = star[["xerr", "yerr"]].mean()
 
         xroi, yroi = (
             centerCutout[0] + xroi - xcen,
             centerCutout[1] + yroi - ycen,
         )
 
-        (marker,) = axs_img.plot(xroi, yroi, "o", color="firebrick", markersize=markersize)
-        (hline,) = axs_img.plot([xroi - xroi_err, xroi + xroi_err], [yroi, yroi], color="firebrick", lw=2.5)
-        (vline,) = axs_img.plot([xroi, xroi], [yroi - yroi_err, yroi + yroi_err], color="firebrick", lw=2.5)
+        (marker,) = axsImg.plot(xroi, yroi, "o", color="firebrick", markersize=markerSize)
+        (hline,) = axsImg.plot([xroi - xroiErr, xroi + xroiErr], [yroi, yroi], color="firebrick", lw=2.5)
+        (vline,) = axsImg.plot([xroi, xroi], [yroi - yroiErr, yroi + yroiErr], color="firebrick", lw=2.5)
         return [marker, hline, vline]
 
     UNIT_DICT = {
@@ -135,26 +195,26 @@ class GuiderPlotter:
 
     def __init__(
         self,
-        stars_df: pd.DataFrame,
+        starsDf: pd.DataFrame,
         guiderData: GuiderData,
         isIsr: bool = True,
     ) -> None:
         self.log = logging.getLogger(__name__)
-        self.exp_id = guiderData.header.get("expid", 0)
+        self.expId = guiderData.header.get("expid", 0)
 
-        if stars_df.empty:
+        if starsDf.empty:
             self.log.warning("stars_df is empty. No data to plot.")
-            self.stats_df = pd.DataFrame(columns=["expid"])
+            self.statsDf = pd.DataFrame(columns=["expid"])
             return
 
-        self.stars_df = stars_df[stars_df["expid"] == self.exp_id]
+        self.starsDf = starsDf[starsDf["expid"] == self.expId]
         self.guiderData = guiderData
         self.isIsr = isIsr  # apply or not parrallel over scan bias correction
 
         # Some metadata information
-        self.exptime = int(self.guiderData.header["SHUTTIME"])
+        self.expTime = int(self.guiderData.header["SHUTTIME"])
         self.seeing = self.guiderData.header.get("SEEING", np.nan)
-        self.cam_rot_angle = float(self.guiderData.header["CAM_ROT_ANGLE"])
+        self.camRotAngle = float(self.guiderData.header["CAM_ROT_ANGLE"])
         elstart, elstop = (
             float(self.guiderData.header["ELSTART"]),
             float(self.guiderData.header["ELEND"]),
@@ -167,13 +227,22 @@ class GuiderPlotter:
         self.az = 0.5 * (azstart + azstop)
 
         # assemble statistics
-        self.stats_df = self.assemble_stats()
+        self.statsDf = self.assembleStats()
 
         sns.set_style("white")
         sns.set_context("talk", font_scale=0.8)
 
-    def assemble_stats(self) -> pd.DataFrame:
-        stars = self.stars_df
+    def assembleStats(self) -> pd.DataFrame:
+        """
+        Assemble summary statistics from the stars dataframe
+        for the current exposure.
+
+        Returns
+        -------
+        pd.DataFrame
+            DataFrame with a summary statistics for the current exposure.
+        """
+        stars = self.starsDf
 
         if stars.empty:
             cols = [
@@ -182,7 +251,7 @@ class GuiderPlotter:
                 "fraction_valid_stamps",
                 "n_measurements",
             ]
-            example_std_centroid = [
+            exampleStdCentroid = [
                 "std_centroid_az",
                 "std_centroid_alt",
                 "std_centroid_corr_az",
@@ -192,64 +261,87 @@ class GuiderPlotter:
                 "offset_zero_az",
                 "offset_zero_alt",
             ]
-            example_phot = ["magoffset_rate", "magoffset_zero", "magoffset_rms"]
-            guider_names = stars["detector"].unique()
-            cols += [f"N_{det}" for det in guider_names]
-            cols += example_std_centroid + example_phot
+            examplePhot = ["magoffset_rate", "magoffset_zero", "magoffset_rms"]
+            guiderNames = stars["detector"].unique()
+            cols += [f"N_{det}" for det in guiderNames]
+            cols += exampleStdCentroid + examplePhot
             return pd.DataFrame(columns=cols)
 
-        n_guiders = stars["detector"].nunique()
-        n_unique = stars["starid"].nunique()
+        nGuiders = stars["detector"].nunique()
+        nUnique = stars["starid"].nunique()
         counts = stars.groupby("detector")["starid"].nunique().to_dict()
-        guider_names = stars["detector"].unique()
-        stars_per_guiders = {f"N_{det}": counts.get(det, 0) for det in guider_names}
+        guiderNames = stars["detector"].unique()
+        starsPerGuiders = {f"N_{det}": counts.get(det, 0) for det in guiderNames}
 
-        mask_valid = (stars["stamp"] >= 0) & (stars["xccd"].notna())
-        n_meas = int(mask_valid.sum())
+        maskValid = (stars["stamp"] >= 0) & (stars["xccd"].notna())
+        nMeas = int(maskValid.sum())
 
-        std_centroid = measure_std_centroid_stats(stars, snr_th=5)
+        stdCentroid = measure_std_centroid_stats(stars, snr_th=5)
         phot = measure_photometric_variation(stars, snr_th=5)
-        psf_stats = measure_psf_stats(stars, snr_th=5)
+        psfStats = measure_psf_stats(stars, snr_th=5)
 
-        total_possible = n_unique * stars["stamp"].nunique()
-        frac_valid = n_meas / total_possible if total_possible > 0 else np.nan
+        totalPossible = nUnique * stars["stamp"].nunique()
+        fracValid = nMeas / totalPossible if totalPossible > 0 else np.nan
 
         summary = {
-            "expid": self.exp_id,
-            "n_guiders": n_guiders,
-            "n_stars": n_unique,
-            "n_measurements": n_meas,
-            "fraction_valid_stamps": frac_valid,
+            "expid": self.expId,
+            "n_guiders": nGuiders,
+            "n_stars": nUnique,
+            "n_measurements": nMeas,
+            "fraction_valid_stamps": fracValid,
             "seeing": self.seeing,
             "filter": self.guiderData.header.get("filter", "unknown"),
             "alt": self.el,
             "az": self.az,
-            **stars_per_guiders,
-            **std_centroid,
+            **starsPerGuiders,
+            **stdCentroid,
             **phot,
-            **psf_stats,
+            **psfStats,
         }
         return pd.DataFrame([summary])
 
-    def print_metrics(self) -> None:
-        if self.stats_df.empty:
+    def printMetrics(self) -> None:
+        """
+        Print formatted metrics and statistics for the current exposure.
+
+        Returns
+        -------
+        None
+        """
+        if self.statsDf.empty:
             print("No statistics available for this exposure.")
             return
 
-        filtered_stats_df = self.stats_df[self.stats_df["expid"] == self.exp_id].copy()
+        filteredStatsDf = self.statsDf[self.statsDf["expid"] == self.expId].copy()
 
-        print(self.format_stats_summary(filtered_stats_df))
-        print(self.format_std_centroid_summary(filtered_stats_df, exptime=self.exptime))
-        print(self.format_photometric_summary(filtered_stats_df, exptime=self.exptime))
-        print(self.format_psf_summary(filtered_stats_df, exptime=self.exptime))
+        print(self.formatStatsSummary(filteredStatsDf))
+        print(self.formatStdCentroidSummary(filteredStatsDf, exptime=self.expTime))
+        print(self.formatPhotometricSummary(filteredStatsDf, exptime=self.expTime))
+        print(self.formatPsfSummary(filteredStatsDf, exptime=self.expTime))
 
-    def strip_plot(self, plot_type: str = "centroidAltAz", save_as: str | None = None) -> None:
-        if self.stars_df.empty:
+    def stripPlot(self, plotType: str = "centroidAltAz", saveAs: Optional[str] = None) -> None:
+        """
+        Generate a strip plot (time series) for various metrics (e.g.,
+        centroid, flux, PSF).
+
+        Parameters
+        ----------
+        plot_type : str, optional
+            Type of metric to plot. One of "centroidAltAz", "centroidPixel",
+            "flux", "ellip", "psf".
+        save_as : str or None, optional
+            If provided, save the plot to this file.
+
+        Returns
+        -------
+        None
+        """
+        if self.starsDf.empty:
             self.log.warning("stars_df is empty. No data to plot.")
             return
 
         # plot_kwargs dtype is dict[str, Any]
-        plot_kwargs: dict[str, dict] = {
+        plotKwargs: dict[str, dict] = {
             "centroidAltAz": {
                 "ylabel": "Centroid Offset [arcsec]",
                 "unit": "arcsec",
@@ -283,21 +375,21 @@ class GuiderPlotter:
                 "title": "PSF FWHM",
             },
         }
-        cfg = plot_kwargs[plot_type]  # type: dict[str, Any]
+        cfg = plotKwargs[plotType]  # type: dict[str, Any]
         scale = cfg.get("scale", 1.0)  # type: float
         cols = cfg["col"]
         unit = cfg.get("unit", "")
-        exp = float(self.exptime)
+        exp = float(self.expTime)
 
         # filter and prepare
-        df = self.stars_df[self.stars_df["elapsed_time"] > 0][["elapsed_time", "detector"] + cols].copy()
+        df = self.starsDf[self.starsDf["elapsed_time"] > 0][["elapsed_time", "detector"] + cols].copy()
 
         # Compute overall mean and sigma for y-axis limits
-        all_data = df[cols].values.flatten()
-        all_data *= scale
-        plow, phigh = np.nanpercentile(all_data, [16, 84])
-        sigma_val = mad_std(all_data, ignore_nan=True)
-        ylims = (plow - 2.5 * sigma_val, phigh + 2.5 * sigma_val)
+        allData = df[cols].values.flatten()
+        allData *= scale
+        plow, phigh = np.nanpercentile(allData, [16, 84])
+        sigmaVal = mad_std(allData, ignore_nan=True)
+        ylims = (plow - 2.5 * sigmaVal, phigh + 2.5 * sigmaVal)
 
         # setup subplots
         n = len(cols)
@@ -334,7 +426,7 @@ class GuiderPlotter:
             model = RobustFitter(
                 x=df["elapsed_time"].values,
                 y=df[col].values * scale,
-                residual_threshold=1.5 * sigma_val,
+                residual_threshold=1.5 * sigmaVal,
             )
 
             results = model.report_best_values()
@@ -342,7 +434,6 @@ class GuiderPlotter:
             txt = (
                 f"Slope: {exp * results.slope:.2f} {unit}/exposure\n"
                 f"Significance: {np.abs(results.slope_tvalue):.1f} σ\n"
-                # f"Intercept: {results.intercept:.1f} {unit}\n"
                 f"scatter: {results.scatter:.3f} {unit}\n"
             )
 
@@ -362,8 +453,8 @@ class GuiderPlotter:
 
             # scatter points
             # Use different markers for each guider detector
-            unique_starids = df["detector"].unique()
-            for i, starid in enumerate(unique_starids):
+            uniqueStarIds = df["detector"].unique()
+            for i, starid in enumerate(uniqueStarIds):
                 marker = self.MARKERS[i % len(self.MARKERS)]
                 mask = df["detector"] == starid
                 mask2 = mask & (model.outlier_mask)
@@ -375,7 +466,6 @@ class GuiderPlotter:
                     alpha=0.6,
                     marker=marker,
                     label=f"{starid}" if count == 0 else "",
-                    # avoid duplicate legend entries
                 )
 
                 # plot outliers
@@ -389,43 +479,36 @@ class GuiderPlotter:
 
             if count == 0:
                 ax.set_ylabel(cfg["ylabel"])
-            # ax.set_xlabel("# stamp")
             ax.set_xlabel("Elapsed time [sec]")
             ax.set_ylim(*ylims)  # <-- Set y-axis limits here
             ax.legend(fontsize=10, ncol=4, loc="lower left")
-
-            # top axis for elapsed time
-            # xstampers = np.arange(0, max_stamp + 10, 10)
-            # ax.set_xticks(xstampers)
-            # ax2 = ax.twiny()
-            # elapsed = self.exptime * xstampers / max_stamp
-            # ax2.set_xticks(xstampers)
-            # ax2.set_xticklabels([f"{e:.1f}" for e in elapsed])
-            # ax2.set_xlabel("Elapsed Time [s]")
 
             count += 1
         fig.suptitle(cfg["title"], fontsize=14, fontweight="bold")
         if count == 0:
             fig.tight_layout()
 
-        if save_as:
-            fig.savefig(save_as, dpi=120, bbox_inches="tight")
-            print(f"Saved strip plot to {save_as}")
+        if saveAs:
+            fig.savefig(saveAs, dpi=120, bbox_inches="tight")
+            print(f"Saved strip plot to {saveAs}")
 
-        # return fig
-
-    def get_star_centroid_ref(self, guiderData: GuiderData) -> dict[str, tuple[float | None, float | None]]:
+    def getStarCentroidRef(self, guiderData: GuiderData) -> dict[str, tuple[float | None, float | None]]:
         """
         Convert the best star centroid in each guider to ROI coordinates.
 
-        The conversion depends on the guider view (dvcs, ccd, etc).
+        Parameters
+        ----------
+        guiderData : GuiderData
+            Guider data object with star information.
 
-        Returns:
-            centroids: dict of {detector: (xroi, yroi)}
+        Returns
+        -------
+        dict of str to tuple of (float or None, float or None)
+            Dictionary mapping detector name to (xroi, yroi) centroid.
         """
         centroids: dict[str, tuple[float | None, float | None]] = {}
         for det in self.DETNAMES:
-            sub = self.stars_df[self.stars_df["detector"] == det]
+            sub = self.starsDf[self.starsDf["detector"] == det]
             if len(sub) > 0:
                 best = sub.loc[sub["snr"].idxmax()]
                 xroi = np.nanmedian([best["xroi_ref"]])
@@ -436,36 +519,79 @@ class GuiderPlotter:
         self.centroids = centroids
         return centroids
 
-    def load_image(
+    def loadImage(
         self,
         guider: GuiderData,
-        detname: str,
-        stamp_num: int = 2,
+        detName: str,
+        stampNum: int = 2,
     ) -> np.ndarray:
+        """
+        Load a guider stamp image for a specific detector and stamp number.
+
+        Parameters
+        ----------
+        guider : GuiderData
+            Guider data object.
+        detname : str
+            Detector name.
+        stamp_num : int, optional
+            Stamp number to load; if negative, loads stacked image.
+
+        Returns
+        -------
+        np.ndarray
+            Image array for the specified stamp and detector.
+        """
         # read full stamp
-        if stamp_num >= len(guider.timestamps):
+        if stampNum >= len(guider.timestamps):
             raise ValueError(
-                f"stamp_num {stamp_num} is out of range for guider" + f"with {len(guider.timestamps)} stamps."
+                f"stamp_num {stampNum} is out of range for guider" + f"with {len(guider.timestamps)} stamps."
             )
-        elif stamp_num < 0:
-            return guider.getStackedStampArray(detName=detname, isIsr=self.isIsr)
+        elif stampNum < 0:
+            return guider.getStackedStampArray(detName=detName, isIsr=self.isIsr)
         else:
-            img = guider.getStampArray(stampNum=stamp_num, detName=detname, isIsr=self.isIsr)
+            img = guider.getStampArray(stampNum=stampNum, detName=detName, isIsr=self.isIsr)
             return img - np.nanmedian(img, axis=0)
 
-    def star_mosaic(
+    def starMosaic(
         self,
-        stamp_num: int = 2,
+        stampNum: int = 2,
         fig: Optional[plt.Figure] = None,
-        axs=None,
-        plo=90.0,
-        phi=99.0,
-        cutout_size=30,
-        is_animated=False,
-        save_as=None,
+        axs: Optional[dict[str, plt.Axes]] = None,
+        plo: float = 90.0,
+        phi: float = 99.0,
+        cutoutSize: int = 30,
+        isAnimated: bool = False,
+        saveAs: Optional[str] = None,
     ) -> list:
-        """Plot the stamp array for all the guiders."""
-        if self.stars_df.empty:
+        """
+        Plot the stamp array for all the guiders in a mosaic layout.
+
+        Parameters
+        ----------
+        stamp_num : int, optional
+            Stamp number to plot; if negative, plot stacked image.
+        fig : matplotlib.figure.Figure, optional
+            Figure object to use.
+        axs : dict, optional
+            Dictionary of axes for the mosaic.
+        plo : float, optional
+            Lower percentile for image scaling.
+        phi : float, optional
+            Upper percentile for image scaling.
+        cutout_size : int, optional
+            Size of cutout for each detector panel.
+        is_animated : bool, optional
+            If True, do not add static overlays (for animation).
+        save_as : str or None, optional
+            If provided, save the figure to this file.
+
+        Returns
+        -------
+        list
+            List of matplotlib artist objects.
+        """
+        if self.starsDf.empty:
             self.log.warning("stars_df is empty. No data to plot.")
             return []
 
@@ -482,64 +608,89 @@ class GuiderPlotter:
             )
 
         if not hasattr(self, "centroids"):
-            self.get_star_centroid_ref(self.guiderData)
+            self.getStarCentroidRef(self.guiderData)
 
         artists = []
-        cutout_shape_list = []
+        cutoutShapeList = []
 
-        for detname in self.DETNAMES:
-            im_object, star_cross, cutout_shape = self._plot_detector_panel(
-                detname, stamp_num, axs, plo, phi, cutout_size, is_animated
+        for detName in self.DETNAMES:
+            imObject, starCross, cutoutShape = self._plotDetectorPanel(
+                detName, stampNum, axs, plo, phi, cutoutSize, isAnimated
             )
-            artists.append(im_object)
-            artists.extend(star_cross)
-            cutout_shape_list.append(cutout_shape)
+            artists.append(imObject)
+            artists.extend(starCross)
+            cutoutShapeList.append(cutoutShape)
 
-        std_az = self.stats_df.loc[self.stats_df["expid"] == self.exp_id, "std_centroid_corr_az"].values[0]
-        std_alt = self.stats_df.loc[self.stats_df["expid"] == self.exp_id, "std_centroid_corr_alt"].values[0]
-        std = np.hypot(std_az, std_alt)
-        stamp_info = self.annotate_center(stamp_num, axs["center"], jitter=std)
-        artists.append(stamp_info)
+        stdAz = self.statsDf.loc[self.statsDf["expid"] == self.expId, "std_centroid_corr_az"].values[0]
+        stdAlt = self.statsDf.loc[self.statsDf["expid"] == self.expId, "std_centroid_corr_alt"].values[0]
+        std = np.hypot(stdAz, stdAlt)
+        stampInfo = self.annotateCenter(stampNum, axs["center"], jitter=std)
+        artists.append(stampInfo)
 
-        cutout_size = np.max(cutout_shape_list) if cutout_shape_list else 30
-        if not is_animated:
-            self.draw_arrows(axs, cutout_size, 90.0 + self.cam_rot_angle)
+        cutoutSize = np.max(cutoutShapeList) if cutoutShapeList else 30
+        if not isAnimated:
+            self.drawArrows(axs, cutoutSize, 90.0 + self.camRotAngle)
 
         for ax in axs.values():
-            self.clear_axis_ticks(ax, is_spine=cutout_size < 0)
+            self.clearAxisTicks(ax, isSpine=cutoutSize < 0)
 
-        if save_as:
-            fig.savefig(save_as, dpi=120, bbox_inches="tight")
-            print(f"Saved mosaic plot to {save_as}")
+        if saveAs:
+            fig.savefig(saveAs, dpi=120, bbox_inches="tight")
+            print(f"Saved mosaic plot to {saveAs}")
 
         return artists
 
-    def _plot_detector_panel(
+    def _plotDetectorPanel(
         self,
-        detname: str,
-        stamp_num: int,
-        axs,
+        detName: str,
+        stampNum: int,
+        axs: dict[str, plt.Axes],
         plo: float,
         phi: float,
-        cutout_size: int,
-        is_animated: bool,
-    ):
-        img = self.load_image(self.guiderData, detname, stamp_num)
+        cutoutSize: int,
+        isAnimated: bool,
+    ) -> tuple[Any, list, tuple[int, int]]:
+        """
+        Plot a single detector panel in the mosaic.
+
+        Parameters
+        ----------
+        detname : str
+            Detector name.
+        stamp_num : int
+            Stamp number.
+        axs : dict
+            Mosaic axes dictionary.
+        plo : float
+            Lower percentile for image scaling.
+        phi : float
+            Upper percentile for image scaling.
+        cutout_size : int
+            Cutout size for the detector panel.
+        is_animated : bool
+            If True, do not add static overlays.
+
+        Returns
+        -------
+        tuple
+            (image object, star_cross artists, cutout shape)
+        """
+        img = self.loadImage(self.guiderData, detName, stampNum)
         mx, my = img.shape[0] // 2, img.shape[1] // 2
-        xcen, ycen = self.centroids.get(detname, (mx, my))
+        xcen, ycen = self.centroids.get(detName, (mx, my))
         if xcen is None or ycen is None:
             xcen, ycen = mx, my
         center = (float(xcen), float(ycen))
 
-        if cutout_size > 0:
-            cutout, centerCutout = crop_around_center(img, center, cutout_size)
+        if cutoutSize > 0:
+            cutout, centerCutout = crop_around_center(img, center, cutoutSize)
         else:
             cutout, centerCutout = img, center
-            stamp_num = -1  # do not plot star
+            stampNum = -1  # do not plot star
 
         vmin, vmax = np.nanpercentile(cutout, plo), np.nanpercentile(cutout, phi)
-        axs_img = axs[detname]
-        im_object = axs_img.imshow(
+        axsImg = axs[detName]
+        imObject = axsImg.imshow(
             cutout,
             origin="lower",
             cmap="Greys",
@@ -549,21 +700,34 @@ class GuiderPlotter:
             interpolation="nearest",
             extent=(0, cutout.shape[1], 0, cutout.shape[0]),
         )
-        axs_img.set_aspect("equal", "box")
+        axsImg.set_aspect("equal", "box")
 
-        if not is_animated:
-            self.add_static_overlays(axs_img, detname, centerCutout, cutout_size)
+        if not isAnimated:
+            self.addStaticOverlays(axsImg, detName, centerCutout, cutoutSize)
 
-        star_cross = self.plot_star_centroid(
-            axs_img, detname, stamp_num, centerCutout, xcen, ycen, markersize=8 if cutout_size > 0 else 0
+        starCross = self.plotStarCentroid(
+            axsImg, detName, stampNum, centerCutout, xcen, ycen, markerSize=8 if cutoutSize > 0 else 0
         )
 
-        axs_img.set_xlim(0, cutout.shape[1])
-        axs_img.set_ylim(0, cutout.shape[0])
-        return im_object, star_cross, cutout.shape
+        axsImg.set_xlim(0, cutout.shape[1])
+        axsImg.set_ylim(0, cutout.shape[0])
+        return imObject, starCross, cutout.shape
 
-    def mosaic(self, stamp_num: int = 2, **kwargs) -> None:
-        """Wrapper to plot a single guider mosaic."""
+    def mosaic(self, stampNum: int = 2, **kwargs) -> None:
+        """
+        Wrapper to plot a single guider mosaic for a specific stamp.
+
+        Parameters
+        ----------
+        stamp_num : int, optional
+            Stamp number to plot.
+        **kwargs
+            Additional keyword arguments passed to star_mosaic.
+
+        Returns
+        -------
+        None
+        """
         fig, axs = plt.subplot_mosaic(
             cast(Any, self.LAYOUT),
             figsize=(12, 12),
@@ -572,29 +736,56 @@ class GuiderPlotter:
             sharey=False,
             sharex=False,
         )
-        _ = self.star_mosaic(stamp_num=stamp_num, cutout_size=-1, fig=fig, axs=axs, **kwargs)
+        _ = self.starMosaic(stampNum=stampNum, cutoutSize=-1, fig=fig, axs=axs, **kwargs)
 
-        plt.suptitle(f"Guider Mosaic for expid: {self.exp_id}\n stamp #: {stamp_num + 1:02d}")
+        plt.suptitle(f"Guider Mosaic for expid: {self.expId}\n stamp #: {stampNum + 1:02d}")
         plt.show()
         return None
 
-    def clear_axis_ticks(self, ax, is_spine=False) -> None:
-        """Remove all ticks and tick labels from an axis."""
+    def clearAxisTicks(self, ax: plt.Axes, isSpine: bool = False) -> None:
+        """
+        Remove all ticks and tick labels from an axis.
+
+        Parameters
+        ----------
+        ax : matplotlib.axes.Axes
+            Axis to clear.
+        is_spine : bool, optional
+            If False, hide the axis spines as well.
+
+        Returns
+        -------
+        None
+        """
         ax.set_xticks([])
         ax.set_yticks([])
         ax.set_xticklabels([])
         ax.set_yticklabels([])
 
-        if not is_spine:
+        if not isSpine:
             for spine in ax.spines.values():
                 spine.set_visible(False)
 
-    def annotate_detector(self, detname, ax) -> plt.Text:
-        """Annotate a detector panel with its name."""
+    def annotateDetector(self, detName: str, ax: plt.Axes) -> plt.Text:
+        """
+        Annotate a detector panel with its name.
+
+        Parameters
+        ----------
+        detname : str
+            Name of the detector.
+        ax : matplotlib.axes.Axes
+            Axis to annotate.
+
+        Returns
+        -------
+        matplotlib.text.Text
+            The text artist added.
+        """
         txt = ax.text(
             0.025,
             0.925,
-            detname,
+            detName,
             transform=ax.transAxes,
             ha="left",
             va="bottom",
@@ -604,14 +795,30 @@ class GuiderPlotter:
         )
         return txt
 
-    def annotate_center(self, stamp_num, ax, jitter=-1) -> plt.Text:
-        """Annotate the center panel with exposure and stamp info."""
-        self.clear_axis_ticks(ax)
+    def annotateCenter(self, stampNum: int, ax: plt.Axes, jitter: float = -1) -> plt.Text:
+        """
+        Annotate the center panel with exposure and stamp info.
+
+        Parameters
+        ----------
+        stamp_num : int
+            Stamp number.
+        ax : matplotlib.axes.Axes
+            Axis to annotate.
+        jitter : float, optional
+            Jitter value to display.
+
+        Returns
+        -------
+        matplotlib.text.Text
+            The text artist added.
+        """
+        self.clearAxisTicks(ax)
         text = f"Center Stdev.: {jitter:.2f} arcsec\n" if jitter > 0 else ""
         text += (
-            f"expid: {self.exp_id}\nStamp #: {stamp_num + 1:02d}"
-            if stamp_num >= 0
-            else f"expid: {self.exp_id}\nStacked w/ {self.stars_df['stamp'].nunique()} stamps"
+            f"expid: {self.expId}\nStamp #: {stampNum + 1:02d}"
+            if stampNum >= 0
+            else f"expid: {self.expId}\nStacked w/ {self.starsDf['stamp'].nunique()} stamps"
         )
 
         txt = ax.text(
@@ -626,9 +833,37 @@ class GuiderPlotter:
         )
         return txt
 
-    def plot_circle(self, ax, xcen, ycen, radius=5, color="firebrick", lw=1.0) -> Circle:
+    def plotCircle(
+        self,
+        ax: plt.Axes,
+        xcen: float,
+        ycen: float,
+        radius: float = 5,
+        color: str = "firebrick",
+        lw: float = 1.0,
+    ) -> Circle:
         """
         Add a circular patch at (xcen, ycen) with given radius on the axis.
+
+        Parameters
+        ----------
+        ax : matplotlib.axes.Axes
+            Axis to add the circle to.
+        xcen : float
+            X coordinate of center.
+        ycen : float
+            Y coordinate of center.
+        radius : float, optional
+            Radius of the circle.
+        color : str, optional
+            Color of the circle edge.
+        lw : float, optional
+            Line width.
+
+        Returns
+        -------
+        matplotlib.patches.Circle
+            The circle patch added to the axis.
         """
         circ = Circle(
             (xcen, ycen),
@@ -641,38 +876,80 @@ class GuiderPlotter:
         ax.add_patch(circ)
         return circ
 
-    def draw_arrows(self, axs, cutout_size, rot_angle=0):
-        xmin1, ymin1 = draw_altaz_reference_arrow(axs["arrow"], 0, cutout_size=cutout_size)
+    def drawArrows(
+        self,
+        axs: dict[str, plt.Axes],
+        cutoutSize: int,
+        rotAngle: float = 0,
+    ) -> None:
+        """
+        Draw Alt/Az reference arrows on the 'arrow' panel of the mosaic.
+
+        Parameters
+        ----------
+        axs : dict
+            Dictionary of axes for the mosaic.
+        cutout_size : int
+            Size of the cutout.
+        rot_angle : float, optional
+            Rotation angle in degrees.
+
+        Returns
+        -------
+        None
+        """
+        xmin1, ymin1 = draw_altaz_reference_arrow(axs["arrow"], 0, cutout_size=cutoutSize)
         xmin2, ymin2 = draw_altaz_reference_arrow(
             axs["arrow"],
-            rot_angle=rot_angle,
+            rot_angle=rotAngle,
             color="lightgrey",
             altlabel="Alt",
             azlabel="Az",
-            cutout_size=cutout_size,
+            cutout_size=cutoutSize,
         )
         axs["arrow"].axis("off")
-        border = cutout_size * 0.10
+        border = cutoutSize * 0.10
         xmin = np.min([xmin1, xmin2]) - border
         ymin = np.min([ymin1, ymin2]) - border
-        axs["arrow"].set_xlim(xmin, xmin + cutout_size)
-        axs["arrow"].set_ylim(ymin, ymin + cutout_size)
+        axs["arrow"].set_xlim(xmin, xmin + cutoutSize)
+        axs["arrow"].set_ylim(ymin, ymin + cutoutSize)
 
-    def make_gif(
+    def makeGif(
         self,
-        n_stamp_max=60,
-        fps=5,
-        dpi=100,
-        plo=90.0,
-        phi=99.0,
-        cutout_size=30,
-        save_as=None,
+        nStampMax: int = 60,
+        fps: int = 5,
+        dpi: int = 100,
+        plo: float = 90.0,
+        phi: float = 99.0,
+        cutoutSize: int = 30,
+        saveAs: Optional[str] = None,
     ) -> animation.ArtistAnimation:
-        from matplotlib import animation
+        """
+        Create an animated GIF of the guider mosaic over a sequence of stamps.
 
-        if self.stars_df.empty:
-            self.log.warning("stars_df is empty. No data to plot.")
-            return animation.ArtistAnimation([], [], interval=1000 / fps, blit=True, repeat_delay=1000)
+        Parameters
+        ----------
+        n_stamp_max : int, optional
+            Maximum number of stamps to animate.
+        fps : int, optional
+            Frames per second.
+        dpi : int, optional
+            Dots per inch for saved animation.
+        plo : float, optional
+            Lower percentile for image scaling.
+        phi : float, optional
+            Upper percentile for image scaling.
+        cutout_size : int, optional
+            Size of cutout for each detector panel.
+        save_as : str or None, optional
+            If provided, save the animation to this file.
+
+        Returns
+        -------
+        matplotlib.animation.ArtistAnimation
+            The resulting animation object.
+        """
+        from matplotlib import animation
 
         # build canvas
         fig, axs = plt.subplot_mosaic(
@@ -682,34 +959,37 @@ class GuiderPlotter:
             constrained_layout=False,
         )
 
-        # number of frames
-        n_stamps = len(self.guiderData.timestamps)
-        total = min(n_stamps, n_stamp_max)
+        if self.stars_df.empty:
+            self.log.warning("stars_df is empty. No data to plot.")
+            return animation.ArtistAnimation(fig, [], interval=1000 / fps, blit=True, repeat_delay=1000)
 
-        print("Number of stamps: ", total)
+        # number of frames
+        nStamps = len(self.guiderData.timestamps)
+        total = min(nStamps, nStampMax)
+
         # initial (stacked) frame
-        artists0 = self.star_mosaic(
-            stamp_num=-1,
+        artists0 = self.starMosaic(
+            stampNum=-1,
             fig=fig,
             axs=axs,
             plo=plo,
             phi=phi,
-            cutout_size=cutout_size,
-            is_animated=False,
+            cutoutSize=cutoutSize,
+            isAnimated=False,
         )
 
         frames = 2 * [artists0]
 
         # sequential stamps
         for i in range(1, total):
-            artists = self.star_mosaic(
-                stamp_num=i,
+            artists = self.starMosaic(
+                stampNum=i,
                 fig=fig,
                 axs=axs,
                 plo=plo,
                 phi=phi,
-                cutout_size=cutout_size,
-                is_animated=True,
+                cutoutSize=cutoutSize,
+                isAnimated=True,
             )
             frames.append(artists)
         frames += 2 * [artists0]
@@ -717,29 +997,38 @@ class GuiderPlotter:
         # create animation
         ani = animation.ArtistAnimation(fig, frames, interval=1000 / fps, blit=True, repeat_delay=1000)
 
-        if save_as is None:
-            save_as = f"guider_mosaic_{self.exp_id}.gif"
-
-        ani.save(save_as, fps=fps, dpi=dpi, writer="pillow")
+        ani.save(saveAs, fps=fps, dpi=dpi, writer="pillow")
         plt.close(fig)
         return ani
 
     @staticmethod
-    def format_std_centroid_summary(stats_df: pd.DataFrame, exptime=1) -> str:
+    def formatStdCentroidSummary(statsDf: pd.DataFrame, exptime: float = 1) -> str:
         """
         Pretty string summary of centroid stdev. stats from run_all_guiders.
+
+        Parameters
+        ----------
+        stats_df : pd.DataFrame
+            DataFrame or dict with centroid statistics.
+        exptime : float, optional
+            Exposure time scaling factor.
+
+        Returns
+        -------
+        str
+            Formatted summary string.
         """
         # handle both dicts and DataFrames
-        if (isinstance(stats_df, pd.DataFrame) and stats_df.empty) or (
-            isinstance(stats_df, dict) and not stats_df
+        if (isinstance(statsDf, pd.DataFrame) and statsDf.empty) or (
+            isinstance(statsDf, dict) and not statsDf
         ):
             return "No centroid stdev. statistics available."
 
         # if it's a DataFrame, extract the one-row dict
-        if isinstance(stats_df, pd.DataFrame):
-            stats = stats_df.iloc[0].to_dict()
+        if isinstance(statsDf, pd.DataFrame):
+            stats = statsDf.iloc[0].to_dict()
         else:
-            stats = stats_df
+            stats = statsDf
 
         js = stats
         summary = (
@@ -757,36 +1046,58 @@ class GuiderPlotter:
         return summary
 
     @staticmethod
-    def format_photometric_summary(phot_stats: pd.DataFrame, exptime=1) -> str:
+    def formatPhotometricSummary(photStats: pd.DataFrame, exptime: float = 1) -> str:
         """
         Pretty-print summary of photometric variation statistics.
+
+        Parameters
+        ----------
+        phot_stats : pd.DataFrame or dict
+            DataFrame or dict with photometric statistics.
+        exptime : float, optional
+            Exposure time scaling factor.
+
+        Returns
+        -------
+        str
+            Formatted summary string.
         """
-        if (isinstance(phot_stats, pd.DataFrame) and phot_stats.empty) or (
-            isinstance(phot_stats, dict) and not phot_stats
+        if (isinstance(photStats, pd.DataFrame) and photStats.empty) or (
+            isinstance(photStats, dict) and not photStats
         ):
             return "No photometric statistics available."
 
         # if it's a DataFrame, extract the one-row dict
-        if isinstance(phot_stats, pd.DataFrame):
-            stats = phot_stats.iloc[0].to_dict()
+        if isinstance(photStats, pd.DataFrame):
+            stats = photStats.iloc[0].to_dict()
         else:
-            stats = phot_stats
+            stats = photStats
 
         return (
             "\nPhotometric Variation Summary\n"
-            "-------------------------------\n"
+            "-----------------------------\n"
             f"  - Mag Drift Rate:      {exptime * stats['magoffset_rate'] * 1e3:.1f} mmag/exposure\n"
             f"  - Mag Zero Offset:     {stats['magoffset_zero'] * 1e3 :.1f} mmag\n"
             f"  - Mag RMS (detrended): {stats['magoffset_rms'] * 1e3:.1f} mmag"
         )
 
     @staticmethod
-    def format_stats_summary(summary: pd.DataFrame) -> str:
+    def formatStatsSummary(summary: pd.DataFrame) -> str:
         """
         Pretty-print only the stats that are present in `summary`.
         Expects keys like:
           n_guiders, n_unique_stars, n_measurements, fraction_valid_stamps,
           N_<detector>, std_centroid_*, magoffset_*, etc.
+
+        Parameters
+        ----------
+        summary : pd.DataFrame or dict
+            DataFrame or dict with summary statistics.
+
+        Returns
+        -------
+        str
+            Formatted summary string.
         """
         if (isinstance(summary, pd.DataFrame) and summary.empty) or (
             isinstance(summary, dict) and not summary
@@ -806,75 +1117,52 @@ class GuiderPlotter:
         lines.append(f"Fraction Valid Stamps: {frac:.3f}")
 
         # Per-guider counts (keys begin with 'N_')
-        guider_keys = sorted(k for k in summary if k.startswith("N_"))
-        if guider_keys:
+        guiderKeys = sorted(k for k in summary if k.startswith("N_"))
+        if guiderKeys:
             lines.append("\nStars per Guider:")
-            for k in guider_keys:
+            for k in guiderKeys:
                 lines.append(f"  - {k[2:]}: {int(summary[k])}")
         return "\n".join(lines)
 
     @staticmethod
-    def format_psf_summary(psf_stats: pd.DataFrame, exptime=1) -> str:
+    def formatPsfSummary(psfStats: pd.DataFrame, exptime: float = 1) -> str:
         """
         Pretty-print summary of PSF statistics.
         Expects keys like:
           fwhm, e1, e2, etc.
+
+        Parameters
+        ----------
+        psf_stats : pd.DataFrame or dict
+            DataFrame or dict with PSF statistics.
+        exptime : float, optional
+            Exposure time scaling factor.
+
+        Returns
+        -------
+        str
+            Formatted summary string.
         """
-        if (isinstance(psf_stats, pd.DataFrame) and psf_stats.empty) or (
-            isinstance(psf_stats, dict) and not psf_stats
+        if (isinstance(psfStats, pd.DataFrame) and psfStats.empty) or (
+            isinstance(psfStats, dict) and not psfStats
         ):
             return "No PSF statistics available."
 
         # if it's a DataFrame, extract the one-row dict
-        if isinstance(psf_stats, pd.DataFrame):
-            psf_stats = psf_stats.iloc[0].to_dict()
+        if isinstance(psfStats, pd.DataFrame):
+            psfStats = psfStats.iloc[0].to_dict()
 
         lines = ["", "-" * 50]
         lines.append("PSF Statistics Summary:")
-        lines.append(f"  - FWHM slope   : {exptime * psf_stats['fwhm_rate']:.3f} arcsec per exposure")
-        lines.append(f"  - FWHM scatter : {psf_stats['fwhm_rms']:.3f} arcsec")
+        lines.append(f"  - FWHM slope   : {exptime * psfStats['fwhm_rate']:.3f} arcsec per exposure")
+        lines.append(f"  - FWHM scatter : {psfStats['fwhm_rms']:.3f} arcsec")
         return "\n".join(lines)
 
 
-def make_cutout(image, xcen, ycen, size=30) -> np.ndarray:
-    if xcen is not None:
-        x0, x1 = int(xcen - size / 2.0), int(xcen + size / 2.0)
-        y0, y1 = int(ycen - size / 2.0), int(ycen + size / 2.0)
-        cutout = image[y0:y1, x0:x1]
-    else:
-        cutout = np.zeros((size, size))
-    return cutout
-
-
-def plot_guide_circles(ax, center, radii, colors, labels=None, text_offset=1, **circle_kwargs) -> list:
-    x0, y0 = center
-    txt_list = []
-    for i, r in enumerate(radii):
-        c = Circle(
-            (x0, y0),
-            r,
-            edgecolor=colors[i],
-            facecolor="none",
-            linestyle="--",
-            **circle_kwargs,
-        )
-        ax.add_patch(c)
-
-        txt = ax.text(
-            x0 + r + text_offset,
-            y0 - r / 4.0,
-            labels[i],
-            color=colors[i],
-            va="center",
-            fontsize=8,
-        )
-        txt_list.append([txt])
-    return txt_list
-
-
 class GuiderMosaicPlotter:
-    """Class to read and unpack the Guider data from Butler.
-       Plot an animated gif of the CCD guider stamp.
+    """
+    Class to read and unpack the Guider data from Butler.
+    Plot an animated gif of the CCD guider stamp.
 
     Example:
         from lsst.summit.utils.guiders.reading import readGuiderData
@@ -902,6 +1190,22 @@ class GuiderMosaicPlotter:
     """
 
     def __init__(self, reader, butler=None, view="dvcs"):
+        """
+        Initialize the GuiderMosaicPlotter with a guider data reader.
+
+        Parameters
+        ----------
+        reader : object
+            Reader object (e.g., from readGuiderData) with guider data.
+        butler : object, optional
+            Butler object (not used).
+        view : str, optional
+            View type (e.g., 'dvcs').
+
+        Returns
+        -------
+        None
+        """
         # reader object readGuiderData
         self.reader = reader
         self.view = reader.view
@@ -920,6 +1224,27 @@ class GuiderMosaicPlotter:
         ]
 
     def plot_stamp_ccd(self, raft_ccd_key, stamp_num=-1, axs=None, plo=10.0, phi=99.0) -> plt.AxesImage:
+        """
+        Plot a stamp or stacked image for a single CCD.
+
+        Parameters
+        ----------
+        raft_ccd_key : str
+            Detector name.
+        stamp_num : int, optional
+            Stamp number; if negative, plot stacked image.
+        axs : matplotlib.axes.Axes, optional
+            Axis to plot on.
+        plo : float, optional
+            Lower percentile for image scaling.
+        phi : float, optional
+            Upper percentile for image scaling.
+
+        Returns
+        -------
+        matplotlib.image.AxesImage
+            Image artist.
+        """
         if axs is None:
             axs = plt.gca()
             plt.title(f"{self.exp_id}")
@@ -943,6 +1268,19 @@ class GuiderMosaicPlotter:
         return im
 
     def get_stamp_number_info(self, stamp_num=0) -> str:
+        """
+        Generate a string with stamp number and observation info.
+
+        Parameters
+        ----------
+        stamp_num : int, optional
+            Stamp number.
+
+        Returns
+        -------
+        str
+            Info string for the stamp.
+        """
         text = f"day_obs: {self.dayObs}" + "\n" + f"seq_num: {self.seqNum}" + "\n"
         text += f"orientation: {self.view}" + "\n"
         if stamp_num > 0:
@@ -952,6 +1290,23 @@ class GuiderMosaicPlotter:
         return text
 
     def plot_stamp_info(self, stamp_num=0, axs=None, more_text=None) -> plt.Text:
+        """
+        Plot stamp info text in the center panel.
+
+        Parameters
+        ----------
+        stamp_num : int, optional
+            Stamp number.
+        axs : matplotlib.axes.Axes, optional
+            Axis to plot on.
+        more_text : str or None, optional
+            Additional text to append.
+
+        Returns
+        -------
+        matplotlib.text.Text
+            The text artist.
+        """
         if axs is None:
             axs = plt.gca()
 
@@ -980,6 +1335,21 @@ class GuiderMosaicPlotter:
         return stamp_id_text
 
     def plot_text_ccd_name(self, detname, axs=None) -> plt.Text:
+        """
+        Annotate a CCD panel with its detector name.
+
+        Parameters
+        ----------
+        detname : str
+            Detector name.
+        axs : matplotlib.axes.Axes, optional
+            Axis to annotate.
+
+        Returns
+        -------
+        matplotlib.text.Text
+            The text artist.
+        """
         if axs is None:
             axs = plt.gca()
         txt = axs.text(
@@ -996,11 +1366,26 @@ class GuiderMosaicPlotter:
         return txt
 
     def plot_stamp_array(self, stamp_num=0, fig=None, axs=None, plo=90.0, phi=99.0) -> list:
-        """Plot the stamp array for all the guiders.
-        Args:
-            stamp_num (int): stamp number
-            fig (matplotlib.figure.Figure): figure object
-            axs (matplotlib.axes.Axes): axes object
+        """
+        Plot the stamp array for all the guiders in a mosaic layout.
+
+        Parameters
+        ----------
+        stamp_num : int, optional
+            Stamp number.
+        fig : matplotlib.figure.Figure, optional
+            Figure object.
+        axs : dict, optional
+            Dictionary of axes for the mosaic.
+        plo : float, optional
+            Lower percentile for image scaling.
+        phi : float, optional
+            Upper percentile for image scaling.
+
+        Returns
+        -------
+        list
+            List of matplotlib artist objects.
         """
         if fig is None:
             gs = dict(hspace=0.0, wspace=0.0)
@@ -1018,16 +1403,45 @@ class GuiderMosaicPlotter:
         return artists
 
     def plot_stacked_stamp_array(self, fig=None, axs=None) -> list:
-        """Plot the stamp array for all the guiders.
-        Args:
-            stamp_num (int): stamp number
-            fig (matplotlib.figure.Figure): figure object
-            axs (matplotlib.axes.Axes): axes object
+        """
+        Plot the stacked stamp array for all the guiders.
+
+        Parameters
+        ----------
+        fig : matplotlib.figure.Figure, optional
+            Figure object.
+        axs : dict, optional
+            Dictionary of axes for the mosaic.
+
+        Returns
+        -------
+        list
+            List of matplotlib artist objects.
         """
         artists = self.plot_stamp_array(stamp_num=-1, fig=fig, axs=axs)
         return artists
 
     def make_gif(self, n_stamp_max=10, fps=5, dpi=80, save_as=None) -> animation.ArtistAnimation:
+        """
+        Create an animated GIF of the guider CCD array
+        over a sequence of stamps.
+
+        Parameters
+        ----------
+        n_stamp_max : int, optional
+            Maximum number of stamps to animate.
+        fps : int, optional
+            Frames per second.
+        dpi : int, optional
+            Dots per inch for saved animation.
+        save_as : str or None, optional
+            If provided, save the animation to this file.
+
+        Returns
+        -------
+        matplotlib.animation.ArtistAnimation
+            The resulting animation object.
+        """
         # Create the animation
         fig, axs = plt.subplot_mosaic(
             self.layout,
@@ -1060,6 +1474,26 @@ class GuiderMosaicPlotter:
     def make_mp4(
         self, n_stamp_max=10, fps=5, dpi=80, save_as="guider_ccd_array.mp4"
     ) -> animation.ArtistAnimation:
+        """
+        Create an MP4 animation of the guider CCD array
+        over a sequence of stamps.
+
+        Parameters
+        ----------
+        n_stamp_max : int, optional
+            Maximum number of stamps to animate.
+        fps : int, optional
+            Frames per second.
+        dpi : int, optional
+            Dots per inch for saved animation.
+        save_as : str, optional
+            Output filename for the MP4 file.
+
+        Returns
+        -------
+        matplotlib.animation.ArtistAnimation
+            The resulting animation object.
+        """
         from matplotlib import animation
 
         # Create the animation
@@ -1090,7 +1524,7 @@ class GuiderMosaicPlotter:
         return ani
 
 
-def measure_std_centroid_stats(stars: pd.DataFrame, snr_th=5, flux_th=10.0) -> pd.DataFrame:
+def measure_std_centroid_stats(stars: pd.DataFrame, snr_th: int = 5, flux_th: float = 10.0) -> pd.DataFrame:
     """
     Compute global std_centroid statistics across all guiders.
 
@@ -1098,12 +1532,15 @@ def measure_std_centroid_stats(stars: pd.DataFrame, snr_th=5, flux_th=10.0) -> p
     ----------
     stars : pd.DataFrame
         Concatenated star table across all guider detectors.
+    snr_th : int, optional
+        SNR threshold for filtering stars.
+    flux_th : float, optional
+        Flux threshold for filtering stars.
 
     Returns
     -------
-    stars : pd.DataFrame
-        DataFrame with new std_centroid statistic
-        columns broadcasted to all rows.
+    dict
+        Dictionary with std_centroid and related statistics.
     """
     # mask the objects w/ very low flux and SNR
     mask = (stars.snr > snr_th) & (stars.flux > flux_th)
@@ -1134,7 +1571,24 @@ def measure_std_centroid_stats(stars: pd.DataFrame, snr_th=5, flux_th=10.0) -> p
     return std_centroid_stats
 
 
-def measure_psf_stats(stars: pd.DataFrame, snr_th=5, flux_th=10) -> dict[str, float]:
+def measure_psf_stats(stars: pd.DataFrame, snr_th: int = 5, flux_th: float = 10) -> dict[str, float]:
+    """
+    Compute PSF statistics (FWHM and ellipticities) over all guiders.
+
+    Parameters
+    ----------
+    stars : pd.DataFrame
+        Concatenated star table across all guider detectors.
+    snr_th : int, optional
+        SNR threshold for filtering stars.
+    flux_th : float, optional
+        Flux threshold for filtering stars.
+
+    Returns
+    -------
+    dict
+        Dictionary with PSF and ellipticity statistics.
+    """
     # mask the objects w/ very low flux and SNR
     mask = (stars.snr > snr_th) & (stars.flux > flux_th)
     time = stars["elapsed_time"][mask].to_numpy()
@@ -1179,6 +1633,15 @@ def crop_around_center(
     Crop a square region from the image centered at a specific point,
     returning both the cropped image and the new center coordinates.
 
+    Parameters
+    ----------
+    image : np.ndarray
+        Input image.
+    center : tuple of float
+        (x, y) coordinates of center.
+    size : int
+        Size of the square region to crop.
+
     Returns
     -------
     cropped : np.ndarray
@@ -1217,8 +1680,23 @@ def crop_around_center(
 
 
 def rotate_around_center(image: np.ndarray, angle_deg: float, center: tuple[float, float]) -> np.ndarray:
-    from scipy.ndimage import affine_transform
+    """
+    Rotate an image around a specified center by a given angle.
 
+    Parameters
+    ----------
+    image : np.ndarray
+        Input image.
+    angle_deg : float
+        Rotation angle in degrees.
+    center : tuple of float
+        (x, y) coordinates of the rotation center.
+
+    Returns
+    -------
+    np.ndarray
+        Rotated image.
+    """
     angle_rad = np.deg2rad(angle_deg)
     cos_a = np.cos(angle_rad)
     sin_a = np.sin(angle_rad)
@@ -1226,18 +1704,29 @@ def rotate_around_center(image: np.ndarray, angle_deg: float, center: tuple[floa
     # Rotation matrix in (row, col) = (y, x) order
     R = np.array([[cos_a, sin_a], [-sin_a, cos_a]])
 
-    center_np = np.array(center)  # array
+    center_np = np.array(center)
     offset = center_np - R @ center_np
 
     rotated = affine_transform(image, R, offset=offset, order=3, mode="nearest")
-    return rotated  # nd.array rotated
+    return rotated
 
 
-def measure_photometric_variation(stars: pd.DataFrame, snr_th=5) -> dict[str, float]:
+def measure_photometric_variation(stars: pd.DataFrame, snr_th: int = 5) -> dict[str, float]:
     """
     Fit magoffset vs time across all rows, compute drift rate,
-      zero-point, and RMS scatter,
-    then add these as constant columns to `stars`.
+    zero-point, and RMS scatter.
+
+    Parameters
+    ----------
+    stars : pd.DataFrame
+        Star measurements across all guiders.
+    snr_th : int, optional
+        SNR threshold for filtering stars.
+
+    Returns
+    -------
+    dict
+        Dictionary with photometric variation statistics.
     """
     mo = stars["magoffset"].to_numpy()
     mask = np.isfinite(mo)
@@ -1249,6 +1738,7 @@ def measure_photometric_variation(stars: pd.DataFrame, snr_th=5) -> dict[str, fl
             "magoffset_rms": np.nan,
             "magoffset_signficance": np.nan,
         }
+        return phot_stats
 
     time = stars["elapsed_time"][mask].to_numpy()
     rf_mag = RobustFitter(time, mo[mask])
@@ -1265,25 +1755,51 @@ def measure_photometric_variation(stars: pd.DataFrame, snr_th=5) -> dict[str, fl
 
 
 def draw_altaz_reference_arrow(
-    ax,
-    rot_angle=0,
-    altlabel="Y DVCS",
-    azlabel="X DVCS",
-    color=LIGHT_BLUE,
-    length=None,
-    cutout_size=30,
-    center=(None, None),
+    ax: plt.Axes,
+    rot_angle: float = 0,
+    altlabel: str = "Y DVCS",
+    azlabel: str = "X DVCS",
+    color: str = LIGHT_BLUE,
+    length: Optional[float] = None,
+    cutout_size: int = 30,
+    center: Optional[tuple[float, float]] = None,
 ) -> tuple[float, float]:
-    """Draw Alt/Az coordinate reference arrows in the bottom-left corner."""
+    """
+    Draw Alt/Az coordinate reference arrows in the bottom-left corner.
+    The arrows indicate the Alt and Az directions,rotated by a specified angle.
+
+    Parameters
+    ----------
+    ax : matplotlib.axes.Axes
+        Axis to plot on.
+    rot_angle : float, optional
+        Rotation angle in degrees.
+    altlabel : str, optional
+        Label for the Alt arrow.
+    azlabel : str, optional
+        Label for the Az arrow.
+    color : str, optional
+        Arrow color.
+    length : float, optional
+        Arrow length.
+    cutout_size : int, optional
+        Size of the cutout.
+    center : tuple, optional
+        Center coordinates for the arrows.
+
+    Returns
+    -------
+    tuple of float
+        Minimum x and y coordinates used for the arrows.
+    """
     length = cutout_size / 4 if length is None else length
-    # x0, y0 = cutout_size // 2, cutout_size // 2
 
     theta = np.radians(rot_angle)
     dx_az, dy_az = length * np.cos(theta), length * np.sin(theta)
     dx_alt, dy_alt = -length * np.sin(theta), length * np.cos(theta)
 
     # Offset to lower-left corner
-    if center[0] is not None and center[1] is not None:
+    if center is not None:
         x0, y0 = center
     else:
         x0, y0 = cutout_size // 2, cutout_size // 2
@@ -1338,7 +1854,34 @@ def draw_altaz_reference_arrow(
     return np.nanmin([dx_alt + x0, dx_az + x0]), np.nanmin([dy_alt + y0, dy_az + y0])
 
 
-def plot_crosshair_rotated(center, angle, axs=None, color="grey", size=30):
+def plot_crosshair_rotated(
+    center: tuple[float, float],
+    angle: float,
+    axs: Optional[plt.Axes] = None,
+    color: str = "grey",
+    size: int = 30,
+) -> None:
+    """
+    Plot a crosshair at a given center, rotated by the specified angle. The
+    crosshair consists of two lines intersecting at the center.
+
+    Parameters
+    ----------
+    center : tuple of float
+        (x, y) coordinates of crosshair center.
+    angle : float
+        Rotation angle in degrees.
+    axs : matplotlib.axes.Axes, optional
+        Axis to plot on. If None, use current axis.
+    color : str, optional
+        Color of the crosshair.
+    size : int, optional
+        Size scaling for the crosshair.
+
+    Returns
+    -------
+    None
+    """
     if axs is None:
         axs = plt.gca()
     # make a cross rotated by the camera rotation angle
@@ -1371,9 +1914,22 @@ def plot_crosshair_rotated(center, angle, axs=None, color="grey", size=30):
     )
 
 
-def compute_camera_angle(df: pd.DataFrame, view="ccd") -> float:
-    """Compute the camera angle (degrees)
-    from a DataFrame of star measurements."""
+def compute_camera_angle(df: pd.DataFrame, view: str = "ccd") -> float:
+    """
+    Compute the camera angle (degrees) from a DataFrame of star measurements.
+
+    Parameters
+    ----------
+    df : pd.DataFrame
+        DataFrame of star measurements with columns for coordinates.
+    view : str, optional
+        Coordinate view ('ccd', 'dvcs', or 'fp').
+
+    Returns
+    -------
+    float
+        Camera rotation angle in degrees.
+    """
     if len(df) < 3:
         raise ValueError("At least 3 stars are required to compute the camera angle.")
 
@@ -1396,12 +1952,106 @@ def compute_camera_angle(df: pd.DataFrame, view="ccd") -> float:
     alt = dfn["dalt"].values
 
     angle_deg = compute_rotation_angle(xccd, yccd, az, alt)
-
-    # print(f"Computed camera angle: {angle_deg:.2f} degrees")
     return angle_deg
 
 
-def compute_rotation_angle(x1, y1, x2, y2):
+def make_cutout(image, xcen, ycen, size=30) -> np.ndarray:
+    """
+    Create a square cutout from an image centered at (xcen, ycen).
+
+    Parameters
+    ----------
+    image : np.ndarray
+        Input image.
+    xcen : float
+        X center coordinate.
+    ycen : float
+        Y center coordinate.
+    size : int, optional
+        Size of the cutout (pixels).
+
+    Returns
+    -------
+    np.ndarray
+        Cutout image of shape (size, size).
+    """
+    if xcen is not None:
+        x0, x1 = int(xcen - size / 2.0), int(xcen + size / 2.0)
+        y0, y1 = int(ycen - size / 2.0), int(ycen + size / 2.0)
+        cutout = image[y0:y1, x0:x1]
+    else:
+        cutout = np.zeros((size, size))
+    return cutout
+
+
+def plot_guide_circles(ax, center, radii, colors, labels=None, text_offset=1, **circle_kwargs) -> list:
+    """
+    Plot concentric guide circles on an axis. Each circle can have
+    its own color and label, and all are centered at the specified position.
+
+    Parameters
+    ----------
+    ax : matplotlib.axes.Axes
+        Axis to plot on.
+    center : tuple
+        Center coordinates (x, y).
+    radii : list
+        List of circle radii.
+    colors : list
+        List of colors for each circle.
+    labels : list, optional
+        Labels for each circle.
+    text_offset : float, optional
+        Offset for the label text.
+    **circle_kwargs
+        Additional keyword arguments for Circle.
+
+    Returns
+    -------
+    list
+        List of text artist objects for labels.
+    """
+    x0, y0 = center
+    txt_list = []
+    for i, r in enumerate(radii):
+        c = Circle(
+            (x0, y0),
+            r,
+            edgecolor=colors[i],
+            facecolor="none",
+            linestyle="--",
+            **circle_kwargs,
+        )
+        ax.add_patch(c)
+
+        txt = ax.text(
+            x0 + r + text_offset,
+            y0 - r / 4.0,
+            labels[i],
+            color=colors[i],
+            va="center",
+            fontsize=8,
+        )
+        txt_list.append([txt])
+    return txt_list
+
+
+def compute_rotation_angle(x1: np.ndarray, y1: np.ndarray, x2: np.ndarray, y2: np.ndarray) -> float:
+    """
+    Compute the rotation angle (degrees) between two sets of coordinates.
+
+    Parameters
+    ----------
+    x1, y1 : np.ndarray
+        First set of coordinates.
+    x2, y2 : np.ndarray
+        Second set of coordinates.
+
+    Returns
+    -------
+    float
+        Rotation angle in degrees from (x1, y1) to (x2, y2).
+    """
     # Centered coordinates
     Xa = np.vstack([x1 - np.mean(x1), y1 - np.mean(y1)])
     Xb = np.vstack([x2 - np.mean(x2), y2 - np.mean(y2)])
