@@ -59,6 +59,17 @@ if TYPE_CHECKING:
     from lsst.summit.utils.guiders.reading import GuiderData
 
 
+# build integer rotation matrices
+ROTATION_MATRICES = {
+    0: np.array([[1.0, 0.0], [0.0, 1.0]]),
+    1: np.array([[0.0, -1], [1.0, 0.0]]),
+    2: np.array([[-1.0, 0.0], [0.0, -1.0]]),
+    3: np.array([[0.0, 1.0], [-1.0, 0.0]]),
+}
+# build inverse rotation matrices
+INVERSE_ROTATION_MATRICES = {k: v.transpose() for k, v in ROTATION_MATRICES.items()}
+
+
 def convert_pixel_to_radec(wcs: Any, x_flat: np.ndarray, y_flat: np.ndarray) -> tuple[np.ndarray, np.ndarray]:
     """
     Map detector-pixel coordinates to ICRS RA and DEC (in radians).
@@ -245,7 +256,7 @@ def mk_ccd_to_dvcs(
     of the focal plane as used in DVCS.
     """
     # Use shared integer rotation matrices
-    nq = np.mod(det_nquarter, 4)
+    nq = np.mod(detNquarter, 4)
     rot = ROTATION_MATRICES
     irot = INVERSE_ROTATION_MATRICES
     # number of 90deg CCW rotations
