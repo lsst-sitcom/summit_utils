@@ -117,27 +117,27 @@ class GuiderStarTracker:
     def __init__(
         self,
         guiderData: GuiderData,
-        psf_fwhm: float = 6.0,
-        min_snr: float = 3.0,
-        min_stamp_detections: int = 30,
-        edge_margin: int = 20,
-        max_ellipticity: float = 0.2,
+        psfFwhm: float = 6.0,
+        minSnr: float = 3.0,
+        minStampDetections: int = 30,
+        edgeMargin: int = 20,
+        maxEllipticity: float = 0.2,
     ) -> None:
         self.log = logging.getLogger(__name__)
         self.guiderData = guiderData
-        self.n_stamps = len(self.guiderData.timestamps)
+        self.nStamps = len(self.guiderData.timestamps)
 
         # detection and QC parameters
-        self.psf_fwhm = psf_fwhm
-        self.min_snr = min_snr
-        self.min_stamp_detections = min_stamp_detections
-        self.edge_margin = edge_margin
-        self.max_ellipticity = max_ellipticity
+        self.psfFwhm = psfFwhm
+        self.minSnr = minSnr
+        self.minStampDetections = minStampDetections
+        self.edgeMargin = edgeMargin
+        self.maxEllipticity = maxEllipticity
 
         # initialize outputs
         self.stars = pd.DataFrame(columns=DEFAULT_COLUMNS)
 
-    def track_guider_stars(self, ref_catalog: None | pd.DataFrame = None) -> pd.DataFrame:
+    def trackGuiderStars(self, refCatalog: None | pd.DataFrame = None) -> pd.DataFrame:
         """
         Track stars across guider exposures using a reference catalog.
 
@@ -152,57 +152,56 @@ class GuiderStarTracker:
             DataFrame with tracked stars and their properties,
             including positions, fluxes, and residual offsets.
         """
-        if ref_catalog is None:
+        if refCatalog is None:
             self.log.info("Using self-generated refcat")
-            ref_catalog = build_reference_catalog(
+            refCatalog = build_reference_catalog(
                 self.guiderData,
-                min_snr=self.min_snr,
-                edge_margin=self.edge_margin,
-                aperture_radius=self.psf_fwhm,
-                max_ellipticity=self.max_ellipticity,
+                min_snr=self.minSnr,
+                edge_margin=self.edgeMargin,
+                aperture_radius=self.psfFwhm,
+                max_ellipticity=self.maxEllipticity,
             )
 
-        if ref_catalog.empty:
+        if refCatalog.empty:
             self.log.warning("Reference catalog is empty. No stars to track.")
             return pd.DataFrame(columns=DEFAULT_COLUMNS)
 
-        tracked_star_tables = []
+        trackedStarTables = []
         for guiderName in self.guiderData.guiderNames:
-            ref = ref_catalog[ref_catalog["detector"] == guiderName].copy()
+            refStar = refCatalog[refCatalog["detector"] == guiderName].copy()
             # take the first star only
-            if len(ref) > 1:
-                ref = ref.sort_values(by="snr", ascending=False).iloc[[0]].copy()
+            if len(refStar) > 1:
+                refStar = refStar.sort_values(by="snr", ascending=False).iloc[[0]].copy()
 
-            stars = self.track_star_across_stamps(ref, guiderName)
-            tracked_star_tables.append(stars)
+            stars = self.trackStarAcrossStamps(refStar, guiderName)
+            trackedStarTables.append(stars)
 
-        filtered_tables = [df for df in tracked_star_tables if not df.empty and not df.isna().all(axis=None)]
+        filteredTables = [df for df in trackedStarTables if not df.empty and not df.isna().all(axis=None)]
         # Concatenate all stars into a single DataFrame
-        if filtered_tables:
-            tracked_star_catalog = pd.concat(filtered_tables, ignore_index=True)
-
+        if filteredTables:
+            trackedStarCatalog = pd.concat(filteredTables, ignore_index=True)
         else:
             self.log.warning("No stars detected in any guider. Returning empty catalog.")
-            tracked_star_catalog = pd.DataFrame(columns=DEFAULT_COLUMNS)
-            return tracked_star_catalog
+            trackedStarCatalog = pd.DataFrame(columns=DEFAULT_COLUMNS)
+            return trackedStarCatalog
 
         # Filter out stars with insufficient detections (xroi, yroi)
-        tracked_star_catalog = tracked_star_catalog.groupby("starid").filter(
-            lambda x: x["xroi"].notna().sum() >= self.min_stamp_detections
+        trackedStarCatalog = trackedStarCatalog.groupby("starid").filter(
+            lambda x: x["xroi"].notna().sum() >= self.minStampDetections
         )
 
         # Set unique IDs
-        tracked_star_catalog = self.set_unique_id(tracked_star_catalog)
+        trackedStarCatalog = self.setUniqueId(trackedStarCatalog)
 
         # Compute offsets
-        tracked_star_catalog = self.compute_offsets(tracked_star_catalog)
-        return tracked_star_catalog
+        trackedStarCatalog = self.computeOffsets(trackedStarCatalog)
+        return trackedStarCatalog
 
-    def track_star_across_stamps(
+    def trackStarAcrossStamps(
         self,
-        ref: pd.DataFrame,
+        refStar: pd.DataFrame,
         guiderName: str,
-        cutout_size: int = 25,
+        cutoutSize: int = 25,
     ) -> pd.DataFrame:
         """
         Track one star across all stamps for one guider.
@@ -235,28 +234,28 @@ class GuiderStarTracker:
             returns None.
 
         """
-        if ref.empty:
+        if refStar.empty:
             # no reference star for this guider
             return pd.DataFrame(columns=DEFAULT_COLUMNS)
 
         # Pull ref-catalog row
-        ref_x, ref_y = ref["xroi"].iloc[0], ref["yroi"].iloc[0]
-        starid = ref["starid"].iloc[0]
-        amp_name = self.guiderData.getGuiderAmpName(guiderName)
+        ref_x, ref_y = refStar["xroi"].iloc[0], refStar["yroi"].iloc[0]
+        starid = refStar["starid"].iloc[0]
+        ampName = self.guiderData.getGuiderAmpName(guiderName)
 
-        image_list = self.guiderData.datasets[guiderName]
+        imageList = self.guiderData.datasets[guiderName]
         rows = []
 
         # get some basic info
         detNum = self.guiderData.getGuiderDetNum(guiderName)
-        obstime = Time(self.guiderData.header["start_time"])
+        obsTime = Time(self.guiderData.header["start_time"])
 
         with warnings.catch_warnings():
             warnings.simplefilter("ignore", ErfaWarning)
-            elapsed_time = self.guiderData.timestamps - self.guiderData.timestamps[0]
+            elapsedTime = self.guiderData.timestamps - self.guiderData.timestamps[0]
 
         # --- per‐stamp measurements ---
-        for i, stampObject in enumerate(image_list[1:]):
+        for i, stampObject in enumerate(imageList[1:]):
             if not (si := stampObject.metadata.get("DAQSTAMP")):
                 self.log.warning(
                     (
@@ -278,81 +277,75 @@ class GuiderStarTracker:
 
             # make isr and cutout
             isr = stamp - np.nanmedian(stamp, axis=0)
-            cutout = Cutout2D(isr, (ref_x, ref_y), size=cutout_size, mode="partial", fill_value=np.nan)
-            _, median, std = sigma_clipped_stats(
-                cutout.data[: cutout_size // 2, : cutout_size // 2], sigma=3.0
-            )
-            # sources = measure_star_in_aperture(
-            # cutout.data - median, aperture_radius=fwhm, std_bkg=std, gain=1.0
-            # )
-            sources = run_galsim(cutout.data - median, bkg_std=std, gain=1.0)
-            if len(sources) == 0:
+            cutout = Cutout2D(isr, (ref_x, ref_y), size=cutoutSize, mode="partial", fill_value=np.nan)
+            _, median, std = sigma_clipped_stats(cutout.data[: cutoutSize // 2, : cutoutSize // 2], sigma=3.0)
+            sources_df = run_galsim(cutout.data - median, bkg_std=std, gain=1.0)
+            if len(sources_df) == 0:
                 # No sources detected in this stamp, skip it
                 continue
 
-            sources = pd.DataFrame(sources, index=np.arange(len(sources)))
-            sources["starid"] = starid
-            sources["stamp"] = si
-            sources["ampname"] = amp_name
-            sources["filter"] = self.guiderData.header["filter"]
-            sources["timestamp"] = self.guiderData.timestamps[si]
-            sources["elapsed_time"] = elapsed_time[si].sec
+            sources_df = pd.DataFrame(sources_df, index=np.arange(len(sources_df)))
+            sources_df["starid"] = starid
+            sources_df["stamp"] = si
+            sources_df["ampname"] = ampName
+            sources_df["filter"] = self.guiderData.header["filter"]
+            sources_df["timestamp"] = self.guiderData.timestamps[si]
+            sources_df["elapsed_time"] = elapsedTime[si].sec
 
             # Centroid in amplifier roi coordinates
-            sources["xroi"] += cutout.xmin_original
-            sources["yroi"] += cutout.ymin_original
+            sources_df["xroi"] += cutout.xmin_original
+            sources_df["yroi"] += cutout.ymin_original
 
             # Convert roi to ccd/focal-plane and alt/az coordinates
             xccd, yccd = convert_roi_to_ccd(
-                sources["xroi"],
-                sources["yroi"],
+                sources_df["xroi"],
+                sources_df["yroi"],
                 self.guiderData,
                 guiderName,
             )
             wcs = self.guiderData.wcs[guiderName]
             xfp, yfp = convert_to_focal_plane(xccd, yccd, detNum)
-            alt, az = convert_to_altaz(xccd, yccd, wcs, obstime)
+            alt, az = convert_to_altaz(xccd, yccd, wcs, obsTime)
 
             # Convert fwhm to arcseconds
             pixel_scale = wcs.getPixelScale().asArcseconds()
-            sources["fwhm"] *= pixel_scale
+            sources_df["fwhm"] *= pixel_scale
 
             # Rotate e1, e2 to alt/az coordinates
             camera_angle = float(self.guiderData.header["CAM_ROT_ANGLE"])
-            e1_, e2_ = rotate_ellipticity(sources["e1"], sources["e2"], 90 + camera_angle)
+            e1_altaz, e2_altaz = rotate_ellipticity(sources_df["e1"], sources_df["e2"], 90 + camera_angle)
 
             # Add reference positions
-            sources["xccd"] = xccd
-            sources["yccd"] = yccd
-            sources["xfp"] = xfp
-            sources["yfp"] = yfp
-            sources["alt"] = alt
-            sources["az"] = az
-            sources["e1_altaz"] = e1_
-            sources["e2_altaz"] = e2_
-            sources["detector"] = guiderName
-            rows.append(sources.iloc[0])
+            sources_df["xccd"] = xccd
+            sources_df["yccd"] = yccd
+            sources_df["xfp"] = xfp
+            sources_df["yfp"] = yfp
+            sources_df["alt"] = alt
+            sources_df["az"] = az
+            sources_df["e1_altaz"] = e1_altaz
+            sources_df["e2_altaz"] = e2_altaz
+            sources_df["detector"] = guiderName
+            rows.append(sources_df.iloc[0])
 
         df = pd.DataFrame(rows)
         if len(df) < 1:
             return pd.DataFrame(columns=DEFAULT_COLUMNS)  # only one detection, ignore it
         else:
-            # df = df[df["snr"] >= self.min_snr]
             return df
 
-    def set_unique_id(self, stars) -> pd.DataFrame:
+    def setUniqueId(self, stars) -> pd.DataFrame:
         # 1) Build a detector→index map (0,1,2,…)
-        det_map = self.guiderData.guiderNameMap
+        detMap = self.guiderData.guiderNameMap
 
         # 2) Create a numeric “global” starid:
         #    global_id = det_index * 10000 + local starid
-        stars["detid"] = stars["detector"].map(det_map)
+        stars["detid"] = stars["detector"].map(detMap)
         stars["trackid"] = stars["starid"] * 1000 + stars["stamp"]
         stars["expid"] = self.guiderData.header["expid"]
         stars["filter"] = self.guiderData.header["filter"]
         return stars
 
-    def compute_offsets(self, stars: pd.DataFrame) -> pd.DataFrame:
+    def computeOffsets(self, stars: pd.DataFrame) -> pd.DataFrame:
         """
         Compute the offsets for each star in the catalog.
         """
@@ -714,22 +707,6 @@ def run_galsim(
     return result
 
 
-if __name__ == "__main__":
-    seqNum, dayObs = 461, 20250425
-    reader = GuiderReader(view="dvcs", verbose=True)
-    guider = reader.get(dayObs=dayObs, seqNum=seqNum)
-
-    star_tracker = GuiderStarTracker(guider, psf_fwhm=6.0)
-
-    # the ref catalog will be provided by the user, .e.g gaia
-    # if not, the class will self-generate one is based on the stack
-    # of the stamps of each guider
-    stars = star_tracker.track_guider_stars(ref_catalog=None)
-
-    print(stars.head())
-    print(stars.groupby("detector").size())
-
-
 def galsim_error(
     array: np.ndarray, gs: galsim.hsm, gain: float = 1.0, bkg_std: float = 0.0, is_gain: bool = False
 ) -> dict:
@@ -892,3 +869,19 @@ def rotate_ellipticity(e1, e2, theta_deg):
     e1_rot = e1 * cos2t + e2 * sin2t
     e2_rot = -e1 * sin2t + e2 * cos2t
     return e1_rot, e2_rot
+
+
+if __name__ == "__main__":
+    seqNum, dayObs = 461, 20250425
+    reader = GuiderReader(view="dvcs", verbose=True)
+    guider = reader.get(dayObs=dayObs, seqNum=seqNum)
+
+    starTracker = GuiderStarTracker(guider, psfFwhm=6.0)
+
+    # the ref catalog will be provided by the user, .e.g gaia
+    # if not, the class will self-generate one is based on the stack
+    # of the stamps of each guider
+    stars = starTracker.trackGuiderStars(refCatalog=None)
+
+    print(stars.head())
+    print(stars.groupby("detector").size())
