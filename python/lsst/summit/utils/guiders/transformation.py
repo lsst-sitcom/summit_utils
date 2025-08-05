@@ -211,19 +211,10 @@ def mk_ccd_to_dvcs(
     bt(pt_stamp_dvcs) sky_coord = wcs.pixelToSky(pt_ccd)
 
     """
-    # build integer rotation matrices
-    rot = {}
-    rot[0] = np.array([[1.0, 0.0], [0.0, 1.0]])
-    rot[1] = np.array([[0.0, -1], [1.0, 0.0]])
-    rot[2] = np.array([[-1.0, 0.0], [0.0, -1.0]])
-    rot[3] = np.array([[0.0, 1.0], [-1.0, 0.0]])
-
-    irot = {}
-    irot[0] = rot[0].transpose()
-    irot[1] = rot[1].transpose()
-    irot[2] = rot[2].transpose()
-    irot[3] = rot[3].transpose()
-
+    # Use shared integer rotation matrices
+    nq = np.mod(det_nquarter, 4)
+    rot = ROTATION_MATRICES
+    irot = INVERSE_ROTATION_MATRICES
     # number of 90deg CCW rotations
     nq = np.mod(det_nquarter, 4)
 
