@@ -31,8 +31,9 @@ from astropy.stats import mad_std
 from matplotlib import animation
 from matplotlib.patches import Circle
 
-from lsst.summit.utils.guiders.reading import GuiderData
 from lsst.summit.utils.utils import RobustFitter
+
+from .reading import GuiderData
 
 sns.set_context("talk", font_scale=1.1)
 

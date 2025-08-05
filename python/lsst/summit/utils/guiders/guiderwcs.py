@@ -265,7 +265,7 @@ def DeltaAltAz(ra, dec, pressure, hum, temperature, wl, time1, time2):
     return [azChange, elChange]
 
 
-def calculate_drift(metadata, cWcs, rWcs):
+def calculate_drift(metadata, cWcs: SkyWcs, rWcs: SkyWcs) -> DriftResult:
     """
     Calculate telescope drift from exposure metadata and WCS.
 

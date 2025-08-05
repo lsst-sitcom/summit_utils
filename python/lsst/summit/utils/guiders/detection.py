@@ -36,16 +36,13 @@ from erfa import ErfaWarning
 
 from lsst.afw.image import ExposureF, ImageF, MaskedImageF
 from lsst.pex.exceptions import InvalidParameterError
-from lsst.summit.utils.guiders.reading import GuiderReader
-from lsst.summit.utils.guiders.transformation import (
-    convert_roi_to_ccd,
-    convert_to_altaz,
-    convert_to_focal_plane,
-)
 from lsst.summit.utils.utils import detectObjectsInExp
 
+from .reading import GuiderReader
+from .transformation import convertRoiToCcd, convertToAltaz, convertToFocalPlane
+
 if TYPE_CHECKING:
-    from lsst.summit.utils.guiders.reading import GuiderData
+    from .reading import GuiderData
 
 DEFAULT_COLUMNS = (
     "xroi",
@@ -297,15 +294,15 @@ class GuiderStarTracker:
             sources_df["yroi"] += cutout.ymin_original
 
             # Convert roi to ccd/focal-plane and alt/az coordinates
-            xccd, yccd = convert_roi_to_ccd(
+            xccd, yccd = convertRoiToCcd(
                 sources_df["xroi"],
                 sources_df["yroi"],
                 self.guiderData,
                 guiderName,
             )
             wcs = self.guiderData.wcs[guiderName]
-            xfp, yfp = convert_to_focal_plane(xccd, yccd, detNum)
-            alt, az = convert_to_altaz(xccd, yccd, wcs, obsTime)
+            xfp, yfp = convertToFocalPlane(xccd, yccd, detNum)
+            alt, az = convertToAltaz(xccd, yccd, wcs, obsTime)
 
             # Convert fwhm to arcseconds
             pixel_scale = wcs.getPixelScale().asArcseconds()

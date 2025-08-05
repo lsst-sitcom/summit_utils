@@ -41,9 +41,10 @@ from lsst.afw.image import ExposureF, ImageF, MaskedImageF
 from lsst.daf.butler import Butler, DatasetNotFoundError
 from lsst.meas.algorithms.stamps import Stamp, Stamps
 from lsst.obs.lsst import LsstCam  # pylint: disable=unused-import
-from lsst.summit.utils.guiders.exceptions import StampsNotFoundError
-from lsst.summit.utils.guiders.guiderwcs import get_camera_rot_angle, make_init_guider_wcs
-from lsst.summit.utils.guiders.transformation import convert_roi, mk_ccd_to_dvcs, mk_roi_bboxes
+
+from .exceptions import StampsNotFoundError
+from .guiderwcs import get_camera_rot_angle, make_init_guider_wcs
+from .transformation import makeCcdToDvcsTransform, makeRoiBbox, roiImageToDvcs
 
 if TYPE_CHECKING:
     from lsst.geom import SkyWcs
@@ -616,11 +617,11 @@ def getGuiderStamps(
     ampName = "C" + segment[7:]
 
     # build the CCD view Bounding Boxes
-    ccd_view_bbox = mk_roi_bboxes(md, camera)
+    ccd_view_bbox = makeRoiBbox(md, camera)
 
     # also build the Translation methods
     # from CCD view -> DVCS view and the reverse
-    ft, bt = mk_ccd_to_dvcs(ccd_view_bbox, detector.getOrientation().getNQuarter())
+    ft, bt = makeCcdToDvcsTransform(ccd_view_bbox, detector.getOrientation().getNQuarter())
 
     if nstamps is None:
         nstamps = md["N_STAMPS"]
@@ -639,7 +640,7 @@ def getGuiderStamps(
 
         # convert to DVCS or CCD view
         raw_roi = masked_ims.getImage().getArray()
-        roi_dvcs = convert_roi(raw_roi, md, detector, ampName, camera, view=view)
+        roi_dvcs = roiImageToDvcs(raw_roi, md, detector, ampName, camera, view=view)
 
         # build a Stamp Object
         output_masked_im = MaskedImageF(roi_dvcs)
