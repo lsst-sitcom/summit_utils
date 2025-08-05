@@ -61,34 +61,56 @@ if TYPE_CHECKING:
 
 def convert_pixel_to_radec(wcs: Any, x_flat: np.ndarray, y_flat: np.ndarray) -> tuple[np.ndarray, np.ndarray]:
     """
-    Map detector-pixel → ICRS RA/Dec (radians).
+    Map detector-pixel coordinates to ICRS RA and DEC (in radians).
+
+    Parameters
+    ----------
+    wcs : object
+        World Coordinate System object with pixelToSkyArray method.
+    xFlat : np.ndarray
+        Flattened array of x pixel coordinates.
+    yFlat : np.ndarray
+        Flattened array of y pixel coordinates.
+
+    Returns
+    -------
+    raFlat : np.ndarray
+        Array of right ascension values in radians.
+    decFlat : np.ndarray
+        Array of declination values in radians.
     """
     return wcs.pixelToSkyArray(x_flat, y_flat)
 
 
 def convert_pixels_to_altaz(
-    wcs: Any, time: Time, x_pix: np.ndarray, y_pix: np.ndarray
+    wcs: Any, time: Time, xPix: np.ndarray, yPix: np.ndarray
 ) -> tuple[np.ndarray, np.ndarray]:
     """
-    Vectorized conversion of detector-pixel coords → AltAz (deg).
+    Convert detector-pixel coordinates to Altitude and Azimuth (degrees)
+    in a vectorized manner.
 
     Parameters
     ----------
-    x_pix : `np.ndarray`
-        Same-shaped arrays of pixel coordinates.
-    y_pix : `np.ndarray`
-        Same-shaped arrays of pixel coordinates.
+    wcs : object
+        World Coordinate System object with pixelToSkyArray method.
+    time : astropy.time.Time
+        Observation time.
+    xPix : np.ndarray
+        Array of x pixel coordinates.
+    yPix : np.ndarray
+        Array of y pixel coordinates.
 
     Returns
     -------
-    az, alt : np.ndarray
-        Arrays of the same shape as x_pix/y_pix giving Az and Alt in
-        degrees.
+    az : np.ndarray
+        Array of azimuth values in degrees (same shape as xPix/yPix).
+    alt : np.ndarray
+        Array of altitude values in degrees (same shape as xPix/yPix).
     """
 
     # 1) make sure we have numpy arrays, remember their shape
-    x_arr = np.asarray(x_pix)
-    y_arr = np.asarray(y_pix)
+    x_arr = np.asarray(xPix)
+    y_arr = np.asarray(yPix)
     shp = x_arr.shape
 
     # 2) flatten for the WCS call
@@ -117,36 +139,59 @@ def convert_pixels_to_altaz(
 
 
 def convert_focal_to_altaz(
-    wcs: Any, time: Time, detector: Detector, x_focal: np.ndarray, y_focal: np.ndarray
+    wcs: Any, time: Time, detector: Detector, xFocal: np.ndarray, yFocal: np.ndarray
 ) -> tuple[np.ndarray, np.ndarray]:
     """
-    Map focal-plane mm (or any XY) → Alt/Az by going
-    focal → pixel → AltAz.
+    Map focal-plane coordinates (mm) to Altitude/Azimuth (degrees) by
+    chaining focal → pixel → AltAz transformations.
+
+    Parameters
+    ----------
+    wcs : object
+        World Coordinate System object with pixelToSkyArray method.
+    time : astropy.time.Time
+        Observation time.
+    detector : lsst.afw.cameraGeom.Detector
+        Detector object.
+    xFocal : np.ndarray
+        Array of x focal-plane coordinates (mm).
+    yFocal : np.ndarray
+        Array of y focal-plane coordinates (mm).
+
+    Returns
+    -------
+    az : np.ndarray
+        Array of azimuth values in degrees.
+    alt : np.ndarray
+        Array of altitude values in degrees.
     """
-    # You must provide focal_to_pixel or similar
-    x_pix, y_pix = focal_to_pixel(x_focal, y_focal, detector)
+    x_pix, y_pix = focal_to_pixel(xFocal, yFocal, detector)
     return convert_pixels_to_altaz(wcs, time, x_pix, y_pix)
 
 
 # Aaron's code to make transformations from ROI coordinates to Focal Plane and
 # sky coordinates.
-def mk_rot(det_nquarter: int, direction: int = 1) -> AffineTransform:
+def mk_rot(detNquarter: int, direction: int = 1) -> AffineTransform:
     """
-    Make rotation Transform
+    Create an AffineTransform representing a rotation
+    by multiples of 90 degrees.
 
     Parameters
     ----------
-    det_nquarter: int
-        Number of 90 degree CCW rotations
-
-    direction: int
-        =1 for forward, =-1 for reverse
+    detNquarter : int
+        Number of 90 degree counter-clockwise rotations (modulo 4).
+    direction : int, optional
+        1 for forward rotation (default), -1 for reverse rotation (transpose)
 
     Returns
     -------
-    rotation: AffineTransformation
-        rotation transformation
+    rotation : lsst.geom.AffineTransform
+        The rotation transformation.
 
+    Raises
+    ------
+    ValueError
+        If direction is not 1 or -1.
     """
     rot = {}
     rot[0] = np.array([[1.0, 0.0], [0.0, 1.0]])
@@ -160,7 +205,7 @@ def mk_rot(det_nquarter: int, direction: int = 1) -> AffineTransform:
     irot[2] = rot[2].transpose()
     irot[3] = rot[3].transpose()
 
-    nq = np.mod(det_nquarter, 4)
+    nq = np.mod(detNquarter, 4)
     if direction == 1:
         rotation = AffineTransform(rot[nq])
     elif direction == -1:
@@ -171,56 +216,44 @@ def mk_rot(det_nquarter: int, direction: int = 1) -> AffineTransform:
 
 
 def mk_ccd_to_dvcs(
-    bbox_ccd: Box2I,
-    det_nquarter: int,
+    bboxCcd: Box2I,
+    detNquarter: int,
 ) -> tuple[AffineTransform, AffineTransform]:
     """
-    Make transformations suitable for Guider stamps, to go from a view of the
-    stamp in CCD pixel coordinates (ie. with 0,0 in the Lower Left of C00) to
-    DVCS view (ie. orientated in the Focal Plane correctly in the DVCS, with
-    0,0 at the Lower Left of the ROI)
+    Create forward and backward AffineTransforms for converting between
+    CCD pixel coordinates and DVCS (focal plane) stamp coordinates.
 
     Parameters
     ----------
-    bbox_ccd : Box2I
-        Bounding Box for the ROI in CCD pixel coordinates
-    det_nquarter : int
-        The number of 90degree quarters needed to rotate from CCD view to DVCS
-        view
+    bboxCcd : lsst.geom.Box2I
+        Bounding box for the ROI in CCD pixel coordinates.
+    detNquarter : int
+        Number of 90-degree CCW rotations to align CCD view to DVCS view.
 
     Returns
     -------
-    forwards : AffineTransform
-        A transform from CCD pixel coordinates in the CCD view to Stamp pixel
-        coordinates in DVCS view
+    forwards : lsst.geom.AffineTransform
+        Transform from CCD pixel coordinates (CCD view) to stamp
+        pixel coordinates (DVCS view).
+    backwards : lsst.geom.AffineTransform
+        Transform from stamp pixel coordinates (DVCS view) to
+        CCD pixel coordinates (CCD view).
 
-    backwards : AffineTransform
-        A transform from Stamp pixel coordinates in DVCS view to CCD pixel
-        coordinates in the CCD view
-
-    Example
-    -------
-
-    detector = camera[189] bbox_ccd = Box2I(Point2I(300,600),Point2I(350,650))
-    ft,bt = mk_ccd_to_dvcs(box_ccd,detector.getOrientation().getNQuarter())
-
-    # given a sky coordinate, find point on the stamp in DVCS view pt_ccd =
-    wcs.skyToPixel(sky_coord) pt_stamp_dvcs = ft(pt_ccd)
-
-    # given a point on the stamp in DVCS view, find the skyCoord pt_ccd =
-    bt(pt_stamp_dvcs) sky_coord = wcs.pixelToSky(pt_ccd)
-
+    Notes
+    -----
+    Useful for mapping between the raw detector coordinates and the orientation
+    of the focal plane as used in DVCS.
     """
     # Use shared integer rotation matrices
     nq = np.mod(det_nquarter, 4)
     rot = ROTATION_MATRICES
     irot = INVERSE_ROTATION_MATRICES
     # number of 90deg CCW rotations
-    nq = np.mod(det_nquarter, 4)
+    nq = np.mod(detNquarter, 4)
 
     # get LL,Size of the CCD view BBox
-    llpt_ccd = Extent2D(bbox_ccd.getCorners()[0])
-    nx, ny = bbox_ccd.getDimensions()
+    llpt_ccd = Extent2D(bboxCcd.getCorners()[0])
+    nx, ny = bboxCcd.getDimensions()
 
     # get translations to use for each NQ value
     boxtranslation = {}
@@ -246,20 +279,20 @@ def mk_ccd_to_dvcs(
 
 def mk_roi_bboxes(md, camera):
     """
-    Make bounding box for a Guider stamp in the full CCD view
+    Construct the bounding box for a Guider ROI stamp
+    in full CCD view coordinates.
 
     Parameters
     ----------
     md : lsst.daf.base.PropertyList
-        Metadata from one Guider CCD
-
-    camera: lsst.obs.lsst.LsstCam
-        LsstCam object
+        Metadata from one Guider CCD.
+    camera : lsst.obs.lsst.LsstCam
+        LsstCam object.
 
     Returns
     -------
-    ccd_view_bbox : Box2I
-        Bounding box for the stamps inside the full CCD in CCD view
+    ccdViewBbox : lsst.geom.Box2I
+        Bounding box for the ROI in CCD pixel coordinates.
     """
 
     # get need info from the stamp metadata
@@ -305,23 +338,21 @@ def mk_roi_bboxes(md, camera):
 
 def get_detector_amp(md, camera):
     """
-    Unpack Detector and Amplifier info.
+    Unpack detector and amplifier information from metadata.
 
     Parameters
     ----------
     md : lsst.daf.base.PropertyList
-        Metadata from one Guider CCD
-
-    camera: lsst.obs.lsst.LsstCam
-        LsstCam object
+        Metadata from one Guider CCD.
+    camera : lsst.obs.lsst.LsstCam
+        LsstCam object.
 
     Returns
     -------
     detector : lsst.afw.cameraGeom.Detector
-        CCD Detector
-
-    ampName : String
-        Amplifier name, eg. C00
+        CCD Detector object.
+    ampName : str
+        Amplifier name, e.g., 'C00'.
     """
     raftBay = md["RAFTBAY"]
     ccdSlot = md["CCDSLOT"]
@@ -336,28 +367,34 @@ def get_detector_amp(md, camera):
 
 def convert_roi(roi, md, detector, ampName, camera, view="dvcs"):
     """
-    convert ROI image from raw to CCD or DVCS views
+    Convert ROI image from raw amplifier view to CCD or DVCS views,
+    or embed in full CCD image.
 
     Parameters
     ----------
-    roi : numpy.ndarray
-        ROI array
-
+    roi : np.ndarray
+        ROI array (raw, amplifier coordinates).
     md : lsst.daf.base.PropertyList
-        Metadata from one Guider CCD
-
+        Metadata from one Guider CCD.
     detector : lsst.afw.cameraGeom.Detector
-        CCD detector object
-
+        CCD detector object.
     ampName : str
-        Amplifier Name, eg. C00
-
+        Amplifier name, e.g., 'C00'.
     camera : lsst.obs.lsst.LsstCam
-        LsstCam object
+        LsstCam object.
+    view : str, optional
+        Desired output view: 'dvcs' (default), 'ccd', or 'ccdfull'.
 
-    view : string
-        Desired view for ROI. Default is 'dvcs', other option is 'ccd'
+    Returns
+    -------
+    imf : lsst.afw.image.ImageF
+        Image in the requested view.
 
+    Notes
+    -----
+    - 'dvcs': Oriented as in the focal plane.
+    - 'ccd': Oriented as in CCD coordinates.
+    - 'ccdfull': ROI embedded in a full CCD-sized image.
     """
 
     # convert image to ccd view
@@ -391,38 +428,48 @@ def convert_roi(roi, md, detector, ampName, camera, view="dvcs"):
 
 def focal_to_pixel(fpx: np.ndarray, fpy: np.ndarray, det: Detector) -> tuple[np.ndarray, np.ndarray]:
     """
+    Convert focal plane coordinates (mm, DVCS) to detector pixel coordinates.
+
     Parameters
     ----------
-    fpx, fpy : array
-        Focal plane position in millimeters in DVCS
-        See https://lse-349.lsst.io/
+    fpx : np.ndarray
+        Focal plane x coordinates (mm).
+    fpy : np.ndarray
+        Focal plane y coordinates (mm).
     det : lsst.afw.cameraGeom.Detector
         Detector of interest.
 
     Returns
     -------
-    x, y : array
-        Pixel coordinates.
+    x : np.ndarray
+        Pixel x coordinates.
+    y : np.ndarray
+        Pixel y coordinates.
     """
     tx = det.getTransform(cameraGeom.FOCAL_PLANE, cameraGeom.PIXELS)
     x, y = tx.getMapping().applyForward(np.vstack((fpx, fpy)))
     return x.ravel(), y.ravel()
 
 
-def pixel_to_focal(x, y, det):
+def pixel_to_focal(x: np.ndarray, y: np.ndarray, det: Detector) -> tuple[np.ndarray, np.ndarray]:
     """
+    Convert pixel coordinates to focal plane coordinates (mm, DVCS).
+
     Parameters
     ----------
-    x, y : array
-        Pixel coordinates.
+    x : np.ndarray
+        Pixel x coordinates.
+    y : np.ndarray
+        Pixel y coordinates.
     det : lsst.afw.cameraGeom.Detector
         Detector of interest.
 
     Returns
     -------
-    fpx, fpy : array
-        Focal plane position in millimeters in DVCS
-        See https://lse-349.lsst.io/
+    fpx : np.ndarray
+        Focal plane x coordinates (mm).
+    fpy : np.ndarray
+        Focal plane y coordinates (mm).
     """
     tx = det.getTransform(cameraGeom.PIXELS, cameraGeom.FOCAL_PLANE)
     fpx, fpy = tx.getMapping().applyForward(np.vstack((x, y)))
@@ -431,30 +478,33 @@ def pixel_to_focal(x, y, det):
 
 def stamp_to_ccd(stamp, ccdimg, detector, camera, ampName, ampCol, ampRow):
     """
-    Place ROI (stamp) into existing full CCD array, all in CCD view
-    (Should rewrite to use mk_roi_bboxes(md,camera))
+    Place ROI (stamp) into an existing full CCD array, all in CCD view.
 
     Parameters
     ----------
-    stamp : array
-        raw ROI array in amp coordinates
-    ccdimg : array
-        ccd image array in ccd coordinates
+    stamp : np.ndarray
+        Raw ROI array in amplifier coordinates.
+    ccdimg : np.ndarray
+        CCD image array in CCD coordinates (to be filled).
     detector : lsst.afw.cameraGeom.Detector
         Detector of interest.
     camera : lsst.afw.cameraGeom.Camera
-        Camera object
+        Camera object.
     ampName : str
-        amplifier name, eg. C00
+        Amplifier name, e.g., 'C00'.
     ampCol : int
-        starting column number for ROI
+        Starting column number for ROI.
     ampRow : int
-        starting row number for ROI
+        Starting row number for ROI.
 
     Returns
     -------
-    ccdimg : array
-        ccd image array filled with ROI
+    ccdimg : np.ndarray
+        CCD image array with the ROI inserted in the appropriate location.
+
+    Notes
+    -----
+    This function may print debugging information if placement fails.
     """
 
     stamp_ccd = amp_to_ccdview(stamp, detector, ampName)
@@ -494,21 +544,21 @@ def stamp_to_ccd(stamp, ccdimg, detector, camera, ampName, ampCol, ampRow):
 
 def amp_to_ccdview(stamp, detector, ampName):
     """
-    Comvert a Guider ROI stamp image from Amp view to CCD view
+    Convert a Guider ROI stamp image from amplifier view to CCD view.
 
     Parameters
     ----------
-    stamp : array
-        raw ROI array in amp coordinates
+    stamp : np.ndarray
+        Raw ROI array in amplifier coordinates.
     detector : lsst.afw.cameraGeom.Detector
         Detector of interest.
     ampName : str
-        amplifier name, eg. C00
+        Amplifier name, e.g., 'C00'.
 
     Returns
     -------
-    img : array
-        ROI image flipped to be in CCD coordinate orientation
+    img : np.ndarray
+        ROI image array flipped to be in CCD coordinate orientation.
     """
     amp = detector[ampName]
     img = stamp.copy()
@@ -521,7 +571,7 @@ def amp_to_ccdview(stamp, detector, ampName):
 
 def convert_to_focal_plane(xccd: np.ndarray, yccd: np.ndarray, detNum: int) -> tuple[np.ndarray, np.ndarray]:
     """
-    Convert from ccd pixels coordinates to focal plane coordinates.
+    Convert from CCD pixel coordinates to focal plane coordinates (mm).
 
     Parameters
     ----------
@@ -534,9 +584,10 @@ def convert_to_focal_plane(xccd: np.ndarray, yccd: np.ndarray, detNum: int) -> t
 
     Returns
     -------
-    xfp, yfp : np.ndarray
-        Arrays of x and y focal plane coordinates (mm).
-
+    xfp : np.ndarray
+        Focal plane x coordinates (mm).
+    yfp : np.ndarray
+        Focal plane y coordinates (mm).
     """
     if len(xccd) > 0:
         detector = LsstCam.getCamera()[detNum]
@@ -548,10 +599,10 @@ def convert_to_focal_plane(xccd: np.ndarray, yccd: np.ndarray, detNum: int) -> t
 
 
 def convert_to_altaz(
-    xccd: np.ndarray, yccd: np.ndarray, wcs: Any, obs_time: Time
+    xccd: np.ndarray, yccd: np.ndarray, wcs: Any, obsTime: Time
 ) -> tuple[np.ndarray, np.ndarray]:
     """
-    Convert the ccd pixel coordinates to altaz coordinates.
+    Convert CCD pixel coordinates to altitude and azimuth (degrees).
 
     Parameters
     ----------
@@ -561,16 +612,18 @@ def convert_to_altaz(
         Array of y CCD pixel coordinates.
     wcs : lsst.afw.image.Wcs
         WCS object for the guider detector.
-    obs_time : astropy.time.Time
+    obsTime : astropy.time.Time
         Observation time.
 
     Returns
     -------
-    alt, az : np.ndarray
-        Arrays of alt and az coordinates (degrees).
+    alt : np.ndarray
+        Array of altitude coordinates (degrees).
+    az : np.ndarray
+        Array of azimuth coordinates (degrees).
     """
     if len(xccd) > 0:
-        az, alt = convert_pixels_to_altaz(wcs, obs_time, xccd, yccd)
+        az, alt = convert_pixels_to_altaz(wcs, obsTime, xccd, yccd)
     else:
         alt, az = np.array([]), np.array([])
 
@@ -581,23 +634,30 @@ def convert_roi_to_ccd(
     xroi: np.ndarray, yroi: np.ndarray, guiderData: GuiderData, guiderName: str
 ) -> tuple[np.ndarray, np.ndarray]:
     """
-    Convert roi coordinates to CCD pixel coordinates.
+    Convert ROI coordinates to CCD pixel coordinates.
 
     Parameters
     ----------
     xroi : np.ndarray
-        Array of x roi coordinates (pixels within the ROI).
+        Array of x ROI coordinates (pixels within the ROI).
     yroi : np.ndarray
-        Array of y roi coordinates (pixels within the ROI).
+        Array of y ROI coordinates (pixels within the ROI).
     guiderData : GuiderData
         GuiderData object containing the guider datasets and view information.
     guiderName : str
-        Name of the guider (e.g., 'R44_SG0', etc.)
+        Name of the guider (e.g., 'R44_SG0').
 
     Returns
     -------
-    xccd, yccd : np.ndarray
-        Arrays of CCD pixel coordinates.
+    xccd : np.ndarray
+        Array of x CCD pixel coordinates.
+    yccd : np.ndarray
+        Array of y CCD pixel coordinates.
+
+    Raises
+    ------
+    ValueError
+        If the view in GuiderData is not supported.
     """
     view = guiderData.view
     stamps = guiderData.datasets[guiderName]
@@ -624,7 +684,7 @@ def convert_roi_to_ccd(
         # from roi coords to ccd coords
         xccd, yccd = roi2ccd(xroi, yroi)
     else:
-        raise ValueError(f"Unsupported view '{view}' in convert_roi_to_ccd", "must be 'ccd' or 'dvcs'")
+        raise ValueError(f"Unsupported view '{view}' in convert_roi_to_ccd" "must be 'ccd' or 'dvcs'")
 
     return xccd, yccd
 
@@ -633,7 +693,7 @@ def convert_ccd_to_roi(
     xccd: np.ndarray, yccd: np.ndarray, guiderData: GuiderData, guiderName: str
 ) -> tuple[np.ndarray, np.ndarray]:
     """
-    Convert CCD pixel coordinates to ROI coordinates.
+    Convert CCD pixel coordinates to ROI pixel coordinates.
 
     Parameters
     ----------
@@ -644,12 +704,19 @@ def convert_ccd_to_roi(
     guiderData : GuiderData
         GuiderData object containing the guider datasets and view information.
     guiderName : str
-        Name of the guider (e.g., 'R44_SG0', etc.)
+        Name of the guider (e.g., 'R44_SG0').
 
     Returns
     -------
-    xroi, yroi : np.ndarray
-        Arrays of ROI pixel coordinates.
+    xroi : np.ndarray
+        Array of x ROI pixel coordinates.
+    yroi : np.ndarray
+        Array of y ROI pixel coordinates.
+
+    Raises
+    ------
+    ValueError
+        If the view in GuiderData is not supported.
     """
     view = guiderData.view
     stamps = guiderData.datasets[guiderName]
@@ -677,7 +744,8 @@ def convert_ccd_to_dvcs(
     xccd: np.ndarray, yccd: np.ndarray, guiderData: GuiderData, guiderName: str
 ) -> tuple[np.ndarray, np.ndarray]:
     """
-    Convert CCD pixel coordinates to DVCS focal plane coordinates (mm).
+    Convert CCD pixel coordinates to DVCS (focal plane)
+    coordinates (pixels or mm).
 
     Parameters
     ----------
@@ -688,12 +756,14 @@ def convert_ccd_to_dvcs(
     guiderData : GuiderData
         GuiderData object containing the guider datasets and view information.
     guiderName : str
-        Name of the guider (e.g., 'R44_SG0', etc.)
+        Name of the guider (e.g., 'R44_SG0').
 
     Returns
     -------
-    xdvcs, ydvcs : np.ndarray
-        Arrays of x and y DVCS focal plane coordinates (pixel).
+    xdvcs : np.ndarray
+        Array of x DVCS focal plane coordinates.
+    ydvcs : np.ndarray
+        Array of y DVCS focal plane coordinates.
     """
     stamps = guiderData.datasets[guiderName]
 

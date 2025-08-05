@@ -99,18 +99,18 @@ class GuiderStarTracker:
 
     Parameters
     ----------
-    guider : GuiderData
+    guiderData : GuiderData
         Guider dataclass instance containing guider data.
-    psf_fwhm : float, default=6.0
+    psfFwhm : float, default=6.0
         Expected PSF full-width at half-maximum in pixels.
-    min_snr : float, default=3.0
+    minSnr : float, default=3.0
         Minimum signal-to-noise ratio for stars in the reference catalog.
-    min_stamp_detections : int, default=30
+    minStampDetections : int, default=30
         Minimum number of stamps a star must be detected
         in to be considered valid.
-    edge_margin : int, default=30
+    edgeMargin : int, default=20
         Pixels from CCD edge to exclude reference sources.
-    max_ellipticity : float, default=0.1
+    maxEllipticity : float, default=0.2
         Maximum allowed ellipticity for sources.
     """
 
@@ -143,7 +143,7 @@ class GuiderStarTracker:
 
         Parameters
         ----------
-        ref_catalog : pd.DataFrame
+        refCatalog : pd.DataFrame
             Reference catalog with known star positions per detector.
 
         Returns
@@ -211,16 +211,19 @@ class GuiderStarTracker:
 
         Parameters
         ----------
-        ref : pd.DataFrame
+        refStar : pd.DataFrame
             One-row DataFrame with reference star info for this guider.
             Must contain columns 'xroi', 'yroi', 'starid'.
         guiderName : str
             Name of the guider (e.g., 'R22_S11').
+        cutoutSize : int, optional
+            Size of the cutout region in pixels. Default is 25.
+
         Returns
         -------
-        pd.DataFrame or None
+        pd.DataFrame
             DataFrame with one row per stamp where the star was detected,
-            or None if the star was not detected in any stamp.
+            or empty DataFrame if the star was not detected in any stamp.
             Columns include:
               - starid, stamp, ampname, filter
               - xroi, yroi (centroid in roi coordinates)
@@ -230,9 +233,6 @@ class GuiderStarTracker:
               - flux, flux_err, fwhm, snr
               - ixx, iyy, ixy, ixx_err, iyy_err, ixy_err
               - e1, e2 (ellipticity components)
-            If the star was not detected in any stamp (or only one),
-            returns None.
-
         """
         if refStar.empty:
             # no reference star for this guider
@@ -333,7 +333,20 @@ class GuiderStarTracker:
         else:
             return df
 
-    def setUniqueId(self, stars) -> pd.DataFrame:
+    def setUniqueId(self, stars: pd.DataFrame) -> pd.DataFrame:
+        """
+        Assign unique IDs to tracked stars.
+
+        Parameters
+        ----------
+        stars : pd.DataFrame
+            DataFrame with detected stars.
+
+        Returns
+        -------
+        pd.DataFrame
+            DataFrame with additional unique ID columns.
+        """
         # 1) Build a detector→index map (0,1,2,…)
         detMap = self.guiderData.guiderNameMap
 
@@ -348,6 +361,16 @@ class GuiderStarTracker:
     def computeOffsets(self, stars: pd.DataFrame) -> pd.DataFrame:
         """
         Compute the offsets for each star in the catalog.
+
+        Parameters
+        ----------
+        stars : pd.DataFrame
+            DataFrame with detected stars.
+
+        Returns
+        -------
+        pd.DataFrame
+            DataFrame with additional offset columns.
         """
         # make reference positions
         stars["xroi_ref"] = stars.groupby("starid")["xroi"].transform("median")
@@ -393,7 +416,7 @@ def measure_star_in_aperture(
 
     Parameters
     ----------
-    cutout_data : 2D ndarray
+    cutout_data : np.ndarray
         Background-subtracted cutout image.
     aperture_radius : float
         Radius of aperture in pixels.
@@ -401,17 +424,15 @@ def measure_star_in_aperture(
         Background RMS per pixel.
     gain : float
         e-/ADU gain.
-    mask : 2D bool ndarray or None
+    mask : np.ndarray or None
         True = pixel to ignore (e.g. bad column, cosmic ray, star mask). Must
-        be same shape as cutout_data.  If None, no extra masking.
+        be same shape as cutout_data. If None, no extra masking.
 
     Returns
     -------
-    pandas.DataFrame with one row and columns:
-      xcentroid, ycentroid, xerr, yerr,
-      ixx, iyy, ixy, ixx_err, iyy_err, ixy_err,
-        e1, e2,  # ellipticity components
-      flux, flux_err, fwhm, snr
+    pd.DataFrame
+        DataFrame with one row containing centroid, moments, ellipticity,
+        flux, flux error, FWHM, and SNR.
     """
     h, w = cutout_data.shape
     y, x = np.indices((h, w))
@@ -519,7 +540,26 @@ def run_source_detection(
     gain: float = 1.0,
 ) -> pd.DataFrame:
     """
-    Replaces SEP with LSST's detectObjectsInExp and GalSim moments.
+    Detect sources in an image using LSST's detectObjectsInExp and measure
+    their roperties with GalSim adaptive moments.
+
+    Parameters
+    ----------
+    image : np.ndarray
+        2D image array.
+    th : float
+        Detection threshold.
+    bkg_std : float
+        Background RMS per pixel.
+    max_ellipticity : float
+        Maximum allowed ellipticity for sources.
+    gain : float
+        Detector gain (e-/ADU).
+
+    Returns
+    -------
+    pd.DataFrame
+        DataFrame with detected source properties.
     """
     # Step 1: Convert numpy image to MaskedImage and Exposure
     exposure = ExposureF(MaskedImageF(ImageF(image)))
@@ -570,6 +610,10 @@ def build_reference_catalog(
     ----------
     guider : GuiderData
         Guider dataclass instance containing guider data.
+    aperture_radius : float
+        Radius of aperture in pixels.
+    max_ellipticity : float
+        Maximum allowed ellipticity for sources.
     min_snr : float
         Minimum signal-to-noise ratio for stars to include.
     edge_margin : int
@@ -578,7 +622,7 @@ def build_reference_catalog(
     Returns
     -------
     pd.DataFrame
-        Reference catalog with default columns
+        Reference catalog with default columns.
     """
     table_list = []
     for guiderName in guider.guiderNames:
@@ -726,6 +770,8 @@ def galsim_error(
         Detector gain (e-/ADU).
     bkg_std : float
         Background RMS per pixel.
+    is_gain : bool
+        If True, include gain in variance weighting.
 
     Returns
     -------
@@ -812,24 +858,26 @@ def make_elliptical_gaussian_star(
     center: tuple[float, float],
 ) -> np.ndarray:
     """
-    Create an elliptical 2D Gaussian star with flux, sigma, e1, and e2.
+    Create an elliptical 2D Gaussian star with specified parameters.
 
     Parameters
     ----------
-    shape : tuple
-        (size, size) of the output image.
+    shape : tuple[int, int]
+        (ny, nx) shape of the output image.
     flux : float
         Total flux of the star.
     sigma : float
         Base Gaussian size.
-    e1, e2 : float
-        Ellipticity components.
-    center : tuple
+    e1 : float
+        Ellipticity component e1.
+    e2 : float
+        Ellipticity component e2.
+    center : tuple[float, float]
         (x0, y0) center of the Gaussian.
 
     Returns
     -------
-    image : np.ndarray
+    np.ndarray
         Image array with the elliptical Gaussian.
     """
     y, x = np.indices(shape)
@@ -861,7 +909,19 @@ def rotate_ellipticity(e1, e2, theta_deg):
     """
     Rotate ellipticity components (e1, e2) by theta_deg degrees.
 
-    Returns (e1_rot, e2_rot)
+    Parameters
+    ----------
+    e1 : float or array-like
+        Ellipticity component e1.
+    e2 : float or array-like
+        Ellipticity component e2.
+    theta_deg : float
+        Rotation angle in degrees.
+
+    Returns
+    -------
+    tuple
+        (e1_rot, e2_rot) rotated ellipticity components.
     """
     theta = np.deg2rad(theta_deg)
     cos2t = np.cos(2 * theta)

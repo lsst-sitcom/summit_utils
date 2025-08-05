@@ -44,18 +44,19 @@ if TYPE_CHECKING:
 
 def make_init_guider_wcs(camera, visitInfo) -> dict[str, SkyWcs]:
     """
+    Create initial WCS for each guider detector in the camera.
+
     Parameters
     ----------
     camera : lsst.afw.cameraGeom.Camera
-        Camera object
+        Camera object containing detectors.
     visitInfo : lsst.afw.image.VisitInfo
-        visit info from an Image
+        Visit information from an exposure.
 
     Returns
     -------
-    cam_wcs : dictionary
-        WCS for each detector, keyed by detector Id
-
+    dict[str, SkyWcs]
+        Dictionary of WCS objects keyed by detector name for guider detectors.
     """
     orientation = visitInfo.getBoresightRotAngle()
     boresight = visitInfo.getBoresightRaDec()
@@ -73,18 +74,18 @@ def make_init_guider_wcs(camera, visitInfo) -> dict[str, SkyWcs]:
 
 
 def get_camera_rot_angle(visitinfo) -> float:
-    """Get the camera rotation angle from visitInfo
+    """
+    Compute the camera rotation angle in degrees from visit information.
 
     Parameters
     ----------
-    visitInfo : lsst.afw.image.VisitInfo
-        visit info from an Image
+    visitinfo : lsst.afw.image.VisitInfo
+        Visit information from an exposure.
 
     Returns
     -------
-    orientation : float
-        Camera rotation angle in radians
-
+    float
+        Camera rotation angle in degrees, wrapped near zero.
     """
     camRot = (
         visitinfo.getBoresightParAngle().asDegrees() - visitinfo.getBoresightRotAngle().asDegrees() - 90.0
@@ -97,6 +98,35 @@ def get_camera_rot_angle(visitinfo) -> float:
 # Data class for drift results
 @dataclass
 class DriftResult:
+    """
+    Data class to store results of telescope drift calculations.
+
+    Attributes
+    ----------
+    ra_point : float
+        Telescope pointing right ascension in degrees.
+    dec_point : float
+        Telescope pointing declination in degrees.
+    ra_real : float
+        Actual right ascension in degrees.
+    dec_real : float
+        Actual declination in degrees.
+    delta_ra_arcsec : float
+        Pointing error in RA in arcseconds.
+    delta_dec_arcsec : float
+        Pointing error in Dec in arcseconds.
+    az_drift_arcsec : float
+        Azimuth drift in arcseconds.
+    el_drift_arcsec : float
+        Elevation drift in arcseconds.
+    total_drift_arcsec : float
+        Total drift in arcseconds.
+    el_start : float
+        Starting elevation in degrees.
+    pixel_offset : tuple of float
+        Pixel offset from raw WCS origin to calibrated WCS origin.
+    """
+
     ra_point: float
     dec_point: float
     ra_real: float
@@ -110,6 +140,19 @@ class DriftResult:
     pixel_offset: tuple[float, float]
 
     def __str__(self, expid=""):
+        """
+        Return a formatted string summarizing the drift results.
+
+        Parameters
+        ----------
+        expid : str, optional
+            Exposure identifier to include in the summary (default is "").
+
+        Returns
+        -------
+        str
+            Formatted summary string.
+        """
         s = (
             f"Exposure summary: {expid}\n"
             f"Telescope pointing (RA, Dec): ({self.ra_point:.6f}, {self.dec_point:.6f})\n"
@@ -127,11 +170,43 @@ class DriftResult:
         return s
 
     def summary(self, expid=""):
+        """
+        Print a summary of the drift results.
+
+        Parameters
+        ----------
+        expid : str, optional
+            Exposure identifier to include in the summary (default is "").
+        """
         print(self.__str__(expid))
 
 
 def getObsAltAz(ra, dec, pressure, hum, temperature, wl, time):
-    # given the RA/Dec and other variables
+    """
+    Compute the observed AltAz coordinates for given RA/Dec and conditions.
+
+    Parameters
+    ----------
+    ra : float
+        Right ascension in degrees.
+    dec : float
+        Declination in degrees.
+    pressure : astropy.units.Quantity
+        Atmospheric pressure with units.
+    hum : float
+        Relative humidity as a fraction (0-1).
+    temperature : astropy.units.Quantity
+        Temperature with units.
+    wl : astropy.units.Quantity
+        Wavelength of observation with units.
+    time : astropy.time.Time
+        Observation time.
+
+    Returns
+    -------
+    astropy.coordinates.AltAz
+        Altitude and azimuth coordinates of the object.
+    """
     skyLocation = SkyCoord(ra * u.deg, dec * u.deg)
     altAz1 = AltAz(
         obstime=time,
@@ -146,7 +221,33 @@ def getObsAltAz(ra, dec, pressure, hum, temperature, wl, time):
 
 
 def DeltaAltAz(ra, dec, pressure, hum, temperature, wl, time1, time2):
-    # This calculates the change in AltAz during an exposure
+    """
+    Calculate the change in AltAz coordinates between two times.
+
+    Parameters
+    ----------
+    ra : float
+        Right ascension in degrees.
+    dec : float
+        Declination in degrees.
+    pressure : astropy.units.Quantity
+        Atmospheric pressure with units.
+    hum : float
+        Relative humidity as a fraction (0-1).
+    temperature : astropy.units.Quantity
+        Temperature with units.
+    wl : astropy.units.Quantity
+        Wavelength of observation with units.
+    time1 : astropy.time.Time
+        Start time of observation.
+    time2 : astropy.time.Time
+        End time of observation.
+
+    Returns
+    -------
+    list of float
+        List containing azimuth change and elevation change in arcseconds.
+    """
     obsAltAz1 = getObsAltAz(ra, dec, pressure, hum, temperature, wl, time1)
     obsAltAz2 = getObsAltAz(ra, dec, pressure, hum, temperature, wl, time2)
     # 1 is at the beginning of the exposure, 2 is at the end
@@ -156,8 +257,9 @@ def DeltaAltAz(ra, dec, pressure, hum, temperature, wl, time1, time2):
     az1 = obsAltAz1.az.deg
     el2 = obsAltAz2.alt.deg
     az2 = obsAltAz2.az.deg
-    # Change values are the change f
-    # rom the beginning to the end of the exposure, in arcseconds
+    # Change values are the change from the beginning
+    # to the end of the exposure,
+    # in arcseconds
     azChange = (az2 - az1) * 3600.0
     elChange = (el2 - el1) * 3600.0
     return [azChange, elChange]
@@ -171,13 +273,16 @@ def calculate_drift(metadata, cWcs, rWcs):
     ----------
     metadata : dict-like
         Must contain at least: 'FILTBAND', 'PRESSURE', 'AIRTEMP', 'HUMIDITY',
-        'MJD-BEG', 'MJD-END', 'RASTART', 'DECSTART', 'ELSTART'
-    cWcs, rWcs : lsst.afw.geom.SkyWcs
-        Calibrated and raw WCS objects
+        'MJD-BEG', 'MJD-END', 'RASTART', 'DECSTART', 'ELSTART'.
+    cWcs : lsst.afw.geom.SkyWcs
+        Calibrated WCS object.
+    rWcs : lsst.afw.geom.SkyWcs
+        Raw WCS object.
 
     Returns
     -------
     DriftResult
+        Object containing drift calculation results.
 
     Example
     -------

@@ -9,3 +9,6 @@ target-version = ["py311"]
 
 [tool.lsst_versions]
 write_to = "python/lsst/summit/utils/version.py"
+
+[tool.ruff]
+line-length = 79

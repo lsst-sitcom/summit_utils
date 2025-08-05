@@ -602,7 +602,7 @@ def getGuiderStamps(
         raw_stamps = butler.get("guider_raw", dataId)
     except DatasetNotFoundError:
         raise StampsNotFoundError(
-            f"No guider data found for dayObs {dayObs}, seqNum {seqNum}, detector {detNum}."
+            f"No guider data found for dayObs {dayObs}," f"seqNum {seqNum}, detector {detNum}."
         )
 
     md = raw_stamps.metadata
@@ -668,11 +668,28 @@ def getGuiderStamps(
 
 
 def get_timestamps(raw_stamps: Stamps, nstamps: int = 50) -> Time:
+    """
+    Extract timestamps from a Stamps object and align them to an ideal
+    sequence.
+
+    Parameters
+    ----------
+    raw_stamps : Stamps
+        Stamps object containing the guider stamp metadata.
+    nstamps : int, optional
+        Number of stamps expected (default is 50).
+
+    Returns
+    -------
+    full_timestamps : astropy.time.Time
+        Masked array of timestamps (MJD) for each stamp. Missing timestamps
+        are masked. Has attribute 'freq' with the median interval in days.
+    """
     timestamps_list = [stamp.metadata.get("STMPTMJD", np.nan) for stamp in raw_stamps]
     mjd_array = np.ma.masked_invalid(timestamps_list)
     timestamps = Time(mjd_array, format="mjd", scale="utc")
 
-    # infer frequency from valid timestamps
+    # Infer frequency from valid timestamps
     dt = np.diff(timestamps.jd)
     freq = np.nanmedian(dt)
     start = timestamps[0].jd
@@ -691,13 +708,13 @@ def get_timestamps(raw_stamps: Stamps, nstamps: int = 50) -> Time:
     # Build aligned timestamp list with np.nan where missing
     mjd_list = []
     for t_ideal in timestamps_ideal.jd:
-        # check if any actual timestamp is close to this ideal timestamp
+        # Check if any actual timestamp is close to this ideal timestamp
         if np.any(np.abs(actual_jd - t_ideal) < tolerance):
-            # match found — find the closest
+            # Match found — find the closest
             idx = np.argmin(np.abs(actual_jd - t_ideal))
             mjd_list.append(actual_jd[idx])
         else:
-            # no match — this is a missing timestamp
+            # No match — this is a missing timestamp
             mjd_list.append(np.nan)
 
     mjd_array = np.ma.masked_invalid(mjd_list)
