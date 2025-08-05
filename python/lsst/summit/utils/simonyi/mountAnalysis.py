@@ -31,6 +31,7 @@ __all__ = [
 ]
 
 import copy
+import yaml
 import logging
 from dataclasses import dataclass
 from typing import TYPE_CHECKING
@@ -684,6 +685,14 @@ def calculateHexRms(mountData: MountData) -> tuple[float, float]:
     tuple[float, float]
         The image motions associated with the CamHex and M2Hex motions.
     """
+
+    lut_path_update = "/home/c/cslage/u/Hexapods/LUTs/_init.yaml"
+
+    with open(lut_path_update, "r") as yaml_file:
+        lut_data = yaml.safe_load(yaml_file)
+
+
+
     # The below image motion coefficients were calculated
     # with a Batoid simulation by Josh Meyers
     camHexXY = 1.00  # microns(image) / micron(hexapod)
@@ -701,19 +710,38 @@ def calculateHexRms(mountData: MountData) -> tuple[float, float]:
     m2HexUV = m2HexUV / 10.0 * pixelScale  # arcseconds(image) / arcsecond(hexapod)
     m2Coefs = [m2HexXY, m2HexXY, 0, m2HexUV, m2HexUV, 0]
 
+    els = mountData.elevationData['actualPosition'].values
+    elTimes = mountData.elevationData['timestamp'].values
     camHexMs = 0.0
     for i in [0, 1, 3, 4]:
+        lut_coeffs = lut_data['camera_config']['elevation_coeffs'][i]
         camhex = copy.deepcopy(mountData.camhexData[f"position{i}"])
         camhex -= np.median(camhex)
+        camTimes = np.asarray(mountData.camhexData['private_kafkaStamp'])
+        # Below are the LUT values.  Only elevation at this point
+        dz = np.polyval(lut_coeffs[::-1], els)
+        dz -= np.median(dz)
+        # Need to align the timestamps, then subtract LUT
+        dzInterp = np.interp(camTimes, elTimes, dz)
+        camhex -= dzInterp
         camhex *= camCoefs[i]
         camHexMs += np.mean(camhex * camhex)
     camHexRms = np.sqrt(camHexMs)  # in arcseconds image impact
 
     m2HexMs = 0.0
     for i in [0, 1, 3, 4]:
+        lut_coeffs = lut_data['m2_config']['elevation_coeffs'][i]
         m2hex = copy.deepcopy(mountData.m2hexData[f"position{i}"])
         m2hex -= np.median(m2hex)
+        m2Times = np.asarray(mountData.m2hexData['private_kafkaStamp'])
+        # Below are the LUT values.  Only elevation at this point
+        dz = np.polyval(lut_coeffs[::-1], els)
+        dz -= np.median(dz)
+        # Need to align the timestamps, then subtract LUT
+        dzInterp = np.interp(m2Times, elTimes, dz)
+        m2hex -= dzInterp
         m2hex *= m2Coefs[i]
         m2HexMs += np.mean(m2hex * m2hex)
     m2HexRms = np.sqrt(m2HexMs)  # in arcseconds image impact
     return (float(camHexRms), float(m2HexRms))
+
