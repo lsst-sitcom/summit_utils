@@ -28,6 +28,7 @@ from typing import Any
 from deprecated.sphinx import deprecated
 
 import lsst.daf.butler as dafButler
+from lsst.daf.butler.direct_butler import DirectButler
 from lsst.summit.utils.utils import getSite
 from lsst.utils.iteration import ensure_iterable
 
@@ -488,7 +489,7 @@ def updateDataIdOrDataCord(dataId: dafButler.DataId, **updateKwargs: Any) -> Map
     return newId
 
 
-def fillDataId(butler: dafButler.direct_butler.DirectButler, dataId: dafButler.DataId) -> Mapping[str, Any]:
+def fillDataId(butler: DirectButler, dataId: dafButler.DataId) -> Mapping[str, Any]:
     """Given a dataId, fill it with values for all available dimensions.
 
     Parameters
@@ -794,7 +795,7 @@ def getExpId(dataId: Mapping[str, Any] | dafButler.DimensionRecord) -> int | Non
 
 
 def getLatissOnSkyDataIds(
-    butler: dafButler.direct_butler.DirectButler,
+    butler: DirectButler,
     skipTypes: Iterable[str] = ("bias", "dark", "flat"),
     checkObject: bool = True,
     full: bool = True,
