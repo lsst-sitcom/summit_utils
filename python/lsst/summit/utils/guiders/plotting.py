@@ -1,0 +1,1416 @@
+# This file is part of summit_utils.
+#
+# Developed for the LSST Data Management System.
+# This product includes software developed by the LSST Project
+# (https://www.lsst.org).
+# See the COPYRIGHT file at the top-level directory of this distribution
+# for details of code ownership.
+#
+# This program is free software: you can redistribute it and/or modify
+# it under the terms of the GNU General Public License as published by
+# the Free Software Foundation, either version 3 of the License, or
+# (at your option) any later version.
+#
+# This program is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU General Public License for more details.
+#
+# You should have received a copy of the GNU General Public License
+# along with this program.  If not, see <https://www.gnu.org/licenses/>.
+from __future__ import annotations
+
+import logging
+from typing import Any, Optional, cast
+
+import matplotlib.pyplot as plt
+import numpy as np
+import pandas as pd
+import seaborn as sns
+from astropy.stats import mad_std
+from matplotlib import animation
+from matplotlib.patches import Circle
+
+from lsst.summit.utils.guiders.reading import GuiderData
+from lsst.summit.utils.utils import RobustFitter
+
+sns.set_context("talk", font_scale=1.1)
+
+# Fine-tune fonts & lines from matplotlib side
+plt.rcParams.update(
+    {
+        # --- font family & scaling ---
+        "font.family": "sans-serif",
+        # pick one that exists on most systems; change if you have a favourite
+        "font.sans-serif": ["DejaVu Sans", "Arial", "Liberation Sans"],
+        "text.color": "#222222",
+        "axes.labelcolor": "#222222",
+        "axes.edgecolor": "#444444",
+    }
+)
+
+
+__all__ = ["GuiderMosaicPlotter", "GuiderPlotter"]
+
+LIGHT_BLUE = "#6495ED"
+
+
+class GuiderPlotter:
+    def add_static_overlays(self, axs_img, detname, centerCutout, cutout_size):
+        _ = self.annotate_detector(detname, axs_img)
+        axs_img.axvline(centerCutout[0], color=LIGHT_BLUE, lw=1.25, linestyle="--", alpha=0.75)
+        axs_img.axhline(centerCutout[1], color=LIGHT_BLUE, lw=1.25, linestyle="--", alpha=0.75)
+        plot_crosshair_rotated(
+            centerCutout,
+            90 + self.cam_rot_angle,
+            axs=axs_img,
+            color="grey",
+            size=cutout_size,
+        )
+        radii = [10, 5] if cutout_size > 0 else [10]
+        _ = plot_guide_circles(
+            axs_img,
+            centerCutout,
+            radii=radii,
+            colors=[LIGHT_BLUE, LIGHT_BLUE],
+            labels=["2″", "1″"],
+            linewidth=2.0,
+        )
+
+    def plot_star_centroid(self, axs_img, detname, stamp_num, centerCutout, xcen, ycen, markersize=8):
+        xroi, yroi = centerCutout[0], centerCutout[1]
+        xroi_err, yroi_err = 0.0, 0.0
+
+        star = self.stars_df[(self.stars_df["detector"] == detname)]
+        if not star.empty:
+            if stamp_num >= 0:
+                star = star[star["stamp"] == stamp_num]
+                if not star.empty:
+                    xroi, yroi = star.iloc[0][["xroi", "yroi"]]
+                    xroi_err, yroi_err = star.iloc[0][["xerr", "yerr"]]
+            elif markersize > 0:
+                xroi, yroi = star.iloc[0][["xroi_ref", "yroi_ref"]]
+                xroi_err, yroi_err = star[["xerr", "yerr"]].mean()
+
+        xroi, yroi = (
+            centerCutout[0] + xroi - xcen,
+            centerCutout[1] + yroi - ycen,
+        )
+
+        (marker,) = axs_img.plot(xroi, yroi, "o", color="firebrick", markersize=markersize)
+        (hline,) = axs_img.plot([xroi - xroi_err, xroi + xroi_err], [yroi, yroi], color="firebrick", lw=2.5)
+        (vline,) = axs_img.plot([xroi, xroi], [yroi - yroi_err, yroi + yroi_err], color="firebrick", lw=2.5)
+        return [marker, hline, vline]
+
+    UNIT_DICT = {
+        "centroidAltAz": "arcsec",
+        "centroidPixel": "pixels",
+        "flux": "magnitudes",
+        "secondMoments": "pixels²",
+        "psf": "arcsec",
+    }
+
+    # for plotting
+    LAYOUT: list[tuple[str, ...]] = [
+        (".", "R40_SG1", "R44_SG0", "."),
+        ("R40_SG0", "center", ".", "R44_SG1"),
+        ("R00_SG1", ".", ".", "R04_SG0"),
+        ("arrow", "R00_SG0", "R04_SG1", "."),
+    ]
+    DETNAMES = [cell for row in LAYOUT for cell in row if (cell[0] == "R")]
+
+    # The COLOR_MAP and MARKERS lists are used for plotting different detector
+    COLOR_MAP = [
+        "black",
+        "firebrick",
+        "grey",
+        "lightgrey",
+        "blue",
+        "green",
+        "orange",
+        "purple",
+    ]
+    MARKERS = ["o", "x", "+", "*", "^", "v", "s", "p"]
+
+    def __init__(
+        self,
+        stars_df: pd.DataFrame,
+        guiderData: GuiderData,
+        isIsr: bool = True,
+    ) -> None:
+        self.log = logging.getLogger(__name__)
+        self.exp_id = guiderData.header.get("expid", 0)
+
+        if stars_df.empty:
+            self.log.warning("stars_df is empty. No data to plot.")
+            self.stats_df = pd.DataFrame(columns=["expid"])
+            return
+
+        self.stars_df = stars_df[stars_df["expid"] == self.exp_id]
+        self.guiderData = guiderData
+        self.isIsr = isIsr  # apply or not parrallel over scan bias correction
+
+        # Some metadata information
+        self.exptime = int(self.guiderData.header["SHUTTIME"])
+        self.seeing = self.guiderData.header.get("SEEING", np.nan)
+        self.cam_rot_angle = float(self.guiderData.header["CAM_ROT_ANGLE"])
+        elstart, elstop = (
+            float(self.guiderData.header["ELSTART"]),
+            float(self.guiderData.header["ELEND"]),
+        )
+        azstart, azstop = (
+            float(self.guiderData.header["AZSTART"]),
+            float(self.guiderData.header["AZEND"]),
+        )
+        self.el = 0.5 * (elstart + elstop)
+        self.az = 0.5 * (azstart + azstop)
+
+        # assemble statistics
+        self.stats_df = self.assemble_stats()
+
+        sns.set_style("white")
+        sns.set_context("talk", font_scale=0.8)
+
+    def assemble_stats(self) -> pd.DataFrame:
+        stars = self.stars_df
+
+        if stars.empty:
+            cols = [
+                "n_guiders",
+                "n_stars",
+                "fraction_valid_stamps",
+                "n_measurements",
+            ]
+            example_std_centroid = [
+                "std_centroid_az",
+                "std_centroid_alt",
+                "std_centroid_corr_az",
+                "std_centroid_corr_alt",
+                "drift_rate_az",
+                "drift_rate_alt",
+                "offset_zero_az",
+                "offset_zero_alt",
+            ]
+            example_phot = ["magoffset_rate", "magoffset_zero", "magoffset_rms"]
+            guider_names = stars["detector"].unique()
+            cols += [f"N_{det}" for det in guider_names]
+            cols += example_std_centroid + example_phot
+            return pd.DataFrame(columns=cols)
+
+        n_guiders = stars["detector"].nunique()
+        n_unique = stars["starid"].nunique()
+        counts = stars.groupby("detector")["starid"].nunique().to_dict()
+        guider_names = stars["detector"].unique()
+        stars_per_guiders = {f"N_{det}": counts.get(det, 0) for det in guider_names}
+
+        mask_valid = (stars["stamp"] >= 0) & (stars["xccd"].notna())
+        n_meas = int(mask_valid.sum())
+
+        std_centroid = measure_std_centroid_stats(stars, snr_th=5)
+        phot = measure_photometric_variation(stars, snr_th=5)
+        psf_stats = measure_psf_stats(stars, snr_th=5)
+
+        total_possible = n_unique * stars["stamp"].nunique()
+        frac_valid = n_meas / total_possible if total_possible > 0 else np.nan
+
+        summary = {
+            "expid": self.exp_id,
+            "n_guiders": n_guiders,
+            "n_stars": n_unique,
+            "n_measurements": n_meas,
+            "fraction_valid_stamps": frac_valid,
+            "seeing": self.seeing,
+            "filter": self.guiderData.header.get("filter", "unknown"),
+            "alt": self.el,
+            "az": self.az,
+            **stars_per_guiders,
+            **std_centroid,
+            **phot,
+            **psf_stats,
+        }
+        return pd.DataFrame([summary])
+
+    def print_metrics(self) -> None:
+        if self.stats_df.empty:
+            print("No statistics available for this exposure.")
+            return
+
+        filtered_stats_df = self.stats_df[self.stats_df["expid"] == self.exp_id].copy()
+
+        print(self.format_stats_summary(filtered_stats_df))
+        print(self.format_std_centroid_summary(filtered_stats_df, exptime=self.exptime))
+        print(self.format_photometric_summary(filtered_stats_df, exptime=self.exptime))
+        print(self.format_psf_summary(filtered_stats_df, exptime=self.exptime))
+
+    def strip_plot(self, plot_type: str = "centroidAltAz", save_as: str | None = None) -> None:
+        if self.stars_df.empty:
+            self.log.warning("stars_df is empty. No data to plot.")
+            return
+
+        # plot_kwargs dtype is dict[str, Any]
+        plot_kwargs: dict[str, dict] = {
+            "centroidAltAz": {
+                "ylabel": "Centroid Offset [arcsec]",
+                "unit": "arcsec",
+                "col": ["dalt", "daz"],
+                "title": "Alt/Az Centroid Offsets",
+            },
+            "centroidPixel": {
+                "ylabel": "Centroid Offset [pixels]",
+                "col": ["dx", "dy"],
+                "unit": "pixels",
+                "title": "CCD Pixel Centroid Offsets",
+            },
+            "flux": {
+                "ylabel": "Magnitude Offset [mag]",
+                "col": ["magoffset"],
+                "unit": "mmag",
+                "scale": 1e3,  # scale to mmag
+                "title": "Flux Magnitude Offsets",
+            },
+            "ellip": {
+                "ylabel": "Ellipticity",
+                "col": ["e1_altaz", "e2_altaz"],
+                "unit": "",
+                "title": "",
+            },
+            "psf": {
+                "ylabel": "PSF FWHM [arcsec]",
+                "col": ["fwhm"],
+                "scale": 1.0,
+                "unit": "arcsec",
+                "title": "PSF FWHM",
+            },
+        }
+        cfg = plot_kwargs[plot_type]  # type: dict[str, Any]
+        scale = cfg.get("scale", 1.0)  # type: float
+        cols = cfg["col"]
+        unit = cfg.get("unit", "")
+        exp = float(self.exptime)
+
+        # filter and prepare
+        df = self.stars_df[self.stars_df["elapsed_time"] > 0][["elapsed_time", "detector"] + cols].copy()
+
+        # Compute overall mean and sigma for y-axis limits
+        all_data = df[cols].values.flatten()
+        all_data *= scale
+        plow, phigh = np.nanpercentile(all_data, [16, 84])
+        sigma_val = mad_std(all_data, ignore_nan=True)
+        ylims = (plow - 2.5 * sigma_val, phigh + 2.5 * sigma_val)
+
+        # setup subplots
+        n = len(cols)
+        fig, axes = plt.subplots(nrows=1, ncols=n, figsize=(8 * n, 6), sharex=True, sharey=True)
+        fig.subplots_adjust(wspace=0.05)
+
+        if n == 1:
+            axes = [axes]
+
+        count = 0
+        for ax, col in zip(axes, cols):
+            # horizontal line at zero
+            if col == "daz":
+                ax.axhline(0, color="grey", ls="--", label="Az")
+            if col == "dalt":
+                ax.axhline(0, color="grey", ls="--", label="Alt")
+
+            if col == "dx":
+                ax.axhline(0, color="grey", ls="--", label="CCD X")
+            if col == "dy":
+                ax.axhline(0, color="grey", ls="--", label="CCD Y")
+
+            if col == "e1_altaz":
+                ax.axhline(0, color="grey", ls="--", label="e1")
+            if col == "e2_altaz":
+                ax.axhline(0, color="grey", ls="--", label="e2")
+
+            if col == "magoffset":
+                ax.axhline(0, color="grey", ls="--", label="Magnitude Offset")
+
+            if col == "fwhm":
+                ax.axhline(np.nanmedian(df[col] * scale), color="grey", ls="--", label="PSF FWHM")
+
+            model = RobustFitter(
+                x=df["elapsed_time"].values,
+                y=df[col].values * scale,
+                residual_threshold=1.5 * sigma_val,
+            )
+
+            results = model.report_best_values()
+            # Format best-fit stats as text
+            txt = (
+                f"Slope: {exp * results.slope:.2f} {unit}/exposure\n"
+                f"Significance: {np.abs(results.slope_tvalue):.1f} σ\n"
+                # f"Intercept: {results.intercept:.1f} {unit}\n"
+                f"scatter: {results.scatter:.3f} {unit}\n"
+            )
+
+            # Place text on the plot (top left, inside axes)
+            ax.text(
+                0.02,
+                0.98,
+                txt,
+                transform=ax.transAxes,
+                fontsize=11,
+                color="black",
+                ha="left",
+                va="top",
+                bbox=dict(facecolor="white", alpha=0.75, edgecolor="none", boxstyle="round,pad=0.3"),
+            )
+            model.plot_best_fit(ax=ax, color=LIGHT_BLUE, label="", lw=2, is_scatter=False)
+
+            # scatter points
+            # Use different markers for each guider detector
+            unique_starids = df["detector"].unique()
+            for i, starid in enumerate(unique_starids):
+                marker = self.MARKERS[i % len(self.MARKERS)]
+                mask = df["detector"] == starid
+                mask2 = mask & (model.outlier_mask)
+
+                ax.scatter(
+                    df.loc[mask, "elapsed_time"],
+                    df.loc[mask, col] * scale,
+                    color="lightgrey",
+                    alpha=0.6,
+                    marker=marker,
+                    label=f"{starid}" if count == 0 else "",
+                    # avoid duplicate legend entries
+                )
+
+                # plot outliers
+                ax.scatter(
+                    df.loc[mask2, "elapsed_time"],
+                    df.loc[mask2, col] * scale,
+                    color=LIGHT_BLUE,
+                    alpha=0.2,
+                    marker=marker,
+                )
+
+            if count == 0:
+                ax.set_ylabel(cfg["ylabel"])
+            # ax.set_xlabel("# stamp")
+            ax.set_xlabel("Elapsed time [sec]")
+            ax.set_ylim(*ylims)  # <-- Set y-axis limits here
+            ax.legend(fontsize=10, ncol=4, loc="lower left")
+
+            # top axis for elapsed time
+            # xstampers = np.arange(0, max_stamp + 10, 10)
+            # ax.set_xticks(xstampers)
+            # ax2 = ax.twiny()
+            # elapsed = self.exptime * xstampers / max_stamp
+            # ax2.set_xticks(xstampers)
+            # ax2.set_xticklabels([f"{e:.1f}" for e in elapsed])
+            # ax2.set_xlabel("Elapsed Time [s]")
+
+            count += 1
+        fig.suptitle(cfg["title"], fontsize=14, fontweight="bold")
+        if count == 0:
+            fig.tight_layout()
+
+        if save_as:
+            fig.savefig(save_as, dpi=120, bbox_inches="tight")
+            print(f"Saved strip plot to {save_as}")
+
+        # return fig
+
+    def get_star_centroid_ref(self, guiderData: GuiderData) -> dict[str, tuple[float | None, float | None]]:
+        """
+        Convert the best star centroid in each guider to ROI coordinates.
+
+        The conversion depends on the guider view (dvcs, ccd, etc).
+
+        Returns:
+            centroids: dict of {detector: (xroi, yroi)}
+        """
+        centroids: dict[str, tuple[float | None, float | None]] = {}
+        for det in self.DETNAMES:
+            sub = self.stars_df[self.stars_df["detector"] == det]
+            if len(sub) > 0:
+                best = sub.loc[sub["snr"].idxmax()]
+                xroi = np.nanmedian([best["xroi_ref"]])
+                yroi = np.nanmedian([best["yroi_ref"]])
+                centroids[det] = float(xroi), float(yroi)
+            else:
+                centroids[det] = (None, None)
+        self.centroids = centroids
+        return centroids
+
+    def load_image(
+        self,
+        guider: GuiderData,
+        detname: str,
+        stamp_num: int = 2,
+    ) -> np.ndarray:
+        # read full stamp
+        if stamp_num >= len(guider.timestamps):
+            raise ValueError(
+                f"stamp_num {stamp_num} is out of range for guider" + f"with {len(guider.timestamps)} stamps."
+            )
+        elif stamp_num < 0:
+            return guider.getStackedStampArray(detName=detname, isIsr=self.isIsr)
+        else:
+            img = guider.getStampArray(stampNum=stamp_num, detName=detname, isIsr=self.isIsr)
+            return img - np.nanmedian(img, axis=0)
+
+    def star_mosaic(
+        self,
+        stamp_num: int = 2,
+        fig: Optional[plt.Figure] = None,
+        axs=None,
+        plo=90.0,
+        phi=99.0,
+        cutout_size=30,
+        is_animated=False,
+        save_as=None,
+    ) -> list:
+        """Plot the stamp array for all the guiders."""
+        if self.stars_df.empty:
+            self.log.warning("stars_df is empty. No data to plot.")
+            return []
+
+        if self.guiderData.view != "dvcs":
+            raise ValueError("Guider view must be 'dvcs' for mosaic plotting.")
+
+        if fig is None:
+            gs = dict(hspace=0.0, wspace=0.0)
+            fig, axs = plt.subplot_mosaic(
+                cast(Any, self.LAYOUT),
+                figsize=(9.5, 9.5),
+                gridspec_kw=gs,
+                constrained_layout=False,
+            )
+
+        if not hasattr(self, "centroids"):
+            self.get_star_centroid_ref(self.guiderData)
+
+        artists = []
+        cutout_shape_list = []
+
+        for detname in self.DETNAMES:
+            im_object, star_cross, cutout_shape = self._plot_detector_panel(
+                detname, stamp_num, axs, plo, phi, cutout_size, is_animated
+            )
+            artists.append(im_object)
+            artists.extend(star_cross)
+            cutout_shape_list.append(cutout_shape)
+
+        std_az = self.stats_df.loc[self.stats_df["expid"] == self.exp_id, "std_centroid_corr_az"].values[0]
+        std_alt = self.stats_df.loc[self.stats_df["expid"] == self.exp_id, "std_centroid_corr_alt"].values[0]
+        std = np.hypot(std_az, std_alt)
+        stamp_info = self.annotate_center(stamp_num, axs["center"], jitter=std)
+        artists.append(stamp_info)
+
+        cutout_size = np.max(cutout_shape_list) if cutout_shape_list else 30
+        if not is_animated:
+            self.draw_arrows(axs, cutout_size, 90.0 + self.cam_rot_angle)
+
+        for ax in axs.values():
+            self.clear_axis_ticks(ax, is_spine=cutout_size < 0)
+
+        if save_as:
+            fig.savefig(save_as, dpi=120, bbox_inches="tight")
+            print(f"Saved mosaic plot to {save_as}")
+
+        return artists
+
+    def _plot_detector_panel(
+        self,
+        detname: str,
+        stamp_num: int,
+        axs,
+        plo: float,
+        phi: float,
+        cutout_size: int,
+        is_animated: bool,
+    ):
+        img = self.load_image(self.guiderData, detname, stamp_num)
+        mx, my = img.shape[0] // 2, img.shape[1] // 2
+        xcen, ycen = self.centroids.get(detname, (mx, my))
+        if xcen is None or ycen is None:
+            xcen, ycen = mx, my
+        center = (float(xcen), float(ycen))
+
+        if cutout_size > 0:
+            cutout, centerCutout = crop_around_center(img, center, cutout_size)
+        else:
+            cutout, centerCutout = img, center
+            stamp_num = -1  # do not plot star
+
+        vmin, vmax = np.nanpercentile(cutout, plo), np.nanpercentile(cutout, phi)
+        axs_img = axs[detname]
+        im_object = axs_img.imshow(
+            cutout,
+            origin="lower",
+            cmap="Greys",
+            animated=True,
+            vmin=vmin,
+            vmax=vmax,
+            interpolation="nearest",
+            extent=(0, cutout.shape[1], 0, cutout.shape[0]),
+        )
+        axs_img.set_aspect("equal", "box")
+
+        if not is_animated:
+            self.add_static_overlays(axs_img, detname, centerCutout, cutout_size)
+
+        star_cross = self.plot_star_centroid(
+            axs_img, detname, stamp_num, centerCutout, xcen, ycen, markersize=8 if cutout_size > 0 else 0
+        )
+
+        axs_img.set_xlim(0, cutout.shape[1])
+        axs_img.set_ylim(0, cutout.shape[0])
+        return im_object, star_cross, cutout.shape
+
+    def mosaic(self, stamp_num: int = 2, **kwargs) -> None:
+        """Wrapper to plot a single guider mosaic."""
+        fig, axs = plt.subplot_mosaic(
+            cast(Any, self.LAYOUT),
+            figsize=(12, 12),
+            gridspec_kw=dict(hspace=0.0, wspace=0.0),
+            constrained_layout=False,
+            sharey=False,
+            sharex=False,
+        )
+        _ = self.star_mosaic(stamp_num=stamp_num, cutout_size=-1, fig=fig, axs=axs, **kwargs)
+
+        plt.suptitle(f"Guider Mosaic for expid: {self.exp_id}\n stamp #: {stamp_num + 1:02d}")
+        plt.show()
+        return None
+
+    def clear_axis_ticks(self, ax, is_spine=False) -> None:
+        """Remove all ticks and tick labels from an axis."""
+        ax.set_xticks([])
+        ax.set_yticks([])
+        ax.set_xticklabels([])
+        ax.set_yticklabels([])
+
+        if not is_spine:
+            for spine in ax.spines.values():
+                spine.set_visible(False)
+
+    def annotate_detector(self, detname, ax) -> plt.Text:
+        """Annotate a detector panel with its name."""
+        txt = ax.text(
+            0.025,
+            0.925,
+            detname,
+            transform=ax.transAxes,
+            ha="left",
+            va="bottom",
+            fontsize=9,
+            weight="bold",
+            color="grey",
+        )
+        return txt
+
+    def annotate_center(self, stamp_num, ax, jitter=-1) -> plt.Text:
+        """Annotate the center panel with exposure and stamp info."""
+        self.clear_axis_ticks(ax)
+        text = f"Center Stdev.: {jitter:.2f} arcsec\n" if jitter > 0 else ""
+        text += (
+            f"expid: {self.exp_id}\nStamp #: {stamp_num + 1:02d}"
+            if stamp_num >= 0
+            else f"expid: {self.exp_id}\nStacked w/ {self.stars_df['stamp'].nunique()} stamps"
+        )
+
+        txt = ax.text(
+            1.085,
+            -0.10,
+            text,
+            transform=ax.transAxes,
+            ha="center",
+            va="center",
+            fontsize=14,
+            color="grey",
+        )
+        return txt
+
+    def plot_circle(self, ax, xcen, ycen, radius=5, color="firebrick", lw=1.0) -> Circle:
+        """
+        Add a circular patch at (xcen, ycen) with given radius on the axis.
+        """
+        circ = Circle(
+            (xcen, ycen),
+            radius=radius,
+            edgecolor=color,
+            facecolor="none",
+            lw=lw,
+            ls="--",
+        )
+        ax.add_patch(circ)
+        return circ
+
+    def draw_arrows(self, axs, cutout_size, rot_angle=0):
+        xmin1, ymin1 = draw_altaz_reference_arrow(axs["arrow"], 0, cutout_size=cutout_size)
+        xmin2, ymin2 = draw_altaz_reference_arrow(
+            axs["arrow"],
+            rot_angle=rot_angle,
+            color="lightgrey",
+            altlabel="Alt",
+            azlabel="Az",
+            cutout_size=cutout_size,
+        )
+        axs["arrow"].axis("off")
+        border = cutout_size * 0.10
+        xmin = np.min([xmin1, xmin2]) - border
+        ymin = np.min([ymin1, ymin2]) - border
+        axs["arrow"].set_xlim(xmin, xmin + cutout_size)
+        axs["arrow"].set_ylim(ymin, ymin + cutout_size)
+
+    def make_gif(
+        self,
+        n_stamp_max=60,
+        fps=5,
+        dpi=100,
+        plo=90.0,
+        phi=99.0,
+        cutout_size=30,
+        save_as=None,
+    ) -> animation.ArtistAnimation:
+        from matplotlib import animation
+
+        if self.stars_df.empty:
+            self.log.warning("stars_df is empty. No data to plot.")
+            return animation.ArtistAnimation([], [], interval=1000 / fps, blit=True, repeat_delay=1000)
+
+        # build canvas
+        fig, axs = plt.subplot_mosaic(
+            cast(Any, self.LAYOUT),
+            figsize=(10, 10),
+            gridspec_kw=dict(hspace=0.0, wspace=0.0),
+            constrained_layout=False,
+        )
+
+        # number of frames
+        n_stamps = len(self.guiderData.timestamps)
+        total = min(n_stamps, n_stamp_max)
+
+        print("Number of stamps: ", total)
+        # initial (stacked) frame
+        artists0 = self.star_mosaic(
+            stamp_num=-1,
+            fig=fig,
+            axs=axs,
+            plo=plo,
+            phi=phi,
+            cutout_size=cutout_size,
+            is_animated=False,
+        )
+
+        frames = 2 * [artists0]
+
+        # sequential stamps
+        for i in range(1, total):
+            artists = self.star_mosaic(
+                stamp_num=i,
+                fig=fig,
+                axs=axs,
+                plo=plo,
+                phi=phi,
+                cutout_size=cutout_size,
+                is_animated=True,
+            )
+            frames.append(artists)
+        frames += 2 * [artists0]
+
+        # create animation
+        ani = animation.ArtistAnimation(fig, frames, interval=1000 / fps, blit=True, repeat_delay=1000)
+
+        if save_as is None:
+            save_as = f"guider_mosaic_{self.exp_id}.gif"
+
+        ani.save(save_as, fps=fps, dpi=dpi, writer="pillow")
+        plt.close(fig)
+        return ani
+
+    @staticmethod
+    def format_std_centroid_summary(stats_df: pd.DataFrame, exptime=1) -> str:
+        """
+        Pretty string summary of centroid stdev. stats from run_all_guiders.
+        """
+        # handle both dicts and DataFrames
+        if (isinstance(stats_df, pd.DataFrame) and stats_df.empty) or (
+            isinstance(stats_df, dict) and not stats_df
+        ):
+            return "No centroid stdev. statistics available."
+
+        # if it's a DataFrame, extract the one-row dict
+        if isinstance(stats_df, pd.DataFrame):
+            stats = stats_df.iloc[0].to_dict()
+        else:
+            stats = stats_df
+
+        js = stats
+        summary = (
+            f"\nGlobal centroid stdev. Summary Across All Guiders\n"
+            f"{'-' * 45}\n"
+            f"  - centroid stdev.  (AZ): {js['std_centroid_az']:.3f} arcsec (raw)\n"
+            f"  - centroid stdev. (ALT): {js['std_centroid_alt']:.3f} arcsec (raw)\n"
+            f"  - centroid stdev.  (AZ): {js['std_centroid_corr_az']:.3f} arcsec (linear corr)\n"
+            f"  - centroid stdev. (ALT): {js['std_centroid_corr_alt']:.3f} arcsec (linear corr)\n"
+            f"  - Drift Rate       (AZ): {exptime * js['drift_rate_az']:.2f} arcsec per exposure\n"
+            f"  - Drift Rate      (ALT): {exptime * js['drift_rate_alt']:.2f} arcsec per exposure\n"
+            f"  - Zero Offset      (AZ): {js['offset_zero_az']:.3f} arcsec\n"
+            f"  - Zero Offset     (ALT): {js['offset_zero_alt']:.3f} arcsec"
+        )
+        return summary
+
+    @staticmethod
+    def format_photometric_summary(phot_stats: pd.DataFrame, exptime=1) -> str:
+        """
+        Pretty-print summary of photometric variation statistics.
+        """
+        if (isinstance(phot_stats, pd.DataFrame) and phot_stats.empty) or (
+            isinstance(phot_stats, dict) and not phot_stats
+        ):
+            return "No photometric statistics available."
+
+        # if it's a DataFrame, extract the one-row dict
+        if isinstance(phot_stats, pd.DataFrame):
+            stats = phot_stats.iloc[0].to_dict()
+        else:
+            stats = phot_stats
+
+        return (
+            "\nPhotometric Variation Summary\n"
+            "-------------------------------\n"
+            f"  - Mag Drift Rate:      {exptime * stats['magoffset_rate'] * 1e3:.1f} mmag/exposure\n"
+            f"  - Mag Zero Offset:     {stats['magoffset_zero'] * 1e3 :.1f} mmag\n"
+            f"  - Mag RMS (detrended): {stats['magoffset_rms'] * 1e3:.1f} mmag"
+        )
+
+    @staticmethod
+    def format_stats_summary(summary: pd.DataFrame) -> str:
+        """
+        Pretty-print only the stats that are present in `summary`.
+        Expects keys like:
+          n_guiders, n_unique_stars, n_measurements, fraction_valid_stamps,
+          N_<detector>, std_centroid_*, magoffset_*, etc.
+        """
+        if (isinstance(summary, pd.DataFrame) and summary.empty) or (
+            isinstance(summary, dict) and not summary
+        ):
+            return "No summary statistics available."
+        # if it's a DataFrame, extract the one-row dict
+        if isinstance(summary, pd.DataFrame):
+            summary = summary.iloc[0].to_dict()
+
+        lines = ["-" * 50]
+
+        # Basic overall stats
+        lines.append(f"Number of Guiders: {int(summary['n_guiders'])}")
+        lines.append(f"Number of Unique Stars: {int(summary['n_stars'])}")
+        lines.append(f"Total Measurements: {int(summary['n_measurements'])}")
+        frac = summary["fraction_valid_stamps"]
+        lines.append(f"Fraction Valid Stamps: {frac:.3f}")
+
+        # Per-guider counts (keys begin with 'N_')
+        guider_keys = sorted(k for k in summary if k.startswith("N_"))
+        if guider_keys:
+            lines.append("\nStars per Guider:")
+            for k in guider_keys:
+                lines.append(f"  - {k[2:]}: {int(summary[k])}")
+        return "\n".join(lines)
+
+    @staticmethod
+    def format_psf_summary(psf_stats: pd.DataFrame, exptime=1) -> str:
+        """
+        Pretty-print summary of PSF statistics.
+        Expects keys like:
+          fwhm, e1, e2, etc.
+        """
+        if (isinstance(psf_stats, pd.DataFrame) and psf_stats.empty) or (
+            isinstance(psf_stats, dict) and not psf_stats
+        ):
+            return "No PSF statistics available."
+
+        # if it's a DataFrame, extract the one-row dict
+        if isinstance(psf_stats, pd.DataFrame):
+            psf_stats = psf_stats.iloc[0].to_dict()
+
+        lines = ["", "-" * 50]
+        lines.append("PSF Statistics Summary:")
+        lines.append(f"  - FWHM slope   : {exptime * psf_stats['fwhm_rate']:.3f} arcsec per exposure")
+        lines.append(f"  - FWHM scatter : {psf_stats['fwhm_rms']:.3f} arcsec")
+        return "\n".join(lines)
+
+
+def make_cutout(image, xcen, ycen, size=30) -> np.ndarray:
+    if xcen is not None:
+        x0, x1 = int(xcen - size / 2.0), int(xcen + size / 2.0)
+        y0, y1 = int(ycen - size / 2.0), int(ycen + size / 2.0)
+        cutout = image[y0:y1, x0:x1]
+    else:
+        cutout = np.zeros((size, size))
+    return cutout
+
+
+def plot_guide_circles(ax, center, radii, colors, labels=None, text_offset=1, **circle_kwargs) -> list:
+    x0, y0 = center
+    txt_list = []
+    for i, r in enumerate(radii):
+        c = Circle(
+            (x0, y0),
+            r,
+            edgecolor=colors[i],
+            facecolor="none",
+            linestyle="--",
+            **circle_kwargs,
+        )
+        ax.add_patch(c)
+
+        txt = ax.text(
+            x0 + r + text_offset,
+            y0 - r / 4.0,
+            labels[i],
+            color=colors[i],
+            va="center",
+            fontsize=8,
+        )
+        txt_list.append([txt])
+    return txt_list
+
+
+class GuiderMosaicPlotter:
+    """Class to read and unpack the Guider data from Butler.
+       Plot an animated gif of the CCD guider stamp.
+
+    Example:
+        from lsst.summit.utils.guiders.reading import readGuiderData
+        from lsst.summit.utils.guiders.plotting import GuiderMosaicPlotter
+
+        # Pick a seq number and dayObs
+        seqNum, dayObs = 591, 20250425
+
+        # Load the data from the butler
+        reader = readGuiderData(seqNum, dayObs, view='dvcs', verbose=True)
+        reader.init_guiders()
+        reader.load_data()
+
+        # Create the plotter object
+        plotter = GuiderMosaicPlotter(reader)
+
+        # Plot a stacked image of the stamps
+        plotter.plot_stacked_stamp_array()
+
+        # Plot a single stamp
+        plotter.plot_stamp_array(stamp_num=9)
+
+        # Make a gif of the stamps
+        plotter.make_gif(n_stamp_max=50, fps=10)
+    """
+
+    def __init__(self, reader, butler=None, view="dvcs"):
+        # reader object readGuiderData
+        self.reader = reader
+        self.view = reader.view
+        self.dayObs = reader.dayObs
+        self.seqNum = reader.seqNum
+        self.exp_id = reader.expid
+        self.n_stamps = reader.nStamps
+        self.detnames = reader.getGuiderNames()
+
+        # for plotting
+        self.layout = [
+            [".", "R40_SG1", "R44_SG0", "."],
+            ["R40_SG0", "center", ".", "R44_SG1"],
+            ["R00_SG1", ".", ".", "R04_SG0"],
+            [".", "R00_SG0", "R04_SG1", "."],
+        ]
+
+    def plot_stamp_ccd(self, raft_ccd_key, stamp_num=-1, axs=None, plo=10.0, phi=99.0) -> plt.AxesImage:
+        if axs is None:
+            axs = plt.gca()
+            plt.title(f"{self.exp_id}")
+
+        if stamp_num < 0:
+            img = self.reader.read_stacked(raft_ccd_key)
+        else:
+            img = self.reader.read(stamp_num, raft_ccd_key)
+
+        bias = np.median(img)
+        img_isr = img - bias
+        lo, hi = np.nanpercentile(img_isr, [plo, phi])
+
+        im = axs.imshow(img_isr, origin="lower", cmap="Greys", vmin=lo, vmax=hi, animated=True)
+        axs.set_yticklabels([])
+        axs.set_xticklabels([])
+        axs.set_xticks([])
+        axs.set_xticks([], minor=True)
+        axs.set_yticks([])
+        axs.set_yticks([], minor=True)
+        return im
+
+    def get_stamp_number_info(self, stamp_num=0) -> str:
+        text = f"day_obs: {self.dayObs}" + "\n" + f"seq_num: {self.seqNum}" + "\n"
+        text += f"orientation: {self.view}" + "\n"
+        if stamp_num > 0:
+            text += f"Stamp #: {stamp_num + 1:02d}"
+        else:
+            text += f"Stacked Image w/ {self.n_stamps} stamps"
+        return text
+
+    def plot_stamp_info(self, stamp_num=0, axs=None, more_text=None) -> plt.Text:
+        if axs is None:
+            axs = plt.gca()
+
+        axs.set_xticks([])
+        axs.set_yticks([])
+        axs.set_axis_off()
+
+        text = self.get_stamp_number_info(stamp_num)
+        if more_text is not None:
+            text += "\n" + more_text
+
+        stamp_id_text = axs.text(
+            1.085,
+            -0.10,
+            text,
+            transform=axs.transAxes,
+            ha="center",
+            va="center",
+            fontsize=14,
+            color="firebrick",
+            animated=True,
+        )
+        axs.set_axis_off()
+        self.stamp_id_axs = stamp_id_text
+        self.stamp_id_more_text = more_text
+        return stamp_id_text
+
+    def plot_text_ccd_name(self, detname, axs=None) -> plt.Text:
+        if axs is None:
+            axs = plt.gca()
+        txt = axs.text(
+            0.025,
+            0.025,
+            detname,
+            transform=axs.transAxes,
+            ha="left",
+            va="bottom",
+            fontsize=9,
+            weight="bold",
+            color="grey",
+        )
+        return txt
+
+    def plot_stamp_array(self, stamp_num=0, fig=None, axs=None, plo=90.0, phi=99.0) -> list:
+        """Plot the stamp array for all the guiders.
+        Args:
+            stamp_num (int): stamp number
+            fig (matplotlib.figure.Figure): figure object
+            axs (matplotlib.axes.Axes): axes object
+        """
+        if fig is None:
+            gs = dict(hspace=0.0, wspace=0.0)
+            fig, axs = plt.subplot_mosaic(
+                self.layout, figsize=(9.5, 9.5), gridspec_kw=gs, constrained_layout=False
+            )
+
+        artists = []
+        for detname in self.detnames:
+            im = self.plot_stamp_ccd(detname, stamp_num=stamp_num, axs=axs[detname], plo=plo, phi=phi)
+            txt = self.plot_text_ccd_name(detname, axs=axs[detname])
+            artists.extend([im, txt])
+        stamp_info = self.plot_stamp_info(axs=axs["center"], stamp_num=stamp_num)
+        artists.append(stamp_info)
+        return artists
+
+    def plot_stacked_stamp_array(self, fig=None, axs=None) -> list:
+        """Plot the stamp array for all the guiders.
+        Args:
+            stamp_num (int): stamp number
+            fig (matplotlib.figure.Figure): figure object
+            axs (matplotlib.axes.Axes): axes object
+        """
+        artists = self.plot_stamp_array(stamp_num=-1, fig=fig, axs=axs)
+        return artists
+
+    def make_gif(self, n_stamp_max=10, fps=5, dpi=80, save_as=None) -> animation.ArtistAnimation:
+        # Create the animation
+        fig, axs = plt.subplot_mosaic(
+            self.layout,
+            figsize=(9.5, 9.5),
+            gridspec_kw=dict(hspace=0.0, wspace=0.0),
+            constrained_layout=False,
+        )
+
+        nStamps = min(self.n_stamps, n_stamp_max)
+        print("Number of stamps: ", nStamps)
+
+        # plot the stacked image
+        artists0 = self.plot_stacked_stamp_array(fig=fig, axs=axs)
+        frame_list = 5 * [artists0]
+
+        # loop over the stamps
+        for i in range(nStamps):
+            artists = self.plot_stamp_array(stamp_num=i, fig=fig, axs=axs)
+            frame_list.append(artists)
+
+        frame_list += 5 * [artists0]
+
+        # update the stamps
+        ani = animation.ArtistAnimation(fig, frame_list, interval=1000 / fps, blit=True, repeat_delay=1000)
+
+        ani.save(save_as, fps=fps, dpi=dpi, writer="pillow")
+        plt.close(fig)
+        return ani
+
+    def make_mp4(
+        self, n_stamp_max=10, fps=5, dpi=80, save_as="guider_ccd_array.mp4"
+    ) -> animation.ArtistAnimation:
+        from matplotlib import animation
+
+        # Create the animation
+        fig, axs = plt.subplot_mosaic(
+            self.layout,
+            figsize=(9.5, 9.5),
+            gridspec_kw=dict(hspace=0.0, wspace=0.0),
+            constrained_layout=False,
+        )
+
+        nStamps = min(self.n_stamps, n_stamp_max)
+        print("Number of stamps: ", nStamps)
+
+        # plot the stacked image
+        artists0 = self.plot_stacked_stamp_array(fig=fig, axs=axs)
+        frame_list = 5 * [artists0]
+
+        # loop over the stamps
+        for i in range(nStamps):
+            artists = self.plot_stamp_array(stamp_num=i, fig=fig, axs=axs)
+            frame_list.append(artists)
+        frame_list += 5 * [artists0]
+
+        # update the stamps
+        ani = animation.ArtistAnimation(fig, frame_list, interval=1000 / fps, blit=True, repeat_delay=1000)
+        ani.save(save_as, fps=fps, dpi=dpi)
+        plt.close(fig)
+        return ani
+
+
+def measure_std_centroid_stats(stars: pd.DataFrame, snr_th=5, flux_th=10.0) -> pd.DataFrame:
+    """
+    Compute global std_centroid statistics across all guiders.
+
+    Parameters
+    ----------
+    stars : pd.DataFrame
+        Concatenated star table across all guider detectors.
+
+    Returns
+    -------
+    stars : pd.DataFrame
+        DataFrame with new std_centroid statistic
+        columns broadcasted to all rows.
+    """
+    # mask the objects w/ very low flux and SNR
+    mask = (stars.snr > snr_th) & (stars.flux > flux_th)
+    time = stars["elapsed_time"][mask].to_numpy()
+    az = stars.daz[mask].to_numpy()
+    alt = stars.dalt[mask].to_numpy()
+
+    # Make a robust fit
+    rf_alt = RobustFitter(time, alt)
+    coefs_alt = rf_alt.report_best_values()
+
+    rf_az = RobustFitter(time, az)
+    coefs_az = rf_az.report_best_values()
+
+    # Stats
+    std_centroid_stats = {
+        "std_centroid_az": mad_std(az),
+        "std_centroid_alt": mad_std(alt),
+        "std_centroid_corr_az": coefs_az.scatter,
+        "std_centroid_corr_alt": coefs_alt.scatter,
+        "drift_rate_az": coefs_az.slope,
+        "drift_rate_alt": coefs_alt.slope,
+        "drift_rate_signficance_az": coefs_az.slope_tvalue,
+        "drift_rate_signficance_alt": coefs_alt.slope_tvalue,
+        "offset_zero_az": np.nanmedian(az),
+        "offset_zero_alt": np.nanmedian(alt),
+    }
+    return std_centroid_stats
+
+
+def measure_psf_stats(stars: pd.DataFrame, snr_th=5, flux_th=10) -> dict[str, float]:
+    # mask the objects w/ very low flux and SNR
+    mask = (stars.snr > snr_th) & (stars.flux > flux_th)
+    time = stars["elapsed_time"][mask].to_numpy()
+    psf = stars["fwhm"][mask].to_numpy()
+    # Make a robust fit
+    model = RobustFitter(time, psf)
+    coefs = model.report_best_values()
+
+    # Elipiticities
+    e1 = stars["e1_altaz"][mask].to_numpy()
+    # Make a robust fit
+    model = RobustFitter(time, e1)
+    coefs_e1 = model.report_best_values()
+
+    e2 = stars["e2_altaz"][mask].to_numpy()
+    # Make a robust fit
+    model = RobustFitter(time, e2)
+    coefs_e2 = model.report_best_values()
+
+    # Stats
+    psf_stats = {
+        "fwhm_rate": coefs.slope,
+        "fwhm_signficance": coefs.slope_tvalue,
+        "fwhm_zero": coefs.intercept,
+        "fwhm_rms": coefs.scatter,
+        "e1_rate": coefs_e1.slope,
+        "e1_signficance": coefs_e1.slope_tvalue,
+        "e1_zero": coefs.intercept,
+        "e1_rms": coefs_e1.scatter,
+        "e2_rate": coefs_e2.slope,
+        "e2_signficance": coefs_e2.slope_tvalue,
+        "e2_zero": coefs_e2.intercept,
+        "e2_rms": coefs_e2.scatter,
+    }
+    return psf_stats
+
+
+def crop_around_center(
+    image: np.ndarray, center: tuple[float, float], size: int
+) -> tuple[np.ndarray, tuple[float, float]]:
+    """
+    Crop a square region from the image centered at a specific point,
+    returning both the cropped image and the new center coordinates.
+
+    Returns
+    -------
+    cropped : np.ndarray
+        Cropped image of shape (size, size).
+    new_center : tuple[float, float]
+        Coordinates of the original center in the cropped image.
+    """
+    x, y = center
+    x, y = int(round(x)), int(round(y))
+    half = size // 2
+
+    y0 = max(0, y - half)
+    y1 = min(image.shape[0], y + half)
+    x0 = max(0, x - half)
+    x1 = min(image.shape[1], x + half)
+
+    cropped = image[y0:y1, x0:x1]
+
+    # Calculate offsets for padding
+    pad_top = max(0, (half - y))
+    pad_left = max(0, (half - x))
+    pad_bottom = size - (pad_top + (y1 - y0))
+    pad_right = size - (pad_left + (x1 - x0))
+
+    if pad_top > 0 or pad_bottom > 0 or pad_left > 0 or pad_right > 0:
+        cropped = np.pad(
+            cropped,
+            ((pad_top, pad_bottom), (pad_left, pad_right)),
+            mode="constant",
+            constant_values=np.nan,
+        )
+
+    # New center in cropped image
+    new_center = (x - x0 + pad_left, y - y0 + pad_top)
+    return cropped, new_center
+
+
+def rotate_around_center(image: np.ndarray, angle_deg: float, center: tuple[float, float]) -> np.ndarray:
+    from scipy.ndimage import affine_transform
+
+    angle_rad = np.deg2rad(angle_deg)
+    cos_a = np.cos(angle_rad)
+    sin_a = np.sin(angle_rad)
+
+    # Rotation matrix in (row, col) = (y, x) order
+    R = np.array([[cos_a, sin_a], [-sin_a, cos_a]])
+
+    center_np = np.array(center)  # array
+    offset = center_np - R @ center_np
+
+    rotated = affine_transform(image, R, offset=offset, order=3, mode="nearest")
+    return rotated  # nd.array rotated
+
+
+def measure_photometric_variation(stars: pd.DataFrame, snr_th=5) -> dict[str, float]:
+    """
+    Fit magoffset vs time across all rows, compute drift rate,
+      zero-point, and RMS scatter,
+    then add these as constant columns to `stars`.
+    """
+    mo = stars["magoffset"].to_numpy()
+    mask = np.isfinite(mo)
+    mask &= stars["snr"] > snr_th
+    if np.sum(mask) < 3:
+        phot_stats = {
+            "magoffset_rate": np.nan,
+            "magoffset_zero": np.nan,
+            "magoffset_rms": np.nan,
+            "magoffset_signficance": np.nan,
+        }
+
+    time = stars["elapsed_time"][mask].to_numpy()
+    rf_mag = RobustFitter(time, mo[mask])
+    coefs_mag = rf_mag.report_best_values()
+
+    # Stats
+    phot_stats = {
+        "magoffset_rate": coefs_mag.slope,
+        "magoffset_signficance": coefs_mag.slope_tvalue,
+        "magoffset_zero": np.nanmedian(mo[mask]),
+        "magoffset_rms": coefs_mag.scatter,
+    }
+    return phot_stats
+
+
+def draw_altaz_reference_arrow(
+    ax,
+    rot_angle=0,
+    altlabel="Y DVCS",
+    azlabel="X DVCS",
+    color=LIGHT_BLUE,
+    length=None,
+    cutout_size=30,
+    center=(None, None),
+) -> tuple[float, float]:
+    """Draw Alt/Az coordinate reference arrows in the bottom-left corner."""
+    length = cutout_size / 4 if length is None else length
+    # x0, y0 = cutout_size // 2, cutout_size // 2
+
+    theta = np.radians(rot_angle)
+    dx_az, dy_az = length * np.cos(theta), length * np.sin(theta)
+    dx_alt, dy_alt = -length * np.sin(theta), length * np.cos(theta)
+
+    # Offset to lower-left corner
+    if center[0] is not None and center[1] is not None:
+        x0, y0 = center
+    else:
+        x0, y0 = cutout_size // 2, cutout_size // 2
+
+    # Az arrow
+    ax.arrow(
+        x0,
+        y0,
+        dx_az,
+        dy_az,
+        color=color,
+        width=cutout_size / 120,
+        head_width=cutout_size / 30,
+        head_length=cutout_size / 20,
+        length_includes_head=True,
+        zorder=10,
+    )
+    ax.text(
+        x0 + dx_az + 0.5,
+        y0 + dy_az,
+        azlabel,
+        color=color,
+        fontsize=9,
+        fontweight="bold",
+    )
+
+    # Alt arrow
+    ax.arrow(
+        x0,
+        y0,
+        dx_alt,
+        dy_alt,
+        color=color,
+        width=cutout_size / 120,
+        head_width=cutout_size / 30,
+        head_length=cutout_size / 20,
+        length_includes_head=True,
+        zorder=10,
+    )
+    ax.text(
+        x0 + dx_alt + 0.5,
+        y0 + dy_alt,
+        altlabel,
+        color=color,
+        fontsize=9,
+        fontweight="bold",
+    )
+
+    ax.set_xlim(x0, cutout_size)
+    ax.set_ylim(y0, cutout_size)
+
+    return np.nanmin([dx_alt + x0, dx_az + x0]), np.nanmin([dy_alt + y0, dy_az + y0])
+
+
+def plot_crosshair_rotated(center, angle, axs=None, color="grey", size=30):
+    if axs is None:
+        axs = plt.gca()
+    # make a cross rotated by the camera rotation angle
+    cross_length = 1.5 * size if size > 0 else 30
+    theta = np.radians(angle)
+
+    # Cross center
+    cx, cy = center
+    # Horizontal line (rotated)
+    dx = cross_length * np.cos(theta) / 2
+    dy = cross_length * np.sin(theta) / 2
+    axs.plot(
+        [cx - dx, cx + dx],
+        [cy - dy, cy + dy],
+        color=color,
+        ls="--",
+        lw=1.0,
+        alpha=0.5,
+    )
+    # Vertical line (rotated)
+    dx_v = cross_length * np.cos(theta + np.pi / 2) / 2
+    dy_v = cross_length * np.sin(theta + np.pi / 2) / 2
+    axs.plot(
+        [cx - dx_v, cx + dx_v],
+        [cy - dy_v, cy + dy_v],
+        color=color,
+        ls="--",
+        lw=1.0,
+        alpha=0.5,
+    )
+
+
+def compute_camera_angle(df: pd.DataFrame, view="ccd") -> float:
+    """Compute the camera angle (degrees)
+    from a DataFrame of star measurements."""
+    if len(df) < 3:
+        raise ValueError("At least 3 stars are required to compute the camera angle.")
+
+    if view == "ccd":
+        xcol, ycol = "dx", "dy"
+    elif view == "dvcs":
+        # xcol, ycol = "dx_dvcs", "dy_dvcs"
+        xcol, ycol = "dx", "dy"
+    elif view == "fp":
+        xcol, ycol = "dxfp", "dyfp"
+    else:
+        raise ValueError("view must be 'ccd', 'dvcs' of 'fp'.")
+
+    dfn = df.dropna(subset=[xcol, ycol, "daz", "dalt"]).copy()
+    if len(dfn) < 3:
+        raise ValueError("At least 3 stars with valid coordinates are required.")
+    xccd = dfn[xcol].values
+    yccd = dfn[ycol].values
+    az = dfn["daz"].values
+    alt = dfn["dalt"].values
+
+    angle_deg = compute_rotation_angle(xccd, yccd, az, alt)
+
+    # print(f"Computed camera angle: {angle_deg:.2f} degrees")
+    return angle_deg
+
+
+def compute_rotation_angle(x1, y1, x2, y2):
+    # Centered coordinates
+    Xa = np.vstack([x1 - np.mean(x1), y1 - np.mean(y1)])
+    Xb = np.vstack([x2 - np.mean(x2), y2 - np.mean(y2)])
+
+    # Rotation from 1 → 2
+    try:
+        U, _, Vt = np.linalg.svd(Xa @ Xb.T)
+        R = U @ Vt
+        theta = np.arctan2(R[1, 0], R[0, 0])
+        angle_deg = np.degrees(theta) % 360.0
+    except np.linalg.LinAlgError:
+        angle_deg = np.nan
+    return angle_deg
