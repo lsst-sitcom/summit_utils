@@ -21,7 +21,7 @@
 from __future__ import annotations
 
 import logging
-from typing import Any, Optional, cast
+from typing import TYPE_CHECKING, Any, Optional, cast
 
 import matplotlib.pyplot as plt
 import numpy as np
@@ -34,9 +34,10 @@ from scipy.ndimage import affine_transform
 
 from lsst.summit.utils.utils import RobustFitter
 
-from .reading import GuiderData
+if TYPE_CHECKING:
+    from .reading import GuiderData
 
-sns.set_context("talk", font_scale=1.1)
+sns.set_context("talk", font_scale=0.8)
 
 # Fine-tune fonts & lines from matplotlib side
 plt.rcParams.update(
@@ -48,11 +49,17 @@ plt.rcParams.update(
         "text.color": "#222222",
         "axes.labelcolor": "#222222",
         "axes.edgecolor": "#444444",
+        "xtick.labelsize": 8,
+        "ytick.labelsize": 8,
+        "xtick.major.size": 4,
+        "ytick.major.size": 4,
+        "xtick.major.width": 0.8,
+        "ytick.major.width": 0.8,
     }
 )
 
 
-__all__ = ["GuiderMosaicPlotter", "GuiderPlotter"]
+__all__ = ["GuiderDataPlotter", "GuiderPlotter"]
 
 LIGHT_BLUE = "#6495ED"
 
@@ -84,7 +91,7 @@ class GuiderPlotter:
         -------
         None
         """
-        _ = self.annotateDetector(detName, axsImg)
+        annotateDetector(detName, axsImg)
         axsImg.axvline(centerCutout[0], color=LIGHT_BLUE, lw=1.25, linestyle="--", alpha=0.75)
         axsImg.axhline(centerCutout[1], color=LIGHT_BLUE, lw=1.25, linestyle="--", alpha=0.75)
         plot_crosshair_rotated(
@@ -212,16 +219,16 @@ class GuiderPlotter:
         self.isIsr = isIsr  # apply or not parrallel over scan bias correction
 
         # Some metadata information
-        self.expTime = int(self.guiderData.header["SHUTTIME"])
-        self.seeing = self.guiderData.header.get("SEEING", np.nan)
-        self.camRotAngle = float(self.guiderData.header["CAM_ROT_ANGLE"])
+        self.expTime = int(self.guiderData.header.get("SHUTTIME") or 0)
+        self.seeing = float(self.guiderData.header.get("SEEING") or np.nan)
+        self.camRotAngle = float(self.guiderData.header.get("CAM_ROT_ANGLE") or np.nan)
         elstart, elstop = (
-            float(self.guiderData.header["ELSTART"]),
-            float(self.guiderData.header["ELEND"]),
+            float(self.guiderData.header["el_start"] or np.nan),
+            float(self.guiderData.header["el_end"] or np.nan),
         )
         azstart, azstop = (
-            float(self.guiderData.header["AZSTART"]),
-            float(self.guiderData.header["AZEND"]),
+            float(self.guiderData.header["az_start"] or np.nan),
+            float(self.guiderData.header["az_end"] or np.nan),
         )
         self.el = 0.5 * (elstart + elstop)
         self.az = 0.5 * (azstart + azstop)
@@ -543,15 +550,15 @@ class GuiderPlotter:
             Image array for the specified stamp and detector.
         """
         # read full stamp
-        if stampNum >= len(guider.timestamps):
+        if stampNum >= len(guider):
             raise ValueError(
-                f"stamp_num {stampNum} is out of range for guider" + f"with {len(guider.timestamps)} stamps."
+                f"stamp_num {stampNum} is out of range for guider" + f"with {len(guider)} stamps."
             )
         elif stampNum < 0:
-            return guider.getStackedStampArray(detName=detName, isIsr=self.isIsr)
+            return guider.getStampArrayCoadd(detName)
         else:
-            img = guider.getStampArray(stampNum=stampNum, detName=detName, isIsr=self.isIsr)
-            return img - np.nanmedian(img, axis=0)
+            img = guider[detName, stampNum]
+            return img
 
     def starMosaic(
         self,
@@ -607,6 +614,8 @@ class GuiderPlotter:
                 constrained_layout=False,
             )
 
+        assert axs is not None
+
         if not hasattr(self, "centroids"):
             self.getStarCentroidRef(self.guiderData)
 
@@ -629,10 +638,10 @@ class GuiderPlotter:
 
         cutoutSize = np.max(cutoutShapeList) if cutoutShapeList else 30
         if not isAnimated:
-            self.drawArrows(axs, cutoutSize, 90.0 + self.camRotAngle)
+            drawArrows(axs["arrow"], cutoutSize, 90.0 + self.camRotAngle)
 
         for ax in axs.values():
-            self.clearAxisTicks(ax, isSpine=cutoutSize < 0)
+            clearAxisTicks(ax, isSpine=cutoutSize < 0)
 
         if saveAs:
             fig.savefig(saveAs, dpi=120, bbox_inches="tight")
@@ -742,59 +751,6 @@ class GuiderPlotter:
         plt.show()
         return None
 
-    def clearAxisTicks(self, ax: plt.Axes, isSpine: bool = False) -> None:
-        """
-        Remove all ticks and tick labels from an axis.
-
-        Parameters
-        ----------
-        ax : matplotlib.axes.Axes
-            Axis to clear.
-        is_spine : bool, optional
-            If False, hide the axis spines as well.
-
-        Returns
-        -------
-        None
-        """
-        ax.set_xticks([])
-        ax.set_yticks([])
-        ax.set_xticklabels([])
-        ax.set_yticklabels([])
-
-        if not isSpine:
-            for spine in ax.spines.values():
-                spine.set_visible(False)
-
-    def annotateDetector(self, detName: str, ax: plt.Axes) -> plt.Text:
-        """
-        Annotate a detector panel with its name.
-
-        Parameters
-        ----------
-        detname : str
-            Name of the detector.
-        ax : matplotlib.axes.Axes
-            Axis to annotate.
-
-        Returns
-        -------
-        matplotlib.text.Text
-            The text artist added.
-        """
-        txt = ax.text(
-            0.025,
-            0.925,
-            detName,
-            transform=ax.transAxes,
-            ha="left",
-            va="bottom",
-            fontsize=9,
-            weight="bold",
-            color="grey",
-        )
-        return txt
-
     def annotateCenter(self, stampNum: int, ax: plt.Axes, jitter: float = -1) -> plt.Text:
         """
         Annotate the center panel with exposure and stamp info.
@@ -813,7 +769,7 @@ class GuiderPlotter:
         matplotlib.text.Text
             The text artist added.
         """
-        self.clearAxisTicks(ax)
+        clearAxisTicks(ax, isSpine=True)
         text = f"Center Stdev.: {jitter:.2f} arcsec\n" if jitter > 0 else ""
         text += (
             f"expid: {self.expId}\nStamp #: {stampNum + 1:02d}"
@@ -876,59 +832,23 @@ class GuiderPlotter:
         ax.add_patch(circ)
         return circ
 
-    def drawArrows(
-        self,
-        axs: dict[str, plt.Axes],
-        cutoutSize: int,
-        rotAngle: float = 0,
-    ) -> None:
-        """
-        Draw Alt/Az reference arrows on the 'arrow' panel of the mosaic.
-
-        Parameters
-        ----------
-        axs : dict
-            Dictionary of axes for the mosaic.
-        cutout_size : int
-            Size of the cutout.
-        rot_angle : float, optional
-            Rotation angle in degrees.
-
-        Returns
-        -------
-        None
-        """
-        xmin1, ymin1 = draw_altaz_reference_arrow(axs["arrow"], 0, cutout_size=cutoutSize)
-        xmin2, ymin2 = draw_altaz_reference_arrow(
-            axs["arrow"],
-            rot_angle=rotAngle,
-            color="lightgrey",
-            altlabel="Alt",
-            azlabel="Az",
-            cutout_size=cutoutSize,
-        )
-        axs["arrow"].axis("off")
-        border = cutoutSize * 0.10
-        xmin = np.min([xmin1, xmin2]) - border
-        ymin = np.min([ymin1, ymin2]) - border
-        axs["arrow"].set_xlim(xmin, xmin + cutoutSize)
-        axs["arrow"].set_ylim(ymin, ymin + cutoutSize)
-
     def makeGif(
         self,
+        saveAs: str,
         nStampMax: int = 60,
         fps: int = 5,
         dpi: int = 100,
         plo: float = 90.0,
         phi: float = 99.0,
         cutoutSize: int = 30,
-        saveAs: Optional[str] = None,
     ) -> animation.ArtistAnimation:
         """
         Create an animated GIF of the guider mosaic over a sequence of stamps.
 
         Parameters
         ----------
+        save_as : str
+            save the animation to this file.
         n_stamp_max : int, optional
             Maximum number of stamps to animate.
         fps : int, optional
@@ -941,8 +861,6 @@ class GuiderPlotter:
             Upper percentile for image scaling.
         cutout_size : int, optional
             Size of cutout for each detector panel.
-        save_as : str or None, optional
-            If provided, save the animation to this file.
 
         Returns
         -------
@@ -959,12 +877,12 @@ class GuiderPlotter:
             constrained_layout=False,
         )
 
-        if self.stars_df.empty:
+        if self.starsDf.empty:
             self.log.warning("stars_df is empty. No data to plot.")
             return animation.ArtistAnimation(fig, [], interval=1000 / fps, blit=True, repeat_delay=1000)
 
         # number of frames
-        nStamps = len(self.guiderData.timestamps)
+        nStamps = len(self.guiderData)
         total = min(nStamps, nStampMax)
 
         # initial (stacked) frame
@@ -1159,121 +1077,126 @@ class GuiderPlotter:
         return "\n".join(lines)
 
 
-class GuiderMosaicPlotter:
+class GuiderDataPlotter:
     """
-    Class to read and unpack the Guider data from Butler.
+    Class to plot guider stamp mosaics using a GuiderData container.
     Plot an animated gif of the CCD guider stamp.
 
     Example:
-        from lsst.summit.utils.guiders.reading import readGuiderData
+        from lsst.summit.utils.guiders.reading import GuiderReader
         from lsst.summit.utils.guiders.plotting import GuiderMosaicPlotter
 
         # Pick a seq number and dayObs
         seqNum, dayObs = 591, 20250425
 
         # Load the data from the butler
-        reader = readGuiderData(seqNum, dayObs, view='dvcs', verbose=True)
-        reader.init_guiders()
-        reader.load_data()
+        guiderData = GuiderReader(seqNum, dayObs, view='dvcs')
 
         # Create the plotter object
-        plotter = GuiderMosaicPlotter(reader)
+        plotter = GuiderMosaicPlotter(guiderData)
 
         # Plot a stacked image of the stamps
-        plotter.plot_stacked_stamp_array()
+        plotter.plotStackedStampArray()
 
         # Plot a single stamp
-        plotter.plot_stamp_array(stamp_num=9)
+        plotter.plotStampArray(stampNum=9)
 
         # Make a gif of the stamps
-        plotter.make_gif(n_stamp_max=50, fps=10)
+        plotter.makeGif(nStampMax=50, fps=10)
     """
 
-    def __init__(self, reader, butler=None, view="dvcs"):
+    # for plotting
+    LAYOUT: list[tuple[str, ...]] = [
+        (".", "R40_SG1", "R44_SG0", "."),
+        ("R40_SG0", "center", ".", "R44_SG1"),
+        ("R00_SG1", ".", ".", "R04_SG0"),
+        ("arrow", "R00_SG0", "R04_SG1", "."),
+    ]
+
+    def __init__(self, guiderData: GuiderData):
         """
-        Initialize the GuiderMosaicPlotter with a guider data reader.
+        Initialize the GuiderMosaicPlotter with a GuiderData container.
 
         Parameters
         ----------
-        reader : object
-            Reader object (e.g., from readGuiderData) with guider data.
-        butler : object, optional
-            Butler object (not used).
-        view : str, optional
-            View type (e.g., 'dvcs').
+        guiderData : GuiderData
+            GuiderData container with guider images and metadata.
 
         Returns
         -------
         None
         """
-        # reader object readGuiderData
-        self.reader = reader
-        self.view = reader.view
-        self.dayObs = reader.dayObs
-        self.seqNum = reader.seqNum
-        self.exp_id = reader.expid
-        self.n_stamps = reader.nStamps
-        self.detnames = reader.getGuiderNames()
+        self.guiderData = guiderData
+        self.view = guiderData.view
+        self.expId = guiderData.expid
+        self.nStamps = len(guiderData)
+        self.detNames = guiderData.guiderNames
+        self.header = guiderData.header
 
-        # for plotting
-        self.layout = [
-            [".", "R40_SG1", "R44_SG0", "."],
-            ["R40_SG0", "center", ".", "R44_SG1"],
-            ["R00_SG1", ".", ".", "R04_SG0"],
-            [".", "R00_SG0", "R04_SG1", "."],
-        ]
+        # get the last 5 digits of expId as seqNum
+        self.seqNum = int(str(self.expId)[-5:])
+        # get the dayObs from the first 8 digits of expId
+        self.dayObs = int(str(self.expId)[:8])
 
-    def plot_stamp_ccd(self, raft_ccd_key, stamp_num=-1, axs=None, plo=10.0, phi=99.0) -> plt.AxesImage:
+    def plotStampCcd(
+        self,
+        axs: plt.Axes,
+        detName: str,
+        stampNum: int = -1,
+        plo: float = 50.0,
+        phi: float = 99.0,
+        is_ticks: bool = False,
+    ) -> plt.AxesImage:
         """
         Plot a stamp or stacked image for a single CCD.
 
         Parameters
         ----------
-        raft_ccd_key : str
+        detName : str
             Detector name.
-        stamp_num : int, optional
-            Stamp number; if negative, plot stacked image.
-        axs : matplotlib.axes.Axes, optional
+        axs : matplotlib.axes.Axes
             Axis to plot on.
+        stampNum : int, optional
+            Stamp number; if negative, plot stacked image.
         plo : float, optional
             Lower percentile for image scaling.
         phi : float, optional
             Upper percentile for image scaling.
+        is_ticks : bool, optional
+            Whether to show ticks.
 
         Returns
         -------
         matplotlib.image.AxesImage
             Image artist.
         """
-        if axs is None:
-            axs = plt.gca()
-            plt.title(f"{self.exp_id}")
-
-        if stamp_num < 0:
-            img = self.reader.read_stacked(raft_ccd_key)
+        if stampNum < 0:
+            img = self.guiderData.getStampArrayCoadd(detName)
         else:
-            img = self.reader.read(stamp_num, raft_ccd_key)
+            img = self.guiderData[detName, stampNum]
 
         bias = np.median(img)
-        img_isr = img - bias
-        lo, hi = np.nanpercentile(img_isr, [plo, phi])
+        imgIsr = img - bias
+        lo, hi = np.nanpercentile(imgIsr, [plo, phi])
 
-        im = axs.imshow(img_isr, origin="lower", cmap="Greys", vmin=lo, vmax=hi, animated=True)
-        axs.set_yticklabels([])
-        axs.set_xticklabels([])
-        axs.set_xticks([])
-        axs.set_xticks([], minor=True)
-        axs.set_yticks([])
-        axs.set_yticks([], minor=True)
+        im = axs.imshow(imgIsr, origin="lower", cmap="Greys", vmin=lo, vmax=hi, animated=True)
+
+        if not is_ticks:
+            axs.set_yticklabels([])
+            axs.set_xticklabels([])
+            axs.set_xticks([])
+            axs.set_xticks([], minor=True)
+            axs.set_yticks([])
+            axs.set_yticks([], minor=True)
         return im
 
-    def get_stamp_number_info(self, stamp_num=0) -> str:
+    def getStampNumberInfo(self, stampNum=0) -> str:
         """
         Generate a string with stamp number and observation info.
 
         Parameters
         ----------
-        stamp_num : int, optional
+        stampNum : int, optional
             Stamp number.
 
         Returns
@@ -1283,23 +1206,23 @@ class GuiderMosaicPlotter:
         """
         text = f"day_obs: {self.dayObs}" + "\n" + f"seq_num: {self.seqNum}" + "\n"
         text += f"orientation: {self.view}" + "\n"
-        if stamp_num > 0:
-            text += f"Stamp #: {stamp_num + 1:02d}"
+        if stampNum > 0:
+            text += f"Stamp #: {stampNum + 1:02d}"
         else:
-            text += f"Stacked Image w/ {self.n_stamps} stamps"
+            text += f"Stacked Image w/ {self.nStamps} stamps"
         return text
 
-    def plot_stamp_info(self, stamp_num=0, axs=None, more_text=None) -> plt.Text:
+    def plotStampInfo(self, stampNum=0, axs=None, moreText=None) -> plt.Text:
         """
         Plot stamp info text in the center panel.
 
         Parameters
         ----------
-        stamp_num : int, optional
+        stampNum : int, optional
             Stamp number.
         axs : matplotlib.axes.Axes, optional
             Axis to plot on.
-        more_text : str or None, optional
+        moreText : str or None, optional
             Additional text to append.
 
         Returns
@@ -1310,15 +1233,11 @@ class GuiderMosaicPlotter:
         if axs is None:
             axs = plt.gca()
 
-        axs.set_xticks([])
-        axs.set_yticks([])
-        axs.set_axis_off()
+        text = self.getStampNumberInfo(stampNum)
+        if moreText is not None:
+            text += "\n" + moreText
 
-        text = self.get_stamp_number_info(stamp_num)
-        if more_text is not None:
-            text += "\n" + more_text
-
-        stamp_id_text = axs.text(
+        stampIdText = axs.text(
             1.085,
             -0.10,
             text,
@@ -1326,21 +1245,22 @@ class GuiderMosaicPlotter:
             ha="center",
             va="center",
             fontsize=14,
-            color="firebrick",
+            color="grey",
             animated=True,
         )
         axs.set_axis_off()
-        self.stamp_id_axs = stamp_id_text
-        self.stamp_id_more_text = more_text
-        return stamp_id_text
+        clearAxisTicks(axs, isSpine=True)
+        self.stampIdAxs = stampIdText
+        self.stampIdMoreText = moreText
+        return stampIdText
 
-    def plot_text_ccd_name(self, detname, axs=None) -> plt.Text:
+    def plotTextCcdName(self, detName, axs=None) -> plt.Text:
         """
         Annotate a CCD panel with its detector name.
 
         Parameters
         ----------
-        detname : str
+        detName : str
             Detector name.
         axs : matplotlib.axes.Axes, optional
             Axis to annotate.
@@ -1355,23 +1275,23 @@ class GuiderMosaicPlotter:
         txt = axs.text(
             0.025,
             0.025,
-            detname,
+            detName,
             transform=axs.transAxes,
             ha="left",
             va="bottom",
             fontsize=9,
             weight="bold",
-            color="grey",
+            color=LIGHT_BLUE,
         )
         return txt
 
-    def plot_stamp_array(self, stamp_num=0, fig=None, axs=None, plo=90.0, phi=99.0) -> list:
+    def plotStampArray(self, stampNum=0, fig=None, axs=None, plo=90.0, phi=99.0, isAnimated=False) -> list:
         """
         Plot the stamp array for all the guiders in a mosaic layout.
 
         Parameters
         ----------
-        stamp_num : int, optional
+        stampNum : int, optional
             Stamp number.
         fig : matplotlib.figure.Figure, optional
             Figure object.
@@ -1381,6 +1301,8 @@ class GuiderMosaicPlotter:
             Lower percentile for image scaling.
         phi : float, optional
             Upper percentile for image scaling.
+        isAnimated : bool, optional
+            Whether this is part of an animation.
 
         Returns
         -------
@@ -1390,19 +1312,27 @@ class GuiderMosaicPlotter:
         if fig is None:
             gs = dict(hspace=0.0, wspace=0.0)
             fig, axs = plt.subplot_mosaic(
-                self.layout, figsize=(9.5, 9.5), gridspec_kw=gs, constrained_layout=False
+                cast(Any, self.LAYOUT), figsize=(9.5, 9.5), gridspec_kw=gs, constrained_layout=False
             )
 
         artists = []
-        for detname in self.detnames:
-            im = self.plot_stamp_ccd(detname, stamp_num=stamp_num, axs=axs[detname], plo=plo, phi=phi)
-            txt = self.plot_text_ccd_name(detname, axs=axs[detname])
+        for detName in self.detNames:
+            im = self.plotStampCcd(axs[detName], detName, stampNum=stampNum, plo=plo, phi=phi)
+            txt = self.plotTextCcdName(detName, axs=axs[detName])
             artists.extend([im, txt])
-        stamp_info = self.plot_stamp_info(axs=axs["center"], stamp_num=stamp_num)
-        artists.append(stamp_info)
+        stampInfo = self.plotStampInfo(axs=axs["center"], stampNum=stampNum)
+
+        # add coordinate arrow
+        cutoutSize = max(int(self.header["roi_cols"] or np.nan), int(self.header["roi_rows"] or np.nan))
+        if not isAnimated:
+            cam_rot_angle = cast(float, self.header.get("CAM_ROT_ANGLE", 0.0))
+            drawArrows(axs["arrow"], cutoutSize, 90.0 + cam_rot_angle)
+
+        artists.append(stampInfo)
+        fig.tight_layout()
         return artists
 
-    def plot_stacked_stamp_array(self, fig=None, axs=None) -> list:
+    def plotStackedStampArray(self, fig=None, axs=None, plo=50, phi=99) -> list:
         """
         Plot the stacked stamp array for all the guiders.
 
@@ -1418,23 +1348,25 @@ class GuiderMosaicPlotter:
         list
             List of matplotlib artist objects.
         """
-        artists = self.plot_stamp_array(stamp_num=-1, fig=fig, axs=axs)
+        artists = self.plotStampArray(stampNum=-1, fig=fig, axs=axs, plo=plo, phi=phi)
         return artists
 
-    def make_gif(self, n_stamp_max=10, fps=5, dpi=80, save_as=None) -> animation.ArtistAnimation:
+    def makeGif(
+        self, nStampMax=1000, fps=5, dpi=80, saveAs=None, plo=50, phi=99, figsize=(9, 9)
+    ) -> animation.ArtistAnimation:
         """
         Create an animated GIF of the guider CCD array
         over a sequence of stamps.
 
         Parameters
         ----------
-        n_stamp_max : int, optional
+        nStampMax : int, optional
             Maximum number of stamps to animate.
         fps : int, optional
             Frames per second.
         dpi : int, optional
             Dots per inch for saved animation.
-        save_as : str or None, optional
+        saveAs : str or None, optional
             If provided, save the animation to this file.
 
         Returns
@@ -1444,35 +1376,35 @@ class GuiderMosaicPlotter:
         """
         # Create the animation
         fig, axs = plt.subplot_mosaic(
-            self.layout,
-            figsize=(9.5, 9.5),
+            cast(Any, self.LAYOUT),
+            figsize=figsize,
             gridspec_kw=dict(hspace=0.0, wspace=0.0),
             constrained_layout=False,
         )
 
-        nStamps = min(self.n_stamps, n_stamp_max)
-        print("Number of stamps: ", nStamps)
+        nStamps = min(self.nStamps, nStampMax)
+        # print("Number of stamps: ", nStamps)
 
         # plot the stacked image
-        artists0 = self.plot_stacked_stamp_array(fig=fig, axs=axs)
-        frame_list = 5 * [artists0]
+        artists0 = self.plotStackedStampArray(fig=fig, axs=axs, plo=plo, phi=phi)
+        frameList = 5 * [artists0]
 
         # loop over the stamps
-        for i in range(nStamps):
-            artists = self.plot_stamp_array(stamp_num=i, fig=fig, axs=axs)
-            frame_list.append(artists)
+        for i in range(1, nStamps - 1):
+            artists = self.plotStampArray(stampNum=i, fig=fig, axs=axs, plo=plo, phi=phi, isAnimated=True)
+            frameList.append(artists)
 
-        frame_list += 5 * [artists0]
+        frameList += 5 * [artists0]
 
         # update the stamps
-        ani = animation.ArtistAnimation(fig, frame_list, interval=1000 / fps, blit=True, repeat_delay=1000)
+        ani = animation.ArtistAnimation(fig, frameList, interval=1000 / fps, blit=True, repeat_delay=1000)
 
-        ani.save(save_as, fps=fps, dpi=dpi, writer="pillow")
+        ani.save(saveAs, fps=fps, dpi=dpi, writer="pillow")
         plt.close(fig)
         return ani
 
-    def make_mp4(
-        self, n_stamp_max=10, fps=5, dpi=80, save_as="guider_ccd_array.mp4"
+    def makeMp4(
+        self, nStampMax=10, fps=5, dpi=80, saveAs="guider_ccd_array.mp4"
     ) -> animation.ArtistAnimation:
         """
         Create an MP4 animation of the guider CCD array
@@ -1480,13 +1412,13 @@ class GuiderMosaicPlotter:
 
         Parameters
         ----------
-        n_stamp_max : int, optional
+        nStampMax : int, optional
             Maximum number of stamps to animate.
         fps : int, optional
             Frames per second.
         dpi : int, optional
             Dots per inch for saved animation.
-        save_as : str, optional
+        saveAs : str, optional
             Output filename for the MP4 file.
 
         Returns
@@ -1494,32 +1426,30 @@ class GuiderMosaicPlotter:
         matplotlib.animation.ArtistAnimation
             The resulting animation object.
         """
-        from matplotlib import animation
-
         # Create the animation
         fig, axs = plt.subplot_mosaic(
-            self.layout,
+            cast(Any, self.LAYOUT),
             figsize=(9.5, 9.5),
             gridspec_kw=dict(hspace=0.0, wspace=0.0),
             constrained_layout=False,
         )
 
-        nStamps = min(self.n_stamps, n_stamp_max)
+        nStamps = min(self.nStamps, nStampMax)
         print("Number of stamps: ", nStamps)
 
         # plot the stacked image
-        artists0 = self.plot_stacked_stamp_array(fig=fig, axs=axs)
-        frame_list = 5 * [artists0]
+        artists0 = self.plotStackedStampArray(fig=fig, axs=axs)
+        frameList = 5 * [artists0]
 
         # loop over the stamps
         for i in range(nStamps):
-            artists = self.plot_stamp_array(stamp_num=i, fig=fig, axs=axs)
-            frame_list.append(artists)
-        frame_list += 5 * [artists0]
+            artists = self.plotStampArray(stampNum=i, fig=fig, axs=axs)
+            frameList.append(artists)
+        frameList += 5 * [artists0]
 
         # update the stamps
-        ani = animation.ArtistAnimation(fig, frame_list, interval=1000 / fps, blit=True, repeat_delay=1000)
-        ani.save(save_as, fps=fps, dpi=dpi)
+        ani = animation.ArtistAnimation(fig, frameList, interval=1000 / fps, blit=True, repeat_delay=1000)
+        ani.save(saveAs, fps=fps, dpi=dpi)
         plt.close(fig)
         return ani
 
@@ -1752,6 +1682,104 @@ def measure_photometric_variation(stars: pd.DataFrame, snr_th: int = 5) -> dict[
         "magoffset_rms": coefs_mag.scatter,
     }
     return phot_stats
+
+
+def annotateDetector(detName: str, ax: plt.Axes, color: str = "grey") -> plt.Text:
+    """
+    Annotate a detector panel with its name.
+
+    Parameters
+    ----------
+    detName : str
+        Name of the detector.
+    ax : matplotlib.axes.Axes
+        Axis to annotate.
+    color : str, optional
+        Color of the text.
+
+    Returns
+    -------
+    matplotlib.text.Text
+        The text artist added.
+    """
+    txt = ax.text(
+        0.025,
+        0.925,
+        detName,
+        transform=ax.transAxes,
+        ha="left",
+        va="bottom",
+        fontsize=9,
+        weight="bold",
+        color=color,
+    )
+    return txt
+
+
+def clearAxisTicks(ax: plt.Axes, isSpine: bool = False) -> None:
+    """
+    Remove all ticks and tick labels from an axis.
+
+    Parameters
+    ----------
+    ax : matplotlib.axes.Axes
+        Axis to clear.
+    is_spine : bool, optional
+        If False, hide the axis spines as well.
+
+    Returns
+    -------
+    None
+    """
+    ax.set_xticks([])
+    ax.set_yticks([])
+    ax.set_xticklabels([])
+    ax.set_yticklabels([])
+
+    if not isSpine:
+        for spine in ax.spines.values():
+            spine.set_visible(False)
+
+
+def drawArrows(
+    ax: plt.Axes,
+    cutoutSize: int,
+    rotAngle: float = 0,
+) -> None:
+    """
+    Draw Alt/Az reference arrows on a single axis.
+
+    Parameters
+    ----------
+    ax : matplotlib.axes.Axes
+        Axis to draw arrows on.
+    cutoutSize : int
+        Size of the cutout.
+    rotAngle : float, optional
+        Rotation angle in degrees.
+
+    Returns
+    -------
+    None
+    """
+    xmin1, ymin1 = draw_altaz_reference_arrow(ax, 0, cutout_size=cutoutSize)
+    xmin2, ymin2 = draw_altaz_reference_arrow(
+        ax,
+        rot_angle=rotAngle,
+        color="lightgrey",
+        altlabel="Alt",
+        azlabel="Az",
+        cutout_size=cutoutSize,
+    )
+
+    ax.set_aspect("equal", adjustable="box")
+    border = cutoutSize * 0.10
+    xmin = np.min([xmin1, xmin2]) - border
+    ymin = np.min([ymin1, ymin2]) - border
+    ax.set_xlim(xmin, xmin + cutoutSize)
+    ax.set_ylim(ymin, ymin + cutoutSize)
+    clearAxisTicks(ax, isSpine=True)
+    ax.set_axis_off()
 
 
 def draw_altaz_reference_arrow(

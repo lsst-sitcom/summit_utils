@@ -38,7 +38,6 @@ from lsst.afw.image import ExposureF, ImageF, MaskedImageF
 from lsst.pex.exceptions import InvalidParameterError
 from lsst.summit.utils.utils import detectObjectsInExp
 
-from .reading import GuiderReader
 from .transformation import convertRoiToCcd, convertToAltaz, convertToFocalPlane
 
 if TYPE_CHECKING:
@@ -97,7 +96,7 @@ class GuiderStarTracker:
     Parameters
     ----------
     guiderData : GuiderData
-        Guider dataclass instance containing guider data.
+        GuiderData instance containing guider data and metadata.
     psfFwhm : float, default=6.0
         Expected PSF full-width at half-maximum in pixels.
     minSnr : float, default=3.0
@@ -122,7 +121,7 @@ class GuiderStarTracker:
     ) -> None:
         self.log = logging.getLogger(__name__)
         self.guiderData = guiderData
-        self.nStamps = len(self.guiderData.timestamps)
+        self.nStamps = len(self.guiderData)
 
         # detection and QC parameters
         self.psfFwhm = psfFwhm
@@ -240,16 +239,17 @@ class GuiderStarTracker:
         starid = refStar["starid"].iloc[0]
         ampName = self.guiderData.getGuiderAmpName(guiderName)
 
-        imageList = self.guiderData.datasets[guiderName]
+        imageList = self.guiderData[guiderName]
         rows = []
 
         # get some basic info
         detNum = self.guiderData.getGuiderDetNum(guiderName)
         obsTime = Time(self.guiderData.header["start_time"])
+        timestamp = self.guiderData.timestampMap[guiderName]
 
         with warnings.catch_warnings():
             warnings.simplefilter("ignore", ErfaWarning)
-            elapsedTime = self.guiderData.timestamps - self.guiderData.timestamps[0]
+            elapsedTime = timestamp - timestamp[0]
 
         # --- per‐stamp measurements ---
         for i, stampObject in enumerate(imageList[1:]):
@@ -286,7 +286,7 @@ class GuiderStarTracker:
             sources_df["stamp"] = si
             sources_df["ampname"] = ampName
             sources_df["filter"] = self.guiderData.header["filter"]
-            sources_df["timestamp"] = self.guiderData.timestamps[si]
+            sources_df["timestamp"] = timestamp[si]
             sources_df["elapsed_time"] = elapsedTime[si].sec
 
             # Centroid in amplifier roi coordinates
@@ -300,7 +300,7 @@ class GuiderStarTracker:
                 self.guiderData,
                 guiderName,
             )
-            wcs = self.guiderData.wcs[guiderName]
+            wcs = self.guiderData.getWcs(guiderName)
             xfp, yfp = convertToFocalPlane(xccd, yccd, detNum)
             alt, az = convertToAltaz(xccd, yccd, wcs, obsTime)
 
@@ -309,7 +309,7 @@ class GuiderStarTracker:
             sources_df["fwhm"] *= pixel_scale
 
             # Rotate e1, e2 to alt/az coordinates
-            camera_angle = float(self.guiderData.header["CAM_ROT_ANGLE"])
+            camera_angle = float(self.guiderData.camRotAngle)
             e1_altaz, e2_altaz = rotate_ellipticity(sources_df["e1"], sources_df["e2"], 90 + camera_angle)
 
             # Add reference positions
@@ -351,7 +351,7 @@ class GuiderStarTracker:
         #    global_id = det_index * 10000 + local starid
         stars["detid"] = stars["detector"].map(detMap)
         stars["trackid"] = stars["starid"] * 1000 + stars["stamp"]
-        stars["expid"] = self.guiderData.header["expid"]
+        stars["expid"] = self.guiderData.expid
         stars["filter"] = self.guiderData.header["filter"]
         return stars
 
@@ -623,7 +623,7 @@ def build_reference_catalog(
     """
     table_list = []
     for guiderName in guider.guiderNames:
-        array = guider.getStackedStampArray(detName=guiderName, isIsr=True)
+        array = guider.getStampArrayCoadd(guiderName)
         _, median, std = sigma_clipped_stats(array, sigma=3.0)
         sources = run_source_detection(
             array, th=min_snr, max_ellipticity=max_ellipticity, bkg_std=std + median
@@ -926,19 +926,3 @@ def rotate_ellipticity(e1, e2, theta_deg):
     e1_rot = e1 * cos2t + e2 * sin2t
     e2_rot = -e1 * sin2t + e2 * cos2t
     return e1_rot, e2_rot
-
-
-if __name__ == "__main__":
-    seqNum, dayObs = 461, 20250425
-    reader = GuiderReader(view="dvcs", verbose=True)
-    guider = reader.get(dayObs=dayObs, seqNum=seqNum)
-
-    starTracker = GuiderStarTracker(guider, psfFwhm=6.0)
-
-    # the ref catalog will be provided by the user, .e.g gaia
-    # if not, the class will self-generate one is based on the stack
-    # of the stamps of each guider
-    stars = starTracker.trackGuiderStars(refCatalog=None)
-
-    print(stars.head())
-    print(stars.groupby("detector").size())

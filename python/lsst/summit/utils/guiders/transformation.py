@@ -674,7 +674,7 @@ def convertRoiToCcd(
         If the view in GuiderData is not supported.
     """
     view = guiderData.view
-    stamps = guiderData.datasets[guiderName]
+    stamps = guiderData[guiderName]
 
     if np.isscalar(xroi):
         xroi = np.array([xroi])
@@ -733,7 +733,7 @@ def convertCcdToRoi(
         If the view in GuiderData is not supported.
     """
     view = guiderData.view
-    stamps = guiderData.datasets[guiderName]
+    stamps = guiderData[guiderName]
 
     if len(xccd) == 0:
         return np.array([]), np.array([])
@@ -779,7 +779,7 @@ def convertCcdToDvcs(
     ydvcs : np.ndarray
         Array of y DVCS focal plane coordinates.
     """
-    stamps = guiderData.datasets[guiderName]
+    stamps = guiderData[guiderName]
 
     if len(xccd) == 0:
         return np.array([]), np.array([])
