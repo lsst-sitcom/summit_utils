@@ -33,7 +33,7 @@ from .transformation import convertRoiToCcd, convertToAltaz, convertToFocalPlane
 if TYPE_CHECKING:
     from .reading import GuiderData
 
-from .detection import buildReferenceCatalog, makeBlankCatalog, trackStarAcrossStamp
+from .detection import GuiderStarTrackerConfig, buildReferenceCatalog, makeBlankCatalog, trackStarAcrossStamp
 
 
 def _selBrighestStar(refCatalog: pd.DataFrame, guiderName: str) -> tuple[float, float]:
@@ -53,39 +53,32 @@ class GuiderStarTracker:
     ----------
     guiderData : GuiderData
         GuiderData instance containing guider data and metadata.
-    minSnr : float, default=3.0
-        Minimum signal-to-noise ratio for stars in the reference catalog.
-    minStampDetections : int, default=30
-        Minimum number of stamps a star must be detected
-        in to be considered valid.
-    edgeMargin : int, default=20
-        Pixels from CCD edge to exclude reference sources.
-    maxEllipticity : float, default=0.2
-        Maximum allowed ellipticity for sources.
-    cutOutSize : int, default=30
-        Size of the cutout around each star in pixels.
+    config : GuiderStarTrackerConfig, optional
+        Config object with setup and quality control parameters.
     """
 
     def __init__(
         self,
         guiderData: GuiderData,
-        minSnr: float = 3.0,
-        minStampDetections: int = 30,
-        edgeMargin: int = 20,
-        maxEllipticity: float = 0.2,
-        cutOutSize: int = 30,
+        config: GuiderStarTrackerConfig = GuiderStarTrackerConfig(),
     ) -> None:
+        """
+        Initialize the GuiderStarTracker with guider data and configuration.
+
+        Parameters
+        ----------
+        guiderData : GuiderData
+            GuiderData instance containing guider data and metadata.
+        config : GuiderStarTrackerConfig, optional
+            Config object with setup and quality control parameters.
+        """
         self.log = logging.getLogger(__name__)
         self.guiderData = guiderData
-        self.nStamps = len(self.guiderData)
-        self.expid = self.guiderData.expid
+        self.nStamps = len(guiderData)
+        self.expid = guiderData.expid
 
-        # detection and QC parameters
-        self.minSnr = minSnr
-        self.minStampDetections = minStampDetections
-        self.edgeMargin = edgeMargin
-        self.maxEllipticity = maxEllipticity
-        self.cutOutSize = cutOutSize
+        # detection and QC parameters from config
+        self.config = config
 
         # initialize outputs
         self.blankStars = makeBlankCatalog()
@@ -108,13 +101,7 @@ class GuiderStarTracker:
         """
         if refCatalog is None:
             self.log.info("Using self-generated refcat")
-            refCatalog = buildReferenceCatalog(
-                self.guiderData,
-                self.log,
-                minSnr=self.minSnr,
-                edgeMargin=self.edgeMargin,
-                maxEllipticity=self.maxEllipticity,
-            )
+            refCatalog = buildReferenceCatalog(self.guiderData, self.log, self.config)
 
         if refCatalog.empty:
             self.log.warning(f"Reference catalog is empty for {self.expid}. No stars to track.")
@@ -144,13 +131,16 @@ class GuiderStarTracker:
     ) -> pd.DataFrame:
         """Track stars for a single guider using the reference catalog."""
         gd = self.guiderData
+        cfg = self.config
+
+        # Select the brightest star from the reference catalog
         refCenter = _selBrighestStar(refCatalog, guiderName)
-        cutOutSize = self.cutOutSize
-        starStamps = trackStarAcrossStamp(refCenter, gd, guiderName, gain, cutOutSize)
+
+        # Measure the stars across all stamps for this guider
+        starStamps = trackStarAcrossStamp(refCenter, gd, guiderName, cfg)
 
         # Apply quality cuts to the tracked stars
-        kwargs = {k: getattr(self, k) for k in ["minSnr", "minStampDetections", "maxEllipticity"]}
-        stars = applyQualityCuts(starStamps, **kwargs)
+        stars = applyQualityCuts(starStamps, cfg)
 
         if stars.empty:
             self.log.warning(
@@ -215,14 +205,17 @@ def convertToCcdFocalPlaneAltAz(stars: pd.DataFrame, guiderData: GuiderData, gui
     return stars
 
 
-def applyQualityCuts(
-    stars: pd.DataFrame, minSnr: float = 3, minStampDetections: int = 20, maxEllipticity: float = 0.2
-) -> pd.DataFrame:
+def applyQualityCuts(stars: pd.DataFrame, config: GuiderStarTrackerConfig) -> pd.DataFrame:
     """
     Minimum SNR, minimum number of detections, and maximum ellipticity.
     """
+    minSnr = config.minSnr
+    minStampDetections = config.minStampDetections
+    maxEllipticity = config.maxEllipticity
+    edgeMargin = config.edgeMargin
+
     # Filter by minimum SNR
-    mask1 = (stars["snr"] >= minSnr) & (stars["flux"] > 0) & (stars["flux_err"] > 0) & (stars["fwhm"] > 1)
+    mask1 = (stars["snr"] >= minSnr) & (stars["flux"] > 0) & (stars["flux_err"] > 0)
 
     # Filter by minimum number of detections
     mask2 = stars["stamp"].groupby(stars["detector"]).transform("count") >= minStampDetections
@@ -232,8 +225,16 @@ def applyQualityCuts(
     mask3 = (stars["e1"].abs() <= maxEllipticity) & (stars["e1"].abs() <= maxEllipticity)
     mask3 &= eabs <= maxEllipticity
 
+    # Add edge margin mask
+    mask4 = (
+        (stars["xroi"] >= edgeMargin)
+        & (stars["xroi"] <= stars["xroi"].max() - edgeMargin)
+        & (stars["yroi"] >= edgeMargin)
+        & (stars["yroi"] <= stars["yroi"].max() - edgeMargin)
+    )
+
     # Combine all masks
-    mask = mask1 & mask2 & mask3
+    mask = mask1 & mask2 & mask3 & mask4
     return stars[mask].copy()
 
 

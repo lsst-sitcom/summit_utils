@@ -41,56 +41,6 @@ from lsst.summit.utils.utils import detectObjectsInExp
 
 from .reading import GuiderData
 
-
-def trackStarAcrossStamp(
-    refCenter: tuple[float, float],
-    guiderData: GuiderData,
-    guiderName: str,
-    gain: int = 1,
-    cutoutSize: int = 30,
-) -> pd.DataFrame:
-    """
-    Track a star across all guider stamps, returning a DataFrame with
-    per-stamp centroids, shapes, fluxes, and residuals.
-    """
-    gd = guiderData
-    expid = gd.expid
-
-    # loop over stamps
-    results = []
-    for i in range(len(gd)):
-        cutout = getCutouts(gd[guiderName, i], refCenter, cutoutSize)
-        array = cutout.data
-
-        if np.count_nonzero(array == 0) < 1:
-            # Blank Stamp, skip this stamp
-            continue
-
-        # Calculate read noise and background std
-        _, median, bkgStd = sigma_clipped_stats(array.flatten(), sigma=3.0)
-
-        # 2)  Track the star across all stamps for this guider
-        star = runGalSim(array - median, gain=gain, bkgStd=bkgStd)
-        star.xroi += cutout.xmin_original
-        star.yroi += cutout.ymin_original
-        sf = star.toDataFrame()
-        sf["stamp"] = i  # Add stamp index
-        results.append(sf)
-
-    # 3)  Concatenate & quality-cut
-    stars = pd.concat(results, ignore_index=True)
-    if stars.empty:
-        return makeBlankCatalog()
-
-    # 4)  Add metadata
-    stars["detector"] = guiderName
-    stars["expid"] = expid
-    stars["ampname"] = gd.getGuiderAmpName(guiderName)
-    stars["detid"] = gd.getGuiderDetNum(guiderName)
-    stars["filter"] = gd.header.get("filter", "UNKNOWN")
-    return stars
-
-
 # ----------------------------------------------------------------------
 
 # === Make Blank Catalog ===
@@ -110,6 +60,165 @@ def makeBlankCatalog() -> pd.DataFrame:
     Create a blank DataFrame with the default columns for a star catalog.
     """
     return pd.DataFrame(columns=DEFAULT_COLUMNS)
+
+
+# ----------------------------------------------------------------------
+
+
+@dataclass(frozen=True, slots=True)
+class GuiderStarTrackerConfig:
+    """Configuration for the GuiderStarTracker.
+
+    Parameters
+    ----------
+    cutOutSize : int
+        Size of the cutout around the star for tracking.
+    aperSizeArcsec : float
+        Aperture size in arcseconds for star detection.
+    minSnr : float
+        Minimum signal-to-noise ratio for star detection.
+    minStampDetections : int
+        Minimum number of detections across all stamps for a star
+        to be considered valid.
+    edgeMargin : int
+        Margin in pixels to avoid edge effects in the image.
+    maxEllipticity : float
+        Maximum allowed ellipticity for a star to be considered valid.
+    gain : float
+        Gain factor for the guider data, used in flux calculations.
+    """
+
+    minSnr: float = 10.0
+    minStampDetections: int = 30
+    edgeMargin: int = 10
+    maxEllipticity: float = 0.3
+    cutOutSize: int = 50
+    aperSizeArcsec: float = 3.0
+    gain: float = 1.0
+
+
+def trackStarAcrossStamp(
+    refCenter: tuple[float, float],
+    guiderData: GuiderData,
+    guiderName: str,
+    config: GuiderStarTrackerConfig = GuiderStarTrackerConfig(),
+) -> pd.DataFrame:
+    """
+    Track a star across all guider stamps, computes centroid, shape, and flux.
+
+    Galsim is used for centroid and shape measurements.
+    The flux is measured using aperture photometry.
+
+    Parameters
+    ----------
+    refCenter : tuple[float, float]
+        Reference position (x, y) in pixel coordinates for the star.
+    guiderData : GuiderData
+        Guider data containing the image stamps and metadata.
+    guiderName : str
+        Name of the guider to process.
+    config : GuiderStarTrackerConfig, optional
+        Configuration parameters for the star tracker.
+    Returns
+    -------
+    starsDf : pd.DataFrame
+        DataFrame containing the tracked star measurements across all stamps.
+    """
+    gd = guiderData
+    expid = gd.expid
+    wcs = gd.getWcs(guiderName)
+    pixelScale = wcs.getPixelScale().asArcseconds()
+
+    # Initialize parameters from config
+    aperRadius = config.aperSizeArcsec / pixelScale
+    cutOutSize = config.cutOutSize
+    gain = config.gain
+
+    # loop over stamps
+    results = []
+    for i in range(len(gd)):
+        cutout = getCutouts(gd[guiderName, i], refCenter, cutOutSize)
+        data = cutout.data
+
+        # Blank Stamp, skip this stamp
+        if np.all(data == 0):
+            continue
+
+        # Subtract the background
+        annulus = (aperRadius * 1.0, aperRadius * 2.0)
+        dataBkgSub, bkgStd = annulusBackgroundSubtraction(data, annulus)
+
+        # 2)  Track the star across all stamps for this guider
+        star = runGalSim(dataBkgSub, gain=gain, bkgStd=bkgStd)
+
+        # 3) Make aperture photometry measurements
+        # Galsim flux is the normalization of the Gaussian, not w/ fixed aper.
+        flux, fluxErr = aperturePhotometry(data, (star.xroi, star.yroi), aperRadius, gain=gain)
+        star.flux = flux
+        star.flux_err = fluxErr
+
+        # 4)  Add centroid and shape in pixel coordinates
+        star.xroi += cutout.xmin_original
+        star.yroi += cutout.ymin_original
+
+        # Add stamp index
+        sf = star.toDataFrame()
+        sf["stamp"] = i
+        results.append(sf)
+
+    # 3)  Concatenate
+    if not results:
+        return makeBlankCatalog()
+    stars = pd.concat(results, ignore_index=True)
+
+    # 4)  Add metadata
+    stars["detector"] = guiderName
+    stars["expid"] = expid
+    stars["ampname"] = gd.getGuiderAmpName(guiderName)
+    stars["detid"] = gd.getGuiderDetNum(guiderName)
+    stars["filter"] = gd.header.get("filter", "UNKNOWN")
+    return stars
+
+
+def annulusBackgroundSubtraction(data, annulus):
+    """Subtract background from the data using an annulus."""
+    rin, rout = annulus
+    x0, y0 = data.shape[1] // 2, data.shape[0] // 2
+    x, y = np.indices(data.shape)
+    annMask = ((x - x0) ** 2 + (y - y0) ** 2 >= rin**2) & ((x - x0) ** 2 + (y - y0) ** 2 <= rout**2)
+    _, bkgSub, bkgStd = sigma_clipped_stats(data[annMask], sigma=3.0)
+    dataBkgSub = data - bkgSub
+    return dataBkgSub, bkgStd
+
+
+def aperturePhotometry(cutout, center, radius, annulus=None, gain=1.0):
+    """Aperture photometry on a cutout image."""
+    if not annulus:
+        rin, rout = radius, radius * 2
+
+    ny, nx = cutout.shape
+    y, x = np.indices((ny, nx))
+    x0, y0 = center
+
+    # Background mask
+    aperMask = (x - x0) ** 2 + (y - y0) ** 2 <= radius**2
+    annMask = ((x - x0) ** 2 + (y - y0) ** 2 >= rin**2) & ((x - x0) ** 2 + (y - y0) ** 2 <= rout**2)
+
+    # Background level (median)
+    bkgMed = np.median(cutout[annMask])
+
+    # Aperture sum
+    fluxRaw = np.sum(cutout[aperMask])
+    npix = aperMask.sum()
+    fluxNet = fluxRaw - bkgMed * npix
+
+    # Background RMS
+    bkgStd = np.std(cutout[annMask])
+
+    # Flux error
+    fluxErr = np.sqrt(fluxNet / gain + npix * bkgStd**2)
+
+    return fluxNet, fluxErr
 
 
 # ----------------------------------------------------------------------
@@ -348,15 +457,17 @@ def makeEllipticalGaussianStar(
 def buildReferenceCatalog(
     guiderData: "GuiderData",
     log: logging.Logger,
-    maxEllipticity: float = 0.2,
-    minSnr: float = 3.0,
-    edgeMargin: int = 20,
+    config: "GuiderStarTrackerConfig" = GuiderStarTrackerConfig(),
 ) -> pd.DataFrame:
     """
     Build a reference star catalog from each guider's coadded stamp.
     Returns a DataFrame with the brightest star per guider.
     """
     expId = guiderData.expid
+    maxEllipticity = config.maxEllipticity
+    minSnr = config.minSnr
+    edgeMargin = config.edgeMargin
+
     tableList = []
     for guiderName in guiderData.guiderNames:
         array = guiderData.getStampArrayCoadd(guiderName)
