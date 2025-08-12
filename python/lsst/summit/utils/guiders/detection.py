@@ -45,12 +45,12 @@ from .reading import GuiderData
 
 # === Make Blank Catalog ===
 _DEFAULT_COLUMNS: str = (
-    "trackid detector expid timestamp dalt daz dtheta dx dy "
-    "xroi yroi xccd yccd xroi_ref yroi_ref xccd_ref yccd_ref "
+    "trackid detector expid elapsed_time dalt daz dtheta dx dy "
+    "fwhm xroi yroi xccd yccd xroi_ref yroi_ref xccd_ref yccd_ref "
     "dxfp dyfp xfp yfp alt az xfp_ref yfp_ref alt_ref az_ref "
     "theta theta_ref flux flux_err magoffset snr "
-    "ixx iyy ixy fwhm e1 e2 e1_altaz e2_altaz "
-    "ampname elapsed_time stamp detid filter "
+    "ixx iyy ixy e1 e2 e1_altaz e2_altaz "
+    "ampname timestamp stamp detid filter "
 )
 DEFAULT_COLUMNS: tuple[str, ...] = tuple(_DEFAULT_COLUMNS.split())
 
@@ -90,7 +90,7 @@ class GuiderStarTrackerConfig:
 
     minSnr: float = 10.0
     minStampDetections: int = 30
-    edgeMargin: int = 10
+    edgeMargin: int = 25
     maxEllipticity: float = 0.3
     cutOutSize: int = 50
     aperSizeArcsec: float = 3.0
@@ -134,37 +134,21 @@ def trackStarAcrossStamp(
     cutOutSize = config.cutOutSize
     gain = config.gain
 
+    # check if the ref center is within the image bounds
+    stampShape = gd[guiderName, 0].shape
+    if not (0 <= refCenter[0] < stampShape[1]) or not (0 <= refCenter[1] < stampShape[0]):
+        return makeBlankCatalog()
+
     # loop over stamps
     results = []
     for i in range(len(gd)):
-        cutout = getCutouts(gd[guiderName, i], refCenter, cutOutSize)
-        data = cutout.data
-
-        # Blank Stamp, skip this stamp
-        if np.all(data == 0):
-            continue
-
-        # Subtract the background
-        annulus = (aperRadius * 1.0, aperRadius * 2.0)
-        dataBkgSub, bkgStd = annulusBackgroundSubtraction(data, annulus)
-
-        # 2)  Track the star across all stamps for this guider
-        star = runGalSim(dataBkgSub, gain=gain, bkgStd=bkgStd)
-
-        # 3) Make aperture photometry measurements
-        # Galsim flux is the normalization of the Gaussian, not w/ fixed aper.
-        flux, fluxErr = aperturePhotometry(data, (star.xroi, star.yroi), aperRadius, gain=gain)
-        star.flux = flux
-        star.flux_err = fluxErr
-
-        # 4)  Add centroid and shape in pixel coordinates
-        star.xroi += cutout.xmin_original
-        star.yroi += cutout.ymin_original
+        data = gd[guiderName, i]
+        star = measureStarOnStamp(data, refCenter, cutOutSize, aperRadius, gain=gain).toDataFrame()
 
         # Add stamp index
-        sf = star.toDataFrame()
-        sf["stamp"] = i
-        results.append(sf)
+        if not star.empty:
+            star["stamp"] = i
+            results.append(star)
 
     # 3)  Concatenate
     if not results:
@@ -186,39 +170,10 @@ def annulusBackgroundSubtraction(data, annulus):
     x0, y0 = data.shape[1] // 2, data.shape[0] // 2
     x, y = np.indices(data.shape)
     annMask = ((x - x0) ** 2 + (y - y0) ** 2 >= rin**2) & ((x - x0) ** 2 + (y - y0) ** 2 <= rout**2)
+    annMask &= np.isfinite(data)
     _, bkgSub, bkgStd = sigma_clipped_stats(data[annMask], sigma=3.0)
     dataBkgSub = data - bkgSub
     return dataBkgSub, bkgStd
-
-
-def aperturePhotometry(cutout, center, radius, annulus=None, gain=1.0):
-    """Aperture photometry on a cutout image."""
-    if not annulus:
-        rin, rout = radius, radius * 2
-
-    ny, nx = cutout.shape
-    y, x = np.indices((ny, nx))
-    x0, y0 = center
-
-    # Background mask
-    aperMask = (x - x0) ** 2 + (y - y0) ** 2 <= radius**2
-    annMask = ((x - x0) ** 2 + (y - y0) ** 2 >= rin**2) & ((x - x0) ** 2 + (y - y0) ** 2 <= rout**2)
-
-    # Background level (median)
-    bkgMed = np.median(cutout[annMask])
-
-    # Aperture sum
-    fluxRaw = np.sum(cutout[aperMask])
-    npix = aperMask.sum()
-    fluxNet = fluxRaw - bkgMed * npix
-
-    # Background RMS
-    bkgStd = np.std(cutout[annMask])
-
-    # Flux error
-    fluxErr = np.sqrt(fluxNet / gain + npix * bkgStd**2)
-
-    return fluxNet, fluxErr
 
 
 # ----------------------------------------------------------------------
@@ -244,16 +199,48 @@ class StarMeasurement:
     def toDataFrame(self) -> pd.DataFrame:
         """
         Return a single-row DataFrame for this measurement.
-        NaN/Inf values are kept as-is (pandas handles them well).
+        If xroi is NaN, return an empty DataFrame.
+        Otherwise, return a DataFrame with all columns
         """
-        data = asdict(self)
-        return pd.DataFrame([data])
+        d = asdict(self)
+        # Only drop the column if xroi is NaN (i.e., measurement failed)
+        if not np.isfinite(d.get("xroi", np.nan)):
+            # Return an empty DataFrame with all the keys as columns,
+            return pd.DataFrame(columns=list(d.keys()))
+        # Otherwise, return all columns, even if some are NaN
+        return pd.DataFrame([d])
+
+    def aperturePhotometry(self, cutout, radius, bkgStd=1, gain=1.0):
+        """Aperture photometry on a cutout image."""
+        x0, y0 = self.xroi, self.yroi
+        if np.isfinite(x0) and np.isfinite(y0):
+            ny, nx = cutout.shape
+            y, x = np.indices((ny, nx))
+            x0, y0 = self.xroi, self.yroi
+
+            # Background mask
+            aperMask = (x - x0) ** 2 + (y - y0) ** 2 <= radius**2
+
+            # Aperture sum
+            fluxNet = np.nansum(cutout[aperMask])
+            fluxNet = np.clip(fluxNet, 0, None)  # Ensure non-negative flux
+            npix = aperMask.sum()
+
+            # Flux error
+            fluxErr = np.sqrt(fluxNet / gain + npix * bkgStd**2)
+            snr = fluxNet / (fluxErr + 1e-9) if fluxErr > 0 else 0.0
+
+            # Update the measurement
+            self.flux = fluxNet
+            self.flux_err = fluxErr
+            self.snr = snr
 
 
 def runSourceDetection(
     image: np.ndarray,
     threshold: float = 10,
-    bkgStd: float = 15,
+    cutOutSize: int = 25,
+    aperRadius: int = 5,
     gain: float = 1.0,
 ) -> pd.DataFrame:
     """
@@ -265,8 +252,10 @@ def runSourceDetection(
         2D image array.
     threshold : float
         Detection threshold.
-    bkgStd : float
-        Background RMS per pixel.
+    cutOutSize : int
+        Size of the cutout around each detected source.
+    aperRadius : int
+        Aperture radius in pixels for photometry.
     gain : float
         Detector gain (e-/ADU).
 
@@ -286,21 +275,51 @@ def runSourceDetection(
 
     results = []
     for fp in footprints.getFootprints():
-        # Create a cutout of the image around the footprint
-        bbox = fp.getBBox()
-        subimage = exposure.getMaskedImage().getImage()[bbox]
-
-        array = subimage.array
-        if not np.isfinite(array).all():
+        # only single peaked stars
+        if len(fp.getPeaks()) > 1:
             continue
 
-        star = runGalSim(array, gain=gain, bkgStd=bkgStd)
-        star.xroi += bbox.getMinX()
-        star.yroi += bbox.getMinY()
+        # Create a cutout of the image around the footprint
+        refCenter = tuple(fp.getCentroid())
+        star = measureStarOnStamp(image, refCenter, cutOutSize, aperRadius, gain).toDataFrame()
+        if not star.empty:
+            results.append(star)
 
-        results.append(star)
-    df = pd.concat([star.toDataFrame() for star in results], ignore_index=True)
+    df = pd.concat([sf for sf in results], ignore_index=True)
     return df
+
+
+def measureStarOnStamp(
+    stamp: np.ndarray,
+    refCenter: tuple[float, float],
+    cutOutSize: int,
+    aperRadius: int,
+    gain: float = 1.0,
+) -> StarMeasurement:
+    """Crop, subtract background, run HSM,
+    do perture photometry, return star.
+    """
+    cutout = getCutouts(stamp, refCenter, cutoutSize=cutOutSize)
+    data = cutout.data
+
+    if np.all(data == 0) | (not np.isfinite(data).all()):
+        return StarMeasurement()
+
+    # 1) Subtract the background
+    annulus = (aperRadius * 1.0, aperRadius * 2)
+    dataBkgSub, bkgStd = annulusBackgroundSubtraction(data, annulus)
+
+    # 2)  Track the star across all stamps for this guider
+    star = runGalSim(dataBkgSub, gain=gain, bkgStd=bkgStd)
+
+    # 3) Make aperture photometry measurements
+    # Galsim flux is the normalization of the Gaussian, not w/ fixed aper.
+    star.aperturePhotometry(dataBkgSub, aperRadius, gain=gain, bkgStd=bkgStd)
+
+    # 4)  Add centroid and shape in amplifier roi coordinates
+    star.xroi += cutout.xmin_original
+    star.yroi += cutout.ymin_original
+    return star
 
 
 def runGalSim(
@@ -336,7 +355,7 @@ def runGalSim(
         nEff = 2 * np.pi * sigma**2 * np.sqrt(1 - ellipticity**2)
         shotNoise = np.sqrt(nEff * bkgStd**2)
         fluxErr = np.sqrt(flux / gain + shotNoise**2)
-        snr = flux / shotNoise if flux > 0 else 0.0
+        snr = flux / (shotNoise + 1e-9) if shotNoise > 0 else 0.0
 
         # Calculate second moments
         ixx = sigma**2 * (1 + e1)
@@ -464,57 +483,36 @@ def buildReferenceCatalog(
     Returns a DataFrame with the brightest star per guider.
     """
     expId = guiderData.expid
-    maxEllipticity = config.maxEllipticity
     minSnr = config.minSnr
-    edgeMargin = config.edgeMargin
+    gain = config.gain
+    cutOutSize = config.cutOutSize
 
     tableList = []
     for guiderName in guiderData.guiderNames:
+        pixelScale = guiderData.getWcs(guiderName).getPixelScale().asArcseconds()
+        aperRadius = int(config.aperSizeArcsec / pixelScale)
+
         array = guiderData.getStampArrayCoadd(guiderName)
         array = np.where(array < 0, 0, array)  # Ensure no negative values
-        _, median, std = sigma_clipped_stats(array, sigma=3.0)
         sources = runSourceDetection(
             array,
             threshold=minSnr,
-            bkgStd=std + median,
-            gain=1.0,
+            aperRadius=aperRadius,
+            cutOutSize=cutOutSize,
+            gain=gain,
         )
         if sources.empty:
             log.warning(f"No sources detected in `buildReferenceCatalog`" f"for {guiderName} in {expId}. ")
             continue
 
-        # Filter out edge sources
-        h, w = array.shape
-        mask = (
-            (sources["xroi"] > edgeMargin)
-            & (sources["xroi"] < w - edgeMargin)
-            & (sources["yroi"] > edgeMargin)
-            & (sources["yroi"] < h - edgeMargin)
-            & (sources["snr"] >= minSnr)
-            & (np.sqrt(sources["e1"] ** 2 + sources["e2"] ** 2) <= maxEllipticity)
-            & (sources["flux"] > 0)  # Ensure positive flux
-            & (sources["fwhm"] > 1)  # Ensure positive FWHM at least 1 pixel
-        )
-        # Ensure we have sources to process
-        if np.count_nonzero(mask) == 0:
-            log.warning(
-                f"No sources after filering in `buildReferenceCatalog`" f"for {guiderName} in {expId}."
-            )
-            continue
-
-        sources = sources[mask]
-        sources["fwhm_inv"] = 1 / sources["fwhm"]
-        sources.sort_values(by=["snr", "fwhm_inv"], ascending=False, inplace=True)
+        sources.sort_values(by=["snr"], ascending=False, inplace=True)
         sources.reset_index(drop=True, inplace=True)
 
-        # pick the brightest source only
-        bright = sources.iloc[[0]].copy()
-
         detNum = guiderData.getGuiderDetNum(guiderName)
-        bright["detector"] = guiderName
-        bright["detid"] = detNum
-        bright["starid"] = detNum * 100
-        tableList.append(bright)
+        sources["detector"] = guiderName
+        sources["detid"] = detNum
+        sources["starid"] = detNum * 100
+        tableList.append(sources)
 
     if len(tableList) == 0:
         log.warning(f"`buildReferenceCatalog` failed" f" - no stars detected in any guider for {expId}.")

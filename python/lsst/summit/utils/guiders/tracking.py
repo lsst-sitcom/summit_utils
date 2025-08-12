@@ -41,8 +41,8 @@ def _selBrighestStar(refCatalog: pd.DataFrame, guiderName: str) -> tuple[float, 
     Select the brightest star from the reference catalog for a given guider.
     """
     ref = refCatalog[refCatalog["detector"] == guiderName].copy()
-    ref.sort_values(by=["snr", "fwhm_inv"], ascending=False, inplace=True)
-    return (ref["xroi"].values, ref["yroi"].values)
+    ref.sort_values(by=["snr"], ascending=False, inplace=True)
+    return (ref["xroi"].values[0], ref["yroi"].values[0])
 
 
 class GuiderStarTracker:
@@ -76,6 +76,7 @@ class GuiderStarTracker:
         self.guiderData = guiderData
         self.nStamps = len(guiderData)
         self.expid = guiderData.expid
+        self.shape = guiderData[guiderData.detNameMax, 0].shape
 
         # detection and QC parameters from config
         self.config = config
@@ -101,7 +102,8 @@ class GuiderStarTracker:
         """
         if refCatalog is None:
             self.log.info("Using self-generated refcat")
-            refCatalog = buildReferenceCatalog(self.guiderData, self.log, self.config)
+            _refCatalog = buildReferenceCatalog(self.guiderData, self.log, self.config)
+            refCatalog = applyQualityCuts(_refCatalog, self.shape, self.config)
 
         if refCatalog.empty:
             self.log.warning(f"Reference catalog is empty for {self.expid}. No stars to track.")
@@ -131,7 +133,9 @@ class GuiderStarTracker:
     ) -> pd.DataFrame:
         """Track stars for a single guider using the reference catalog."""
         gd = self.guiderData
+        shape = self.shape
         cfg = self.config
+        minStampDetections = cfg.minStampDetections
 
         # Select the brightest star from the reference catalog
         refCenter = _selBrighestStar(refCatalog, guiderName)
@@ -140,7 +144,11 @@ class GuiderStarTracker:
         starStamps = trackStarAcrossStamp(refCenter, gd, guiderName, cfg)
 
         # Apply quality cuts to the tracked stars
-        stars = applyQualityCuts(starStamps, cfg)
+        stars = applyQualityCuts(starStamps, shape, cfg)
+
+        # Filter by minimum number of detections
+        mask = stars["stamp"].groupby(stars["detector"]).transform("count") >= minStampDetections
+        stars = stars[mask].copy()
 
         if stars.empty:
             self.log.warning(
@@ -172,11 +180,18 @@ def addTimeStamp(stars: pd.DataFrame, guiderData: GuiderData, guiderName: str) -
     Add timestamp and elapsed time to the star DataFrame.
     """
     gd = guiderData
+    # the stamp are aligned with the index of the timestamps
     stampIndex = stars["stamp"].to_numpy()
     indices = np.array([ix for ix in stampIndex], dtype=int)
+
+    # get the timestamp for each stamp
     timeStamp = gd.timestampMap[guiderName][indices]
+
+    # inital time is the time of the first stamp of the guider with most stamps
+    t0 = gd.timestampMap[gd.detNameMax][0]
+
     stars["timestamp"] = timeStamp
-    stars["elapsed_time"] = (timeStamp - timeStamp[0]).sec
+    stars["elapsed_time"] = (timeStamp - t0).sec
     return stars
 
 
@@ -205,20 +220,33 @@ def convertToCcdFocalPlaneAltAz(stars: pd.DataFrame, guiderData: GuiderData, gui
     return stars
 
 
-def applyQualityCuts(stars: pd.DataFrame, config: GuiderStarTrackerConfig) -> pd.DataFrame:
+def applyQualityCuts(
+    stars: pd.DataFrame, shape: tuple[float, float], config: GuiderStarTrackerConfig
+) -> pd.DataFrame:
     """
-    Minimum SNR, minimum number of detections, and maximum ellipticity.
+    Minimum SNR, maximum ellipticity and edge margin.
+
+    Parameters
+    ----------
+    stars : pd.DataFrame
+        DataFrame with star measurements.
+    shape : tuple of float
+        Shape of the ROI (cols, rows).
+    config : GuiderStarTrackerConfig
+        Configuration object with quality cut parameters.
+
+    Returns
+    -------
+    stars : pd.DataFrame
+        DataFrame with stars that passed the quality cuts.
     """
     minSnr = config.minSnr
-    minStampDetections = config.minStampDetections
     maxEllipticity = config.maxEllipticity
     edgeMargin = config.edgeMargin
+    roiCols, roiRows = shape
 
     # Filter by minimum SNR
     mask1 = (stars["snr"] >= minSnr) & (stars["flux"] > 0) & (stars["flux_err"] > 0)
-
-    # Filter by minimum number of detections
-    mask2 = stars["stamp"].groupby(stars["detector"]).transform("count") >= minStampDetections
 
     # Filter by minimum number of detections and maximum ellipticity
     eabs = np.hypot(stars["e1"], stars["e2"])
@@ -228,13 +256,12 @@ def applyQualityCuts(stars: pd.DataFrame, config: GuiderStarTrackerConfig) -> pd
     # Add edge margin mask
     mask4 = (
         (stars["xroi"] >= edgeMargin)
-        & (stars["xroi"] <= stars["xroi"].max() - edgeMargin)
+        & (stars["xroi"] <= roiRows - edgeMargin)
         & (stars["yroi"] >= edgeMargin)
-        & (stars["yroi"] <= stars["yroi"].max() - edgeMargin)
+        & (stars["yroi"] <= roiCols - edgeMargin)
     )
-
     # Combine all masks
-    mask = mask1 & mask2 & mask3 & mask4
+    mask = mask1 & mask3 & mask4
     return stars[mask].copy()
 
 
