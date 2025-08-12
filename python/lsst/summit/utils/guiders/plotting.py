@@ -1323,9 +1323,9 @@ class GuiderDataPlotter:
         stampInfo = self.plotStampInfo(axs=axs["center"], stampNum=stampNum)
 
         # add coordinate arrow
-        cutoutSize = max(int(self.header["roi_cols"] or np.nan), int(self.header["roi_rows"] or np.nan))
+        cutoutSize = max(*self.guiderData[0].shape)
         if not isAnimated:
-            cam_rot_angle = cast(float, self.header.get("CAM_ROT_ANGLE", 0.0))
+            cam_rot_angle = cast(float, self.guiderData.camRotAngle)
             drawArrows(axs["arrow"], cutoutSize, 90.0 + cam_rot_angle)
 
         artists.append(stampInfo)
