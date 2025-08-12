@@ -167,7 +167,7 @@ class GuiderData:
         dayobs = int(md.get("DAYOBS", 0))
         seqnum = int(md.get("SEQNUM", 0))
         info["expid"] = dayobs * 100000 + seqnum
-        info["filter"] = md.get("FILTBAND", None)
+        info["filter"] = md.get("FILTBAND", "Unknown")
         info["cam_rot_angle"] = self.camRotAngle
         info["start_time"] = md.get("GDSSTART", None)
         info["roi_cols"] = int(md.get("ROICOLS", 0))
@@ -261,14 +261,7 @@ class GuiderData:
 
     @cached_property
     def roiAmpNames(self) -> dict[str, str]:
-        """Names of the amplifier used in the stamp ROI.
-
-        Returns
-        -------
-        ampNames : dict[str, str]
-            Dictionary with detector names as keys and amplifier names as
-            values.
-        """
+        """Names of the amplifier used in the stamp ROI."""
         ampNames: dict[str, str] = {}
         for detName in self.rawStampsMap.keys():
             md = self.rawStampsMap[detName].metadata.toDict()
@@ -278,18 +271,7 @@ class GuiderData:
         return ampNames
 
     def getRowAxis(self, detName: str) -> int:
-        """Get the axis corresponding to the rows for a given guider detector.
-
-        Parameters
-        ----------
-        detName : `str`
-            The name of the detector.
-
-        Returns
-        -------
-        axis : `int`
-            The axis corresponding to the rows for a given detector.
-        """
+        """Get axis corresponding to the rows for a given guider detector."""
         if detName not in self.axisRowMap:
             raise ValueError(f"Detector {detName} not found in axisRowMap.")
         return self.axisRowMap[detName]
@@ -299,23 +281,6 @@ class GuiderData:
 
         The stack is computed across the time axis after optional median‑row
         bias removal (controlled by ``self.subtractMedian``).
-
-        Parameters
-        ----------
-        detName : str
-            Guider detector name.
-
-        Returns
-        -------
-        stack : np.ndarray
-            Median of all stamps in the same shape as one stamp.
-
-        Raises
-        ------
-        KeyError
-            If `detName` is not found in the stamps map.
-        ValueError
-            If no stamps are available for the detector.
         """
         if detName not in self.stampsMap:
             raise KeyError(f"{detName!r} not present in stampsMap")
@@ -330,61 +295,29 @@ class GuiderData:
         return stack
 
     def getGuiderAmpName(self, detName: str) -> str:
-        """Get amplifier name for a given guider detector.
-
-        Parameters
-        ----------
-        detName : `str`
-            Name of the detector.
-
-        Returns
-        -------
-        ampName : `str`
-            Name of the amplifier used for the ROI.
-        """
+        """Get amplifier name for a given guider detector."""
         if detName not in self.roiAmpNames:
             raise ValueError(f"Detector {detName} not found in roiAmpNames.")
         return self.roiAmpNames[detName]
 
     def getGuiderDetNum(self, detName: str) -> int:
-        """Get detector number for a given guider detector name.
-
-        Parameters
-        ----------
-        detName : `str`
-            Name of the detector.
-
-        Returns
-        -------
-        detNum : `int`
-            Detector number for the specified guider detector.
-        """
+        """Get detector number for a given guider detector name."""
         if detName not in self.guiderNameMap:
             raise ValueError(f"Detector {detName} not found in guiderNameMap.")
         return self.guiderNameMap[detName]
 
     def getWcs(self, detName: str) -> "SkyWcs":
-        """Return the SkyWcs for a given guider detector.
-
-        Parameters
-        ----------
-        detName : str
-            Detector name whose WCS is requested.
-
-        Returns
-        -------
-        SkyWcs
-            WCS object for the specified detector.
-
-        Raises
-        ------
-        KeyError
-            If the detector name is not in ``wcsMap``.
-        """
+        """Return the SkyWcs for a given guider detector."""
         try:
             return self.wcsMap[detName]
         except KeyError as err:
             raise KeyError(f"{detName!r} not found in wcsMap") from err
+
+    @cached_property
+    def obsTime(self) -> Time:
+        """Return the observation time for a given guider detector."""
+        gdstart = self.header["start_time"]
+        return Time(gdstart, format="isot", scale="tai")
 
     # ------------------------------------------------------------------
     # Iterable / dict-like helpers
@@ -451,8 +384,8 @@ class GuiderData:
         arr = stamp.stamp_im.image.array
         if self.subtractMedian:
             axis = self.getRowAxis(detName)
-            arr = arr - np.median(arr, axis=axis)
-        return arr - np.nanmedian(arr.flatten())
+            arr = arr - np.nanmedian(arr, axis=axis)
+        return arr
 
     # ------------------------------------------------------------------
     # Plot helpers
