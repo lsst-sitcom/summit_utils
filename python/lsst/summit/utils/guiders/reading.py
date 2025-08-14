@@ -36,7 +36,7 @@ import numpy as np
 from astropy.time import Time
 
 from lsst.afw import cameraGeom
-from lsst.afw.image import ExposureF, ImageF, MaskedImageF
+from lsst.afw.image import ExposureF, ImageF, MaskedImageF, VisitInfo
 from lsst.daf.butler import Butler, DatasetNotFoundError
 from lsst.meas.algorithms.stamps import Stamp, Stamps
 from lsst.obs.lsst import LsstCam
@@ -52,6 +52,8 @@ from .transformation import (
 )
 
 if TYPE_CHECKING:
+    from lsst.afw.cameraGeom import Camera, Detector
+    from lsst.daf.base import PropertyList
     from lsst.geom import SkyWcs
 
 
@@ -60,23 +62,24 @@ class GuiderData:
     """
     LSST guider data container.
 
-    Holds raw Stamps, WCS and metadata. Provides cached properties for
-    timestamps, header and convenience dict-like access.
+    Holds raw guider Stamps, WCS objects, and exposure metadata. Provides
+    cached properties for timestamps, header information, and convenience
+    (dict-like) access.
 
     Parameters
     ----------
-    guiderNameMap : dict[str, int]
-        Detector name → detector number map.
-    rawStampsMap : dict[str, Stamps]
-        Detector name → raw Stamps map.
-    wcsMap : dict[str, SkyWcs]
-        Detector name → SkyWcs map.
-    camRotAngle : float
+    guiderNameMap : `dict[str, int]`
+        Detector name to detector number map.
+    rawStampsMap : `dict[str, Stamps]`
+        Detector name to raw Stamps map.
+    wcsMap : `dict[str, SkyWcs]`
+        Detector name to SkyWcs map.
+    camRotAngle : `float`
         Camera rotation angle in degrees.
-    subtractMedian : bool, optional
-        Subtract median row bias from stamp arrays.
-    view : str, optional
-        Output view: 'dvcs', 'ccd' or 'roi'.
+    subtractMedian : `bool`, optional
+        If True, subtract median row (bias) per stamp upon array extraction.
+    view : `str`, optional
+        Output view: 'dvcs', 'ccd', or 'roi'.
 
     Cached properties
     -----------------
@@ -120,7 +123,15 @@ class GuiderData:
     view: str = "dvcs"  # view type, either 'dvcs' or 'ccd' or 'roi'
 
     def __repr__(self) -> str:
-        """Compact one‑line representation for interactive use."""
+        """
+        Return a compact one-line representation.
+
+        Returns
+        -------
+        reprStr : `str`
+            String summary with exposure id, number of stamps, view, and guider
+            names.
+        """
         return (
             f"GuiderData(expid={self.expid}, "
             f"nStamps={len(self)}, view='{self.view}', "
@@ -128,27 +139,63 @@ class GuiderData:
         )
 
     def __len__(self) -> int:
-        """Return the number of stamps in this exposure."""
+        """
+        Return number of stamps for the detector with the maximum count.
+
+        Returns
+        -------
+        nStamps : `int`
+            Number of stamps (time samples) in the exposure for the primary
+            detector.
+        """
         return len(self.rawStampsMap[self.detNameMax])
 
     @cached_property
     def guiderNames(self) -> list[str]:
-        """Names of the guider detectors."""
+        """
+        Names of the guider detectors.
+
+        Returns
+        -------
+        guiderNames : `list[str]`
+            Sorted list of guider detector names.
+        """
         return sorted(list(self.guiderNameMap.keys()))
 
     @cached_property
     def guiderIds(self) -> list[int]:
-        """IDs of the guider detectors."""
+        """
+        IDs of the guider detectors.
+
+        Returns
+        -------
+        guiderIds : `list[int]`
+            Sorted list of guider detector numeric IDs.
+        """
         return sorted(list(self.guiderNameMap.values()))
 
     @cached_property
     def detNameMax(self) -> str:
-        """Detector name with the maximum number of stamps."""
+        """
+        Detector name with the maximum number of stamps.
+
+        Returns
+        -------
+        detName : `str`
+            Detector name possessing the most stamps.
+        """
         return max(self.rawStampsMap, key=lambda k: len(self.rawStampsMap[k]))
 
     @cached_property
     def metadata(self) -> dict:
-        """Metadata dict for the detector with the most stamps."""
+        """
+        Metadata for the detector with the most stamps.
+
+        Returns
+        -------
+        metadata : `dict`
+            Copy of the detector-level metadata dictionary.
+        """
         return self.rawStampsMap[self.detNameMax].metadata.toDict()
 
     @cached_property
@@ -158,6 +205,11 @@ class GuiderData:
         Fields: n_stamps, freq, expid, filter, cam_rot_angle, start_time,
         roi_cols, roi_rows, shuttime, az_start, el_start, az_end, el_end,
         seeing.
+
+        Returns
+        -------
+        header : `dict[str, str | float | None]`
+            The headers.
         """
         md = self.metadata
         info: dict[str, str | float | None] = {}
@@ -183,13 +235,20 @@ class GuiderData:
 
     @cached_property
     def expid(self) -> int:
-        """Exposure ID"""
+        """
+        Exposure identifier.
+
+        Returns
+        -------
+        expid : `int`
+            The exposure id.
+        """
         if self.header["expid"] is None:
             raise ValueError("Missing expid in header.")
         return int(self.header["expid"])
 
     def printHeaderInfo(self) -> None:
-        """Print summary of key header fields."""
+        """Print a concise summary of key header fields."""
         print(f"Data Id: {self.expid}, filter-band: {self.header['filter']}")
         print(f"ROI Shape (row, col): {self.header['roi_rows']}, " f"{self.header['roi_cols']}")
         print(f"With nStamps {len(self)}" f" at {self.guiderFrequency} Hz")
@@ -200,7 +259,14 @@ class GuiderData:
 
     @cached_property
     def timestampMap(self) -> dict[str, Time]:
-        """Aligned timestamps for all detectors."""
+        """
+        Aligned timestamp arrays for all detectors.
+
+        Returns
+        -------
+        timestampMap : `dict[str, Time]`
+            Mapping from detector name to masked Time array (TAI scale).
+        """
         nStamps = len(self.rawStampsMap[self.detNameMax])
         timestampMap: dict[str, Time] = {}
         for detName, stamps in self.rawStampsMap.items():
@@ -209,7 +275,14 @@ class GuiderData:
 
     @cached_property
     def guiderFrequency(self) -> float:
-        """Return the guider stamp cadence in Hz."""
+        """
+        Guider stamp cadence.
+
+        Returns
+        -------
+        frequency : `float`
+            Median stamp frequency in Hz.
+        """
         timestamps = self.timestampMap[self.detNameMax]
         # extract only the unmasked MJD values
         jd = timestamps[~timestamps.mask].jd
@@ -218,7 +291,14 @@ class GuiderData:
 
     @cached_property
     def guiderDurationSec(self) -> float:
-        """Return the total duration of the guider stamps in seconds."""
+        """
+        Total guider duration.
+
+        Returns
+        -------
+        durationSec : `float`
+            Total elapsed guider duration in seconds (including final period).
+        """
         timestamps = self.timestampMap[self.detNameMax]
         jd = timestamps[~timestamps.mask].jd
         duration_sec = (jd[-1] - jd[0]) * 86400.0 + 1 / self.guiderFrequency
@@ -226,7 +306,14 @@ class GuiderData:
 
     @cached_property
     def stampsMap(self) -> dict[str, Stamps]:
-        """Stamps data converted to the desired view."""
+        """
+        Stamps converted to requested view.
+
+        Returns
+        -------
+        stampsMap : `dict[str, Stamps]`
+            Mapping of detector name to converted Stamps object.
+        """
         result: dict[str, Stamps] = {}
         if self.view == "roi":
             return self.rawStampsMap
@@ -242,7 +329,8 @@ class GuiderData:
 
     @cached_property
     def axisRowMap(self) -> dict[str, int]:
-        """Axis mapping for the rows for all guider detectors.
+        """
+        Axis mapping (row axis) for guider detectors.
 
         Returns
         -------
@@ -261,7 +349,14 @@ class GuiderData:
 
     @cached_property
     def roiAmpNames(self) -> dict[str, str]:
-        """Names of the amplifier used in the stamp ROI."""
+        """
+        Amplifier names used in the ROI.
+
+        Returns
+        -------
+        ampNames : `dict[str, str]`
+            Mapping from detector name to amplifier name active in ROI.
+        """
         ampNames: dict[str, str] = {}
         for detName in self.rawStampsMap.keys():
             md = self.rawStampsMap[detName].metadata.toDict()
@@ -271,16 +366,39 @@ class GuiderData:
         return ampNames
 
     def getRowAxis(self, detName: str) -> int:
-        """Get axis corresponding to the rows for a given guider detector."""
+        """
+        Retrieve the index of the row axis for a detector.
+
+        Parameters
+        ----------
+        detName : `str`
+            Guider detector name.
+
+        Returns
+        -------
+        axis : `int`
+            0 if rows align with Y, 1 if rows align with X.
+        """
         if detName not in self.axisRowMap:
             raise ValueError(f"Detector {detName} not found in axisRowMap.")
         return self.axisRowMap[detName]
 
     def getStampArrayCoadd(self, detName: str) -> np.ndarray:
-        """Return the median‑stacked stamp for the specified detector.
+        """
+        Get the median-stacked stamp across time for the specified detector.
 
-        The stack is computed across the time axis after optional median‑row
+        The stack is computed across the time axis after optional median-row
         bias removal (controlled by ``self.subtractMedian``).
+
+        Parameters
+        ----------
+        detName : `str`
+            Guider detector name.
+
+        Returns
+        -------
+        coadd : `np.ndarray`
+            Median of all stamp arrays (time axis collapsed).
         """
         if detName not in self.stampsMap:
             raise KeyError(f"{detName!r} not present in stampsMap")
@@ -295,19 +413,55 @@ class GuiderData:
         return stack
 
     def getGuiderAmpName(self, detName: str) -> str:
-        """Get amplifier name for a given guider detector."""
+        """
+        Return amplifier name for a guider detector.
+
+        Parameters
+        ----------
+        detName : `str`
+            Guider detector name.
+
+        Returns
+        -------
+        ampName : `str`
+            Amplifier name string.
+        """
         if detName not in self.roiAmpNames:
             raise ValueError(f"Detector {detName} not found in roiAmpNames.")
         return self.roiAmpNames[detName]
 
     def getGuiderDetNum(self, detName: str) -> int:
-        """Get detector number for a given guider detector name."""
+        """
+        Return detector number for a guider detector name.
+
+        Parameters
+        ----------
+        detName : `str`
+            Guider detector name.
+
+        Returns
+        -------
+        detNum : `int`
+            The numeric detector id.
+        """
         if detName not in self.guiderNameMap:
             raise ValueError(f"Detector {detName} not found in guiderNameMap.")
         return self.guiderNameMap[detName]
 
-    def getWcs(self, detName: str) -> "SkyWcs":
-        """Return the SkyWcs for a given guider detector."""
+    def getWcs(self, detName: str) -> SkyWcs:
+        """
+        Return the wcs for a guider detector.
+
+        Parameters
+        ----------
+        detName : `str`
+            Guider detector name.
+
+        Returns
+        -------
+        wcs : `SkyWcs`
+            SkyWcs for the detector.
+        """
         try:
             return self.wcsMap[detName]
         except KeyError as err:
@@ -315,7 +469,14 @@ class GuiderData:
 
     @cached_property
     def obsTime(self) -> Time:
-        """Return the observation time for a given guider detector."""
+        """
+        Observation start time in TAI.
+
+        Returns
+        -------
+        obsTime : `Time`
+            Start time parsed from metadata (TAI scale).
+        """
         gdstart = self.header["start_time"]
         return Time(gdstart, format="isot", scale="tai")
 
@@ -341,16 +502,27 @@ class GuiderData:
             yield self.stampsMap[det]
 
     def __getitem__(self, key):
-        """Direct stamp access.
+        """
+        Direct stamp access helper.
 
-        Usage examples
-        --------------
+        Example usage:
         gd["R44_SG0"]            -> full `Stamps` object
         gd["R44_SG0", 3]         -> stamp #3 ndarray
         gd[3]                    -> stamp #3 from `detNameMax`
 
-        Stamp arrays returned by index use the object's `subtractMedian`
-        setting to determine if median row bias is subtracted.
+        Parameters
+        ----------
+        key : `str | int | slice | tuple`
+            Access pattern:
+            - 'DET' -> Stamps
+            - ('DET', i) -> single stamp ndarray
+            - i (int) -> stamp i from primary detector
+            - ('DET', slice) -> list of ndarrays
+
+        Returns
+        -------
+        result : `Stamps | np.ndarray | list[np.ndarray]`
+            Retrieved object according to key specification.
         """
         # Single detector name -> full Stamps
         if isinstance(key, str):
@@ -380,7 +552,21 @@ class GuiderData:
 
     # helper -------------------------------------------------------------
     def _processStampArray(self, stamp: Stamp, detName: str) -> np.ndarray:
-        """Return ndarray for one stamp, optionally bias‑corrected."""
+        """
+        Convert a Stamp to an ndarray with optional median-row subtraction.
+
+        Parameters
+        ----------
+        stamp : `Stamp`
+            Input stamp object.
+        detName : `str`
+            Detector name (for row-axis logic).
+
+        Returns
+        -------
+        array : `np.ndarray`
+            2D image array (bias-corrected if configured).
+        """
         arr = stamp.stamp_im.image.array
         if self.subtractMedian:
             axis = self.getRowAxis(detName)
@@ -395,11 +581,37 @@ class GuiderData:
         return GuiderDataPlotter(self)
 
     def plotMosaic(self, stampNum: int = -1, plo: float = 50, phi: float = 99):
-        """Plot a full mosaic of guider stamps for one frame or stack."""
+        """
+        Plot mosaic of guider stamps.
+
+        Parameters
+        ----------
+        stampNum : `int`, optional
+            Stamp index; -1 for median stack.
+        plo : `float`, optional
+            Lower percentile stretch.
+        phi : `float`, optional
+            Upper percentile stretch.
+        """
         self.plotter.plotStampArray(stampNum=stampNum, plo=plo, phi=phi)
 
     def plotStamp(self, detName: str, stampNum: int, plo: float = 50, phi: float = 99, figsize=(10, 8)):
-        """Plot a single guider stamp from a given detector."""
+        """
+        Plot a single guider stamp.
+
+        Parameters
+        ----------
+        detName : `str`
+            Detector name.
+        stampNum : `int`
+            Stamp index.
+        plo : `float`, optional
+            Lower percentile stretch.
+        phi : `float`, optional
+            Upper percentile stretch.
+        figsize : `tuple`, optional
+            Figure size.
+        """
         from matplotlib import pyplot as plt
 
         fig, axs = plt.subplots(1, 1, figsize=figsize)
@@ -410,16 +622,20 @@ class GuiderData:
 
     def makeGif(self, saveAs: str, fps: int = 5, plo: float = 50.0, phi: float = 99.0, figsize=(9, 9)):
         """
-        Create a GIF animation of the guider stamps over time.
+        Create a GIF animation of guider stamps over time.
 
         Parameters
         ----------
-        saveAs : str
-            Output filename for the GIF.
-        plo, phi : float, optional
-            Percentile clip for display stretch.
-        figsize : tuple, optional
-            Figure size for the plots.
+        saveAs : `str`
+            Output filename.
+        fps : `int`, optional
+            Frames per second.
+        plo : `float`, optional
+            Lower percentile for display stretch.
+        phi : `float`, optional
+            Upper percentile for display stretch.
+        figsize : `tuple`, optional
+            Figure size.
         """
         self.plotter.makeGif(saveAs=saveAs, fps=fps, plo=plo, phi=phi, figsize=figsize)
 
@@ -458,22 +674,24 @@ class GuiderReader:
     def get(
         self, dayObs: int, seqNum: int, subtractMedian: bool = True, scienceDetNum: int = 94
     ) -> GuiderData:
-        """Get the guider data for a given day of observation and sequence
-        number.
+        """
+        Retrieve guider data for a given dayObs / seqNum.
 
         Parameters
         ----------
         dayObs : `int`
             Day of observation in YYYYMMDD format.
         seqNum : `int`
-            Sequence number of the observation.
+            Sequence number.
+        subtractMedian : `bool`, optional
+            If True, subtract median row bias from each stamp upon access.
         scienceDetNum : `int`, optional
-            Detector number of the science CCD to use for WCS reference.
+            Science detector number for WCS reference.
 
         Returns
         -------
         guiderData : `GuiderData`
-            An instance of `GuiderData` containing the guider data.
+            Assembled guider data object.
         """
         # check if the guider name is swaped (dayObs < 20250509)
         # modifies self.guiderNameMap in place if necessary
@@ -513,14 +731,21 @@ class GuiderReader:
         )
         return guiderData
 
-    def getGuiderRawStamps(self, dayObs, seqNum) -> dict[str, Stamps]:
-        """Get the raw Stamps objects for all guider detectors.
+    def getGuiderRawStamps(self, dayObs: int, seqNum: int) -> dict[str, Stamps]:
+        """
+        Fetch raw guider Stamps for all detectors.
+
+        Parameters
+        ----------
+        dayObs : `int`
+            Observation day (YYYYMMDD).
+        seqNum : `int`
+            Sequence number.
 
         Returns
         -------
         rawStamps : `dict[str, Stamps]`
-            Dictionary with guider detector names as keys
-            and Stamps objects as values.
+            Mapping from detector name to raw Stamps object.
         """
         rawStamps: dict[str, Stamps] = {}
         for detName, detNum in self.guiderNameMap.items():
@@ -537,8 +762,13 @@ class GuiderReader:
         return rawStamps
 
     def applyGuiderNameSwapIfNeeded(self, dayObs: int) -> None:
-        """Swap guider names (SG0/SG1) in guiderNameMap
-        if required by dayObs.
+        """
+        Apply guider name swap (SG0/SG1) for early data if required.
+
+        Parameters
+        ----------
+        dayObs : `int`
+            Observation day (YYYYMMDD) used to decide whether to swap.
         """
         if getattr(self, "_guiderNameMapSwapped", False):
             return  # Already swapped; do nothing
@@ -557,8 +787,26 @@ class GuiderReader:
             self._guiderNameMapSwapped = True
 
 
-def getVisitInfo(butler: Butler, dayObs: int, seqNum: int, scienceDetNum=94):
-    """Get visitInfo from the butler for a given dayObs and seqNum."""
+def getVisitInfo(butler: Butler, dayObs: int, seqNum: int, scienceDetNum: int = 94) -> VisitInfo:
+    """
+    Retrieve VisitInfo for a given dayObs / seqNum.
+
+    Parameters
+    ----------
+    butler : `Butler`
+        Active Butler instance.
+    dayObs : `int`
+        Observation day (YYYYMMDD).
+    seqNum : `int`
+        Sequence number.
+    scienceDetNum : `int`, optional
+        Science detector number.
+
+    Returns
+    -------
+    visitInfo : `VisitInfo`
+        VisitInfo object retrieved from butler.
+    """
     dataId = {
         "instrument": "LSSTCam",
         "day_obs": dayObs,
@@ -572,8 +820,26 @@ def getVisitInfo(butler: Butler, dayObs: int, seqNum: int, scienceDetNum=94):
 # ----------------------------------------------------------------------
 # Helper functions for stamp conversion
 # ----------------------------------------------------------------------
-def _makeRoiTransforms(metadata, detector, camera, view: str) -> tuple[tuple, str]:
-    """Compute bbox and CCD↔DVCS transforms, return ampName."""
+def _makeRoiTransforms(metadata: dict, detector: Detector, camera: Camera, view: str) -> tuple[tuple, str]:
+    """
+    Construct ROI transforms and derive amplifier name.
+
+    Parameters
+    ----------
+    metadata : `dict`
+        Exposure-level metadata.
+    detector : `Detector`
+        The detector.
+    camera : `Camera`
+        The camera object.
+    view : `str`
+        Requested output view ('dvcs', 'ccd', or 'roi').
+
+    Returns
+    -------
+    result : `tuple[tuple, str]`
+        ((ccdViewBbox, fwd, back), ampName)
+    """
     ampName = "C" + metadata["ROISEG"][7:]
     ccdViewBbox = makeRoiBbox(metadata, camera)
     fwd, back = makeCcdToDvcsTransform(ccdViewBbox, detector.getOrientation().getNQuarter())
@@ -583,14 +849,40 @@ def _makeRoiTransforms(metadata, detector, camera, view: str) -> tuple[tuple, st
 def _convertMaskedImage(
     maskedImage: MaskedImageF,
     stampMetadata: dict,
-    metadata,
+    metadata: dict,
     transforms: tuple,
-    detector,
+    detector: Detector,
     ampName: str,
-    camera,
+    camera: Camera,
     view: str,
 ) -> Stamp:
-    """Convert one masked image ROI to the requested view and build a Stamp."""
+    """
+    Convert one masked image ROI and build a Stamp.
+
+    Parameters
+    ----------
+    maskedImage : `MaskedImageF`
+        Input masked image for the ROI.
+    stampMetadata : `dict`
+        Stamp-level metadata (modified in-place).
+    metadata : `dict`
+        Exposure-level metadata.
+    transforms : `tuple`
+        Tuple containing (ccdViewBbox, forwardTransform, inverseTransform).
+    detector : `Detector`
+        Camera detector.
+    ampName : `str`
+        Amplifier name.
+    camera : `Camera`
+        Camera object.
+    view : `str`
+        Output view ('dvcs', 'ccd', or 'roi').
+
+    Returns
+    -------
+    stamp : `Stamp`
+        Converted stamp object.
+    """
     ccdViewBbox, fwd, back = transforms
     rawArray = maskedImage.getImage().getArray()
     dvcsArray = roiImageToDvcs(rawArray, metadata, detector, ampName, camera, view=view)
@@ -601,10 +893,26 @@ def _convertMaskedImage(
 
 def _blankStamp(
     stampIdx: int,
-    metadata,
+    metadata: PropertyList,
     transforms: tuple,
 ) -> Stamp:
-    """Create a blank Stamp for missing indices."""
+    """
+    Create a blank (zero) stamp for a missing index.
+
+    Parameters
+    ----------
+    stampIdx : `int`
+        Missing stamp index.
+    metadata : `PropertyList`
+        Original metadata container.
+    transforms : `tuple`
+        (ccdViewBbox, forwardTransform, inverseTransform).
+
+    Returns
+    -------
+    stamp : `Stamp`
+        Placeholder blank stamp with NaN timestamp.
+    """
     ccdViewBbox, fwd, back = transforms
     nRows, nCols = int(metadata["ROIROWS"]), int(metadata["ROICOLS"])
     blankArray = np.zeros((nRows, nCols), dtype=np.float32)
@@ -625,6 +933,22 @@ def convertRawStampsToView(
     """
     Convert guider stamps from raw ROI to a requested view ('dvcs' or 'ccd').
     Handles missing stamps and preserves metadata and order.
+
+    Parameters
+    ----------
+    rawStamps : `Stamps`
+        Input raw ROI stamps.
+    detName : `str`
+        Detector name.
+    nStamps : `int`
+        Target total number of stamps (after filling gaps).
+    view : `str`, optional
+        Output view: 'dvcs', 'ccd', or 'roi'.
+
+    Returns
+    -------
+    stampsOut : `Stamps`
+        Converted stamps with gaps filled by blank stamps.
     """
     camera = LsstCam.getCamera()
     detector = camera[detName]
@@ -671,11 +995,22 @@ def convertRawStampsToView(
 
 def standardizeGuiderTimestamps(rawStamps: Stamps, nStamps: int) -> Time:
     """
-    Return a masked `Time` array of length *nStamps* for one guider.
+    Return a masked `Time` array of length `nStamps` for one guider.
 
-    Missing stamps are filled with NaN and masked so every detector
-    shares a uniform, sortable timestamp vector.  Result is in MJD,
-    `scale="tai"`.
+    Missing stamps are filled with `NaN` and masked so every detector shares a
+    uniform, sortable timestamp vector. Result is in MJD, `scale="tai"`.
+
+    Parameters
+    ----------
+    rawStamps : `Stamps`
+        Input stamps (may have missing indices).
+    nStamps : `int`
+        Desired total length (maximum among guiders).
+
+    Returns
+    -------
+    fullTimestamps : `Time`
+        Masked Time array (scale='tai') with inferred cadence and gaps masked.
     """
     timestampsList = [stamp.metadata.get("STMPTMJD", np.nan) for stamp in rawStamps]
     mjdArray = np.ma.masked_invalid(timestampsList)
