@@ -41,9 +41,6 @@ from lsst.summit.utils.utils import detectObjectsInExp
 
 from .reading import GuiderData
 
-# ----------------------------------------------------------------------
-
-# === Make Blank Catalog ===
 _DEFAULT_COLUMNS: str = (
     "trackid detector expid elapsed_time dalt daz dtheta dx dy "
     "fwhm xroi yroi xccd yccd xroi_ref yroi_ref xccd_ref yccd_ref "
@@ -58,11 +55,13 @@ DEFAULT_COLUMNS: tuple[str, ...] = tuple(_DEFAULT_COLUMNS.split())
 def makeBlankCatalog() -> pd.DataFrame:
     """
     Create a blank DataFrame with the default columns for a star catalog.
+
+    Returns
+    -------
+    catalog : `pd.DataFrame`
+        Empty catalog with the default schema.
     """
     return pd.DataFrame(columns=DEFAULT_COLUMNS)
-
-
-# ----------------------------------------------------------------------
 
 
 @dataclass(frozen=True, slots=True)
@@ -71,20 +70,20 @@ class GuiderStarTrackerConfig:
 
     Parameters
     ----------
-    cutOutSize : int
-        Size of the cutout around the star for tracking.
-    aperSizeArcsec : float
-        Aperture size in arcseconds for star detection.
-    minSnr : float
+    minSnr : `float`
         Minimum signal-to-noise ratio for star detection.
-    minStampDetections : int
-        Minimum number of detections across all stamps for a star
-        to be considered valid.
-    edgeMargin : int
+    minStampDetections : `int`
+        Minimum number of detections across all stamps for a star to be
+        considered valid.
+    edgeMargin : `int`
         Margin in pixels to avoid edge effects in the image.
-    maxEllipticity : float
+    maxEllipticity : `float`
         Maximum allowed ellipticity for a star to be considered valid.
-    gain : float
+    cutOutSize : `int`
+        Size of the cutout around the star for tracking.
+    aperSizeArcsec : `float`
+        Aperture size in arcseconds for star detection.
+    gain : `float`
         Gain factor for the guider data, used in flux calculations.
     """
 
@@ -104,24 +103,26 @@ def trackStarAcrossStamp(
     config: GuiderStarTrackerConfig = GuiderStarTrackerConfig(),
 ) -> pd.DataFrame:
     """
-    Track a star across all guider stamps, computes centroid, shape, and flux.
+    Track a star across all guider stamps and compute centroid, shape, and
+    flux.
 
-    Galsim is used for centroid and shape measurements.
-    The flux is measured using aperture photometry.
+    GalSim is used for centroid and shape measurements. Flux is measured with
+    aperture photometry.
 
     Parameters
     ----------
-    refCenter : tuple[float, float]
+    refCenter : `tuple[float, float]`
         Reference position (x, y) in pixel coordinates for the star.
-    guiderData : GuiderData
-        Guider data containing the image stamps and metadata.
-    guiderName : str
+    guiderData : `GuiderData`
+        Guider data containing image stamps and metadata.
+    guiderName : `str`
         Name of the guider to process.
-    config : GuiderStarTrackerConfig, optional
+    config : `GuiderStarTrackerConfig`
         Configuration parameters for the star tracker.
+
     Returns
     -------
-    starsDf : pd.DataFrame
+    stars : `pd.DataFrame`
         DataFrame containing the tracked star measurements across all stamps.
     """
     gd = guiderData
@@ -164,8 +165,24 @@ def trackStarAcrossStamp(
     return stars
 
 
-def annulusBackgroundSubtraction(data, annulus):
-    """Subtract background from the data using an annulus."""
+def annulusBackgroundSubtraction(data: np.ndarray, annulus: tuple[float, float]) -> tuple[np.ndarray, float]:
+    """
+    Subtract background from the data using an annulus.
+
+    Parameters
+    ----------
+    data : `np.ndarray`
+        Image cutout data.
+    annulus : `tuple[float, float]`
+        Inner and outer radii (pixels) defining the background annulus.
+
+    Returns
+    -------
+    dataBkgSub : `np.ndarray`
+        Background-subtracted data.
+    bkgStd : `float`
+        Standard deviation of the background estimation.
+    """
     rin, rout = annulus
     x0, y0 = data.shape[1] // 2, data.shape[0] // 2
     x, y = np.indices(data.shape)
@@ -198,9 +215,12 @@ class StarMeasurement:
 
     def toDataFrame(self) -> pd.DataFrame:
         """
-        Return a single-row DataFrame for this measurement.
-        If xroi is NaN, return an empty DataFrame.
-        Otherwise, return a DataFrame with all columns
+        Convert this measurement to a single-row DataFrame.
+
+        Returns
+        -------
+        row : `pd.DataFrame`
+            Single-row DataFrame with measurement fields, or empty if invalid.
         """
         d = asdict(self)
         # Only drop the column if xroi is NaN (i.e., measurement failed)
@@ -210,8 +230,23 @@ class StarMeasurement:
         # Otherwise, return all columns, even if some are NaN
         return pd.DataFrame([d])
 
-    def aperturePhotometry(self, cutout, radius, bkgStd=1, gain=1.0):
-        """Aperture photometry on a cutout image."""
+    def aperturePhotometry(
+        self, cutout: np.ndarray, radius: float, bkgStd: float = 1.0, gain: float = 1.0
+    ) -> None:
+        """
+        Perform aperture photometry on a cutout image.
+
+        Parameters
+        ----------
+        cutout : `np.ndarray`
+            2D cutout image (background-subtracted).
+        radius : `float`
+            Aperture radius in pixels.
+        bkgStd : `float`
+            Background RMS per pixel.
+        gain : `float`
+            Detector gain (e-/ADU).
+        """
         x0, y0 = self.xroi, self.yroi
         if np.isfinite(x0) and np.isfinite(y0):
             ny, nx = cutout.shape
@@ -248,20 +283,20 @@ def runSourceDetection(
 
     Parameters
     ----------
-    image : np.ndarray
+    image : `np.ndarray`
         2D image array.
-    threshold : float
-        Detection threshold.
-    cutOutSize : int
-        Size of the cutout around each detected source.
-    aperRadius : int
+    threshold : `float`
+        Detection threshold in sigma units.
+    cutOutSize : `int`
+        Size of the cutout around each detected source (pixels).
+    aperRadius : `int`
         Aperture radius in pixels for photometry.
-    gain : float
+    gain : `float`
         Detector gain (e-/ADU).
 
     Returns
     -------
-    pd.DataFrame
+    sources : `pd.DataFrame`
         DataFrame with detected source properties.
     """
     # Step 1: Convert numpy image to MaskedImage and Exposure
@@ -296,8 +331,27 @@ def measureStarOnStamp(
     aperRadius: int,
     gain: float = 1.0,
 ) -> StarMeasurement:
-    """Crop, subtract background, run HSM,
-    do perture photometry, return star.
+    """
+    Measure a star on a single stamp: background subtraction, shape, centroid,
+    photometry.
+
+    Parameters
+    ----------
+    stamp : `np.ndarray`
+        Full stamp array.
+    refCenter : `tuple[float, float]`
+        Reference (x, y) pixel position for the cutout center.
+    cutOutSize : `int`
+        Size of the cutout in pixels.
+    aperRadius : `int`
+        Aperture radius in pixels for photometry.
+    gain : `float`
+        Detector gain (e-/ADU).
+
+    Returns
+    -------
+    measurement : `StarMeasurement`
+        StarMeasurement object with populated fields (may be empty on failure).
     """
     cutout = getCutouts(stamp, refCenter, cutoutSize=cutOutSize)
     data = cutout.data
@@ -330,7 +384,19 @@ def runGalSim(
     """
     Measure star properties with GalSim adaptive moments.
 
-    Returns a DataFrame with centroid, moments, shape, flux, FWHM, and SNR.
+    Parameters
+    ----------
+    imageArray : `np.ndarray`
+        Background-subtracted image cutout.
+    gain : `float`
+        Detector gain (e-/ADU).
+    bkgStd : `float`
+        Background RMS per pixel.
+
+    Returns
+    -------
+    result : `StarMeasurement`
+        Resulting measurement (empty if measurement failed).
     """
     gsImg = galsim.Image(imageArray)
     hsmRes = galsim.hsm.FindAdaptiveMom(gsImg, strict=False)
@@ -389,6 +455,26 @@ def galSimError(
 ) -> tuple[float, float]:
     """
     Estimate centroid errors from GalSim HSMShapeData.
+
+    Parameters
+    ----------
+    imageArray : `np.ndarray`
+        Image cutout used for measurement.
+    gs : `galsim.hsm`
+        GalSim HSM shape data result object.
+    gain : `float`
+        Detector gain (e-/ADU).
+    bkgStd : `float`
+        Background RMS per pixel.
+    isGain : `bool`
+        Whether to include gain-dependent weighting.
+
+    Returns
+    -------
+    xerr : `float`
+        Estimated x centroid uncertainty (pixels).
+    yerr : `float`
+        Estimated y centroid uncertainty (pixels).
     """
     if not gs or gs.error_message != "":
         return 0.0, 0.0
@@ -446,6 +532,26 @@ def makeEllipticalGaussianStar(
 ) -> np.ndarray:
     """
     Create an elliptical 2D Gaussian star with specified parameters.
+
+    Parameters
+    ----------
+    shape : `tuple[int, int]`
+        (ny, nx) output array shape.
+    flux : `float`
+        Total flux (normalization).
+    sigma : `float`
+        Gaussian sigma (pixels).
+    e1 : `float`
+        Ellipticity component e1.
+    e2 : `float`
+        Ellipticity component e2.
+    center : `tuple[float, float]`
+        (x0, y0) centroid position in pixels.
+
+    Returns
+    -------
+    image : `np.ndarray`
+        Generated model image.
     """
     y, x = np.indices(shape)
     x0, y0 = center
@@ -474,13 +580,26 @@ def makeEllipticalGaussianStar(
 
 # === Reference Catalog Construction ===
 def buildReferenceCatalog(
-    guiderData: "GuiderData",
+    guiderData: GuiderData,
     log: logging.Logger,
-    config: "GuiderStarTrackerConfig" = GuiderStarTrackerConfig(),
+    config: GuiderStarTrackerConfig = GuiderStarTrackerConfig(),
 ) -> pd.DataFrame:
     """
     Build a reference star catalog from each guider's coadded stamp.
-    Returns a DataFrame with the brightest star per guider.
+
+    Parameters
+    ----------
+    guiderData : `GuiderData`
+        Guider dataset containing stamps and metadata.
+    log : `logging.Logger`
+        Logger for warnings and diagnostics.
+    config : `GuiderStarTrackerConfig`
+        Star tracker configuration.
+
+    Returns
+    -------
+    refCatalog : `pd.DataFrame`
+        Concatenated reference catalog of brightest stars per guider.
     """
     expId = guiderData.expid
     minSnr = config.minSnr
@@ -525,6 +644,20 @@ def buildReferenceCatalog(
 def getCutouts(imageArray: np.ndarray, refCenter: tuple[float, float], cutoutSize: int = 25) -> Cutout2D:
     """
     Get a cutout at the reference position from an image array.
+
+    Parameters
+    ----------
+    imageArray : `np.ndarray`
+        Full image array.
+    refCenter : `tuple[float, float]`
+        (x, y) center for the cutout in pixels.
+    cutoutSize : `int`
+        Size (pixels) of the square cutout.
+
+    Returns
+    -------
+    cutout : `Cutout2D`
+        Astropy Cutout2D object.
     """
     refX, refY = refCenter
     return Cutout2D(imageArray, (refX, refY), size=cutoutSize, mode="partial", fill_value=np.nan)
