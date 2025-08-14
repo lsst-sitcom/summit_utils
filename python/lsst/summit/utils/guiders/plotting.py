@@ -23,7 +23,7 @@ from __future__ import annotations
 import logging
 from collections.abc import Sequence
 from dataclasses import dataclass, field
-from typing import TYPE_CHECKING, Any, List, Optional, Tuple, cast
+from typing import TYPE_CHECKING, Any, cast
 
 import matplotlib.pyplot as plt
 import numpy as np
@@ -48,7 +48,7 @@ LIGHT_BLUE = "#6495ED"
 
 @dataclass(frozen=True)
 class MosaicLayout:
-    grid: List[Tuple[str, ...]] = field(
+    grid: list[tuple[str, ...]] = field(
         default_factory=lambda: [
             (".", "R40_SG1", "R44_SG0", "."),
             ("R40_SG0", "center", ".", "R44_SG1"),
@@ -60,11 +60,32 @@ class MosaicLayout:
     def build(
         self,
         *,
-        figsize: Tuple[float, float] = (12, 12),
+        figsize: tuple[float, float] = (12, 12),
         hspace: float = 0.0,
         wspace: float = 0.0,
         constrained_layout: bool = False,
     ) -> tuple[plt.Figure, dict[str, plt.Axes]]:
+        """
+        Build the figure and axes dictionary for the predefined mosaic layout.
+
+        Parameters
+        ----------
+        figsize : `tuple[float, float]`, optional
+            Figure size in inches (width, height).
+        hspace : `float`, optional
+            Height space between subplots (gridspec hspace).
+        wspace : `float`, optional
+            Width space between subplots (gridspec wspace).
+        constrained_layout : `bool`, optional
+            Whether to enable Matplotlib constrained layout.
+
+        Returns
+        -------
+        fig : `matplotlib.figure.Figure`
+            The created figure.
+        axs : `dict[str, matplotlib.axes.Axes]`
+            Mapping from mosaic panel labels to axes.
+        """
         # TODO: use DM code to make figure mosaic
         fig, axs = plt.subplot_mosaic(
             cast(Any, self.grid),
@@ -141,16 +162,31 @@ class GuiderPlotter:
         sns.set_style("white")
         sns.set_context("talk", font_scale=0.8)
 
-    def setupFigure(self, figsize: Tuple[float, float] = (12, 12)) -> tuple[plt.Figure, dict[str, plt.Axes]]:
+    def setupFigure(self, figsize: tuple[float, float] = (12, 12)) -> tuple[plt.Figure, dict[str, plt.Axes]]:
         """
-        Setup a figure and axes for the guider mosaic layout.
+        Create a figure and axes using the guider mosaic layout.
+
+        Parameters
+        ----------
+        figsize : `tuple[float, float]`, optional
+            Figure size in inches (width, height).
+
+        Returns
+        -------
+        fig : `matplotlib.figure.Figure`
+            The created figure.
+        axs : `dict[str, matplotlib.axes.Axes]`
+            Mapping of panel name to axes.
         """
         fig, axs = self.layout.build(figsize=figsize)
         return fig, axs
 
     def printMetrics(self) -> None:
         """
-        Print formatted metrics and statistics for the current exposure.
+        Print formatted statistics summaries for the current exposure.
+
+        Prints centroid, photometric, PSF, and basic exposure statistics
+        to standard output if available.
         """
         if self.statsDf.empty:
             self.log.warning("No statistics available for this exposure.")
@@ -164,7 +200,7 @@ class GuiderPlotter:
         print(self.formatPsfSummary(filteredStatsDf, self.expTime))
 
     def stripPlot(
-        self, plotType: str = "centroidAltAz", saveAs: Optional[str] = None, coveragePct: int = 68
+        self, plotType: str = "centroidAltAz", saveAs: str | None = None, coveragePct: int = 68
     ) -> plt.Figure:
         """
         Plot time-series strip plot for a chosen metric.
@@ -175,16 +211,17 @@ class GuiderPlotter:
 
         Parameters
         ----------
-        plotType : str, optional
+        plotType : `str`, optional
             Metric key in `stripPlotKwargs` (e.g., 'centroidAltAz').
-        saveAs : str or None, optional
-            If set, save the figure to this path.
-        coveragePct : int, optional
-            Central coverage percent for y-limits (e.g., 68 → 16–84).
+        saveAs : `str`, optional
+            If not None, path to save the figure.
+        coveragePct : `int`, optional
+            Central percentile span used to derive y-limits (e.g. 68 -> 16–84).
 
         Returns
         -------
-        stripFig : Matplotlib Figure.
+        stripFig : `matplotlib.figure.Figure`
+            Figure containing the strip plot panels.
         """
         cfg = stripPlotKwargs.get(plotType)
         if cfg is None:
@@ -274,39 +311,39 @@ class GuiderPlotter:
         self,
         stampNum: int = 2,
         fig: plt.Figure | None = None,
-        axs: Optional[dict[str, plt.Axes]] = None,
+        axs: dict[str, plt.Axes] | None = None,
         plo: float = 90.0,
         phi: float = 99.0,
         cutoutSize: int = 30,
         isAnimated: bool = False,
-        saveAs: Optional[str] = None,
+        saveAs: str | None = None,
     ) -> list[Artist]:
         """
-        Plot mosaic of guider stamps.
+        Plot a mosaic of guider stamps (a single stamp or a stacked image).
 
         Parameters
         ----------
-        stampNum : int, optional
-            Stamp index; &lt;0 uses stacked image.
-        fig : Figure or None, optional
-            Figure to draw on; creates one if None.
-        axs : dict[str, Axes] or None, optional
-            Axes dict for the mosaic; creates if None.
-        plo : float, optional
-            Lower percentile for scaling.
-        phi : float, optional
-            Upper percentile for scaling.
-        cutoutSize : int, optional
-            Cutout size per panel; -1 uses full frame.
-        isAnimated : bool, optional
-            If True, skip static overlays.
-        saveAs : str or None, optional
-            If set, save figure to this path.
+        stampNum : `int`, optional
+            Stamp index; values < 0 select the stacked (coadd) image.
+        fig : `matplotlib.figure.Figure`, optional
+            Existing figure to draw on; created if ``None``.
+        axs : `dict[str, matplotlib.axes.Axes]`, optional
+            Axes dictionary for the mosaic; created if ``None``.
+        plo : `float`, optional
+            Lower percentile for intensity scaling.
+        phi : `float`, optional
+            Upper percentile for intensity scaling.
+        cutoutSize : `int`, optional
+            Square cutout size around star center; -1 uses full frame.
+        isAnimated : `bool`, optional
+            If True, skip static overlays intended only for static displays.
+        saveAs : `str`, optional
+            If provided, path and filename to which the figure is saved.
 
         Returns
         -------
-        artists : list
-            Matplotlib artists added to the figure.
+        artists : `list[matplotlib.artist.Artist]`
+            Artists added for this mosaic frame.
         """
         nStamps = len(self.guiderData)
         view = self.guiderData.view
@@ -382,28 +419,28 @@ class GuiderPlotter:
         cutoutSize: int = 30,
     ) -> animation.ArtistAnimation:
         """
-        Create an animated GIF of the guider mosaic over stamps.
+        Create an animated GIF of the guider mosaic across sequential stamps.
 
         Parameters
         ----------
-        saveAs : str
+        saveAs : `str`
             Output filepath for the GIF.
-        nStampMax : int, optional
-            Max number of stamps to animate.
-        fps : int, optional
+        nStampMax : `int`, optional
+            Maximum number of stamps to animate.
+        fps : `int`, optional
             Frames per second.
-        dpi : int, optional
-            Output dots per inch.
-        plo : float, optional
+        dpi : `int`, optional
+            Output resolution in dots per inch.
+        plo : `float`, optional
             Lower percentile for image scaling.
-        phi : float, optional
+        phi : `float`, optional
             Upper percentile for image scaling.
-        cutoutSize : int, optional
-            Cutout size per panel; -1 uses full frame.
+        cutoutSize : `int`, optional
+            Square cutout size; -1 means full frame.
 
         Returns
         -------
-        matplotlib.animation.ArtistAnimation
+        ani : `matplotlib.animation.ArtistAnimation`
             The created animation object.
         """
         # build canvas
@@ -454,7 +491,19 @@ class GuiderPlotter:
     @staticmethod
     def formatStdCentroidSummary(statsDf: pd.DataFrame, expTime: float = 1) -> str:
         """
-        Pretty string summary of centroid stdev. stats from run_all_guiders.
+        Format a summary string for centroid standard deviation statistics.
+
+        Parameters
+        ----------
+        statsDf : `pandas.DataFrame`
+            DataFrame (single-row) or dict with centroid statistics.
+        expTime : `float`, optional
+            Exposure time scaling factor (seconds per exposure).
+
+        Returns
+        -------
+        summary : `str`
+            Human-readable multi-line summary.
         """
         # handle both dicts and DataFrames
         if (isinstance(statsDf, pd.DataFrame) and statsDf.empty) or (
@@ -486,7 +535,19 @@ class GuiderPlotter:
     @staticmethod
     def formatPhotometricSummary(photStats: pd.DataFrame, expTime: float = 1) -> str:
         """
-        Pretty-print summary of photometric variation statistics.
+        Format a summary string for photometric variation statistics.
+
+        Parameters
+        ----------
+        photStats : `pandas.DataFrame`
+            DataFrame (single-row) or dict with photometric stats.
+        expTime : `float`, optional
+            Exposure time scaling factor (seconds per exposure).
+
+        Returns
+        -------
+        summary : `str`
+            Human-readable multi-line summary.
         """
         if (isinstance(photStats, pd.DataFrame) and photStats.empty) or (
             isinstance(photStats, dict) and not photStats
@@ -510,10 +571,17 @@ class GuiderPlotter:
     @staticmethod
     def formatStatsSummary(summary: pd.DataFrame) -> str:
         """
-        Pretty-print only the stats that are present in `summary`.
-        Expects keys like:
-          n_guiders, n_unique_stars, n_measurements, fraction_valid_stamps,
-          N_<detector>, std_centroid_*, magoffset_*, etc.
+        Format a compact summary of high-level exposure statistics.
+
+        Parameters
+        ----------
+        summary : `pandas.DataFrame`
+            DataFrame (single-row) or dict with aggregate statistics.
+
+        Returns
+        -------
+        summaryText : `str`
+            Human-readable summary string.
         """
         if (isinstance(summary, pd.DataFrame) and summary.empty) or (
             isinstance(summary, dict) and not summary
@@ -536,7 +604,19 @@ class GuiderPlotter:
     @staticmethod
     def formatPsfSummary(psfStats: pd.DataFrame, expTime: float = 1) -> str:
         """
-        Pretty-print summary of PSF statistics.
+        Format a summary of PSF statistics (FWHM trends and scatter).
+
+        Parameters
+        ----------
+        psfStats : `pandas.DataFrame`
+            DataFrame (single-row) or dict with PSF statistics.
+        expTime : `float`, optional
+            Exposure time scaling factor.
+
+        Returns
+        -------
+        summary : `str`
+            Human-readable summary string.
         """
         if (isinstance(psfStats, pd.DataFrame) and psfStats.empty) or (
             isinstance(psfStats, dict) and not psfStats
@@ -555,23 +635,15 @@ class GuiderPlotter:
 
 class GuiderDataPlotter:
     """
-    Class to plot guider stamp mosaics using a GuiderData container.
-    Plot an animated gif of the CCD guider stamp.
+    Plot guider stamp mosaics and animations from a GuiderData instance.
+
+    Parameters
+    ----------
+    guiderData : `GuiderData`
+        Container with guider stamps and metadata.
     """
 
     def __init__(self, guiderData: GuiderData):
-        """
-        Initialize the GuiderMosaicPlotter with a GuiderData container.
-
-        Parameters
-        ----------
-        guiderData : GuiderData
-            GuiderData container with guider images and metadata.
-
-        Returns
-        -------
-        None
-        """
         self.guiderData = guiderData
         self.view = guiderData.view
         self.expId = guiderData.expid
@@ -585,9 +657,21 @@ class GuiderDataPlotter:
         self.dayObs = int(str(self.expId)[:8])
         self.mosaic = MosaicLayout()
 
-    def setupFigure(self, figsize: Tuple[float, float] = (12, 12)) -> tuple[plt.Figure, dict[str, plt.Axes]]:
+    def setupFigure(self, figsize: tuple[float, float] = (12, 12)) -> tuple[plt.Figure, dict[str, plt.Axes]]:
         """
-        Setup a figure and axes for the guider mosaic layout.
+        Create a figure and axes for the guider CCD mosaic.
+
+        Parameters
+        ----------
+        figsize : `tuple[float, float]`, optional
+            Figure size in inches.
+
+        Returns
+        -------
+        fig : `matplotlib.figure.Figure`
+            Created figure.
+        axs : `dict[str, matplotlib.axes.Axes]`
+            Axes dictionary keyed by panel label.
         """
         fig, axs = self.mosaic.build(figsize=figsize, hspace=0.0, wspace=0.0)
         return fig, axs
@@ -602,7 +686,27 @@ class GuiderDataPlotter:
         is_ticks: bool = False,
     ) -> plt.AxesImage:
         """
-        Plot a stamp or stacked image for a single CCD.
+        Plot a single CCD stamp (or stacked image) onto the provided axes.
+
+        Parameters
+        ----------
+        axs : `matplotlib.axes.Axes`
+            Target axes.
+        detName : `str`
+            Detector name.
+        stampNum : `int`, optional
+            Stamp index; values < 0 use stacked image.
+        plo : `float`, optional
+            Lower percentile for scaling.
+        phi : `float`, optional
+            Upper percentile for scaling.
+        is_ticks : `bool`, optional
+            If False, ticks are removed.
+
+        Returns
+        -------
+        image : `matplotlib.image.AxesImage`
+            Image artist.
         """
         im, _, _, _ = renderStampPanel(
             axs, self.guiderData, detName, stampNum, plo=plo, phi=phi, annotate=True
@@ -613,27 +717,27 @@ class GuiderDataPlotter:
 
     def plotStampArray(self, stampNum=0, fig=None, axs=None, plo=90.0, phi=99.0, isAnimated=False) -> list:
         """
-        Plot the stamp array for all the guiders in a mosaic layout.
+        Plot a mosaic of all guider stamps for a single stamp index.
 
         Parameters
         ----------
-        stampNum : int, optional
-            Stamp number.
-        fig : matplotlib.figure.Figure, optional
-            Figure object.
-        axs : dict, optional
-            Dictionary of axes for the mosaic.
-        plo : float, optional
-            Lower percentile for image scaling.
-        phi : float, optional
-            Upper percentile for image scaling.
-        isAnimated : bool, optional
-            Whether this is part of an animation.
+        stampNum : `int`, optional
+            Stamp index; -1 for stacked image.
+        fig : `matplotlib.figure.Figure`, optional
+            Existing figure or None to create.
+        axs : `dict`, optional
+            Axes dictionary from mosaic builder.
+        plo : `float`, optional
+            Lower percentile for scaling.
+        phi : `float`, optional
+            Upper percentile for scaling.
+        isAnimated : `bool`, optional
+            If True, skip static overlays suited for static frames.
 
         Returns
         -------
-        Artists : list
-            List of matplotlib artist objects.
+        artists : `list`
+            List of created artists.
         """
         if fig is None:
             fig, axs = self.setupFigure(figsize=(9.5, 9.5))
@@ -664,7 +768,23 @@ class GuiderDataPlotter:
 
     def plotStackedStampArray(self, fig=None, axs=None, plo=50, phi=99) -> list:
         """
-        Plot the stacked stamp array for all the guiders.
+        Convenience wrapper to plot the stacked (coadded) stamp mosaic.
+
+        Parameters
+        ----------
+        fig : `matplotlib.figure.Figure`, optional
+            Existing figure or None to create.
+        axs : `dict`, optional
+            Axes dictionary or None to create.
+        plo : `float`, optional
+            Lower percentile for scaling.
+        phi : `float`, optional
+            Upper percentile for scaling.
+
+        Returns
+        -------
+        artists : `list`
+            List of created artists.
         """
         artists = self.plotStampArray(stampNum=-1, fig=fig, axs=axs, plo=plo, phi=phi)
         return artists
@@ -673,22 +793,27 @@ class GuiderDataPlotter:
         self, fps=5, dpi=80, saveAs=None, plo=50, phi=99, figsize=(9, 9)
     ) -> animation.ArtistAnimation:
         """
-        Create an animated GIF of the guider CCD array
-        over a sequence of stamps.
+        Create an animated GIF over all stamps for this exposure.
 
         Parameters
         ----------
-        fps : int, optional
+        fps : `int`, optional
             Frames per second.
-        dpi : int, optional
-            Dots per inch for saved animation.
-        saveAs : str or None, optional
-            If provided, save the animation to this file.
+        dpi : `int`, optional
+            Output resolution.
+        saveAs : `str`, optional
+            Output file path (GIF); required to save.
+        plo : `float`, optional
+            Lower percentile for scaling.
+        phi : `float`, optional
+            Upper percentile for scaling.
+        figsize : `tuple[int, int]`, optional
+            Figure size passed to setup.
 
         Returns
         -------
-        matplotlib.animation.ArtistAnimation
-            The resulting animation object.
+        ani : `matplotlib.animation.ArtistAnimation`
+            Created animation.
         """
         # Create the animation
         fig, axs = self.setupFigure(figsize=figsize)
@@ -713,22 +838,21 @@ class GuiderDataPlotter:
 
     def makeMp4(self, fps=5, dpi=80, saveAs="guider_ccd_array.mp4") -> animation.ArtistAnimation:
         """
-        Create an MP4 animation of the guider CCD array
-        over a sequence of stamps.
+        Create an MP4 animation over all stamps for this exposure.
 
         Parameters
         ----------
-        fps : int, optional
+        fps : `int`, optional
             Frames per second.
-        dpi : int, optional
-            Dots per inch for saved animation.
-        saveAs : str, optional
-            Output filename for the MP4 file.
+        dpi : `int`, optional
+            Output resolution in dots per inch.
+        saveAs : `str`, optional
+            Output MP4 filename.
 
         Returns
         -------
-        matplotlib.animation.ArtistAnimation
-            The resulting animation object.
+        ani : `matplotlib.animation.ArtistAnimation`
+            Created animation.
         """
         # Create the animation
         fig, axs = self.setupFigure(figsize=(9, 9))
@@ -752,6 +876,21 @@ class GuiderDataPlotter:
 
 
 def getStdCentroid(statsDf: pd.DataFrame, expId: int) -> float:
+    """
+    Compute combined (quadrature) corrected centroid scatter for an exposure.
+
+    Parameters
+    ----------
+    statsDf : `pandas.DataFrame`
+        Statistics DataFrame containing centroid scatter columns.
+    expId : `int`
+        Exposure identifier.
+
+    Returns
+    -------
+    jitter : `float`
+        Quadrature sum of corrected AZ and ALT centroid scatter (arcsec).
+    """
     stdAz = statsDf.loc[statsDf["expid"] == expId, "std_centroid_corr_az"].values[0]
     stdAlt = statsDf.loc[statsDf["expid"] == expId, "std_centroid_corr_alt"].values[0]
     return np.hypot(stdAz, stdAlt)
@@ -769,7 +908,26 @@ def drawArrows(
     center: tuple[float, float] | None = None,
 ) -> None:
     """
-    Draw DVCS (θ=0) and Alt/Az (θ=rotAngle) reference arrows.
+    Draw reference arrows for instrument (DVCS) and rotated Alt/Az axes.
+
+    Parameters
+    ----------
+    ax : `matplotlib.axes.Axes`
+        Target axes.
+    cutoutSize : `int`
+        Size scale used for arrow lengths and framing.
+    rotAngle : `float`, optional
+        Rotation angle (degrees) for overlay (Alt/Az) axes.
+    baseLabels : `tuple[str, str]`, optional
+        Labels for the base (unrotated) Y/X axes.
+    overlayLabels : `tuple[str, str]`, optional
+        Labels for the rotated Alt/Az axes.
+    baseColor : `str`, optional
+        Color for base axes arrows.
+    overlayColor : `str`, optional
+        Color for rotated axes arrows.
+    center : `tuple[float, float]`, optional
+        Arrow origin; defaults to cutout center when None.
     """
     x0, y0 = (cutoutSize // 2, cutoutSize // 2) if center is None else center
     L = cutoutSize / 3.0
@@ -817,9 +975,26 @@ def getReferenceCenter(
     stampNum: int,
 ) -> tuple[tuple[float, float], tuple[float, float]]:
     """
-    Return ((refX, refY), (dX, dY)) for a detector/stamp.
-    If no measurement for that stamp or stampNum < 0 (stacked),
-    the offset is (0, 0).
+    Determine reference (x,y) center and centroid offset for a detector/stamp.
+
+    If there is no measurement for that stamp, or stampNum < 0 (a stacked
+    image), the offset is (0, 0).
+
+    Parameters
+    ----------
+    starsDf : `pandas.DataFrame`
+        Star measurements table.
+    detName : `str`
+        Detector name.
+    stampNum : `int`
+        Stamp index; negative implies stacked image (zero offset).
+
+    Returns
+    -------
+    center_ref : `tuple[float, float]`
+        Reference center coordinates.
+    delta : `tuple[float, float]`
+        Centroid offset (dX, dY) relative to the reference center.
     """
     mask1 = starsDf["detector"] == detName
     if not mask1.any():
@@ -853,14 +1028,49 @@ def renderStampPanel(
     plo: float = 50.0,
     phi: float = 99.0,
     annotate: bool = True,
-) -> tuple[plt.AxesImage, tuple[float, float], tuple[int, int], Optional[plt.Text]]:
+) -> tuple[plt.AxesImage, tuple[float, float], tuple[int, int], plt.Text | None]:
     """
-    1) Select stamp or coadd
-    2) Optional crop around `center`
-    3) Scale by percentiles
-    4) imshow + equal aspect
-    5) Optional detector label
-    Returns: (imageArtist, centerCutout, cutoutShape, labelArtist)
+    Render a single detector stamp (or stacked image) with optional cropping
+    and annotation.
+
+    Steps:
+      1. Select stamp or coadd.
+      2. Optionally crop around center.
+      3. Apply percentile scaling.
+      4. Display with imshow.
+      5. Optionally annotate detector label.
+
+    Parameters
+    ----------
+    ax : `matplotlib.axes.Axes`
+        Target axes.
+    guiderData : `GuiderData`
+        Guider data container.
+    detName : `str`
+        Detector name.
+    stampNum : `int`
+        Stamp index; negative for stacked/coadd.
+    center : `tuple[float, float]`, optional
+        Center for cropping; image center if None.
+    cutoutSize : `int`, optional
+        Square cutout size; -1 for full frame.
+    plo : `float`, optional
+        Lower percentile for scaling.
+    phi : `float`, optional
+        Upper percentile for scaling.
+    annotate : `bool`, optional
+        If True, add detector label text.
+
+    Returns
+    -------
+    image : `matplotlib.image.AxesImage`
+        Image artist.
+    centerCutout : `tuple[float, float]`
+        Center coordinates within the (possibly cropped) image.
+    shape : `tuple[int, int]`
+        Shape of the displayed (possibly cropped) image.
+    label : `matplotlib.text.Text` or `None`
+        Detector label artist if added.
     """
     # 1) image
     img = guiderData.getStampArrayCoadd(detName) if stampNum < 0 else guiderData[detName, stampNum]
@@ -908,13 +1118,36 @@ def labelDetector(
     ax: plt.Axes,
     name: str,
     *,
-    corner: str = "tl",  # "tl" | "tr" | "bl" | "br"
+    corner: str = "tl",
     color: str = "grey",
     fontsize: int = 9,
     weight: str = "bold",
     pad: tuple[float, float] = (0.025, 0.025),
 ) -> plt.Text:
-    """Place the detector name on a CCD panel."""
+    """Place the detector name text inside a panel.
+
+    Parameters
+    ----------
+    ax : `matplotlib.axes.Axes`
+        Target axes.
+    name : `str`
+        Detector name to display.
+    corner : `str`, optional
+        Two-letter code: t/b (top/bottom) + l/r (left/right).
+    color : `str`, optional
+        Text color.
+    fontsize : `int`, optional
+        Font size.
+    weight : `str`, optional
+        Font weight.
+    pad : `tuple[float, float]`, optional
+        Relative (x,y) padding in axes fraction.
+
+    Returns
+    -------
+    text : `matplotlib.text.Text`
+        Created text artist.
+    """
     ha, va = ("left", "top") if corner[0] == "t" else ("left", "bottom")
     ha = "right" if corner[1] == "r" else ha
     va = "top" if corner[0] == "t" else va
@@ -944,11 +1177,37 @@ def annotateStampInfo(
     stampNum: int,
     nStamps: int,
     view: str | None = None,
-    jitter: float | None = None,  # arcsec
-    extra: str | None = None,  # free-form extra text
+    jitter: float | None = None,
+    extra: str | None = None,
     xy: tuple[float, float] = (1.085, -0.10),
 ) -> plt.Text:
-    """Annotate center panel with exposure/stamp info text."""
+    """
+    Annotate exposure metadata and stamp index on the center panel.
+
+    Parameters
+    ----------
+    ax : `matplotlib.axes.Axes`
+        Target axes.
+    expid : `int`
+        Exposure identifier.
+    stampNum : `int`
+        Current stamp index (0-based). Negative implies stacked.
+    nStamps : `int`
+        Total number of stamps available.
+    view : `str`, optional
+        Orientation descriptor.
+    jitter : `float`, optional
+        Combined centroid scatter (arcsec).
+    extra : `str`, optional
+        Additional free-form text.
+    xy : `tuple[float, float]`, optional
+        Annotation position in axes coordinates.
+
+    Returns
+    -------
+    text : `matplotlib.text.Text`
+        Created text artist.
+    """
     dayObs, seqNum = str(expid)[:8], int(str(expid)[-5:])
 
     text = ""
@@ -985,8 +1244,20 @@ def addStaticOverlays(
     camRotAngle: float,
 ) -> None:
     """
-    Add static overlays to a guider image axis, with detector annotation,
-    crosshairs, and guide circles.
+    Add detector label, crosshairs, and guide circles to a guider panel.
+
+    Parameters
+    ----------
+    axsImg : `matplotlib.axes.Axes`
+        Target axes.
+    detName : `str`
+        Detector name.
+    centerCutout : `tuple[float, float]`
+        Center coordinates in the displayed cutout.
+    cutoutSize : `int`
+        Cutout size; influences overlay scaling.
+    camRotAngle : `float`
+        Camera rotation angle (degrees).
     """
     _ = labelDetector(axsImg, detName)
     axsImg.axvline(centerCutout[0], color=LIGHT_BLUE, lw=1.25, linestyle="--", alpha=0.75)
@@ -1014,13 +1285,34 @@ def drawGuideCircles(
     center: tuple[float, float],
     radii: Sequence[float],
     colors: Sequence[str],
-    labels: Optional[Sequence[str]] = None,
+    labels: Sequence[str] | None = None,
     text_offset: float = 1.0,
     **circle_kwargs: Any,
 ) -> list[plt.Text]:
     """
-    Plot concentric guide circles on an axis. Each circle can have
-    its own color and label, and all are centered at the specified position.
+    Draw concentric guide circles with optional labels.
+
+    Parameters
+    ----------
+    ax : `matplotlib.axes.Axes`
+        Target axes.
+    center : `tuple[float, float]`
+        Center (x, y) of circles.
+    radii : `Sequence[float]`
+        Radii of circles.
+    colors : `Sequence[str]`
+        Edge colors per circle.
+    labels : `Sequence[str]`, optional
+        Labels per circle; None for no labels.
+    text_offset : `float`, optional
+        Offset for label placement along +x.
+    **circle_kwargs : `dict`
+        Extra keyword args passed to Circle.
+
+    Returns
+    -------
+    texts : `list[matplotlib.text.Text]`
+        List of label text artists.
     """
     x0, y0 = center
     txt_list: list[plt.Text] = []
@@ -1055,8 +1347,20 @@ def plotCrosshairRotated(
     size: int = 30,
 ) -> None:
     """
-    Plot a crosshair at a given center, rotated by the specified angle. The
-    crosshair consists of two lines intersecting at the center.
+    Plot a rotated crosshair centered on given coordinates.
+
+    Parameters
+    ----------
+    center : `tuple[float, float]`
+        Center (x, y) in image coordinates.
+    angle : `float`
+        Rotation angle in degrees.
+    axs : `matplotlib.axes.Axes`, optional
+        Target axes or None to use current.
+    color : `str`, optional
+        Line color.
+    size : `int`, optional
+        Size scaling factor.
     """
     if axs is None:
         axs = plt.gca()
@@ -1100,7 +1404,27 @@ def plotStarCentroid(
     color: str = "firebrick",
 ) -> list[Line2D]:
     """
-    Plot the star centroid on the cutout using explicit coordinates.
+    Plot the measured star centroid (with optional error bars) on a cutout.
+
+    Parameters
+    ----------
+    ax : `matplotlib.axes.Axes`
+        Target axes.
+    centerCutout : `tuple[float, float]`
+        Reference center in the cutout.
+    deltaXY : `tuple[float, float]`
+        Offset (dx, dy) from center to centroid.
+    markerSize : `int`, optional
+        Marker size; <=0 disables plotting.
+    errXY : `tuple[float, float]`, optional
+        (xerr, yerr) half-lengths for error bars.
+    color : `str`, optional
+        Marker and line color.
+
+    Returns
+    -------
+    artists : `list[matplotlib.lines.Line2D]`
+        Marker and error bar line artists.
     """
     if markerSize <= 0:
         return []
@@ -1118,7 +1442,14 @@ def plotStarCentroid(
 
 def clearAxisTicks(ax: plt.Axes, isSpine: bool = False) -> None:
     """
-    Remove all ticks and tick labels from an axis.
+    Remove all ticks/labels; optionally keep spines.
+
+    Parameters
+    ----------
+    ax : `matplotlib.axes.Axes`
+        Target axes.
+    isSpine : `bool`, optional
+        If True, retain spines; otherwise hide them.
     """
     ax.set_xticks([])
     ax.set_yticks([])
@@ -1134,15 +1465,23 @@ def cropAroundCenter(
     image: np.ndarray, center: tuple[float, float], size: int
 ) -> tuple[np.ndarray, tuple[float, float]]:
     """
-    Crop a square region from the image centered at a specific point,
-    returning both the cropped image and the new center coordinates.
+    Extract a square crop centered on the specified coordinates.
+
+    Parameters
+    ----------
+    image : `numpy.ndarray`
+        Source 2D image.
+    center : `tuple[float, float]`
+        Center (x, y) in original image coordinates.
+    size : `int`
+        Desired square size in pixels.
 
     Returns
     -------
-    cropped : np.ndarray
-        Cropped image of shape (size, size).
-    new_center : tuple[float, float]
-        Coordinates of the original center in the cropped image.
+    cropped : `numpy.ndarray`
+        Cropped (and possibly padded) image of shape (size, size).
+    new_center : `tuple[float, float]`
+        Center coordinates within the cropped image.
     """
     x, y = center
     x, y = int(round(x)), int(round(y))
@@ -1176,13 +1515,17 @@ def cropAroundCenter(
 
 def assembleStats(stars) -> pd.DataFrame:
     """
-    Assemble summary statistics from the stars dataframe
-    for the current exposure.
+    Assemble per-exposure summary statistics from star measurements.
+
+    Parameters
+    ----------
+    stars : `pandas.DataFrame`
+        Star measurement rows for a single exposure.
 
     Returns
     -------
-    pd.DataFrame
-        DataFrame with a summary statistics for the current exposure.
+    summary : `pandas.DataFrame`
+        Single-row DataFrame with aggregate statistics.
     """
     nGuiders = stars["detector"].nunique()
     nUnique = stars["detid"].nunique()
@@ -1217,21 +1560,21 @@ def assembleStats(stars) -> pd.DataFrame:
 
 def measureStdCentroidStats(stars: pd.DataFrame, snr_th: int = 5, flux_th: float = 10.0) -> pd.DataFrame:
     """
-    Compute global std_centroid statistics across all guiders.
+    Compute global centroid scatter and drift statistics.
 
     Parameters
     ----------
-    stars : pd.DataFrame
-        Concatenated star table across all guider detectors.
-    snr_th : int, optional
-        SNR threshold for filtering stars.
-    flux_th : float, optional
-        Flux threshold for filtering stars.
+    stars : `pandas.DataFrame`
+        Star measurements across guiders.
+    snr_th : `int`, optional
+        Minimum SNR threshold.
+    flux_th : `float`, optional
+        Minimum flux threshold.
 
     Returns
     -------
-    dict
-        Dictionary with std_centroid and related statistics.
+    stats : `dict`
+        Dictionary of centroid scatter, drift, and offsets.
     """
     # mask the objects w/ very low flux and SNR
     mask = (stars.snr > snr_th) & (stars.flux > flux_th)
@@ -1264,21 +1607,21 @@ def measureStdCentroidStats(stars: pd.DataFrame, snr_th: int = 5, flux_th: float
 
 def measurePsfStats(stars: pd.DataFrame, snr_th: int = 5, flux_th: float = 10) -> dict[str, float]:
     """
-    Compute PSF statistics (FWHM and ellipticities) over all guiders.
+    Compute PSF FWHM and ellipticity trend statistics.
 
     Parameters
     ----------
-    stars : pd.DataFrame
-        Concatenated star table across all guider detectors.
-    snr_th : int, optional
-        SNR threshold for filtering stars.
-    flux_th : float, optional
-        Flux threshold for filtering stars.
+    stars : `pandas.DataFrame`
+        Star measurements across guiders.
+    snr_th : `int`, optional
+        Minimum SNR threshold.
+    flux_th : `float`, optional
+        Minimum flux threshold.
 
     Returns
     -------
-    dict
-        Dictionary with PSF and ellipticity statistics.
+    stats : `dict[str, float]`
+        PSF and ellipticity slope, scatter, zero-point metrics.
     """
     # mask the objects w/ very low flux and SNR
     mask = (stars.snr > snr_th) & (stars.flux > flux_th)
@@ -1319,20 +1662,19 @@ def measurePsfStats(stars: pd.DataFrame, snr_th: int = 5, flux_th: float = 10) -
 
 def measurePhotometricVariation(stars: pd.DataFrame, snr_th: int = 5) -> dict[str, float]:
     """
-    Fit magoffset vs time across all rows, compute drift rate,
-    zero-point, and RMS scatter.
+    Measure drift and scatter of magnitude offsets versus time.
 
     Parameters
     ----------
-    stars : pd.DataFrame
-        Star measurements across all guiders.
-    snr_th : int, optional
-        SNR threshold for filtering stars.
+    stars : `pandas.DataFrame`
+        Star measurements across guiders.
+    snr_th : `int`, optional
+        Minimum SNR threshold.
 
     Returns
     -------
-    dict
-        Dictionary with photometric variation statistics.
+    stats : `dict[str, float]`
+        Drift rate, zero-point, RMS scatter, and significance.
     """
     mo = stars["magoffset"].to_numpy()
     mask = np.isfinite(mo)
