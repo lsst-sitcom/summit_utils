@@ -45,7 +45,7 @@ _DEFAULT_COLUMNS: str = (
     "trackid detector expid elapsed_time dalt daz dtheta dx dy "
     "fwhm xroi yroi xccd yccd xroi_ref yroi_ref xccd_ref yccd_ref "
     "dxfp dyfp xfp yfp alt az xfp_ref yfp_ref alt_ref az_ref "
-    "theta theta_ref flux flux_err magoffset snr "
+    "xerr yerr theta theta_err theta_ref flux flux_err magoffset snr "
     "ixx iyy ixy e1 e2 e1_altaz e2_altaz "
     "ampname timestamp stamp detid filter "
 )

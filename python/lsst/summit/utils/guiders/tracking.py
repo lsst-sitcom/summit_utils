@@ -314,10 +314,37 @@ def computeOffsets(stars: pd.DataFrame) -> pd.DataFrame:
 
 def computeRotatorAngle(stars: pd.DataFrame) -> pd.DataFrame:
     """
-    Compute the rotator angle for each star in the catalog.
+    Compute the rotator angle (theta) and its propagated 1-sigma uncertainty
+    for each row in `stars`.
+
+    Required columns:
+        - xfp, yfp     : focal plane coordinates
+        - xerr, yerr   : 1-sigma uncertainties for xccd, yccd
+
+    Adds columns:
+        - theta       : angle in degrees
+        - theta_err   : propagated uncertainty in degrees
     """
-    # Compute the rotator angle in the focal plane
-    stars["theta"] = np.arctan2(stars["yfp"], stars["xfp"]) * 180 / np.pi
+    mm = 0.001  # convert microns to mm
+    xfp = stars["xfp"].to_numpy()
+    yfp = stars["yfp"].to_numpy()
+    sigmaX = stars["xerr"].to_numpy() * 10 * mm
+    sigmaY = stars["yerr"].to_numpy() * 10 * mm
+
+    # Angle in degrees
+    theta = np.degrees(np.arctan2(yfp, xfp))
+
+    # Denominator r^2 = x^2 + y^2
+    denom = xfp**2 + yfp**2
+
+    # Suppress warnings for rows where denom == 0; set sigmaTheta to NaN there.
+    with np.errstate(divide="ignore", invalid="ignore"):
+        sigmaThetaRad = np.sqrt((yfp**2 * sigmaX**2 + xfp**2 * sigmaY**2) / denom**2)
+        sigmaTheta = np.degrees(sigmaThetaRad)
+        sigmaTheta = np.where(denom == 0, np.nan, sigmaTheta)
+
+    stars["theta"] = theta
+    stars["theta_err"] = sigmaTheta
     return stars
 
 
