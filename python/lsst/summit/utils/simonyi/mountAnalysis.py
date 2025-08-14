@@ -687,6 +687,7 @@ def calculateHexRms(mountData: MountData) -> tuple[float, float]:
     tuple[float, float]
         The image motions associated with the CamHex and M2Hex motions.
     """
+
     # The below image motion coefficients were calculated
     # with a Batoid simulation by Josh Meyers
     camHexXY = 1.00  # microns(image) / micron(hexapod)
@@ -706,16 +707,14 @@ def calculateHexRms(mountData: MountData) -> tuple[float, float]:
 
     camHexMs = 0.0
     for i in [0, 1, 3, 4]:
-        camhex = copy.deepcopy(mountData.camhexData[f"position{i}"])
-        camhex -= np.median(camhex)
+        camhex = copy.deepcopy(mountData.camhexData[f"error{i}"])
         camhex *= camCoefs[i]
         camHexMs += np.mean(camhex * camhex)
     camHexRms = np.sqrt(camHexMs)  # in arcseconds image impact
 
     m2HexMs = 0.0
     for i in [0, 1, 3, 4]:
-        m2hex = copy.deepcopy(mountData.m2hexData[f"position{i}"])
-        m2hex -= np.median(m2hex)
+        m2hex = copy.deepcopy(mountData.m2hexData[f"error{i}"])
         m2hex *= m2Coefs[i]
         m2HexMs += np.mean(m2hex * m2hex)
     m2HexRms = np.sqrt(m2HexMs)  # in arcseconds image impact
