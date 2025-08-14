@@ -11,4 +11,9 @@ target-version = ["py311"]
 write_to = "python/lsst/summit/utils/version.py"
 
 [tool.ruff]
-line-length = 79
+line-length = 110
+target-version = "py311"
+exclude = [
+    "__init__.py",
+    "config/*",
+]
