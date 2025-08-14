@@ -28,7 +28,7 @@ from typing import TYPE_CHECKING
 import numpy as np
 import pandas as pd
 
-from .transformation import convertRoiToCcd, convertToAltaz, convertToFocalPlane
+from .transformation import ComputeCcdToAltAzAngle, convertRoiToCcd, convertToAltaz, convertToFocalPlane
 
 if TYPE_CHECKING:
     from .reading import GuiderData
@@ -223,8 +223,7 @@ def convertToCcdFocalPlaneAltAz(stars: pd.DataFrame, guiderData: GuiderData, gui
 def applyQualityCuts(
     stars: pd.DataFrame, shape: tuple[float, float], config: GuiderStarTrackerConfig
 ) -> pd.DataFrame:
-    """
-    Minimum SNR, maximum ellipticity and edge margin.
+    """Apply cuts according to min SNR, maximum ellipticity and edge margin.
 
     Parameters
     ----------
@@ -327,18 +326,16 @@ def convertEllipticity(stars: pd.DataFrame, guiderData: GuiderData, detName) -> 
     Rotate ellipticity components (e1, e2) to Alt/Az.
     """
     # TODO: Double check with Aaron
-    camRotAngle = guiderData.camRotAngle
-    is_rotated = guiderData.axisRowMap[detName] == 1
-    if is_rotated:
-        camRotAngle = (camRotAngle + 90) % 360  # Adjust angle for flipped detectors
+    camRotAngleDeg = guiderData.camRotAngle
+    ccdRotAngle = ComputeCcdToAltAzAngle(camRotAngleDeg, detName)
 
-    e1_rot, e2_rot = rotateEllipticity(stars["e1"], stars["e2"], camRotAngle)
+    e1_rot, e2_rot = rotateEllipticity(stars["e1"], stars["e2"], ccdRotAngle)
     stars["e1_altaz"] = e1_rot
     stars["e2_altaz"] = e2_rot
     return stars
 
 
-def rotateEllipticity(e1: float, e2: float, theta_deg: float):
+def rotateEllipticity(e1: float, e2: float, theta_deg: float) -> tuple[float, float]:
     """
     Rotate ellipticity components (e1, e2) by theta_deg degrees.
     """

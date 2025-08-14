@@ -404,7 +404,6 @@ class GuiderData:
 
         fig, axs = plt.subplots(1, 1, figsize=figsize)
         _ = self.plotter.plotStampCcd(axs, detName, stampNum=stampNum, plo=plo, phi=phi, is_ticks=True)
-        _ = self.plotter.plotTextCcdName(detName, axs=axs)
         axs.set_xlabel("X (pixels)", fontsize=11)
         axs.set_ylabel("Y (pixels)", fontsize=11)
         plt.title(f"{self.expid}")
@@ -422,8 +421,7 @@ class GuiderData:
         figsize : tuple, optional
             Figure size for the plots.
         """
-        nStampMax = len(self)
-        self.plotter.makeGif(saveAs=saveAs, fps=fps, nStampMax=nStampMax, plo=plo, phi=phi, figsize=figsize)
+        self.plotter.makeGif(saveAs=saveAs, fps=fps, plo=plo, phi=phi, figsize=figsize)
 
 
 class GuiderReader:

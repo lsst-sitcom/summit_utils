@@ -25,7 +25,7 @@ __all__ = [
     "makeCcdToDvcsTransform",
     "makeRoiBbox",
     "stampToCcd",
-    "get_detector_amp",
+    "getAmpNameFromMetadata",
     "roiImageToDvcs",
     "focalToPixel",
     "pixelToFocal",
@@ -41,7 +41,7 @@ __all__ = [
     "makeInitGuiderWcs",
     "getCamRotAngle",
     "DriftResult",
-    "getCamRotAngle",
+    "ComputeCcdToAltAzAngle",
 ]
 
 from dataclasses import dataclass
@@ -55,6 +55,9 @@ from astropy.time import Time
 from lsst.afw import cameraGeom
 from lsst.afw.cameraGeom import Detector
 from lsst.afw.image import ImageF
+
+# at top-level imports
+from lsst.daf.base import PropertyList
 from lsst.geom import AffineTransform, Angle, Box2D, Box2I, Extent2D, Point2D, degrees
 from lsst.obs.base import createInitialSkyWcsFromBoresight
 from lsst.obs.lsst import LsstCam
@@ -286,66 +289,43 @@ def makeCcdToDvcsTransform(
     return forwards, backwards
 
 
-def makeRoiBbox(md, camera):
+def makeRoiBbox(md: PropertyList, camera: LsstCam) -> Box2I:
     """
-    Construct the bounding box for a Guider ROI stamp
-    in full CCD view coordinates.
-
-    Parameters
-    ----------
-    md : lsst.daf.base.PropertyList
-        Metadata from one Guider CCD.
-    camera : lsst.obs.lsst.LsstCam
-        LsstCam object.
-
-    Returns
-    -------
-    ccdViewBbox : lsst.geom.Box2I
-        Bounding box for the ROI in CCD pixel coordinates.
+    Construct the bounding box for a Guider ROI stamp in CCD coords.
     """
+    # ROI metadata
+    roiColumn: int = int(md["ROICOL"])
+    roiRow: int = int(md["ROIROW"])
+    roiColumns: int = int(md["ROICOLS"])
+    roiRows: int = int(md["ROIROWS"])
 
-    # get need info from the stamp metadata
-    roiCol = md["ROICOL"]
-    roiRow = md["ROIROW"]
-    roiCols = md["ROICOLS"]
-    roiRows = md["ROIROWS"]
+    # detector and amp
+    detector, ampName = getAmpNameFromMetadata(md, camera)
 
-    # get detector and amp
-    detector, ampName = get_detector_amp(md, camera)
-    amp = detector[ampName]
-
-    # get corner0 of the location for the ROI
+    # corner 0 (CCD view)
     lct = LsstCameraTransforms(camera, detector.getName())
-    corner0_CCDX, corner0_CCDY = lct.ampPixelToCcdPixel(roiCol, roiRow, ampName)
-    corner0_CCDX = int(corner0_CCDX)
-    corner0_CCDY = int(corner0_CCDY)
+    corner0CcdXFloat, corner0CcdYFloat = lct.ampPixelToCcdPixel(roiColumn, roiRow, ampName)
+    corner0CcdX: int = int(corner0CcdXFloat)
+    corner0CcdY: int = int(corner0CcdYFloat)
 
-    # get opposite corner, corner2, of the ROI
-    # depending on the RawFlipX,Y it could be either below or above corner0
-    if amp.getRawFlipX():
-        corner2_CCDX = corner0_CCDX - (roiCols - 1)
-    else:
-        corner2_CCDX = corner0_CCDX + (roiCols - 1)
+    # corner 2 (depends on flips)
+    amp = detector[ampName]
+    corner2CcdX: int = corner0CcdX - (roiColumns - 1) if amp.getRawFlipX() else corner0CcdX + (roiColumns - 1)
+    corner2CcdY: int = corner0CcdY - (roiRows - 1) if amp.getRawFlipY() else corner0CcdY + (roiRows - 1)
 
-    if amp.getRawFlipY():
-        corner2_CCDY = corner0_CCDY - (roiRows - 1)
-    else:
-        corner2_CCDY = corner0_CCDY + (roiRows - 1)
+    # bbox with LL/UR ordering
+    llX: int = min(corner0CcdX, corner2CcdX)
+    urX: int = max(corner0CcdX, corner2CcdX)
+    llY: int = min(corner0CcdY, corner2CcdY)
+    urY: int = max(corner0CcdY, corner2CcdY)
 
-    # now make the CCD view BBox, here we want the LowerLeft Point to be the
-    # smallest x,y
-    ll_x = min(corner0_CCDX, corner2_CCDX)
-    ur_x = max(corner0_CCDX, corner2_CCDX)
-    ll_y = min(corner0_CCDY, corner2_CCDY)
-    ur_y = max(corner0_CCDY, corner2_CCDY)
-    ll_CCD = Point2D(ll_x, ll_y)
-    ur_CCD = Point2D(ur_x, ur_y)
-    ccd_view_bbox = Box2I(Box2D(ll_CCD, ur_CCD))
-
-    return ccd_view_bbox
+    llCcd: Point2D = Point2D(llX, llY)
+    urCcd: Point2D = Point2D(urX, urY)
+    ccdViewBbox: Box2I = Box2I(Box2D(llCcd, urCcd))
+    return ccdViewBbox
 
 
-def get_detector_amp(md, camera):
+def getAmpNameFromMetadata(md: PropertyList, camera: LsstCam) -> tuple[Detector, str]:
     """
     Unpack detector and amplifier information from metadata.
 
@@ -363,18 +343,25 @@ def get_detector_amp(md, camera):
     ampName : str
         Amplifier name, e.g., 'C00'.
     """
-    raftBay = md["RAFTBAY"]
-    ccdSlot = md["CCDSLOT"]
+    raftBay: str = md["RAFTBAY"]
+    ccdSlot: str = md["CCDSLOT"]
 
-    segment = md["ROISEG"]
-    ampName = "C" + segment[7:]
-    detName = raftBay + "_" + ccdSlot
-    detector = camera[detName]
+    segment: str = md["ROISEG"]
+    ampName: str = "C" + segment[7:]
+    detName: str = f"{raftBay}_{ccdSlot}"
+    detector: Detector = camera[detName]
 
     return detector, ampName
 
 
-def roiImageToDvcs(roi, md, detector, ampName, camera, view="dvcs"):
+def roiImageToDvcs(
+    roi: np.ndarray,
+    metadata: PropertyList,
+    detector: Detector,
+    ampName: str,
+    camera: LsstCam,
+    view: str = "dvcs",
+) -> ImageF:
     """
     Convert ROI image from raw amplifier view to CCD or DVCS views,
     or embed in full CCD image.
@@ -383,7 +370,7 @@ def roiImageToDvcs(roi, md, detector, ampName, camera, view="dvcs"):
     ----------
     roi : np.ndarray
         ROI array (raw, amplifier coordinates).
-    md : lsst.daf.base.PropertyList
+    metadata : lsst.daf.base.PropertyList
         Metadata from one Guider CCD.
     detector : lsst.afw.cameraGeom.Detector
         CCD detector object.
@@ -407,30 +394,29 @@ def roiImageToDvcs(roi, md, detector, ampName, camera, view="dvcs"):
     """
 
     # convert image to ccd view
-    roi_ccdview = ampToCcdView(roi, detector, ampName)
+    roiCcdView = ampToCcdView(roi, detector, ampName)
 
     # convert image to dvcs view (nb. np.rot90 works opposite to
     # afwMath.rotateImageBy90)
-    roi_dvcsview = np.rot90(roi_ccdview, -detector.getOrientation().getNQuarter())
+    roiDvcsView = np.rot90(roiCcdView, -detector.getOrientation().getNQuarter())
+
+    ny, nx = roi.shape
+    imf = ImageF(nx, ny, 0.0)
 
     # output ImageF
     if view == "dvcs":
-        ny, nx = roi.shape
-        imf = ImageF(nx, ny, 0.0)
-        imf.array[:] = roi_dvcsview
+        imf.array[:] = roiDvcsView
     elif view == "ccd":
-        ny, nx = roi.shape
-        imf = ImageF(nx, ny, 0.0)
-        imf.array[:] = roi_ccdview
+        imf.array[:] = roiCcdView
     elif view == "ccdfull":
         # make the full CCD and place the ROI inside it
         nx, ny = detector.getBBox().getDimensions()
         imf = ImageF(nx, ny, 0.0)
-        segment = md["ROISEG"]
-        ampName = "C" + segment[7:]
-        roiCol = md["ROICOL"]
-        roiRow = md["ROIROW"]
-        imf.array[:] = stampToCcd(roi, imf.array[:], detector, camera, ampName, roiCol, roiRow)
+        roiSegment = metadata["ROISEG"]
+        ampName = "C" + roiSegment[7:]
+        roiColumn = metadata["ROICOL"]
+        roiRow = metadata["ROIROW"]
+        imf.array[:] = stampToCcd(roi, imf.array[:], detector, camera, ampName, roiColumn, roiRow)
 
     return imf
 
@@ -556,7 +542,7 @@ def stampToCcd(stamp, ccdimg, detector, camera, ampName, ampCol, ampRow):
     return ccdimg
 
 
-def ampToCcdView(stamp, detector, ampName):
+def ampToCcdView(stamp: np.ndarray, detector: Detector, ampName: str) -> np.ndarray:
     """
     Convert a Guider ROI stamp image from amplifier view to CCD view.
 
@@ -571,16 +557,16 @@ def ampToCcdView(stamp, detector, ampName):
 
     Returns
     -------
-    img : np.ndarray
+    ccdImage : np.ndarray
         ROI image array flipped to be in CCD coordinate orientation.
     """
-    amp = detector[ampName]
-    img = stamp.copy()
-    if amp.getRawFlipX():
-        img = np.fliplr(img)
-    if amp.getRawFlipY():
-        img = np.flipud(img)
-    return img
+    amplifier = detector[ampName]
+    ccdImage = stamp.copy()
+    if amplifier.getRawFlipX():
+        ccdImage = np.fliplr(ccdImage)
+    if amplifier.getRawFlipY():
+        ccdImage = np.flipud(ccdImage)
+    return ccdImage
 
 
 def convertToFocalPlane(xccd: np.ndarray, yccd: np.ndarray, detNum: int) -> tuple[np.ndarray, np.ndarray]:
@@ -784,9 +770,55 @@ def convertCcdToDvcs(
     if len(xccd) == 0:
         return np.array([]), np.array([])
 
-    box, ccd2dvcs, _ = stamps.getArchiveElements()[0]
+    _, ccd2dvcs, _ = stamps.getArchiveElements()[0]
     xdvcs, ydvcs = ccd2dvcs(xccd, yccd)
     return xdvcs, ydvcs
+
+
+def getCamRotAngle(visitinfo) -> float:
+    """
+    Compute the camera rotation angle in degrees from visit information.
+
+    Parameters
+    ----------
+    visitinfo : lsst.afw.image.VisitInfo
+        Visit information from an exposure.
+
+    Returns
+    -------
+    float
+        Camera rotation angle in degrees, wrapped near zero.
+    """
+    camRot = (
+        visitinfo.getBoresightParAngle().asDegrees() - visitinfo.getBoresightRotAngle().asDegrees() - 90.0
+    )
+    camRotAngle = Angle(camRot, degrees)
+    camRotAngleW = camRotAngle.wrapNear(Angle(0.0))
+    return camRotAngleW.asDegrees()
+
+
+def ComputeCcdToAltAzAngle(
+    camRotAngleDeg: float,
+    detName: str,
+) -> float:
+    """
+    Compute the rotation angle from CCD coordinates to Alt/Az
+      for a given detector.
+    """
+    # Get detector orientation
+    camera: LsstCam = LsstCam.getCamera()
+    detector: Detector = camera[detName]
+
+    # Total rotation: CCD→DVCS + DVCS→AltAz
+    # Number of 90deg CCW rotations from CCD to DVCS
+    nFlips = detector.getOrientation().getNQuarter()
+
+    # Angle from CCD +X to DVCS +X
+    thetaCcdToDvcsDeg = (nFlips * 90) % 360
+
+    # Total angle from CCD +X to Alt/Az +X
+    totalAngleDeg = (thetaCcdToDvcsDeg + camRotAngleDeg) % 360.0
+    return totalAngleDeg
 
 
 # Putting former guiderwcs here
@@ -812,37 +844,15 @@ def makeInitGuiderWcs(camera, visitInfo) -> dict[str, SkyWcs]:
     boresight = visitInfo.getBoresightRaDec()
 
     # Get WCS for each CCD in camera
-    cam_wcs = {}
+    camWcs: dict[str, SkyWcs] = {}
 
     for det in camera:
         if det.getType() == cameraGeom.DetectorType.GUIDER:
             # get WCS
             args = boresight, orientation, det
-            cam_wcs[det.getName()] = createInitialSkyWcsFromBoresight(*args, flipX=False)
+            camWcs[det.getName()] = createInitialSkyWcsFromBoresight(*args, flipX=False)
 
-    return cam_wcs
-
-
-def getCamRotAngle(visitinfo) -> float:
-    """
-    Compute the camera rotation angle in degrees from visit information.
-
-    Parameters
-    ----------
-    visitinfo : lsst.afw.image.VisitInfo
-        Visit information from an exposure.
-
-    Returns
-    -------
-    float
-        Camera rotation angle in degrees, wrapped near zero.
-    """
-    camRot = (
-        visitinfo.getBoresightParAngle().asDegrees() - visitinfo.getBoresightRotAngle().asDegrees() - 90.0
-    )
-    camRotAngle = Angle(camRot, degrees)
-    camRotAngleW = camRotAngle.wrapNear(Angle(0.0))
-    return camRotAngleW.asDegrees()
+    return camWcs
 
 
 # Data class for drift results

@@ -1450,19 +1450,19 @@ class RobustFitter:
         self,
         x: np.ndarray,
         y: np.ndarray,
-        min_samples: float = 0.2,
-        residual_threshold: float | None = None,
-        random_state: int = 42,
+        minSamples: float = 0.2,
+        residualThreshold: float | None = None,
+        randomState: int = 42,
     ):
-        self.min_samples = min_samples
-        self.residual_threshold = residual_threshold
-        self.random_state = random_state
+        self.min_samples = minSamples
+        self.residualThreshold = residualThreshold
+        self.randomState = randomState
 
-        if self.residual_threshold is None:
+        if self.residualThreshold is None:
             # Set a default residual threshold based on the data
             if np.isnan(x).all() or np.isnan(y).all():
                 raise ValueError("Cannot fit model: all input data is NaN.")
-            self.residual_threshold = 1.5 * mad_std(y)
+            self.residualThreshold = 1.5 * mad_std(y)
 
         self.fit(x, y)
 
@@ -1482,8 +1482,8 @@ class RobustFitter:
         self.model = RANSACRegressor(
             estimator=LinearRegression(),
             min_samples=self.min_samples,
-            residual_threshold=self.residual_threshold,
-            random_state=self.random_state,
+            residual_threshold=self.residualThreshold,
+            random_state=self.randomState,
         )
         self.model.fit(X, yfit)
         self.slope = self.model.estimator_.coef_[0]
@@ -1517,7 +1517,7 @@ class RobustFitter:
         self.scatter = np.std(ols_model.resid)
         self.ols_model = ols_model  # Expose full model if needed
 
-    def report_best_values(self):
+    def reportBestValues(self):
         return RobustFitResult(
             slope=self.slope,
             slope_pvalue=self.slope_pvalue,
@@ -1530,18 +1530,8 @@ class RobustFitter:
             scatter=self.scatter,
         )
 
-    def plot_best_fit(
-        self,
-        ax=None,
-        label=None,
-        color=None,
-        alpha_band=0.2,
-        lw=2,
-        nbins=5,
-        is_scatter=False,
-    ):
-        """
-        Plot the best fit line, confidence interval,
+    def plotBestFit(self, ax: matplotlib.axes.Axes, label=None, color=None, alphaBand=0.2, lw=2, nBins=5):
+        """Plot the best fit line, confidence interval,
         and optionally scatter/binned data.
 
         Parameters
@@ -1552,25 +1542,18 @@ class RobustFitter:
             Label for the best fit line.
         color : str or None, optional
             Color for the fit line and confidence band.
-        alpha_band : float, optional
+        alphaBand : float, optional
             Alpha transparency for the confidence interval band.
         lw : int, optional
             Line width for the best fit line.
-        nbins : int, optional
+        nBins : int, optional
             Number of bins for binned statistics.
-        is_scatter : bool, optional
-            If True, plot inliers and outliers as scatter points.
 
         Returns
         -------
         ax : matplotlib.axes.Axes
             The axes with the plot.
         """
-        import matplotlib.pyplot as plt
-
-        if ax is None:
-            ax = plt.gca()
-
         # Handle case where self.x contains only NaNs
         if np.isnan(self.x).all():
             raise ValueError("All x values are NaN; cannot plot best fit.")
@@ -1587,24 +1570,18 @@ class RobustFitter:
         # Plot best fit
         ax.plot(xx, mean, color=color, label=label, lw=lw)
         # Plot confidence interval band
-        ax.fill_between(xx, ci_lo, ci_hi, color=color, alpha=alpha_band)
+        ax.fill_between(xx, ci_lo, ci_hi, color=color, alpha=alphaBand)
 
         mask = self.outlier_mask
         xin, yin = self.x[~mask], self.y[~mask]  # inliers
-        xout, yout = self.x[mask], self.y[mask]  # outliers
+        xout, _ = self.x[mask], self.y[mask]  # outliers
 
-        if is_scatter:
-            # Plot inliers and outliers as before
-            ax.scatter(xin, yin, color=color or "black", alpha=0.7, label="Inliers", zorder=5)
-            ylims = ax.get_ylim()
-            ax.scatter(xout, yout, color="firebrick", alpha=0.5, label="Outliers", zorder=5)
-            ax.set_ylim(ylims)
         # Bin data in nbins
         if np.all(np.isnan(xout)):
             # Skip binning if all values are NaN
             pass
         else:
-            bin_centers, means, stds, bin_counts = get_binned_data(xin, yin, nbins)
+            bin_centers, means, stds, bin_counts = self.getBinnedData(xin, yin, nBins)
 
             # Plot binned means and stds
             ax.errorbar(
@@ -1621,25 +1598,28 @@ class RobustFitter:
 
         return ax
 
-
-def get_binned_data(x, y, nbins):
-    bins = np.linspace(np.nanmin(x), np.nanmax(x), nbins + 1)
-    bin_centers = 0.5 * (bins[:-1] + bins[1:])
-    digitized = np.digitize(x, bins) - 1
-    means = []
-    stds = []
-    bin_counts = []
-    for i in range(nbins):
-        bin_y = y[digitized == i]
-        if len(bin_y) > 0:
-            means.append(np.nanmedian(bin_y))
-            if len(bin_y) > 1:
-                stds.append(np.nanstd(bin_y, ddof=1) / np.sqrt(len(bin_y)))
+    @staticmethod
+    def getBinnedData(
+        x: np.ndarray, y: np.ndarray, nbins: int
+    ) -> tuple[np.ndarray, list[float], list[float], list[int]]:
+        """Get binned statistics for x and y."""
+        bins = np.linspace(np.nanmin(x), np.nanmax(x), nbins + 1)
+        bin_centers = 0.5 * (bins[:-1] + bins[1:])
+        digitized = np.digitize(x, bins) - 1
+        means = []
+        stds = []
+        bin_counts = []
+        for i in range(nbins):
+            bin_y = y[digitized == i]
+            if len(bin_y) > 0:
+                means.append(np.nanmedian(bin_y))
+                if len(bin_y) > 1:
+                    stds.append(np.nanstd(bin_y, ddof=1) / np.sqrt(len(bin_y)))
+                else:
+                    stds.append(np.nan)
+                bin_counts.append(len(bin_y))
             else:
+                means.append(np.nan)
                 stds.append(np.nan)
-            bin_counts.append(len(bin_y))
-        else:
-            means.append(np.nan)
-            stds.append(np.nan)
-            bin_counts.append(0)
-    return bin_centers, means, stds, bin_counts
+                bin_counts.append(0)
+        return bin_centers, means, stds, bin_counts
