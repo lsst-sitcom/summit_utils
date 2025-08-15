@@ -41,7 +41,6 @@ from lsst.daf.butler import Butler, DatasetNotFoundError
 from lsst.meas.algorithms.stamps import Stamp, Stamps
 from lsst.obs.lsst import LsstCam
 
-from .exceptions import StampsNotFoundError
 from .plotting import GuiderDataPlotter
 from .transformation import (
     getCamRotAngle,
@@ -405,7 +404,7 @@ class GuiderData:
 
         stamps = self.stampsMap[detName]
         if len(stamps) == 0:
-            raise StampsNotFoundError(f"No stamps found for detector {detName!r}")
+            raise ValueError(f"No stamps found for detector {detName!r}")
 
         # Collect arrays, with optional bias subtraction
         arrList = [self[detName, idx] for idx in range(len(stamps))]
@@ -464,8 +463,8 @@ class GuiderData:
         """
         try:
             return self.wcsMap[detName]
-        except KeyError as err:
-            raise KeyError(f"{detName!r} not found in wcsMap") from err
+        except KeyError as e:
+            raise KeyError(f"{detName!r} not found in wcsMap") from e
 
     @cached_property
     def obsTime(self) -> Time:
@@ -702,7 +701,7 @@ class GuiderReader:
         self.nStamps = max(nStampsList)
 
         if self.nStamps <= 1:
-            raise StampsNotFoundError(
+            raise RuntimeError(
                 f"Only {self.nStamps} stamps found for dayObs {dayObs}, seqNum {seqNum}. "
                 "At least 2 stamps are required to create GuiderData."
             )
@@ -754,7 +753,7 @@ class GuiderReader:
                     instrument="LSSTCam",
                 )
             except DatasetNotFoundError as e:
-                raise StampsNotFoundError(f"No data for {detName} on {dayObs=} {seqNum=}") from e
+                raise DatasetNotFoundError(f"No data for {detName} on {dayObs=} {seqNum=}") from e
         return rawStamps
 
     def applyGuiderNameSwapIfNeeded(self, dayObs: int) -> None:
