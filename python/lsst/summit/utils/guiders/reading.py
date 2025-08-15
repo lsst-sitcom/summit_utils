@@ -924,8 +924,8 @@ def convertRawStampsToView(
     view: str = "dvcs",
 ) -> Stamps:
     """
-    Convert guider stamps from raw ROI to a requested view ('dvcs' or 'ccd').
-    Handles missing stamps and preserves metadata and order.
+    Convert guider stamps from raw ROI to a requested view ('dvcs', 'ccd', or
+    'roi'). Handles missing stamps and preserves metadata and order.
 
     Parameters
     ----------

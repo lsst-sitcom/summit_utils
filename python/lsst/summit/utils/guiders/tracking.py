@@ -42,14 +42,14 @@ def _selBrighestStar(refCatalog: pd.DataFrame, guiderName: str) -> tuple[float, 
 
     Parameters
     ----------
-    refCatalog : pd.DataFrame
+    refCatalog : `pd.DataFrame`
         Reference catalog with star positions and SNR.
-    guiderName : str
+    guiderName : `str`
         Name of the guider.
 
     Returns
     -------
-    (xroi, yroi) : tuple of float
+    (xroi, yroi) : `tuple[float, float]`
         Coordinates of the brightest star in the ROI.
     """
     ref = refCatalog[refCatalog["detector"] == guiderName].copy()
@@ -284,16 +284,16 @@ def applyQualityCuts(
 
     Parameters
     ----------
-    stars : pd.DataFrame
+    stars : `pd.DataFrame`
         DataFrame with star measurements.
-    shape : tuple of float
+    shape : `tuple[float, float]`
         Shape of the ROI (cols, rows).
-    config : GuiderStarTrackerConfig
+    config : `GuiderStarTrackerConfig`
         Configuration object with quality cut parameters.
 
     Returns
     -------
-    stars : pd.DataFrame
+    stars : `pd.DataFrame`
         DataFrame with stars that passed the quality cuts.
     """
     minSnr = config.minSnr
@@ -466,16 +466,16 @@ def rotateEllipticity(e1: float, e2: float, theta_deg: float) -> tuple[float, fl
 
     Parameters
     ----------
-    e1 : float
+    e1 : `float`
         First ellipticity component.
-    e2 : float
+    e2 : `float`
         Second ellipticity component.
-    theta_deg : float
+    theta_deg : `float`
         Rotation angle in degrees.
 
     Returns
     -------
-    (e1_rot, e2_rot) : tuple of float
+    e1_rot, e2_rot : `tuple[float, float]`
         Rotated ellipticity components.
     """
     theta = np.deg2rad(theta_deg)

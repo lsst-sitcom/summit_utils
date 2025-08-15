@@ -193,10 +193,6 @@ def annulusBackgroundSubtraction(data: np.ndarray, annulus: tuple[float, float])
     return dataBkgSub, bkgStd
 
 
-# ----------------------------------------------------------------------
-# === Core GalSim Detection ===
-
-
 @dataclass
 class StarMeasurement:
     xroi: float = field(default=np.nan)
@@ -236,6 +232,8 @@ class StarMeasurement:
         """
         Perform aperture photometry on a cutout image.
 
+        Updates the flux, flux_err, and snr attributes of the StarMeasurement.
+
         Parameters
         ----------
         cutout : `np.ndarray`
@@ -246,12 +244,6 @@ class StarMeasurement:
             Background RMS per pixel.
         gain : `float`
             Detector gain (e-/ADU).
-
-        Returns
-        -------
-        None
-
-        Updates the flux, flux_err, and snr attributes of the StarMeasurement.
         """
         x0, y0 = self.xroi, self.yroi
         if np.isfinite(x0) and np.isfinite(y0):

@@ -85,18 +85,18 @@ def convertPixelToRadec(wcs: SkyWcs, x_flat: np.ndarray, y_flat: np.ndarray) -> 
 
     Parameters
     ----------
-    wcs : lsst.afw.geom.SkyWcs
+    wcs : `SkyWcs`
         World Coordinate System object with pixelToSkyArray method.
-    xFlat : np.ndarray
+    x_flat : `np.ndarray`
         Flattened array of x pixel coordinates.
-    yFlat : np.ndarray
+    y_flat : `np.ndarray`
         Flattened array of y pixel coordinates.
 
     Returns
     -------
-    raFlat : np.ndarray
+    raFlat : `np.ndarray`
         Array of right ascension values in radians.
-    decFlat : np.ndarray
+    decFlat : `np.ndarray`
         Array of declination values in radians.
     """
     return wcs.pixelToSkyArray(x_flat, y_flat)
@@ -193,19 +193,19 @@ def convertFocalToAltaz(
 # sky coordinates.
 def makeRotationTransform(detNquarter: int, direction: int = 1) -> AffineTransform:
     """
-    Create an AffineTransform representing a rotation
-    by multiples of 90 degrees.
+    Create an AffineTransform representing a rotation by multiples of 90
+    degrees.
 
     Parameters
     ----------
-    detNquarter : int
+    detNquarter : `int`
         Number of 90 degree counter-clockwise rotations (modulo 4).
-    direction : int, optional
+    direction : `int`, optional
         1 for forward rotation (default), -1 for reverse rotation (transpose)
 
     Returns
     -------
-    rotation : lsst.geom.AffineTransform
+    rotation : `AffineTransform`
         The rotation transformation.
 
     Raises
@@ -231,24 +231,24 @@ def makeCcdToDvcsTransform(
     detNquarter: int,
 ) -> tuple[AffineTransform, AffineTransform]:
     """
-    Create forward and backward AffineTransforms for converting between
-    CCD pixel coordinates and DVCS (focal plane) stamp coordinates.
+    Create forward and backward AffineTransforms for converting between CCD
+    pixel coordinates and DVCS (focal plane) stamp coordinates.
 
     Parameters
     ----------
-    bboxCcd : lsst.geom.Box2I
+    bboxCcd : `Box2I`
         Bounding box for the ROI in CCD pixel coordinates.
-    detNquarter : int
+    detNquarter : `int`
         Number of 90-degree CCW rotations to align CCD view to DVCS view.
 
     Returns
     -------
-    forwards : lsst.geom.AffineTransform
-        Transform from CCD pixel coordinates (CCD view) to stamp
-        pixel coordinates (DVCS view).
-    backwards : lsst.geom.AffineTransform
-        Transform from stamp pixel coordinates (DVCS view) to
-        CCD pixel coordinates (CCD view).
+    forwards : `AffineTransform`
+        Transform from CCD pixel coordinates (CCD view) to stamp pixel
+        coordinates (DVCS view).
+    backwards : `AffineTransform`
+        Transform from stamp pixel coordinates (DVCS view) to CCD pixel
+        coordinates (CCD view).
 
     Notes
     -----

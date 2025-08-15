@@ -535,7 +535,7 @@ class GuiderDataPlotter:
             Lower percentile for scaling.
         phi : `float`, optional
             Upper percentile for scaling.
-        is_ticks : `bool`, optional
+        isTicks : `bool`, optional
             If False, ticks are removed.
 
         Returns
@@ -579,7 +579,7 @@ class GuiderDataPlotter:
 
         Returns
         -------
-        artists : `list`
+        artists : `list[matplotlib.artist.Artist]`
             List of created artists.
         """
         if fig is None or axs is None:
@@ -633,7 +633,7 @@ class GuiderDataPlotter:
 
         Returns
         -------
-        artists : `list`
+        artists : `list[matplotlib.artist.Artist]`
             List of created artists.
         """
         artists = self.plotStampArray(stampNum=-1, fig=fig, axs=axs, plo=plo, phi=phi)
@@ -653,17 +653,17 @@ class GuiderDataPlotter:
 
         Parameters
         ----------
+        saveAs : `str`
+            Output file path (GIF); required to save.
         fps : `int`, optional
             Frames per second.
         dpi : `int`, optional
             Output resolution.
-        saveAs : `str`, optional
-            Output file path (GIF); required to save.
         plo : `float`, optional
             Lower percentile for scaling.
         phi : `float`, optional
             Upper percentile for scaling.
-        figsize : `tuple[int, int]`, optional
+        figsize : `tuple[float, float]`, optional
             Figure size passed to setup.
 
         Returns
@@ -698,12 +698,12 @@ class GuiderDataPlotter:
 
         Parameters
         ----------
+        saveAs : `str`
+            Output MP4 filename.
         fps : `int`, optional
             Frames per second.
         dpi : `int`, optional
             Output resolution in dots per inch.
-        saveAs : `str`, optional
-            Output MP4 filename.
 
         Returns
         -------
@@ -874,7 +874,7 @@ def getReferenceCenter(
 
 def renderStampPanel(
     ax: plt.Axes,
-    guiderData,
+    guiderData: GuiderData,
     detName: str,
     stampNum: int,
     *,

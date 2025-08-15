@@ -54,16 +54,6 @@ class GuiderMetricsBuilder:
     """
 
     def __init__(self, starCatalog: pd.DataFrame) -> None:
-        """
-        Initialize the metrics object with a star measurement catalog.
-
-        Parameters
-        ----------
-        starCatalog : `pandas.DataFrame`
-            Full guider star measurement table for one or more exposures.
-            Must include ``expid`` to identify individual exposures and
-            the columns required for all desired metrics.
-        """
         self.starCatalog = starCatalog
         self.log = logging.getLogger(__name__)
 
@@ -325,7 +315,7 @@ class MetricResult:
         trend.
     outlier_frac : `float`
         Fraction of data points flagged as outliers by the fitter.
-    slope_significance : `float` or `None`
+    slope_significance : `float`, optional
         t-statistic for the slope significance, or `None` if not
         available.
     nsize : `int`
@@ -491,10 +481,6 @@ def printExposureCounts(countsDf: pd.DataFrame, precision: int = 3) -> None:
         (e.g., n_guiders, n_stars, per-guider flags).
     precision : `int`, optional
         Number of decimal places for fractional values.
-
-    Returns
-    -------
-    None
     """
     nchar = 40
     if countsDf.empty:
