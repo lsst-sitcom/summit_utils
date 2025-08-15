@@ -240,11 +240,11 @@ class GuiderPlotter:
 
         for i, (ax, c) in enumerate(zip(axes, cols)):
             _zero(ax, c)
-            fitter = RobustFitter(x=df["elapsed_time"].values, y=(df[c].values * scale))
-            res = fitter.reportBestValues()
+            fitter = RobustFitter()
+            res = fitter.fit(x=df["elapsed_time"].values, y=(df[c].values * scale))
             txt = (
                 f"Slope: {expTime * res.slope:.2f} {unit}/exposure\n"
-                f"Significance: {abs(res.slope_tvalue):.1f} σ\n"
+                f"Significance: {abs(res.slopeTValue):.1f} σ\n"
                 f"scatter: {res.scatter:.3f} {unit}\n"
             )
             ax.text(
@@ -270,7 +270,7 @@ class GuiderPlotter:
                     marker=m,
                     label=f"{det}" if i == 0 else "",
                 )
-                out = msk & fitter.outlier_mask
+                out = msk & fitter.outlierMask
                 ax.scatter(
                     df.loc[out, "elapsed_time"], df.loc[out, c] * scale, color=LIGHT_BLUE, alpha=0.2, marker=m
                 )

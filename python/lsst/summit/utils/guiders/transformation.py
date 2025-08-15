@@ -661,13 +661,8 @@ def convertRoiToCcd(
     view = guiderData.view
     stamps = guiderData[guiderName]
 
-    if np.isscalar(xroi):
-        xroi = np.array([xroi])
-    if np.isscalar(yroi):
-        yroi = np.array([yroi])
-
-    if len(xroi) == 0:
-        return np.array([]), np.array([])
+    xroi = np.asarray(xroi)
+    yroi = np.asarray(yroi)
 
     box, _, roi2ccd = stamps.getArchiveElements()[0]
     if view == "ccd":

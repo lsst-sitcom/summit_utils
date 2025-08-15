@@ -25,13 +25,13 @@ import logging
 import os
 from collections.abc import Iterable, Sequence
 from dataclasses import dataclass
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any, Optional
 
 import astropy.units as u
 import matplotlib
 import numpy as np
 import numpy.typing as npt
-import statsmodels.api as sm  # type: ignore
+import statsmodels.api as sm  # type: ignore[import-untyped]
 from astro_metadata_translator import ObservationInfo
 from astropy.coordinates import AltAz, EarthLocation, SkyCoord, get_sun
 from astropy.stats import mad_std
@@ -40,7 +40,7 @@ from dateutil.tz import gettz
 from deprecated.sphinx import deprecated
 from matplotlib.patches import Rectangle
 from scipy.ndimage import gaussian_filter
-from sklearn.linear_model import LinearRegression, RANSACRegressor  # type: ignore
+from sklearn.linear_model import LinearRegression, RANSACRegressor  # type: ignore[import-untyped]
 
 import lsst.afw.detection as afwDetect
 import lsst.afw.detection as afwDetection
@@ -1427,108 +1427,162 @@ def getSunAngle(time: Time | None = None) -> float:
     return sun_altaz.alt.deg
 
 
-@dataclass
+@dataclass(slots=True)
 class RobustFitResult:
-    intercept: float
     slope: float
+    intercept: float
     scatter: float
-    slope_pvalue: float
-    slope_stderr: float
-    slope_tvalue: float
-    intercept_pvalue: float
-    intercept_stderr: float
-    intercept_tvalue: float
+    slopePValue: float
+    slopeStdErr: float
+    slopeTValue: float
+    interceptPValue: float
+    interceptStdErr: float
+    interceptTValue: float
 
 
 class RobustFitter:
     """
-    Robust linear fit using RANSAC,
-    with confidence and prediction intervals from statsmodels.
+    Robust linear fit using RANSAC + OLS, reusable across datasets.
+
+    This class fits a robust linear trend to x and y using scikit-learn's
+    RANSAC for inlier detection, followed by an OLS fit on inliers to
+    compute slope, intercept, scatter, standard errors, t-values, and
+    p-values. Configuration (e.g., minSamples) is set at init. Call
+    `fit()` per dataset. Results are returned as a `RobustFitResult`
+    and stored internally for later access (e.g., plotting).
     """
 
-    def __init__(
+    def __init__(self, *, minSamples: float = 0.2) -> None:
+        self.minSamples = minSamples
+        self._clearState()
+
+    def _clearState(self) -> None:
+        """Reset stored fit state."""
+        self.model: Any = None
+        self.olsModel: Any = None
+        self.outlierMask: Optional[np.ndarray] = None
+        self.x: Optional[np.ndarray] = None
+        self.y: Optional[np.ndarray] = None
+        self.slope: float = np.nan
+        self.intercept: float = np.nan
+        self.ciSlope: tuple[float, float] = (np.nan, np.nan)
+        self.ciIntercept: tuple[float, float] = (np.nan, np.nan)
+        self.slopePValue = np.nan
+        self.slopeStdErr = np.nan
+        self.slopeTValue = np.nan
+        self.scatter = np.nan
+
+    @staticmethod
+    def _defaultResidualThreshold(y: np.ndarray) -> float:
+        """Compute default residual threshold from finite y values."""
+        yFinite = np.asarray(y)[np.isfinite(y)]
+        if yFinite.size == 0:
+            raise ValueError("Cannot compute residual threshold: no finite y.")
+        return 1.5 * float(mad_std(yFinite))
+
+    def fit(
         self,
         x: np.ndarray,
         y: np.ndarray,
-        minSamples: float = 0.2,
+        *,
         residualThreshold: float | None = None,
         randomState: int = 42,
-    ):
-        self.min_samples = minSamples
-        self.residualThreshold = residualThreshold
-        self.randomState = randomState
+    ) -> RobustFitResult:
+        """
+        Fit robust line to (x, y) using RANSAC + OLS on inliers.
 
-        if self.residualThreshold is None:
-            # Set a default residual threshold based on the data
-            if np.isnan(x).all() or np.isnan(y).all():
-                raise ValueError("Cannot fit model: all input data is NaN.")
-            self.residualThreshold = 1.5 * mad_std(y)
+        Recomputes residual threshold each call if not provided.
 
-        self.fit(x, y)
+        Parameters
+        ----------
+        x : array-like
+            Independent variable values.
+        y : array-like
+            Dependent variable values.
+        residualThreshold : float, optional
+            Residual threshold for inlier detection. If None, computed
+            as 1.5 × MAD of y.
+        randomState : int, optional
+            Random seed for RANSAC.
 
-    def fit(self, x, y):
-        # Ensure x and y are numpy arrays
+        Returns
+        -------
+        result : `RobustFitResult`
+            Best-fit parameters and statistics from the OLS inlier fit.
+
+        Raises
+        ------
+        ValueError
+            If no finite x/y values are available for fitting.
+        """
+        self._clearState()
+
         x = np.asarray(x)
         y = np.asarray(y)
 
-        # check for NaNs
-        is_nan = np.isnan(x) | np.isnan(y)
-        if np.all(is_nan):
-            raise ValueError("All input data is NaN. Cannot fit a model.")
+        finiteMask = np.isfinite(x) & np.isfinite(y)
+        if not finiteMask.any():
+            raise ValueError("No finite x/y values to fit.")
 
-        X = np.asarray(x[~is_nan]).reshape(-1, 1)
-        yfit = np.asarray(y[~is_nan])
+        X = x[finiteMask].reshape(-1, 1)
+        yFit = y[finiteMask]
 
-        self.model = RANSACRegressor(
+        if residualThreshold is None:
+            residualThreshold = self._defaultResidualThreshold(yFit)
+
+        ransac = RANSACRegressor(
             estimator=LinearRegression(),
-            min_samples=self.min_samples,
-            residual_threshold=self.residualThreshold,
-            random_state=self.randomState,
+            min_samples=self.minSamples,
+            residual_threshold=residualThreshold,
+            random_state=randomState,
         )
-        self.model.fit(X, yfit)
-        self.slope = self.model.estimator_.coef_[0]
-        self.intercept = self.model.estimator_.intercept_
+        ransac.fit(X, yFit)
 
-        # Flatten x to ensure it is 1D for statsmodels
-        self.x = x.flatten()
-        self.y = np.asarray(y)
+        slope = float(ransac.estimator_.coef_[0])
+        intercept = float(ransac.estimator_.intercept_)
 
-        # Use only inliers for statistics
-        self.outlier_mask = np.full(self.x.shape, False, dtype=bool)
-        self.outlier_mask[is_nan] = True  # Keep NaNs as outliers
-        # Mark outliers as True, inliers as False
-        self.outlier_mask[~is_nan] = ~self.model.inlier_mask_
+        self.x = x
+        self.y = y
 
-        x_inlier = self.x[~self.outlier_mask]
-        y_inlier = self.y[~self.outlier_mask]
+        outlierMask = np.ones_like(x, dtype=bool)
+        outlierMask[finiteMask] = ~ransac.inlier_mask_
+        self.outlierMask = outlierMask
 
-        # OLS with statsmodels for CI and p-value
-        X_design = sm.add_constant(x_inlier)
-        ols_model = sm.OLS(y_inlier, X_design).fit()
+        xIn = x[~outlierMask]
+        yIn = y[~outlierMask]
+        XDesign = sm.add_constant(xIn)
+        ols = sm.OLS(yIn, XDesign).fit()
+        ci = ols.conf_int(alpha=0.32)
+        ciIntercept = (float(ci[0][0]), float(ci[0][1]))
+        ciSlope = (float(ci[1][0]), float(ci[1][1]))
+        scatter = float(np.nanstd(ols.resid, ddof=1)) if ols.resid.size > 1 else np.nan
 
-        # statsmodels reports [intercept, slope]
-        ci = ols_model.conf_int(alpha=0.32)  # 68% CI
-        self.ci_intercept = ci[0]
-        self.ci_slope = ci[1]
+        self.model = ransac
+        self.olsModel = ols
+        self.slope = slope
+        self.intercept = intercept
+        self.ciSlope = ciSlope
+        self.ciIntercept = ciIntercept
+        self.slopePValue = float(ols.pvalues[1]) if np.isfinite(ols.pvalues[1]) else np.nan
+        self.slopeStdErr = float(ols.bse[1]) if np.isfinite(ols.bse[1]) else np.nan
+        self.slopeTValue = float(ols.tvalues[1]) if np.isfinite(ols.tvalues[1]) else np.nan
+        self.scatter = scatter
 
-        self.slope_pvalue = ols_model.pvalues[1]
-        self.slope_stderr = ols_model.bse[1]
-        self.slope_tvalue = ols_model.tvalues[1]
-        self.scatter = np.std(ols_model.resid)
-        self.ols_model = ols_model  # Expose full model if needed
-
-    def reportBestValues(self):
         return RobustFitResult(
-            slope=self.slope,
-            slope_pvalue=self.slope_pvalue,
-            slope_stderr=self.slope_stderr,
-            slope_tvalue=self.slope_tvalue,
-            intercept=self.intercept,
-            intercept_pvalue=self.ols_model.pvalues[0],
-            intercept_stderr=self.ols_model.bse[0],
-            intercept_tvalue=self.ols_model.tvalues[0],
-            scatter=self.scatter,
+            slope=slope,
+            intercept=intercept,
+            scatter=scatter,
+            slopePValue=self.slopePValue,
+            slopeStdErr=self.slopeStdErr,
+            slopeTValue=self.slopeTValue,
+            interceptPValue=float(ols.pvalues[0]) if np.isfinite(ols.pvalues[0]) else np.nan,
+            interceptStdErr=float(ols.bse[0]) if np.isfinite(ols.bse[0]) else np.nan,
+            interceptTValue=float(ols.tvalues[0]) if np.isfinite(ols.tvalues[0]) else np.nan,
         )
+
+    def reset(self) -> None:
+        """Clear any stored fit state."""
+        self._clearState()
 
     def plotBestFit(self, ax: matplotlib.axes.Axes, label=None, color=None, alphaBand=0.2, lw=2, nBins=5):
         """Plot the best fit line, confidence interval,
@@ -1555,12 +1609,16 @@ class RobustFitter:
             The axes with the plot.
         """
         # Handle case where self.x contains only NaNs
+        if self.x is None or self.y is None or self.outlierMask is None or self.olsModel is None:
+            raise RuntimeError("Fit must be called before plotting.")
+
         if np.isnan(self.x).all():
             raise ValueError("All x values are NaN; cannot plot best fit.")
+
         xx = np.linspace(np.nanmin(self.x), np.nanmax(self.x), 200)
         X_design = sm.add_constant(xx)
 
-        pred = self.ols_model.get_prediction(X_design)
+        pred = self.olsModel.get_prediction(X_design)
         summary_frame = pred.summary_frame(alpha=0.05)  # 95% intervals
 
         mean = summary_frame["mean"]
@@ -1572,7 +1630,7 @@ class RobustFitter:
         # Plot confidence interval band
         ax.fill_between(xx, ci_lo, ci_hi, color=color, alpha=alphaBand)
 
-        mask = self.outlier_mask
+        mask = self.outlierMask
         xin, yin = self.x[~mask], self.y[~mask]  # inliers
         xout, _ = self.x[mask], self.y[mask]  # outliers
 

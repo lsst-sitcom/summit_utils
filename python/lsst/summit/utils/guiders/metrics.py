@@ -111,10 +111,10 @@ class GuiderMetricsBuilder:
         # build metrics
         self.countsDf = computeExposureCounts(stars, expid)
         self.altDriftData: MetricResult = computeTrendMetrics(stars, "elapsed_time", "dalt", expid)
-        self.azDriftData: MetricResult = computeTrendMetrics(stars, "elapsed_time", "dalt", expid)
-        self.rotatorData: MetricResult = computeTrendMetrics(stars, "elapsed_time", "dalt", expid)
-        self.magData: MetricResult = computeTrendMetrics(stars, "elapsed_time", "dalt", expid)
-        self.psfData: MetricResult = computeTrendMetrics(stars, "elapsed_time", "dalt", expid)
+        self.azDriftData: MetricResult = computeTrendMetrics(stars, "elapsed_time", "daz", expid)
+        self.rotatorData: MetricResult = computeTrendMetrics(stars, "elapsed_time", "dtheta", expid)
+        self.magData: MetricResult = computeTrendMetrics(stars, "elapsed_time", "magoffset", expid)
+        self.psfData: MetricResult = computeTrendMetrics(stars, "elapsed_time", "fwhm", expid)
 
         # Set the build state to true
         self.isBuild = True
@@ -278,12 +278,13 @@ def computeTrendMetrics(
     xArr = s[timeCol].to_numpy()
     yArr = s[yCol].to_numpy()
     stdGlobal = float(mad_std(yArr))
-    fitter = RobustFitter(xArr, yArr)
+    fitter = RobustFitter()
 
-    coefs = fitter.reportBestValues()
-    inlierMask = ~fitter.outlier_mask
-    slopeT = getattr(coefs, "slope_tvalue", None)
-    slope_sig = abs(float(slopeT)) if slopeT is not None else None
+    coefs = fitter.fit(xArr, yArr)
+    inlierMask = ~fitter.outlierMask
+    slopeT = fitter.slopeTValue
+    slope_sig = abs(float(slopeT))
+
     return MetricResult(
         slope=float(coefs.slope),
         intercept=float(coefs.intercept),
