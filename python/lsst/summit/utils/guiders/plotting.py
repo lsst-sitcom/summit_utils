@@ -45,6 +45,41 @@ __all__ = ["GuiderDataPlotter", "GuiderPlotter"]
 
 LIGHT_BLUE = "#6495ED"
 
+STRIP_PLOT_KWARGS: dict[str, dict] = {
+    "centroidAltAz": {
+        "ylabel": "Centroid Offset [arcsec]",
+        "unit": "arcsec",
+        "col": ["dalt", "daz"],
+        "title": "Alt/Az Centroid Offsets",
+    },
+    "centroidPixel": {
+        "ylabel": "Centroid Offset [pixels]",
+        "col": ["dx", "dy"],
+        "unit": "pixels",
+        "title": "CCD Pixel Centroid Offsets",
+    },
+    "flux": {
+        "ylabel": "Magnitude Offset [mag]",
+        "col": ["magoffset"],
+        "unit": "mmag",
+        "scale": 1e3,  # scale to mmag
+        "title": "Flux Magnitude Offsets",
+    },
+    "ellip": {
+        "ylabel": "Ellipticity",
+        "col": ["e1_altaz", "e2_altaz"],
+        "unit": "",
+        "title": "",
+    },
+    "psf": {
+        "ylabel": "PSF FWHM [arcsec]",
+        "col": ["fwhm"],
+        "scale": 1.0,
+        "unit": "arcsec",
+        "title": "PSF FWHM",
+    },
+}
+
 
 @dataclass(frozen=True)
 class MosaicLayout:
@@ -96,42 +131,6 @@ class MosaicLayout:
             sharey=False,  # for the mosaic, do not share axes
         )
         return fig, axs
-
-
-stripPlotKwargs: dict[str, dict] = {
-    "centroidAltAz": {
-        "ylabel": "Centroid Offset [arcsec]",
-        "unit": "arcsec",
-        "col": ["dalt", "daz"],
-        "title": "Alt/Az Centroid Offsets",
-    },
-    "centroidPixel": {
-        "ylabel": "Centroid Offset [pixels]",
-        "col": ["dx", "dy"],
-        "unit": "pixels",
-        "title": "CCD Pixel Centroid Offsets",
-    },
-    "flux": {
-        "ylabel": "Magnitude Offset [mag]",
-        "col": ["magoffset"],
-        "unit": "mmag",
-        "scale": 1e3,  # scale to mmag
-        "title": "Flux Magnitude Offsets",
-    },
-    "ellip": {
-        "ylabel": "Ellipticity",
-        "col": ["e1_altaz", "e2_altaz"],
-        "unit": "",
-        "title": "",
-    },
-    "psf": {
-        "ylabel": "PSF FWHM [arcsec]",
-        "col": ["fwhm"],
-        "scale": 1.0,
-        "unit": "arcsec",
-        "title": "PSF FWHM",
-    },
-}
 
 
 class GuiderPlotter:
@@ -191,7 +190,7 @@ class GuiderPlotter:
         Parameters
         ----------
         plotType : `str`, optional
-            Metric key in `stripPlotKwargs` (e.g., 'centroidAltAz').
+            Metric key in `STRIP_PLOT_KWARGS` (e.g., 'centroidAltAz').
         saveAs : `str`, optional
             If not None, path to save the figure.
         coveragePct : `int`, optional
@@ -202,7 +201,7 @@ class GuiderPlotter:
         stripFig : `matplotlib.figure.Figure`
             Figure containing the strip plot panels.
         """
-        cfg = stripPlotKwargs.get(plotType)
+        cfg = STRIP_PLOT_KWARGS.get(plotType)
         if cfg is None:
             raise ValueError(f"Unknown plotType: {plotType}")
         # from here, tell mypy it’s a dict[str, Any]
