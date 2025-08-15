@@ -41,7 +41,6 @@ __all__ = [
     "makeInitGuiderWcs",
     "getCamRotAngle",
     "DriftResult",
-    "ComputeCcdToAltAzAngle",
 ]
 
 from dataclasses import dataclass
@@ -795,30 +794,6 @@ def getCamRotAngle(visitinfo) -> float:
     camRotAngle = Angle(camRot, degrees)
     camRotAngleW = camRotAngle.wrapNear(Angle(0.0))
     return camRotAngleW.asDegrees()
-
-
-def ComputeCcdToAltAzAngle(
-    camRotAngleDeg: float,
-    detName: str,
-) -> float:
-    """
-    Compute the rotation angle from CCD coordinates to Alt/Az
-      for a given detector.
-    """
-    # Get detector orientation
-    camera: LsstCam = LsstCam.getCamera()
-    detector: Detector = camera[detName]
-
-    # Total rotation: CCD→DVCS + DVCS→AltAz
-    # Number of 90deg CCW rotations from CCD to DVCS
-    nFlips = detector.getOrientation().getNQuarter()
-
-    # Angle from CCD +X to DVCS +X
-    thetaCcdToDvcsDeg = (nFlips * 90) % 360
-
-    # Total angle from CCD +X to Alt/Az +X
-    totalAngleDeg = (thetaCcdToDvcsDeg + camRotAngleDeg) % 360.0
-    return totalAngleDeg
 
 
 # Putting former guiderwcs here

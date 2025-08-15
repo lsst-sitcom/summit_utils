@@ -817,9 +817,7 @@ def getVisitInfo(butler: Butler, dayObs: int, seqNum: int, scienceDetNum: int = 
     return visitInfo
 
 
-# ----------------------------------------------------------------------
 # Helper functions for stamp conversion
-# ----------------------------------------------------------------------
 def _makeRoiTransforms(metadata: dict, detector: Detector, camera: Camera, view: str) -> tuple[tuple, str]:
     """
     Construct ROI transforms and derive amplifier name.

@@ -28,7 +28,7 @@ from typing import TYPE_CHECKING
 import numpy as np
 import pandas as pd
 
-from .transformation import ComputeCcdToAltAzAngle, convertRoiToCcd, convertToAltaz, convertToFocalPlane
+from .transformation import convertRoiToCcd, convertToAltaz, convertToFocalPlane
 
 if TYPE_CHECKING:
     from .reading import GuiderData
@@ -163,8 +163,7 @@ class GuiderStarTracker:
         stars = computeRotatorAngle(stars)
 
         # Convert e1, e2 to Alt/Az coordinates
-        # TODO: Double check with Aaron the ccd conversion to Alt/Az
-        stars = convertEllipticity(stars, gd, guiderName)
+        stars = convertEllipticity(stars, gd.camRotAngle)
 
         # Add timestamp and elapsed time
         stars = addTimeStamp(stars, gd, guiderName)
@@ -348,15 +347,11 @@ def computeRotatorAngle(stars: pd.DataFrame) -> pd.DataFrame:
     return stars
 
 
-def convertEllipticity(stars: pd.DataFrame, guiderData: GuiderData, detName) -> pd.DataFrame:
+def convertEllipticity(stars: pd.DataFrame, camRotAngleDeg: float) -> pd.DataFrame:
     """
     Rotate ellipticity components (e1, e2) to Alt/Az.
     """
-    # TODO: Double check with Aaron
-    camRotAngleDeg = guiderData.camRotAngle
-    ccdRotAngle = ComputeCcdToAltAzAngle(camRotAngleDeg, detName)
-
-    e1_rot, e2_rot = rotateEllipticity(stars["e1"], stars["e2"], ccdRotAngle)
+    e1_rot, e2_rot = rotateEllipticity(stars["e1"], stars["e2"], camRotAngleDeg)
     stars["e1_altaz"] = e1_rot
     stars["e2_altaz"] = e2_rot
     return stars
