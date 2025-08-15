@@ -480,9 +480,7 @@ class GuiderData:
         gdstart = self.header["start_time"]
         return Time(gdstart, format="isot", scale="tai")
 
-    # ------------------------------------------------------------------
     # Iterable / dict-like helpers
-    # ------------------------------------------------------------------
     def __iter__(self):
         """Iterate over detector names in guiderNames order."""
         return iter(self.guiderNames)
@@ -550,7 +548,7 @@ class GuiderData:
 
         raise TypeError("Invalid key type for GuiderData indexing.")
 
-    # helper -------------------------------------------------------------
+    # helper
     def _processStampArray(self, stamp: Stamp, detName: str) -> np.ndarray:
         """
         Convert a Stamp to an ndarray with optional median-row subtraction.
@@ -573,9 +571,7 @@ class GuiderData:
             arr = arr - np.nanmedian(arr, axis=axis)
         return arr
 
-    # ------------------------------------------------------------------
     # Plot helpers
-    # ------------------------------------------------------------------
     @cached_property
     def plotter(self):
         return GuiderDataPlotter(self)
