@@ -22,7 +22,6 @@
 import os
 import tempfile
 import unittest
-from functools import wraps
 
 import numpy as np
 import pandas as pd
@@ -34,30 +33,6 @@ from lsst.summit.utils.guiders.plotting import GuiderPlotter
 from lsst.summit.utils.guiders.reading import GuiderReader
 from lsst.summit.utils.guiders.tracking import GuiderStarTracker
 from lsst.summit.utils.utils import getSite
-
-
-def check_plot_file_size(size_threshold=1000):
-    """Decorator factory to check that a plot file is created
-    and is of sufficient size (in bytes)."""
-
-    def decorator(func):
-        @wraps(func)
-        def wrapper(self, *args, **kwargs):
-            with tempfile.NamedTemporaryFile(suffix=".png", delete=True) as tmpfile:
-                # Call the test method, passing saveAs=temp file
-                result = func(self, *args, saveAs=tmpfile.name, **kwargs)
-                size = os.path.getsize(tmpfile.name)
-                self.assertGreater(
-                    size,
-                    size_threshold,
-                    f"{tmpfile.name} size ({size} bytes)"
-                    f" is below the threshold of {size_threshold} bytes.",
-                )
-                return result
-
-        return wrapper
-
-    return decorator
 
 
 class GuiderTestCase(unittest.TestCase):
