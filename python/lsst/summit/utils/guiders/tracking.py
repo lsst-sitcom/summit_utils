@@ -36,7 +36,7 @@ if TYPE_CHECKING:
 from .detection import GuiderStarTrackerConfig, buildReferenceCatalog, makeBlankCatalog, trackStarAcrossStamp
 
 
-def _selBrighestStar(refCatalog: pd.DataFrame, guiderName: str) -> tuple[float, float]:
+def _selectBrighestStar(refCatalog: pd.DataFrame, guiderName: str) -> tuple[float, float]:
     """
     Select the brightest star from the reference catalog for a given guider.
 
@@ -63,25 +63,27 @@ class GuiderStarTracker:
 
     Parameters
     ----------
-    guiderData : GuiderData
+    guiderData : `GuiderData`
         GuiderData instance containing guider data and metadata.
-    config : GuiderStarTrackerConfig, optional
-        Config object with setup and quality control parameters.
+    config : `GuiderStarTrackerConfig`, optional
+        Config object with setup and quality control parameters. If None, a new
+        default GuiderStarTrackerConfig is created per GuiderStarTracker
+        instance.
     """
 
     def __init__(
         self,
         guiderData: GuiderData,
-        config: GuiderStarTrackerConfig = GuiderStarTrackerConfig(),
+        config: GuiderStarTrackerConfig | None = None,
     ) -> None:
         """
         Initialize the GuiderStarTracker with guider data and configuration.
 
         Parameters
         ----------
-        guiderData : GuiderData
+        guiderData : `GuiderData`
             GuiderData instance containing guider data and metadata.
-        config : GuiderStarTrackerConfig, optional
+        config : `GuiderStarTrackerConfig`, optional
             Config object with setup and quality control parameters.
         """
         self.log = logging.getLogger(__name__)
@@ -91,6 +93,8 @@ class GuiderStarTracker:
         self.shape = guiderData[guiderData.detNameMax, 0].shape
 
         # detection and QC parameters from config
+        if config is None:
+            config = GuiderStarTrackerConfig()
         self.config = config
 
         # initialize outputs
@@ -103,12 +107,12 @@ class GuiderStarTracker:
 
         Parameters
         ----------
-        refCatalog : pd.DataFrame (optional)
+        refCatalog : `pd.DataFrame`, optional
             Reference catalog with known star positions per detector.
 
         Returns
         -------
-        stars : pd.DataFrame
+        stars : `pd.DataFrame`
             DataFrame with tracked stars and their properties,
             including positions, fluxes, and residual offsets.
         """
@@ -148,16 +152,16 @@ class GuiderStarTracker:
 
         Parameters
         ----------
-        refCatalog : pd.DataFrame
+        refCatalog : `pd.DataFrame`
             Reference catalog with known star positions per detector.
-        guiderName : str
+        guiderName : `str`
             Name of the guider to process.
-        gain : int, optional
+        gain : `int`, optional
             Gain value for flux calculations (default is 1).
 
         Returns
         -------
-        stars : pd.DataFrame
+        stars : `pd.DataFrame`
             DataFrame with tracked stars for the specified guider.
         """
         gd = self.guiderData
@@ -166,7 +170,7 @@ class GuiderStarTracker:
         minStampDetections = cfg.minStampDetections
 
         # Select the brightest star from the reference catalog
-        refCenter = _selBrighestStar(refCatalog, guiderName)
+        refCenter = _selectBrighestStar(refCatalog, guiderName)
 
         # Measure the stars across all stamps for this guider
         starStamps = trackStarAcrossStamp(refCenter, gd, guiderName, cfg)
@@ -208,16 +212,16 @@ def addTimeStamp(stars: pd.DataFrame, guiderData: GuiderData, guiderName: str) -
 
     Parameters
     ----------
-    stars : pd.DataFrame
+    stars : `pd.DataFrame`
         DataFrame with star measurements.
-    guiderData : GuiderData
+    guiderData : `GuiderData`
         GuiderData instance containing guider data and metadata.
-    guiderName : str
+    guiderName : `str`
         Name of the guider.
 
     Returns
     -------
-    stars : pd.DataFrame
+    stars : `pd.DataFrame`
         DataFrame with added 'timestamp' and 'elapsed_time' columns.
     """
     gd = guiderData
@@ -242,16 +246,16 @@ def convertToCcdFocalPlaneAltAz(stars: pd.DataFrame, guiderData: GuiderData, gui
 
     Parameters
     ----------
-    stars : pd.DataFrame
+    stars : `pd.DataFrame`
         DataFrame with star measurements in ROI coordinates.
-    guiderData : GuiderData
+    guiderData : `GuiderData`
         GuiderData instance containing guider data and metadata.
-    guiderName : str
+    guiderName : `str`
         Name of the guider.
 
     Returns
     -------
-    stars : pd.DataFrame
+    stars : `pd.DataFrame`
         DataFrame with added columns for CCD, focal plane,
         and Alt/Az coordinates.
     """
@@ -327,14 +331,14 @@ def setUniqueId(guiderData: GuiderData, stars: pd.DataFrame) -> pd.DataFrame:
 
     Parameters
     ----------
-    guiderData : GuiderData
+    guiderData : `GuiderData`
         GuiderData instance containing guider data and metadata.
-    stars : pd.DataFrame
+    stars : `pd.DataFrame`
         DataFrame with star measurements.
 
     Returns
     -------
-    stars : pd.DataFrame
+    stars : `pd.DataFrame`
         DataFrame with added 'detid' and 'trackid' columns.
 
     """
@@ -351,12 +355,12 @@ def computeOffsets(stars: pd.DataFrame) -> pd.DataFrame:
 
     Parameters
     ----------
-    stars : pd.DataFrame
+    stars : `pd.DataFrame`
         DataFrame with star measurements.
 
     Returns
     -------
-    stars : pd.DataFrame
+    stars : `pd.DataFrame`
         DataFrame with added offset columns:
             - dx, dy       : offsets in CCD coordinates (pixels)
             - dxfp, dyfp   : offsets in focal plane coordinates (mm)
@@ -406,13 +410,13 @@ def computeRotatorAngle(stars: pd.DataFrame) -> pd.DataFrame:
 
     Parameters
     ----------
-    stars : pd.DataFrame
+    stars : `pd.DataFrame`
         DataFrame with star measurements. Must contain 'xfp', 'yfp', 'xerr',
           and 'yerr' columns.
 
     Returns
     -------
-    stars : pd.DataFrame
+    stars : `pd.DataFrame`
         DataFrame with added 'theta' and 'theta_err' columns.
     """
     mm = 0.001  # convert microns to mm
@@ -444,14 +448,14 @@ def convertEllipticity(stars: pd.DataFrame, camRotAngleDeg: float) -> pd.DataFra
 
     Parameters
     ----------
-    stars : pd.DataFrame
+    stars : `pd.DataFrame`
         DataFrame with star measurements.
-    camRotAngleDeg : float
+    camRotAngleDeg : `float`
         Camera rotator angle in degrees.
 
     Returns
     -------
-    stars : pd.DataFrame
+    stars : `pd.DataFrame`
         DataFrame with added columns 'e1_altaz' and 'e2_altaz'.
     """
     e1_rot, e2_rot = rotateEllipticity(stars["e1"], stars["e2"], camRotAngleDeg)
