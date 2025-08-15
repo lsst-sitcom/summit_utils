@@ -517,7 +517,7 @@ class GuiderDataPlotter:
         stampNum: int = -1,
         plo: float = 50.0,
         phi: float = 99.0,
-        isTicks: bool = False,
+        removeTicks: bool = True,
     ) -> plt.AxesImage:
         """
         Plot a single CCD stamp (or stacked image) onto the provided axes.
@@ -534,8 +534,8 @@ class GuiderDataPlotter:
             Lower percentile for scaling.
         phi : `float`, optional
             Upper percentile for scaling.
-        isTicks : `bool`, optional
-            If False, ticks are removed.
+        removeTicks : `bool`, optional
+            If ``True``, ticks are removed.
 
         Returns
         -------
@@ -545,7 +545,7 @@ class GuiderDataPlotter:
         im, _, _, _ = renderStampPanel(
             axs, self.guiderData, detName, stampNum, plo=plo, phi=phi, annotate=True
         )
-        if not isTicks:
+        if removeTicks:
             clearAxisTicks(axs, isSpine=True)
         return im
 
