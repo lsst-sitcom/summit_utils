@@ -245,6 +245,12 @@ class StarMeasurement:
             Background RMS per pixel.
         gain : `float`
             Detector gain (e-/ADU).
+
+        Returns
+        -------
+        None
+
+        Updates the flux, flux_err, and snr attributes of the StarMeasurement.
         """
         x0, y0 = self.xroi, self.yroi
         if np.isfinite(x0) and np.isfinite(y0):
@@ -577,6 +583,10 @@ def makeEllipticalGaussianStar(
     return image
 
 
+<<<<<<< HEAD
+=======
+# Reference Catalog Construction
+>>>>>>> f7f9377 (Fix type annotations; mypy errors)
 def buildReferenceCatalog(
     guiderData: GuiderData,
     log: logging.Logger,
