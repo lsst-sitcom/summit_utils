@@ -344,7 +344,7 @@ def computeRotatorAngle(stars: pd.DataFrame) -> pd.DataFrame:
         sigmaTheta = np.where(denom == 0, np.nan, sigmaTheta)
 
     stars["theta"] = theta
-    stars["theta_err"] = sigmaTheta
+    stars["theta_err"] = sigmaTheta * 3600  # convert to arcsec
     return stars
 
 
