@@ -39,6 +39,18 @@ from .detection import GuiderStarTrackerConfig, buildReferenceCatalog, makeBlank
 def _selBrighestStar(refCatalog: pd.DataFrame, guiderName: str) -> tuple[float, float]:
     """
     Select the brightest star from the reference catalog for a given guider.
+
+    Parameters
+    ----------
+    refCatalog : pd.DataFrame
+        Reference catalog with star positions and SNR.
+    guiderName : str
+        Name of the guider.
+
+    Returns
+    -------
+    (xroi, yroi) : tuple of float
+        Coordinates of the brightest star in the ROI.
     """
     ref = refCatalog[refCatalog["detector"] == guiderName].copy()
     ref.sort_values(by=["snr"], ascending=False, inplace=True)
@@ -131,7 +143,23 @@ class GuiderStarTracker:
     def _trackStarForOneGuider(
         self, refCatalog: pd.DataFrame, guiderName: str, gain: int = 1
     ) -> pd.DataFrame:
-        """Track stars for a single guider using the reference catalog."""
+        """
+        Track stars for a single guider using the reference catalog.
+
+        Parameters
+        ----------
+        refCatalog : pd.DataFrame
+            Reference catalog with known star positions per detector.
+        guiderName : str
+            Name of the guider to process.
+        gain : int, optional
+            Gain value for flux calculations (default is 1).
+
+        Returns
+        -------
+        stars : pd.DataFrame
+            DataFrame with tracked stars for the specified guider.
+        """
         gd = self.guiderData
         shape = self.shape
         cfg = self.config
@@ -177,6 +205,20 @@ class GuiderStarTracker:
 def addTimeStamp(stars: pd.DataFrame, guiderData: GuiderData, guiderName: str) -> pd.DataFrame:
     """
     Add timestamp and elapsed time to the star DataFrame.
+
+    Parameters
+    ----------
+    stars : pd.DataFrame
+        DataFrame with star measurements.
+    guiderData : GuiderData
+        GuiderData instance containing guider data and metadata.
+    guiderName : str
+        Name of the guider.
+
+    Returns
+    -------
+    stars : pd.DataFrame
+        DataFrame with added 'timestamp' and 'elapsed_time' columns.
     """
     gd = guiderData
     # the stamp are aligned with the index of the timestamps
@@ -197,6 +239,21 @@ def addTimeStamp(stars: pd.DataFrame, guiderData: GuiderData, guiderName: str) -
 def convertToCcdFocalPlaneAltAz(stars: pd.DataFrame, guiderData: GuiderData, guiderName: str) -> pd.DataFrame:
     """
     Convert star positions to CCD, focal plane, and Alt/Az coordinates.
+
+    Parameters
+    ----------
+    stars : pd.DataFrame
+        DataFrame with star measurements in ROI coordinates.
+    guiderData : GuiderData
+        GuiderData instance containing guider data and metadata.
+    guiderName : str
+        Name of the guider.
+
+    Returns
+    -------
+    stars : pd.DataFrame
+        DataFrame with added columns for CCD, focal plane,
+        and Alt/Az coordinates.
     """
     gd = guiderData
     obsTime = gd.obsTime
@@ -222,7 +279,8 @@ def convertToCcdFocalPlaneAltAz(stars: pd.DataFrame, guiderData: GuiderData, gui
 def applyQualityCuts(
     stars: pd.DataFrame, shape: tuple[float, float], config: GuiderStarTrackerConfig
 ) -> pd.DataFrame:
-    """Apply cuts according to min SNR, maximum ellipticity and edge margin.
+    """
+    Apply cuts according to min SNR, maximum ellipticity and edge margin.
 
     Parameters
     ----------
@@ -266,6 +324,19 @@ def applyQualityCuts(
 def setUniqueId(guiderData: GuiderData, stars: pd.DataFrame) -> pd.DataFrame:
     """
     Assign unique IDs to tracked stars.
+
+    Parameters
+    ----------
+    guiderData : GuiderData
+        GuiderData instance containing guider data and metadata.
+    stars : pd.DataFrame
+        DataFrame with star measurements.
+
+    Returns
+    -------
+    stars : pd.DataFrame
+        DataFrame with added 'detid' and 'trackid' columns.
+
     """
     # Create a numeric “global” starid:
     detMap = guiderData.guiderNameMap
@@ -277,6 +348,22 @@ def setUniqueId(guiderData: GuiderData, stars: pd.DataFrame) -> pd.DataFrame:
 def computeOffsets(stars: pd.DataFrame) -> pd.DataFrame:
     """
     Compute the offsets for each star in the catalog.
+
+    Parameters
+    ----------
+    stars : pd.DataFrame
+        DataFrame with star measurements.
+
+    Returns
+    -------
+    stars : pd.DataFrame
+        DataFrame with added offset columns:
+            - dx, dy       : offsets in CCD coordinates (pixels)
+            - dxfp, dyfp   : offsets in focal plane coordinates (mm)
+            - dalt, daz    : offsets in Alt/Az coordinates (arcsec)
+            - dtheta       : offset in rotator angle (arcsec)
+            - magoffset    : magnitude offset (mmag)
+
     """
     # make reference positions
     stars["xroi_ref"] = stars.groupby("detector")["xroi"].transform("median")
@@ -306,7 +393,8 @@ def computeOffsets(stars: pd.DataFrame) -> pd.DataFrame:
     stars["flux_ref"] = pd.to_numeric(stars["flux_ref"], errors="coerce")
     stars["flux"] = pd.to_numeric(stars["flux"], errors="coerce")
     stars["magoffset"] = -2.5 * np.log10((stars["flux"] + 1e-12) / (stars["flux_ref"] + 1e-12))
-    stars["magoffset"] = stars["magoffset"].replace([np.inf, -np.inf], np.nan)
+    # convert to mmag and replace inf with nan
+    stars["magoffset"] = 1000 * stars["magoffset"].replace([np.inf, -np.inf], np.nan)
 
     return stars
 
@@ -316,13 +404,16 @@ def computeRotatorAngle(stars: pd.DataFrame) -> pd.DataFrame:
     Compute the rotator angle (theta) and its propagated 1-sigma uncertainty
     for each row in `stars`.
 
-    Required columns:
-        - xfp, yfp     : focal plane coordinates
-        - xerr, yerr   : 1-sigma uncertainties for xccd, yccd
+    Parameters
+    ----------
+    stars : pd.DataFrame
+        DataFrame with star measurements. Must contain 'xfp', 'yfp', 'xerr',
+          and 'yerr' columns.
 
-    Adds columns:
-        - theta       : angle in degrees
-        - theta_err   : propagated uncertainty in degrees
+    Returns
+    -------
+    stars : pd.DataFrame
+        DataFrame with added 'theta' and 'theta_err' columns.
     """
     mm = 0.001  # convert microns to mm
     xfp = stars["xfp"].to_numpy()
@@ -350,6 +441,18 @@ def computeRotatorAngle(stars: pd.DataFrame) -> pd.DataFrame:
 def convertEllipticity(stars: pd.DataFrame, camRotAngleDeg: float) -> pd.DataFrame:
     """
     Rotate ellipticity components (e1, e2) to Alt/Az.
+
+    Parameters
+    ----------
+    stars : pd.DataFrame
+        DataFrame with star measurements.
+    camRotAngleDeg : float
+        Camera rotator angle in degrees.
+
+    Returns
+    -------
+    stars : pd.DataFrame
+        DataFrame with added columns 'e1_altaz' and 'e2_altaz'.
     """
     e1_rot, e2_rot = rotateEllipticity(stars["e1"], stars["e2"], camRotAngleDeg)
     stars["e1_altaz"] = e1_rot
@@ -360,6 +463,20 @@ def convertEllipticity(stars: pd.DataFrame, camRotAngleDeg: float) -> pd.DataFra
 def rotateEllipticity(e1: float, e2: float, theta_deg: float) -> tuple[float, float]:
     """
     Rotate ellipticity components (e1, e2) by theta_deg degrees.
+
+    Parameters
+    ----------
+    e1 : float
+        First ellipticity component.
+    e2 : float
+        Second ellipticity component.
+    theta_deg : float
+        Rotation angle in degrees.
+
+    Returns
+    -------
+    (e1_rot, e2_rot) : tuple of float
+        Rotated ellipticity components.
     """
     theta = np.deg2rad(theta_deg)
     cos2t = np.cos(2 * theta)
