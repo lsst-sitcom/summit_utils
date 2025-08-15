@@ -1445,11 +1445,16 @@ class RobustFitter:
     Robust linear fit using RANSAC + OLS, reusable across datasets.
 
     This class fits a robust linear trend to x and y using scikit-learn's
-    RANSAC for inlier detection, followed by an OLS fit on inliers to
-    compute slope, intercept, scatter, standard errors, t-values, and
-    p-values. Configuration (e.g., minSamples) is set at init. Call
-    `fit()` per dataset. Results are returned as a `RobustFitResult`
-    and stored internally for later access (e.g., plotting).
+    RANSAC for inlier detection, followed by an OLS fit on inliers to compute
+    slope, intercept, scatter, standard errors, t-values, and p-values.
+    Configuration (e.g., minSamples) is set at init. Call `fit()` per dataset.
+    Results are returned as a `RobustFitResult` and stored internally for later
+    access (e.g., plotting).
+
+    Parameters
+    ----------
+    minSamples : `float`, optional
+        Minimum fraction of samples chosen randomly from the original data.
     """
 
     def __init__(self, *, minSamples: float = 0.2) -> None:
