@@ -18,7 +18,6 @@
 #
 # You should have received a copy of the GNU General Public License
 # along with this program.  If not, see <https://www.gnu.org/licenses/>.
-
 from __future__ import annotations
 
 import logging
@@ -37,20 +36,19 @@ class GuiderMetricsBuilder:
     """
     Measure and organize guider performance metrics for a given exposure.
 
-    This class wraps the computation of both exposure-level counts
-    (number of guiders, stars, measurements, fraction of valid stamps)
-    and per-quantity trend metrics (ALT drift, AZ drift, rotator,
-    photometry, PSF). Trend metrics include slope, intercept, trend RMSE,
-    global scatter, outlier fraction, slope significance, and sample size.
+    This class wraps the computation of both exposure-level counts (number of
+    guiders, stars, measurements, fraction of valid stamps) and per-quantity
+    trend metrics (ALT drift, AZ drift, rotator, photometry, PSF). Trend
+    metrics include slope, intercept, trend RMSE, global scatter, outlier
+    fraction, slope significance, and sample size.
 
     Parameters
     ----------
     starCatalog : `pandas.DataFrame`
-        Catalog of guider star measurements, containing at least
-        the columns required for the counts and trend metrics:
-        ``expid``, ``elapsed_time``, and the measurement columns
-        for each metric (e.g., ``dalt``, ``daz``, ``dtheta``,
-        ``magoffset``, ``fwhm``).
+        Catalog of guider star measurements, containing at least the columns
+        required for the counts and trend metrics: ``expid``, ``elapsed_time``,
+        and the measurement columns for each metric (e.g., ``dalt``, ``daz``,
+        ``dtheta``, ``magoffset``, ``fwhm``).
     """
 
     def __init__(self, starCatalog: pd.DataFrame) -> None:
@@ -68,7 +66,7 @@ class GuiderMetricsBuilder:
         self.baseVars = list(self.baseVarsCols.keys())
 
         # keep track if the metrics were build
-        self.isBuild = False
+        self.isBuilt = False
 
     def buildMetrics(self, expid: int) -> pd.DataFrame:
         """
@@ -82,11 +80,11 @@ class GuiderMetricsBuilder:
         Returns
         -------
         metricsDf : `pandas.DataFrame`
-            Single-row DataFrame with all computed metrics for the
-            specified exposure ID. Columns include exposure counts
-            (e.g., ``n_guiders``, ``n_stars``, per-guider flags) and
-            each metric prefix (``alt_drift``, ``az_drift``, ``rotator``,
-            ``mag``, ``psf``) expanded with its statistic names.
+            Single-row DataFrame with all computed metrics for the specified
+            exposure ID. Columns include exposure counts (e.g., ``n_guiders``,
+            ``n_stars``, per-guider flags) and each metric prefix
+            (``alt_drift``, ``az_drift``, ``rotator``, ``mag``, ``psf``)
+            expanded with its statistic names.
         """
         self.expid = expid
         stars = self.starCatalog
@@ -94,7 +92,7 @@ class GuiderMetricsBuilder:
         # early exit if no data
         mask = stars["expid"].eq(expid)
         if not mask.any():
-            self.isBuild = False
+            self.isBuilt = False
             self.log.warning(f"No data found for expid={expid}. Returning empty metrics DataFrame.")
             return pd.DataFrame(columns=self.metricsColumns)  # FIX: property
 
@@ -106,8 +104,8 @@ class GuiderMetricsBuilder:
         self.magData: MetricResult = computeTrendMetrics(stars, "elapsed_time", "magoffset", expid)
         self.psfData: MetricResult = computeTrendMetrics(stars, "elapsed_time", "fwhm", expid)
 
-        # Set the build state to true
-        self.isBuild = True
+        # Set the built state to true
+        self.isBuilt = True
 
         # build MetricResult objects to a DataFrame
         return self.toDataFrame()
@@ -119,13 +117,13 @@ class GuiderMetricsBuilder:
         Returns
         -------
         metricsDf : `pandas.DataFrame`
-            DataFrame with one row for the currently set ``expid``.
-            Columns include exposure counts (e.g., ``n_guiders``,
-            ``n_stars``, per-guider flags) and each metric prefix
-            (``alt_drift``, ``az_drift``, ``rotator``, ``mag``, ``psf``)
-            expanded with its statistic names.
+            DataFrame with one row for the currently set ``expid``. Columns
+            include exposure counts (e.g., ``n_guiders``, ``n_stars``,
+            per-guider flags) and each metric prefix (``alt_drift``,
+            ``az_drift``, ``rotator``, ``mag``, ``psf``) expanded with its
+            statistic names.
         """
-        if not self.isBuild:
+        if not self.isBuilt:
             raise RuntimeError("Metrics have not been built. Call buildMetrics(expid) first.")
 
         trendsDf = mergeMetricResults(
@@ -145,14 +143,14 @@ class GuiderMetricsBuilder:
         """
         List of expected output column names for the metrics DataFrame.
 
-        Combines the base count columns and each metric prefix with
-        all statistic suffixes.
+        Combines the base count columns and each metric prefix with all
+        statistic suffixes.
 
         Returns
         -------
         columns : `list` of `str`
-            All column names in the order they will appear in the
-            DataFrame returned by ``toDataFrame()`` or ``buildMetrics()``.
+            All column names in the order they will appear in the DataFrame
+            returned by ``toDataFrame()`` or ``buildMetrics()``.
         """
         baseCols = ["n_guiders", "n_stars", "n_measurements", "fraction_valid_stamps"]
         statVars = [
@@ -181,11 +179,11 @@ class GuiderMetricsBuilder:
         Parameters
         ----------
         exptime : `float`, optional
-            Exposure time in seconds. Used to convert slope units
-            from per-second to per-exposure in the printed output.
+            Exposure time in seconds. Used to convert slope units from
+            per-second to per-exposure in the printed output.
         """
         # Guard if buildMetrics found no data
-        if not self.isBuild:
+        if not self.isBuilt:
             raise RuntimeError("Metrics have not been built. Call buildMetrics(expid) first.")
 
         # set units (ensure consistency with y units!)
@@ -216,34 +214,33 @@ def computeTrendMetrics(
     expid: int,
 ) -> MetricResult:
     """
-    Compute robust linear trend metrics for a given measurement column
-    versus time within a single exposure.
+    Compute robust linear trend metrics for a given measurement column versus
+    time within a single exposure.
 
-    The function fits a robust linear model to the specified `yCol`
-    as a function of `timeCol` for rows matching the given `expid`.
-    It returns a `MetricResult` containing the slope, intercept, trend
-    RMSE, robust global scatter, outlier fraction, slope significance,
-    and sample size.
+    The function fits a robust linear model to the specified `yCol` as a
+    function of `timeCol` for rows matching the given `expid`. It returns a
+    `MetricResult` containing the slope, intercept, trend RMSE, robust global
+    scatter, outlier fraction, slope significance, and sample size.
 
     Parameters
     ----------
     stars : `pandas.DataFrame`
-        Table of star measurements containing at least the columns
-        `timeCol`, `yCol`, and `expid`.
+        Table of star measurements containing at least the columns `timeCol`,
+        `yCol`, and `expid`.
     timeCol : `str`
         Name of the time column (e.g., ``"elapsed_time"``).
     yCol : `str`
-        Name of the dependent variable column to fit
-        (e.g., ``"dalt"``, ``"magoffset"``).
+        Name of the dependent variable column to fit (e.g., ``"dalt"``,
+        ``"magoffset"``).
     expid : `int`
         Exposure identifier used to filter the rows.
 
     Returns
     -------
     metrics : `MetricResult`
-        Dataclass containing the computed trend metrics.
-        If there are no data in `yCol` after filtering,
-        all fields are set to NaN/None and `nsize` is zero.
+        Dataclass containing the computed trend metrics. If there are no data
+        in `yCol` after filtering, all fields are set to NaN/None and `nsize`
+        is zero.
 
     Raises
     ------
@@ -292,32 +289,28 @@ def computeTrendMetrics(
 @dataclass(slots=True)
 class MetricResult:
     """
-    Container for trend metrics of a single quantity y(t) in an
-    exposure.
+    Container for trend metrics of a single quantity y(t) in an exposure.
 
-    Holds the results of fitting a robust linear trend to a
-    measurement column (`yCol`) as a function of time (`timeCol`),
-    along with descriptive statistics for the distribution and
-    fit quality.
+    Holds the results of fitting a robust linear trend to a measurement column
+    (`yCol`) as a function of time (`timeCol`), along with descriptive
+    statistics for the distribution and fit quality.
 
     Parameters
     ----------
     slope : `float`
-        Best-fit slope dy/dx from robust regression, in `yCol` units
-        per unit time.
+        Best-fit slope dy/dx from robust regression, in `yCol` units per unit
+        time.
     intercept : `float`
-        Best-fit intercept (y at x = 0) from robust regression, in
-        `yCol` units.
+        Best-fit intercept (y at x = 0) from robust regression, in `yCol`
+        units.
     trend_rmse : `float`
         RMS of residuals from the fitted trend, in `yCol` units.
     global_std : `float`
-        Robust global standard deviation of `yCol`, ignoring the
-        trend.
+        Robust global standard deviation of `yCol`, ignoring the trend.
     outlier_frac : `float`
         Fraction of data points flagged as outliers by the fitter.
     slope_significance : `float`, optional
-        t-statistic for the slope significance, or `None` if not
-        available.
+        t-statistic for the slope significance, or `None` if not available.
     nsize : `int`
         Number of valid points used in the fit.
     units : `str`
@@ -392,30 +385,30 @@ class MetricResult:
         return pd.DataFrame([row], index=[index])
 
 
-def mergeMetricResults(pairs: list[tuple[str, "MetricResult"]], index: int) -> pd.DataFrame:
+def mergeMetricResults(pairs: list[tuple[str, MetricResult]], index: int) -> pd.DataFrame:
     """
-    Merge multiple `MetricResult` objects into a single-row DataFrame
-    with prefixed column names.
+    Merge multiple `MetricResult` objects into a single-row DataFrame with
+    prefixed column names.
 
-    Each `MetricResult` is converted to a dictionary, filtered to keep
-    only a standard set of metric fields, and all keys are prefixed
-    with the provided label (e.g., ``"alt_drift"``, ``"mag"``) to
-    distinguish different measurement types. The merged results are
-    returned as a single-row DataFrame.
+    Each `MetricResult` is converted to a dictionary, filtered to keep only a
+    standard set of metric fields, and all keys are prefixed with the provided
+    label (e.g., ``"alt_drift"``, ``"mag"``) to distinguish different
+    measurement types. The merged results are returned as a single-row
+    DataFrame.
 
     Parameters
     ----------
     pairs : `list` of `tuple` of (`str`, `MetricResult`)
-        List of (prefix, metric result) pairs. The prefix is used as
-        the column name prefix for that result's metrics.
+        List of (prefix, metric result) pairs. The prefix is used as the column
+        name prefix for that result's metrics.
     index : `int`
         Index value for the returned DataFrame row.
 
     Returns
     -------
     merged : `pandas.DataFrame`
-        Single-row DataFrame containing all merged metrics with column
-        names of the form ``<prefix>_<metric_field>``.
+        Single-row DataFrame containing all merged metrics with column names of
+        the form ``<prefix>_<metric_field>``.
     """
     row: dict[str, float | int | None] = {}
     keep = ("slope", "intercept", "trend_rmse", "global_std", "outlier_frac", "slope_significance", "nsize")
@@ -477,12 +470,11 @@ def printExposureCounts(countsDf: pd.DataFrame, precision: int = 3) -> None:
     Parameters
     ----------
     countsDf : `pandas.DataFrame`
-        DataFrame with a single row containing exposure counts
-        (e.g., n_guiders, n_stars, per-guider flags).
+        DataFrame with a single row containing exposure counts (e.g.,
+        n_guiders, n_stars, per-guider flags).
     precision : `int`, optional
         Number of decimal places for fractional values.
     """
-    nchar = 40
     if countsDf.empty:
         print("Exposure counts ─\nNo data available.")
         return
@@ -490,7 +482,7 @@ def printExposureCounts(countsDf: pd.DataFrame, precision: int = 3) -> None:
     # Get first row as dict for easy .get()
     row = countsDf.iloc[0].to_dict()
 
-    lines = makeHeader("Exposure Counts", nchar=nchar)
+    lines = makeHeader("Exposure Counts")
     lines += [
         f"Guiders     : {int(row.get('n_guiders', 0))}",
         f"Unique stars: {int(row.get('n_stars', 0))}",
@@ -514,9 +506,9 @@ def _prefixKeys(d: dict, prefix: str) -> dict:
     """
     Return a new dictionary with all keys prefixed.
 
-    The keys of the input dictionary are prefixed with the provided
-    string and an underscore. This is typically used to namespace
-    metric names by a measurement type or category.
+    The keys of the input dictionary are prefixed with the provided string and
+    an underscore. This is typically used to namespace metric names by a
+    measurement type or category.
 
     Parameters
     ----------
@@ -543,23 +535,23 @@ def makeHeader(title: str, nchar: int = 40) -> list[str]:
     """
     Create a formatted header block with horizontal lines.
 
-    The header consists of a top line, a centered title line with
-    padding, and a bottom line. The line width is the maximum of
-    `nchar` and the title length plus 10 characters.
+    The header consists of a top line, a centered title line with padding, and
+    a bottom line. The line width is the maximum of `nchar` and the title
+    length plus 10 characters.
 
     Parameters
     ----------
     title : `str`
         Text to display in the header.
     nchar : `int`, optional
-        Minimum width of the horizontal lines. Increased automatically
-        if the title requires more space.
+        Minimum width of the horizontal lines. Increased automatically if the
+        title requires more space.
 
     Returns
     -------
     header_lines : `list` of `str`
-        List of three strings: the top line, the title line, and the
-        bottom line.
+        List of three strings: the top line, the title line, and the bottom
+        line.
     """
     width = max(nchar, len(title) + 10)
     line = "─" * width

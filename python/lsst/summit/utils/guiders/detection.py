@@ -18,6 +18,7 @@
 #
 # You should have received a copy of the GNU General Public License
 # along with this program.  If not, see <https://www.gnu.org/licenses/>.
+from __future__ import annotations
 
 import logging
 from dataclasses import asdict, dataclass, field
@@ -131,7 +132,7 @@ def trackStarAcrossStamp(
     pixelScale = wcs.getPixelScale().asArcseconds()
 
     # Initialize parameters from config
-    aperRadius = config.aperSizeArcsec / pixelScale
+    apertureRadius = config.aperSizeArcsec / pixelScale
     cutOutSize = config.cutOutSize
     gain = config.gain
 
@@ -144,7 +145,7 @@ def trackStarAcrossStamp(
     results = []
     for i in range(len(gd)):
         data = gd[guiderName, i]
-        star = measureStarOnStamp(data, refCenter, cutOutSize, aperRadius, gain=gain).toDataFrame()
+        star = measureStarOnStamp(data, refCenter, cutOutSize, apertureRadius, gain=gain).toDataFrame()
 
         # Add stamp index
         if not star.empty:
@@ -273,7 +274,7 @@ def runSourceDetection(
     image: np.ndarray,
     threshold: float = 10,
     cutOutSize: int = 25,
-    aperRadius: int = 5,
+    apertureRadius: int = 5,
     gain: float = 1.0,
 ) -> pd.DataFrame:
     """
@@ -287,7 +288,7 @@ def runSourceDetection(
         Detection threshold in sigma units.
     cutOutSize : `int`
         Size of the cutout around each detected source (pixels).
-    aperRadius : `int`
+    apertureRadius : `int`
         Aperture radius in pixels for photometry.
     gain : `float`
         Detector gain (e-/ADU).
@@ -314,7 +315,7 @@ def runSourceDetection(
 
         # Create a cutout of the image around the footprint
         refCenter = tuple(fp.getCentroid())
-        star = measureStarOnStamp(image, refCenter, cutOutSize, aperRadius, gain).toDataFrame()
+        star = measureStarOnStamp(image, refCenter, cutOutSize, apertureRadius, gain).toDataFrame()
         if not star.empty:
             results.append(star)
 
@@ -326,7 +327,7 @@ def measureStarOnStamp(
     stamp: np.ndarray,
     refCenter: tuple[float, float],
     cutOutSize: int,
-    aperRadius: int,
+    apertureRadius: int,
     gain: float = 1.0,
 ) -> StarMeasurement:
     """
@@ -341,7 +342,7 @@ def measureStarOnStamp(
         Reference (x, y) pixel position for the cutout center.
     cutOutSize : `int`
         Size of the cutout in pixels.
-    aperRadius : `int`
+    apertureRadius : `int`
         Aperture radius in pixels for photometry.
     gain : `float`
         Detector gain (e-/ADU).
@@ -358,7 +359,7 @@ def measureStarOnStamp(
         return StarMeasurement()
 
     # 1) Subtract the background
-    annulus = (aperRadius * 1.0, aperRadius * 2)
+    annulus = (apertureRadius * 1.0, apertureRadius * 2)
     dataBkgSub, bkgStd = annulusBackgroundSubtraction(data, annulus)
 
     # 2)  Track the star across all stamps for this guider
@@ -366,7 +367,7 @@ def measureStarOnStamp(
 
     # 3) Make aperture photometry measurements
     # Galsim flux is the normalization of the Gaussian, not w/ fixed aper.
-    star.runAperturePhotometry(dataBkgSub, aperRadius, gain=gain, bkgStd=bkgStd)
+    star.runAperturePhotometry(dataBkgSub, apertureRadius, gain=gain, bkgStd=bkgStd)
 
     # 4)  Add centroid and shape in amplifier roi coordinates
     star.xroi += cutout.xmin_original
@@ -412,7 +413,7 @@ def runGalSim(
         fwhm = 2.355 * sigma
 
         # Calculate errors using GalSim's error estimation
-        xErr, yErr = galSimError(imageArray, hsmRes, gain=gain, bkgStd=bkgStd, isGain=True)
+        xErr, yErr = calcGalsimError(imageArray, hsmRes, gain=gain, bkgStd=bkgStd, correctForGain=True)
 
         # Calculate SNR and flux error
         ellipticity = np.sqrt(e1**2 + e2**2)
@@ -444,12 +445,12 @@ def runGalSim(
     return result
 
 
-def galSimError(
+def calcGalsimError(
     imageArray: np.ndarray,
-    gs: galsim.hsm,
+    shape: galsim.hsm.ShapeData,
     gain: float = 1.0,
     bkgStd: float = 0.0,
-    isGain: bool = False,
+    correctForGain: bool = False,
 ) -> tuple[float, float]:
     """
     Estimate centroid errors from GalSim HSMShapeData.
@@ -458,13 +459,13 @@ def galSimError(
     ----------
     imageArray : `np.ndarray`
         Image cutout used for measurement.
-    gs : `galsim.hsm`
+    shape : `galsim.hsm`
         GalSim HSM shape data result object.
     gain : `float`
-        Detector gain (e-/ADU).
+        Detector gain (e-/ADU), ignored if `correctForGain` is False.
     bkgStd : `float`
         Background RMS per pixel.
-    isGain : `bool`
+    correctForGain : `bool`
         Whether to include gain-dependent weighting.
 
     Returns
@@ -474,15 +475,15 @@ def galSimError(
     yerr : `float`
         Estimated y centroid uncertainty (pixels).
     """
-    if not gs or gs.error_message != "":
+    if not shape or shape.error_message != "":
         return 0.0, 0.0
 
-    x0 = gs.moments_centroid.x
-    y0 = gs.moments_centroid.y
-    sigma = gs.moments_sigma
-    e1 = gs.observed_shape.e1
-    e2 = gs.observed_shape.e2
-    flux = gs.moments_amp
+    x0 = shape.moments_centroid.x
+    y0 = shape.moments_centroid.y
+    sigma = shape.moments_sigma
+    e1 = shape.observed_shape.e1
+    e2 = shape.observed_shape.e2
+    flux = shape.moments_amp
 
     kernel = makeEllipticalGaussianStar(
         shape=(imageArray.shape[0], imageArray.shape[1]),
@@ -494,7 +495,7 @@ def galSimError(
     )
 
     weight = np.ones_like(imageArray) / (bkgStd**2 + 1e-9)
-    if isGain:
+    if correctForGain:
         weight = np.ones_like(imageArray) / (bkgStd**2 + np.abs(flux * kernel / gain))
 
     mask = weight == 0.0
@@ -576,7 +577,6 @@ def makeEllipticalGaussianStar(
     return image
 
 
-# Reference Catalog Construction
 def buildReferenceCatalog(
     guiderData: GuiderData,
     log: logging.Logger,
@@ -607,14 +607,14 @@ def buildReferenceCatalog(
     tableList = []
     for guiderName in guiderData.guiderNames:
         pixelScale = guiderData.getWcs(guiderName).getPixelScale().asArcseconds()
-        aperRadius = int(config.aperSizeArcsec / pixelScale)
+        apertureRadius = int(config.aperSizeArcsec / pixelScale)
 
         array = guiderData.getStampArrayCoadd(guiderName)
         array = np.where(array < 0, 0, array)  # Ensure no negative values
         sources = runSourceDetection(
             array,
             threshold=minSnr,
-            aperRadius=aperRadius,
+            apertureRadius=apertureRadius,
             cutOutSize=cutOutSize,
             gain=gain,
         )
@@ -632,7 +632,7 @@ def buildReferenceCatalog(
         tableList.append(sources)
 
     if len(tableList) == 0:
-        log.warning(f"`buildReferenceCatalog` failed" f" - no stars detected in any guider for {expId}.")
+        log.warning(f"buildReferenceCatalog failed - no stars detected in any guider for {expId}.")
         return makeBlankCatalog()
 
     refCatalog = pd.concat(tableList, ignore_index=True)

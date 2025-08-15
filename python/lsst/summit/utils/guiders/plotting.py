@@ -184,9 +184,9 @@ class GuiderPlotter:
         """
         Plot time-series strip plot for a chosen metric.
 
-        This renders one or more panels vs elapsed time, fits a robust
-        linear trend, annotates slope/significance/scatter, and draws
-        reference zero lines or median PSF as needed.
+        This renders one or more panels vs elapsed time, fits a robust linear
+        trend, annotates slope/significance/scatter, and draws reference zero
+        lines or median PSF as needed.
 
         Parameters
         ----------
