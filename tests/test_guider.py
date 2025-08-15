@@ -29,6 +29,7 @@ import pandas as pd
 import lsst.utils.tests
 from lsst.daf.butler import Butler
 from lsst.summit.utils.butlerUtils import makeDefaultButler
+from lsst.summit.utils.guiders.metrics import GuiderMetricsBuilder
 from lsst.summit.utils.guiders.plotting import GuiderPlotter
 from lsst.summit.utils.guiders.reading import GuiderReader
 from lsst.summit.utils.guiders.tracking import GuiderStarTracker
@@ -49,12 +50,14 @@ class GuiderTestCase(unittest.TestCase):
 
         self.dayObs = 20250629
         self.seqNum = 340
+        self.expId = 2025062900340
 
         self.reader = GuiderReader(self.butler, view="dvcs")
         self.guiderData = self.reader.get(dayObs=self.dayObs, seqNum=self.seqNum)
         self.tracker = GuiderStarTracker(self.guiderData)
         self.stars = self.tracker.trackGuiderStars(refCatalog=None)
         self.plotter = GuiderPlotter(self.stars, self.guiderData)
+        self.metricsBuilder = GuiderMetricsBuilder(self.stars)
 
     def test_types(self) -> None:
         self.assertIsInstance(self.guiderData.header, dict)
@@ -164,10 +167,68 @@ class GuiderTestCase(unittest.TestCase):
             size = os.path.getsize(tmp.name)
             self.assertGreater(size, 1000, f"{tmp.name} too small: {size} bytes")
 
-    def test_plotting(self) -> None:
-        # just to check that it runs without error
-        self.plotter.printMetrics()
+    def test_metrics(self) -> None:
+        # Check that metrics can be built without error
+        metrics = self.metricsBuilder.buildMetrics(self.expId)
+        self.assertIsInstance(metrics, pd.DataFrame)
+        self.assertGreater(len(metrics), 0, "Metrics DataFrame is empty")
 
+        # These are what's currently there. Why is the 8th guider missing?
+        expectedColumns = (
+            "n_guiders",
+            "n_stars",
+            "n_measurements",
+            "fraction_valid_stamps",
+            "R00_SG0",
+            "R04_SG0",
+            "R04_SG1",
+            "R40_SG0",
+            "R40_SG1",
+            "R44_SG0",
+            "R44_SG1",
+            "alt_drift_slope",
+            "alt_drift_intercept",
+            "alt_drift_trend_rmse",
+            "alt_drift_global_std",
+            "alt_drift_outlier_frac",
+            "alt_drift_slope_significance",
+            "alt_drift_nsize",
+            "az_drift_slope",
+            "az_drift_intercept",
+            "az_drift_trend_rmse",
+            "az_drift_global_std",
+            "az_drift_outlier_frac",
+            "az_drift_slope_significance",
+            "az_drift_nsize",
+            "rotator_slope",
+            "rotator_intercept",
+            "rotator_trend_rmse",
+            "rotator_global_std",
+            "rotator_outlier_frac",
+            "rotator_slope_significance",
+            "rotator_nsize",
+            "mag_slope",
+            "mag_intercept",
+            "mag_trend_rmse",
+            "mag_global_std",
+            "mag_outlier_frac",
+            "mag_slope_significance",
+            "mag_nsize",
+            "psf_slope",
+            "psf_intercept",
+            "psf_trend_rmse",
+            "psf_global_std",
+            "psf_outlier_frac",
+            "psf_slope_significance",
+            "psf_nsize",
+        )
+        for col in expectedColumns:
+            self.assertIn(col, metrics.columns, f"Column {col} is missing from metrics DataFrame")
+
+        # check this runs without error
+        self.metricsBuilder.printSummary()
+
+    def test_plotting(self) -> None:
         # Check Star Mosaic Plot
         # Stacked and full stamp size
         self.testStarMosaicPlotFullView()
