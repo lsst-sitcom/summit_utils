@@ -25,7 +25,7 @@ import logging
 import os
 from collections.abc import Iterable, Sequence
 from dataclasses import dataclass
-from typing import TYPE_CHECKING, Any, Optional
+from typing import TYPE_CHECKING, Any
 
 import astropy.units as u
 import matplotlib
@@ -1460,9 +1460,9 @@ class RobustFitter:
         """Reset stored fit state."""
         self.model: Any = None
         self.olsModel: Any = None
-        self.outlierMask: Optional[np.ndarray] = None
-        self.x: Optional[np.ndarray] = None
-        self.y: Optional[np.ndarray] = None
+        self.outlierMask: np.ndarray | None = None
+        self.x: np.ndarray | None = None
+        self.y: np.ndarray | None = None
         self.slope: float = np.nan
         self.intercept: float = np.nan
         self.ciSlope: tuple[float, float] = (np.nan, np.nan)

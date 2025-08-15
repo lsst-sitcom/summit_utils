@@ -281,7 +281,10 @@ def computeTrendMetrics(
     fitter = RobustFitter()
 
     coefs = fitter.fit(xArr, yArr)
-    inlierMask = ~fitter.outlierMask
+    mask = fitter.outlierMask
+    if mask is None:
+        mask = np.zeros_like(xArr, dtype=bool)
+    inlierMask = ~mask
     slopeT = fitter.slopeTValue
     slope_sig = abs(float(slopeT))
 

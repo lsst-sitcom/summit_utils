@@ -230,7 +230,7 @@ class StarMeasurement:
         # Otherwise, return all columns, even if some are NaN
         return pd.DataFrame([d])
 
-    def aperturePhotometry(
+    def runAperturePhotometry(
         self, cutout: np.ndarray, radius: float, bkgStd: float = 1.0, gain: float = 1.0
     ) -> None:
         """
@@ -246,6 +246,12 @@ class StarMeasurement:
             Background RMS per pixel.
         gain : `float`
             Detector gain (e-/ADU).
+
+        Returns
+        -------
+        None
+
+        Updates the flux, flux_err, and snr attributes of the StarMeasurement.
         """
         x0, y0 = self.xroi, self.yroi
         if np.isfinite(x0) and np.isfinite(y0):
@@ -368,7 +374,7 @@ def measureStarOnStamp(
 
     # 3) Make aperture photometry measurements
     # Galsim flux is the normalization of the Gaussian, not w/ fixed aper.
-    star.aperturePhotometry(dataBkgSub, aperRadius, gain=gain, bkgStd=bkgStd)
+    star.runAperturePhotometry(dataBkgSub, aperRadius, gain=gain, bkgStd=bkgStd)
 
     # 4)  Add centroid and shape in amplifier roi coordinates
     star.xroi += cutout.xmin_original
@@ -578,7 +584,7 @@ def makeEllipticalGaussianStar(
     return image
 
 
-# === Reference Catalog Construction ===
+# Reference Catalog Construction
 def buildReferenceCatalog(
     guiderData: GuiderData,
     log: logging.Logger,

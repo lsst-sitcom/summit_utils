@@ -611,7 +611,7 @@ class GuiderData:
         from matplotlib import pyplot as plt
 
         fig, axs = plt.subplots(1, 1, figsize=figsize)
-        _ = self.plotter.plotStampCcd(axs, detName, stampNum=stampNum, plo=plo, phi=phi, is_ticks=True)
+        _ = self.plotter.plotStampCcd(axs, detName, stampNum=stampNum, plo=plo, phi=phi, isTicks=True)
         axs.set_xlabel("X (pixels)", fontsize=11)
         axs.set_ylabel("Y (pixels)", fontsize=11)
         plt.title(f"{self.expid}")

@@ -518,7 +518,7 @@ class GuiderDataPlotter:
         stampNum: int = -1,
         plo: float = 50.0,
         phi: float = 99.0,
-        is_ticks: bool = False,
+        isTicks: bool = False,
     ) -> plt.AxesImage:
         """
         Plot a single CCD stamp (or stacked image) onto the provided axes.
@@ -546,11 +546,19 @@ class GuiderDataPlotter:
         im, _, _, _ = renderStampPanel(
             axs, self.guiderData, detName, stampNum, plo=plo, phi=phi, annotate=True
         )
-        if not is_ticks:
+        if not isTicks:
             clearAxisTicks(axs, isSpine=True)
         return im
 
-    def plotStampArray(self, stampNum=0, fig=None, axs=None, plo=90.0, phi=99.0, isAnimated=False) -> list:
+    def plotStampArray(
+        self,
+        stampNum: int = 0,
+        fig: plt.Figure | None = None,
+        axs: dict[str, plt.Axes] | None = None,
+        plo: float = 50,
+        phi: float = 99,
+        isAnimated: bool = False,
+    ) -> list[Artist]:
         """
         Plot a mosaic of all guider stamps for a single stamp index.
 
@@ -574,15 +582,16 @@ class GuiderDataPlotter:
         artists : `list`
             List of created artists.
         """
-        if fig is None:
+        if fig is None or axs is None:
             fig, axs = self.setupFigure(figsize=(9.5, 9.5))
 
-        artists = []
+        artists: list[Artist] = []
         for detName in self.detNames:
             im, _, _, txt = renderStampPanel(
                 axs[detName], self.guiderData, detName, stampNum, plo=plo, phi=phi, annotate=True
             )
-            artists.extend([im, txt])
+            if txt is not None:
+                artists.extend([im, txt])
 
         nStamps, view = self.nStamps, self.view
         stampInfo = annotateStampInfo(
@@ -601,7 +610,13 @@ class GuiderDataPlotter:
         clearAxisTicks(axs["center"], isSpine=False)
         return artists
 
-    def plotStackedStampArray(self, fig=None, axs=None, plo=50, phi=99) -> list:
+    def plotStackedStampArray(
+        self,
+        fig: plt.Figure | None = None,
+        axs: dict[str, plt.Axes] | None = None,
+        plo: float = 50,
+        phi: float = 99,
+    ) -> list[Artist]:
         """
         Convenience wrapper to plot the stacked (coadded) stamp mosaic.
 
@@ -625,7 +640,13 @@ class GuiderDataPlotter:
         return artists
 
     def makeGif(
-        self, fps=5, dpi=80, saveAs=None, plo=50, phi=99, figsize=(9, 9)
+        self,
+        saveAs: str,
+        fps: int = 5,
+        dpi: int = 80,
+        plo: float = 50,
+        phi: float = 99,
+        figsize: tuple[float, float] = (9, 9),
     ) -> animation.ArtistAnimation:
         """
         Create an animated GIF over all stamps for this exposure.
@@ -671,7 +692,7 @@ class GuiderDataPlotter:
         ani.save(saveAs, fps=fps, dpi=dpi, writer="pillow")
         return ani
 
-    def makeMp4(self, fps=5, dpi=80, saveAs="guider_ccd_array.mp4") -> animation.ArtistAnimation:
+    def makeMp4(self, saveAs: str, fps: int = 5, dpi: int = 80) -> animation.ArtistAnimation:
         """
         Create an MP4 animation over all stamps for this exposure.
 
