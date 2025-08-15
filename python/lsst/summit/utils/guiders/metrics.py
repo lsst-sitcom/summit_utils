@@ -30,10 +30,10 @@ from astropy.stats import mad_std
 
 from lsst.summit.utils.utils import RobustFitter
 
-__all__ = ["GuiderMetrics"]
+__all__ = ["GuiderMetricsBuilder"]
 
 
-class GuiderMetrics:
+class GuiderMetricsBuilder:
     """
     Measure and organize guider performance metrics for a given exposure.
 
@@ -77,14 +77,6 @@ class GuiderMetrics:
         }
         self.baseVars = list(self.baseVarsCols.keys())
 
-        # Metric results are populated by buildMetrics; initialize for mypy
-        self.countsDf: pd.DataFrame | None = None
-        self.altDriftData: MetricResult | None = None
-        self.azDriftData: MetricResult | None = None
-        self.rotatorData: MetricResult | None = None
-        self.magData: MetricResult | None = None
-        self.psfData: MetricResult | None = None
-
         # keep track if the metrics were build
         self.isBuild = False
 
@@ -107,20 +99,22 @@ class GuiderMetrics:
             ``mag``, ``psf``) expanded with its statistic names.
         """
         self.expid = expid
+        stars = self.starCatalog
 
         # early exit if no data
-        mask = self.starCatalog["expid"].eq(expid)
-        if not mask.any():  # faster/clearer
+        mask = stars["expid"].eq(expid)
+        if not mask.any():
             self.isBuild = False
             self.log.warning(f"No data found for expid={expid}. Returning empty metrics DataFrame.")
             return pd.DataFrame(columns=self.metricsColumns)  # FIX: property
 
         # build metrics
-        self.countsDf = computeExposureCounts(self.starCatalog, expid)
-
-        # compute trend metrics for each variable
-        for var, col in self.baseVarsCols.items():
-            setattr(self, f"{var}Data", computeTrendMetrics(self.starCatalog, "elapsed_time", col, expid))
+        self.countsDf = computeExposureCounts(stars, expid)
+        self.altDriftData: MetricResult = computeTrendMetrics(stars, "elapsed_time", "dalt", expid)
+        self.azDriftData: MetricResult = computeTrendMetrics(stars, "elapsed_time", "dalt", expid)
+        self.rotatorData: MetricResult = computeTrendMetrics(stars, "elapsed_time", "dalt", expid)
+        self.magData: MetricResult = computeTrendMetrics(stars, "elapsed_time", "dalt", expid)
+        self.psfData: MetricResult = computeTrendMetrics(stars, "elapsed_time", "dalt", expid)
 
         # Set the build state to true
         self.isBuild = True
@@ -143,13 +137,6 @@ class GuiderMetrics:
         """
         if not self.isBuild:
             raise RuntimeError("Metrics have not been built. Call buildMetrics(expid) first.")
-
-        assert self.countsDf is not None
-        assert self.altDriftData is not None
-        assert self.azDriftData is not None
-        assert self.rotatorData is not None
-        assert self.magData is not None
-        assert self.psfData is not None
 
         trendsDf = mergeMetricResults(
             [
@@ -186,7 +173,7 @@ class GuiderMetrics:
             "outlier_frac",
             "slope_significance",
             "nsize",
-        ]  # FIX: include nsize
+        ]
         columns = baseCols[:]
         for var in self.baseVars:
             for stat in statVars:
@@ -211,13 +198,6 @@ class GuiderMetrics:
         if not self.isBuild:
             raise RuntimeError("Metrics have not been built. Call buildMetrics(expid) first.")
 
-        assert self.countsDf is not None
-        assert self.altDriftData is not None
-        assert self.azDriftData is not None
-        assert self.rotatorData is not None
-        assert self.magData is not None
-        assert self.psfData is not None
-
         # set units (ensure consistency with y units!)
         self.altDriftData.units = "arcsec"
         self.azDriftData.units = "arcsec"
@@ -226,7 +206,6 @@ class GuiderMetrics:
         self.psfData.units = "arcsec"
 
         # Print summaries
-
         header1 = makeHeader("Guider Metrics Summary")
         print("\n".join(header1))
         print("Exposure ID:", self.expid)

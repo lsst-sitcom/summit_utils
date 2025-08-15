@@ -155,9 +155,6 @@ class GuiderPlotter:
         self.expTime = self.guiderData.guiderDurationSec
         self.camRotAngle = self.guiderData.camRotAngle
 
-        # assemble statistics
-        self.statsDf = assembleStats(self.starsDf)
-
         # set seaborn style
         sns.set_style("white")
         sns.set_context("talk", font_scale=0.8)
@@ -180,24 +177,6 @@ class GuiderPlotter:
         """
         fig, axs = self.layout.build(figsize=figsize)
         return fig, axs
-
-    def printMetrics(self) -> None:
-        """
-        Print formatted statistics summaries for the current exposure.
-
-        Prints centroid, photometric, PSF, and basic exposure statistics
-        to standard output if available.
-        """
-        if self.statsDf.empty:
-            self.log.warning("No statistics available for this exposure.")
-            return
-
-        filteredStatsDf = self.statsDf[self.statsDf["expid"] == self.expId]
-
-        print(self.formatStatsSummary(filteredStatsDf))
-        print(self.formatStdCentroidSummary(filteredStatsDf, self.expTime))
-        print(self.formatPhotometricSummary(filteredStatsDf, self.expTime))
-        print(self.formatPsfSummary(filteredStatsDf, self.expTime))
 
     def stripPlot(
         self, plotType: str = "centroidAltAz", saveAs: str | None = None, coveragePct: int = 68
@@ -389,7 +368,7 @@ class GuiderPlotter:
             artists.extend(starCross)
             cutoutShapeList.append(shape)
 
-        jitter = getStdCentroid(self.statsDf, self.expId)
+        jitter = getStdCentroid(self.starsDf, self.expId)
         stampInfo = annotateStampInfo(
             axs["center"], expid=self.expId, stampNum=stampNum, nStamps=nStamps, view=view, jitter=jitter
         )
@@ -487,150 +466,6 @@ class GuiderPlotter:
         ani.save(saveAs, fps=fps, dpi=dpi, writer="pillow")
         plt.close(fig)
         return ani
-
-    @staticmethod
-    def formatStdCentroidSummary(statsDf: pd.DataFrame, expTime: float = 1) -> str:
-        """
-        Format a summary string for centroid standard deviation statistics.
-
-        Parameters
-        ----------
-        statsDf : `pandas.DataFrame`
-            DataFrame (single-row) or dict with centroid statistics.
-        expTime : `float`, optional
-            Exposure time scaling factor (seconds per exposure).
-
-        Returns
-        -------
-        summary : `str`
-            Human-readable multi-line summary.
-        """
-        # handle both dicts and DataFrames
-        if (isinstance(statsDf, pd.DataFrame) and statsDf.empty) or (
-            isinstance(statsDf, dict) and not statsDf
-        ):
-            return "No centroid stdev. statistics available."
-
-        # if it's a DataFrame, extract the one-row dict
-        if isinstance(statsDf, pd.DataFrame):
-            stats = statsDf.iloc[0].to_dict()
-        else:
-            stats = statsDf
-
-        js = stats
-        summary = (
-            f"\nGlobal centroid stdev. Summary Across All Guiders\n"
-            f"{'-' * 45}\n"
-            f"  - centroid stdev.  (AZ): {js['std_centroid_az']:.3f} arcsec (raw)\n"
-            f"  - centroid stdev. (ALT): {js['std_centroid_alt']:.3f} arcsec (raw)\n"
-            f"  - centroid stdev.  (AZ): {js['std_centroid_corr_az']:.3f} arcsec (linear corr)\n"
-            f"  - centroid stdev. (ALT): {js['std_centroid_corr_alt']:.3f} arcsec (linear corr)\n"
-            f"  - Drift Rate       (AZ): {expTime * js['drift_rate_az']:.2f} arcsec per exposure\n"
-            f"  - Drift Rate      (ALT): {expTime * js['drift_rate_alt']:.2f} arcsec per exposure\n"
-            f"  - Zero Offset      (AZ): {js['offset_zero_az']:.3f} arcsec\n"
-            f"  - Zero Offset     (ALT): {js['offset_zero_alt']:.3f} arcsec"
-        )
-        return summary
-
-    @staticmethod
-    def formatPhotometricSummary(photStats: pd.DataFrame, expTime: float = 1) -> str:
-        """
-        Format a summary string for photometric variation statistics.
-
-        Parameters
-        ----------
-        photStats : `pandas.DataFrame`
-            DataFrame (single-row) or dict with photometric stats.
-        expTime : `float`, optional
-            Exposure time scaling factor (seconds per exposure).
-
-        Returns
-        -------
-        summary : `str`
-            Human-readable multi-line summary.
-        """
-        if (isinstance(photStats, pd.DataFrame) and photStats.empty) or (
-            isinstance(photStats, dict) and not photStats
-        ):
-            return "No photometric statistics available."
-
-        # if it's a DataFrame, extract the one-row dict
-        if isinstance(photStats, pd.DataFrame):
-            stats = photStats.iloc[0].to_dict()
-        else:
-            stats = photStats
-
-        return (
-            "\nPhotometric Variation Summary\n"
-            "-----------------------------\n"
-            f"  - Mag Drift Rate:      {expTime * stats['magoffset_rate'] * 1e3:.1f} mmag/exposure\n"
-            f"  - Mag Zero Offset:     {stats['magoffset_zero'] * 1e3 :.1f} mmag\n"
-            f"  - Mag RMS (detrended): {stats['magoffset_rms'] * 1e3:.1f} mmag"
-        )
-
-    @staticmethod
-    def formatStatsSummary(summary: pd.DataFrame) -> str:
-        """
-        Format a compact summary of high-level exposure statistics.
-
-        Parameters
-        ----------
-        summary : `pandas.DataFrame`
-            DataFrame (single-row) or dict with aggregate statistics.
-
-        Returns
-        -------
-        summaryText : `str`
-            Human-readable summary string.
-        """
-        if (isinstance(summary, pd.DataFrame) and summary.empty) or (
-            isinstance(summary, dict) and not summary
-        ):
-            return "No summary statistics available."
-        # if it's a DataFrame, extract the one-row dict
-        if isinstance(summary, pd.DataFrame):
-            summary = summary.iloc[0].to_dict()
-
-        lines = ["-" * 50]
-
-        # Basic overall stats
-        lines.append(f"Number of Guiders: {int(summary['n_guiders'])}")
-        lines.append(f"Number of Unique Stars: {int(summary['n_stars'])}")
-        lines.append(f"Total Measurements: {int(summary['n_measurements'])}")
-        frac = summary["fraction_valid_stamps"]
-        lines.append(f"Fraction Valid Stamps: {frac:.3f}")
-        return "\n".join(lines)
-
-    @staticmethod
-    def formatPsfSummary(psfStats: pd.DataFrame, expTime: float = 1) -> str:
-        """
-        Format a summary of PSF statistics (FWHM trends and scatter).
-
-        Parameters
-        ----------
-        psfStats : `pandas.DataFrame`
-            DataFrame (single-row) or dict with PSF statistics.
-        expTime : `float`, optional
-            Exposure time scaling factor.
-
-        Returns
-        -------
-        summary : `str`
-            Human-readable summary string.
-        """
-        if (isinstance(psfStats, pd.DataFrame) and psfStats.empty) or (
-            isinstance(psfStats, dict) and not psfStats
-        ):
-            return "No PSF statistics available."
-
-        if isinstance(psfStats, pd.DataFrame):
-            psfStats = psfStats.iloc[0].to_dict()
-
-        lines = ["", "-" * 50]
-        lines.append("PSF Statistics Summary:")
-        lines.append(f"  - FWHM slope   : {expTime * psfStats['fwhm_rate']:.3f} arcsec per exposure")
-        lines.append(f"  - FWHM scatter : {psfStats['fwhm_rms']:.3f} arcsec")
-        return "\n".join(lines)
 
 
 class GuiderDataPlotter:
@@ -871,7 +706,6 @@ class GuiderDataPlotter:
         # update the stamps
         ani = animation.ArtistAnimation(fig, frameList, interval=1000 / fps, blit=True, repeat_delay=1000)
         ani.save(saveAs, fps=fps, dpi=dpi)
-        plt.close(fig)
         return ani
 
 
@@ -891,8 +725,8 @@ def getStdCentroid(statsDf: pd.DataFrame, expId: int) -> float:
     jitter : `float`
         Quadrature sum of corrected AZ and ALT centroid scatter (arcsec).
     """
-    stdAz = statsDf.loc[statsDf["expid"] == expId, "std_centroid_corr_az"].values[0]
-    stdAlt = statsDf.loc[statsDf["expid"] == expId, "std_centroid_corr_alt"].values[0]
+    stdAz = mad_std(statsDf.loc[statsDf["expid"] == expId, "dalt"].to_numpy())
+    stdAlt = mad_std(statsDf.loc[statsDf["expid"] == expId, "daz"].to_numpy())
     return np.hypot(stdAz, stdAlt)
 
 
@@ -1113,7 +947,6 @@ def renderStampPanel(
     return im, centerCutout, cutout.shape, label
 
 
-# ==== Axis / panel text annotations ====
 def labelDetector(
     ax: plt.Axes,
     name: str,
@@ -1231,9 +1064,6 @@ def annotateStampInfo(
     )
     clearAxisTicks(ax, isSpine=True)
     return txt
-
-
-# ==== Overlays & guides ====
 
 
 def addStaticOverlays(
@@ -1511,192 +1341,3 @@ def cropAroundCenter(
     # New center in cropped image
     newCenter = (x - x0 + padLeft, y - y0 + padTop)
     return cropped, newCenter
-
-
-def assembleStats(stars) -> pd.DataFrame:
-    """
-    Assemble per-exposure summary statistics from star measurements.
-
-    Parameters
-    ----------
-    stars : `pandas.DataFrame`
-        Star measurement rows for a single exposure.
-
-    Returns
-    -------
-    summary : `pandas.DataFrame`
-        Single-row DataFrame with aggregate statistics.
-    """
-    nGuiders = stars["detector"].nunique()
-    nUnique = stars["detid"].nunique()
-    counts = stars.groupby("detector")["detid"].nunique().to_dict()
-    guiderNames = stars["detector"].unique()
-    starsPerGuiders = {f"N_{det}": counts.get(det, 0) for det in guiderNames}
-
-    maskValid = (stars["stamp"] >= 0) & (stars["xccd"].notna())
-    nMeas = int(maskValid.sum())
-
-    stdCentroid = measureStdCentroidStats(stars, snr_th=5)
-    phot = measurePhotometricVariation(stars, snr_th=5)
-    psfStats = measurePsfStats(stars, snr_th=5)
-
-    totalPossible = nUnique * stars["stamp"].nunique()
-    fracValid = nMeas / totalPossible if totalPossible > 0 else np.nan
-
-    summary = {
-        "expid": stars["expid"].iloc[0],
-        "n_guiders": nGuiders,
-        "n_stars": nUnique,
-        "n_measurements": nMeas,
-        "fraction_valid_stamps": fracValid,
-        "filter": stars["filter"].iloc[0],
-        **starsPerGuiders,
-        **stdCentroid,
-        **phot,
-        **psfStats,
-    }
-    return pd.DataFrame([summary])
-
-
-def measureStdCentroidStats(stars: pd.DataFrame, snr_th: int = 5, flux_th: float = 10.0) -> pd.DataFrame:
-    """
-    Compute global centroid scatter and drift statistics.
-
-    Parameters
-    ----------
-    stars : `pandas.DataFrame`
-        Star measurements across guiders.
-    snr_th : `int`, optional
-        Minimum SNR threshold.
-    flux_th : `float`, optional
-        Minimum flux threshold.
-
-    Returns
-    -------
-    stats : `dict`
-        Dictionary of centroid scatter, drift, and offsets.
-    """
-    # mask the objects w/ very low flux and SNR
-    mask = (stars.snr > snr_th) & (stars.flux > flux_th)
-    time = stars["elapsed_time"][mask].to_numpy()
-    az = stars.daz[mask].to_numpy()
-    alt = stars.dalt[mask].to_numpy()
-
-    # Make a robust fit
-    rf_alt = RobustFitter(time, alt)
-    coefs_alt = rf_alt.reportBestValues()
-
-    rf_az = RobustFitter(time, az)
-    coefs_az = rf_az.reportBestValues()
-
-    # Stats
-    std_centroid_stats = {
-        "std_centroid_az": mad_std(az),
-        "std_centroid_alt": mad_std(alt),
-        "std_centroid_corr_az": coefs_az.scatter,
-        "std_centroid_corr_alt": coefs_alt.scatter,
-        "drift_rate_az": coefs_az.slope,
-        "drift_rate_alt": coefs_alt.slope,
-        "drift_rate_signficance_az": coefs_az.slope_tvalue,
-        "drift_rate_signficance_alt": coefs_alt.slope_tvalue,
-        "offset_zero_az": np.nanmedian(az),
-        "offset_zero_alt": np.nanmedian(alt),
-    }
-    return std_centroid_stats
-
-
-def measurePsfStats(stars: pd.DataFrame, snr_th: int = 5, flux_th: float = 10) -> dict[str, float]:
-    """
-    Compute PSF FWHM and ellipticity trend statistics.
-
-    Parameters
-    ----------
-    stars : `pandas.DataFrame`
-        Star measurements across guiders.
-    snr_th : `int`, optional
-        Minimum SNR threshold.
-    flux_th : `float`, optional
-        Minimum flux threshold.
-
-    Returns
-    -------
-    stats : `dict[str, float]`
-        PSF and ellipticity slope, scatter, zero-point metrics.
-    """
-    # mask the objects w/ very low flux and SNR
-    mask = (stars.snr > snr_th) & (stars.flux > flux_th)
-    time = stars["elapsed_time"][mask].to_numpy()
-    psf = stars["fwhm"][mask].to_numpy()
-    # Make a robust fit
-    model = RobustFitter(time, psf)
-    coefs = model.reportBestValues()
-
-    # Elipiticities
-    e1 = stars["e1_altaz"][mask].to_numpy()
-    # Make a robust fit
-    model = RobustFitter(time, e1)
-    coefs_e1 = model.reportBestValues()
-
-    e2 = stars["e2_altaz"][mask].to_numpy()
-    # Make a robust fit
-    model = RobustFitter(time, e2)
-    coefs_e2 = model.reportBestValues()
-
-    # Stats
-    psf_stats = {
-        "fwhm_rate": coefs.slope,
-        "fwhm_signficance": coefs.slope_tvalue,
-        "fwhm_zero": coefs.intercept,
-        "fwhm_rms": coefs.scatter,
-        "e1_rate": coefs_e1.slope,
-        "e1_signficance": coefs_e1.slope_tvalue,
-        "e1_zero": coefs.intercept,
-        "e1_rms": coefs_e1.scatter,
-        "e2_rate": coefs_e2.slope,
-        "e2_signficance": coefs_e2.slope_tvalue,
-        "e2_zero": coefs_e2.intercept,
-        "e2_rms": coefs_e2.scatter,
-    }
-    return psf_stats
-
-
-def measurePhotometricVariation(stars: pd.DataFrame, snr_th: int = 5) -> dict[str, float]:
-    """
-    Measure drift and scatter of magnitude offsets versus time.
-
-    Parameters
-    ----------
-    stars : `pandas.DataFrame`
-        Star measurements across guiders.
-    snr_th : `int`, optional
-        Minimum SNR threshold.
-
-    Returns
-    -------
-    stats : `dict[str, float]`
-        Drift rate, zero-point, RMS scatter, and significance.
-    """
-    mo = stars["magoffset"].to_numpy()
-    mask = np.isfinite(mo)
-    mask &= stars["snr"] > snr_th
-    if np.sum(mask) < 3:
-        phot_stats = {
-            "magoffset_rate": np.nan,
-            "magoffset_zero": np.nan,
-            "magoffset_rms": np.nan,
-            "magoffset_signficance": np.nan,
-        }
-        return phot_stats
-
-    time = stars["elapsed_time"][mask].to_numpy()
-    rf_mag = RobustFitter(time, mo[mask])
-    coefs_mag = rf_mag.reportBestValues()
-
-    # Stats
-    phot_stats = {
-        "magoffset_rate": coefs_mag.slope,
-        "magoffset_signficance": coefs_mag.slope_tvalue,
-        "magoffset_zero": np.nanmedian(mo[mask]),
-        "magoffset_rms": coefs_mag.scatter,
-    }
-    return phot_stats
