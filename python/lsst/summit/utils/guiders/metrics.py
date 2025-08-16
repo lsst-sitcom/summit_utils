@@ -170,17 +170,20 @@ class GuiderMetricsBuilder:
                 columns.append(f"{varSnakeCase}_{stat}")
         return columns
 
-    def printSummary(self, exptime: float = 1.0) -> None:
+    def printSummary(self) -> None:
         """
         Print a human-readable summary of all metrics.
 
-        Each metric's slope is scaled by the provided exposure time.
+        Each metric's slope is scaled by the exposure time.
 
+<<<<<<< HEAD
         Parameters
         ----------
         exptime : `float`, optional
             Exposure time in seconds. Used to convert slope units from
             per-second to per-exposure in the printed output.
+=======
+>>>>>>> 0d1581d (Fix exptime arg; Remove comments)
         """
         # Guard if buildMetrics found no data
         if not self.isBuilt:
@@ -193,6 +196,9 @@ class GuiderMetricsBuilder:
         self.magData.units = "mag"
         self.psfData.units = "arcsec"
 
+        # exptime
+        exptime = self.countsDf["exptime"].values[0]
+
         # Print summaries
         header1 = makeHeader("Guider Metrics Summary")
         print("\n".join(header1))
@@ -200,11 +206,11 @@ class GuiderMetricsBuilder:
         print(f"Exposure time: {exptime:.2f} sec")
         printExposureCounts(self.countsDf)
 
-        self.azDriftData.pprint("Az", exptime)
-        self.altDriftData.pprint("Alt", exptime)
-        self.rotatorData.pprint("Rotator", exptime)
-        self.magData.pprint("Mag", exptime)
-        self.psfData.pprint("PSF FWHM", exptime)
+        self.azDriftData.pprint("Az")
+        self.altDriftData.pprint("Alt")
+        self.rotatorData.pprint("Rotator")
+        self.magData.pprint("Mag")
+        self.psfData.pprint("PSF FWHM")
 
 
 def computeTrendMetrics(
@@ -262,6 +268,7 @@ def computeTrendMetrics(
             nsize=0,
         )
 
+    exptime = float(s[timeCol].max())
     xArr = s[timeCol].to_numpy()
     yArr = s[yCol].to_numpy()
     stdGlobal = float(mad_std(yArr))
@@ -282,7 +289,8 @@ def computeTrendMetrics(
         global_std=stdGlobal,
         outlier_frac=1.0 - (inlierMask.sum() / len(xArr)),
         slope_significance=slope_sig,
-        nsize=int(yArr.size),  # or int(inlierMask.sum()) if you prefer inliers
+        nsize=int(yArr.size),
+        exptime=exptime,
     )
 
 
@@ -315,6 +323,8 @@ class MetricResult:
         Number of valid points used in the fit.
     units : `str`
         Units of the dependent variable. Empty string if none.
+    exptime : `float`
+        Exposure time in seconds. Default is 1.0 (per-second slope).
     """
 
     slope: float
@@ -324,9 +334,10 @@ class MetricResult:
     outlier_frac: float
     slope_significance: float | None = None
     nsize: int = 0
+    exptime: float = 1.0
     units: str = ""
 
-    def pprint(self, title: str, exptime: float = 1.0) -> None:
+    def pprint(self, title: str) -> None:
         """
         Print the stored metrics in a formatted, human-readable block.
 
@@ -334,13 +345,12 @@ class MetricResult:
         ----------
         title : `str`
             Title to display for the metric block.
-        exptime : `float`, optional
-            Exposure time in seconds. The slope will be multiplied by this
-            value to convert from per-second to per-exposure units.
         """
         if not title:
             title = "Metric"
         units = self.units
+        exptime = self.exptime
+
         header = makeHeader(f"Metrics Summary: {title}", nchar=40)
         print("\n".join(header))
         slope_per_exp = self.slope * exptime
@@ -436,6 +446,7 @@ def computeExposureCounts(stars: pd.DataFrame, expid: int) -> pd.DataFrame:
         Single-row DataFrame with counts for the exposure.
     """
     s = stars.loc[stars["expid"].eq(expid)]
+    exptime = float(s["elapsed_tiem"].max())
 
     # Guiders and stars per guider
     nGuiders = s["detector"].nunique()
@@ -458,6 +469,7 @@ def computeExposureCounts(stars: pd.DataFrame, expid: int) -> pd.DataFrame:
         "n_stars": nUnique,
         "n_measurements": nMeas,
         "fraction_valid_stamps": fracValid,
+        "exptime": exptime,
     }
     row.update(guidersPresent)
     return pd.DataFrame([row], index=[expid])
