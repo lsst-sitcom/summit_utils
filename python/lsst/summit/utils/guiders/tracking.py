@@ -127,7 +127,7 @@ class GuiderStarTracker:
 
         trackedStarTables = []
         for guiderName in self.guiderData.guiderNames:
-            table = self._trackStarForOneGuider(refCatalog, guiderName, gain=1)
+            table = self._trackStarForOneGuider(refCatalog, guiderName)
             if not table.empty:
                 trackedStarTables.append(table)
 
@@ -144,9 +144,7 @@ class GuiderStarTracker:
         # Make the final DataFrame with selected columns
         return trackedStarCatalog[self.columns]
 
-    def _trackStarForOneGuider(
-        self, refCatalog: pd.DataFrame, guiderName: str, gain: int = 1
-    ) -> pd.DataFrame:
+    def _trackStarForOneGuider(self, refCatalog: pd.DataFrame, guiderName: str) -> pd.DataFrame:
         """
         Track stars for a single guider using the reference catalog.
 
@@ -156,8 +154,6 @@ class GuiderStarTracker:
             Reference catalog with known star positions per detector.
         guiderName : `str`
             Name of the guider to process.
-        gain : `int`, optional
-            Gain value for flux calculations (default is 1).
 
         Returns
         -------
