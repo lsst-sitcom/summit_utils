@@ -517,7 +517,7 @@ class GuiderDataPlotter:
         stampNum: int = -1,
         plo: float = 50.0,
         phi: float = 99.0,
-        removeTicks: bool = True,
+        removeTicks: bool = False,
     ) -> plt.AxesImage:
         """
         Plot a single CCD stamp (or stacked image) onto the provided axes.
