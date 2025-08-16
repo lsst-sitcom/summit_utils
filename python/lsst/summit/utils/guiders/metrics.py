@@ -176,14 +176,6 @@ class GuiderMetricsBuilder:
 
         Each metric's slope is scaled by the exposure time.
 
-<<<<<<< HEAD
-        Parameters
-        ----------
-        exptime : `float`, optional
-            Exposure time in seconds. Used to convert slope units from
-            per-second to per-exposure in the printed output.
-=======
->>>>>>> 0d1581d (Fix exptime arg; Remove comments)
         """
         # Guard if buildMetrics found no data
         if not self.isBuilt:

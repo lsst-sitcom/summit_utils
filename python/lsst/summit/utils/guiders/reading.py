@@ -40,6 +40,7 @@ from lsst.afw.image import ExposureF, ImageF, MaskedImageF, VisitInfo
 from lsst.daf.butler import Butler, DatasetNotFoundError
 from lsst.meas.algorithms.stamps import Stamp, Stamps
 from lsst.obs.lsst import LsstCam
+from lsst.utils.plotting.figures import make_figure
 
 from .plotting import GuiderDataPlotter
 from .transformation import (
@@ -54,6 +55,13 @@ if TYPE_CHECKING:
     from lsst.afw.cameraGeom import Camera, Detector
     from lsst.daf.base import PropertyList
     from lsst.geom import SkyWcs
+
+
+def make_subplot(nrows=1, ncols=1, **fig_kwargs):
+    """Return (fig, axs) using LSST's make_figure."""
+    fig = make_figure(**fig_kwargs)
+    axs = fig.subplots(nrows=nrows, ncols=ncols, squeeze=False)
+    return fig, axs
 
 
 @dataclass
@@ -607,13 +615,11 @@ class GuiderData:
         figsize : `tuple`, optional
             Figure size.
         """
-        from matplotlib import pyplot as plt
-
-        fig, axs = plt.subplots(1, 1, figsize=figsize)
+        _, axs = make_subplot(nrows=1, ncols=1, figsize=figsize)
         _ = self.plotter.plotStampCcd(axs, detName, stampNum=stampNum, plo=plo, phi=phi, isTicks=True)
         axs.set_xlabel("X (pixels)", fontsize=11)
         axs.set_ylabel("Y (pixels)", fontsize=11)
-        plt.title(f"{self.expid}")
+        axs.set_title(f"{self.expid}")
 
     def makeGif(self, saveAs: str, fps: int = 5, plo: float = 50.0, phi: float = 99.0, figsize=(9, 9)):
         """
@@ -633,6 +639,25 @@ class GuiderData:
             Figure size.
         """
         self.plotter.makeGif(saveAs=saveAs, fps=fps, plo=plo, phi=phi, figsize=figsize)
+
+    def makeMp4(self, saveAs: str, fps: int = 5, plo: float = 50.0, phi: float = 99.0, figsize=(9, 9)):
+        """
+        Create a mp4 animation of guider stamps over time.
+
+        Parameters
+        ----------
+        saveAs : `str`
+            Output filename.
+        fps : `int`, optional
+            Frames per second.
+        plo : `float`, optional
+            Lower percentile for display stretch.
+        phi : `float`, optional
+            Upper percentile for display stretch.
+        figsize : `tuple`, optional
+            Figure size.
+        """
+        self.plotter.makeMp4(saveAs=saveAs, fps=fps, plo=plo, phi=phi, figsize=figsize)
 
 
 class GuiderReader:

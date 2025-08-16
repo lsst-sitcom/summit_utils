@@ -101,7 +101,8 @@ class MosaicLayout:
         constrained_layout: bool = False,
     ) -> tuple[plt.Figure, dict[str, plt.Axes]]:
         """
-        Build the figure and axes dictionary for the predefined mosaic layout.
+        Build the figure and axes dictionary for the predefined mosaic layout
+        using LSST's Agg-backed figure (no pyplot).
 
         Parameters
         ----------
@@ -121,14 +122,15 @@ class MosaicLayout:
         axs : `dict[str, matplotlib.axes.Axes]`
             Mapping from mosaic panel labels to axes.
         """
-        # TODO: use DM code to make figure mosaic
-        fig, axs = plt.subplot_mosaic(
+        # 1) Create Agg-backed figure (no pyplot, no caching)
+        fig = make_figure(figsize=figsize, constrained_layout=constrained_layout)
+
+        # 2) Use Figure.subplot_mosaic (same signature as plt.subplot_mosaic)
+        axs: dict[str, plt.Axes] = fig.subplot_mosaic(
             cast(Any, self.grid),
-            figsize=figsize,
             gridspec_kw=dict(hspace=hspace, wspace=wspace),
-            constrained_layout=constrained_layout,
-            sharex=False,  # for the mosaic, do not share axes
-            sharey=False,  # for the mosaic, do not share axes
+            sharex=False,  # keep the original intent
+            sharey=False,
         )
         return fig, axs
 
@@ -386,51 +388,30 @@ class GuiderPlotter:
 
         return artists
 
-    def makeGif(
+    def _makeAnimation(
         self,
         saveAs: str,
-        nStampMax: int = 60,
-        fps: int = 5,
-        dpi: int = 100,
-        plo: float = 90.0,
-        phi: float = 99.0,
         cutoutSize: int = 30,
+        fps: int = 5,
+        dpi: int = 80,
+        plo: float = 50,
+        phi: float = 99,
+        figsize: tuple[float, float] = (9, 9),
+        hold_frames: int = 2,
+        writer: str | None = None,
     ) -> animation.ArtistAnimation:
         """
-        Create an animated GIF of the guider mosaic across sequential stamps.
-
-        Parameters
-        ----------
-        saveAs : `str`
-            Output filepath for the GIF.
-        nStampMax : `int`, optional
-            Maximum number of stamps to animate.
-        fps : `int`, optional
-            Frames per second.
-        dpi : `int`, optional
-            Output resolution in dots per inch.
-        plo : `float`, optional
-            Lower percentile for image scaling.
-        phi : `float`, optional
-            Upper percentile for image scaling.
-        cutoutSize : `int`, optional
-            Square cutout size; -1 means full frame.
-
-        Returns
-        -------
-        ani : `matplotlib.animation.ArtistAnimation`
-            The created animation object.
+        Internal: construct the animation and return animation object.
         """
         # build canvas
-        fig, axs = self.setupFigure(figsize=(10, 10))
+        fig, axs = self.setupFigure(figsize=figsize)
 
         if self.starsDf.empty:
             self.log.warning("stars_df is empty. No data to plot.")
             return animation.ArtistAnimation(fig, [], interval=1000 / fps, blit=True, repeat_delay=1000)
 
         # number of frames
-        nStamps = len(self.guiderData)
-        total = min(nStamps, nStampMax)
+        total = len(self.guiderData)
 
         # initial (stacked) frame
         artists0 = self.starMosaic(
@@ -443,7 +424,7 @@ class GuiderPlotter:
             isAnimated=False,
         )
 
-        frames = 2 * [artists0]
+        frames = hold_frames * [artists0]
 
         # sequential stamps
         for i in range(1, total):
@@ -457,14 +438,103 @@ class GuiderPlotter:
                 isAnimated=True,
             )
             frames.append(artists)
-        frames += 2 * [artists0]
+        frames += hold_frames * [artists0]
 
         # create animation
         ani = animation.ArtistAnimation(fig, frames, interval=1000 / fps, blit=True, repeat_delay=1000)
 
-        ani.save(saveAs, fps=fps, dpi=dpi, writer="pillow")
-        plt.close(fig)
+        ani.save(saveAs, fps=fps, dpi=dpi, writer=writer)
         return ani
+
+    def makeGif(
+        self,
+        saveAs: str,
+        figsize: tuple[float, float] = (9.0, 9.0),
+        fps: int = 5,
+        dpi: int = 100,
+        plo: float = 90.0,
+        phi: float = 99.0,
+    ) -> animation.ArtistAnimation:
+        """
+        Create an animated GIF of the guider mosaic across sequential stamps.
+
+        Parameters
+        ----------
+        saveAs : `str`
+            Output filepath for the GIF.
+        figsize : `tuple[float, float]`, optional
+            Figure size in inches.
+        fps : `int`, optional
+            Frames per second.
+        dpi : `int`, optional
+            Output resolution in dots per inch.
+        plo : `float`, optional
+            Lower percentile for image scaling.
+        phi : `float`, optional
+            Upper percentile for image scaling.
+
+        Returns
+        -------
+        ani : `matplotlib.animation.ArtistAnimation`
+            The created animation object.
+        """
+        if not saveAs.lower().endswith(".gif"):
+            raise ValueError(f"Output filename {saveAs!r} does not end with .gif")
+        return self._makeAnimation(
+            saveAs,
+            fps=fps,
+            dpi=dpi,
+            plo=plo,
+            phi=phi,
+            figsize=figsize,
+            hold_frames=2,
+            writer="pillow",
+        )
+
+    def makeMp4(
+        self,
+        saveAs: str,
+        figsize: tuple[float, float] = (9.0, 9.0),
+        fps: int = 5,
+        dpi: int = 100,
+        plo: float = 90.0,
+        phi: float = 99.0,
+    ) -> animation.ArtistAnimation:
+        """
+        Create an animated GIF of the guider mosaic across sequential stamps.
+
+        Parameters
+        ----------
+        saveAs : `str`
+            Output filepath for the GIF.
+        figsize : `tuple[float, float]`, optional
+            Figure size in inches.
+        fps : `int`, optional
+            Frames per second.
+        dpi : `int`, optional
+            Output resolution in dots per inch.
+        plo : `float`, optional
+            Lower percentile for image scaling.
+        phi : `float`, optional
+            Upper percentile for image scaling.
+
+        Returns
+        -------
+        ani : `matplotlib.animation.ArtistAnimation`
+            The created animation object.
+        """
+        if not saveAs.lower().endswith(".mp4"):
+            raise ValueError(f"Output filename {saveAs!r} does not end with .mp4")
+        return self._makeAnimation(
+            saveAs,
+            fps=fps,
+            dpi=dpi,
+            plo=plo,
+            phi=phi,
+            figsize=figsize,
+            hold_frames=2,
+            writer=None,
+        )
 
 
 class GuiderDataPlotter:
@@ -638,6 +708,41 @@ class GuiderDataPlotter:
         artists = self.plotStampArray(stampNum=-1, fig=fig, axs=axs, plo=plo, phi=phi)
         return artists
 
+    def _makeAnimation(
+        self,
+        saveAs: str,
+        fps: int = 5,
+        dpi: int = 80,
+        plo: float = 50,
+        phi: float = 99,
+        figsize: tuple[float, float] = (9, 9),
+        hold_frames: int = 2,
+        is_animated: bool = True,
+        writer: str | None = None,
+    ) -> animation.ArtistAnimation:
+        """
+        Internal: construct the animation and return animation object.
+        """
+        fig, axs = self.setupFigure(figsize=figsize)
+        nStamps = self.nStamps
+
+        # Stacked frame (intro/outro buffer)
+        artists0 = self.plotStackedStampArray(fig=fig, axs=axs, plo=plo, phi=phi)
+        frame_list = [artists0] * hold_frames
+
+        # Main sequence: iterate over all stamps (consistent across formats)
+        for i in range(nStamps):
+            artists = self.plotStampArray(
+                stampNum=i, fig=fig, axs=axs, plo=plo, phi=phi, isAnimated=is_animated
+            )
+            frame_list.append(artists)
+
+        frame_list += [artists0] * hold_frames
+
+        ani = animation.ArtistAnimation(fig, frame_list, interval=1000 / fps, blit=True, repeat_delay=1000)
+        ani.save(saveAs, fps=fps, dpi=dpi, writer=writer)
+        return ani
+
     def makeGif(
         self,
         saveAs: str,
@@ -647,9 +752,13 @@ class GuiderDataPlotter:
         phi: float = 99,
         figsize: tuple[float, float] = (9, 9),
     ) -> animation.ArtistAnimation:
-        """
-        Create an animated GIF over all stamps for this exposure.
+        if not saveAs.lower().endswith(".gif"):
+            raise ValueError(f"Output filename {saveAs!r} does not end with .gif")
+        return self._makeAnimation(
+            saveAs, fps=fps, dpi=dpi, plo=plo, phi=phi, figsize=figsize, writer="pillow"
+        )
 
+<<<<<<< HEAD
         Parameters
         ----------
         saveAs : `str`
@@ -727,6 +836,20 @@ class GuiderDataPlotter:
         ani = animation.ArtistAnimation(fig, frameList, interval=1000 / fps, blit=True, repeat_delay=1000)
         ani.save(saveAs, fps=fps, dpi=dpi)
         return ani
+=======
+    def makeMp4(
+        self,
+        saveAs: str,
+        fps: int = 5,
+        dpi: int = 80,
+        plo: float = 50,
+        phi: float = 99,
+        figsize: tuple[float, float] = (9, 9),
+    ) -> animation.ArtistAnimation:
+        if not saveAs.lower().endswith(".mp4"):
+            raise ValueError(f"Output filename {saveAs!r} does not end with .mp4")
+        return self._makeAnimation(saveAs, fps=fps, dpi=dpi, plo=plo, phi=phi, figsize=figsize, writer=None)
+>>>>>>> d7de0ff (Add lsst.summit.utils plot figure; Unify makeGif and makeMp4 method)
 
 
 def getStdCentroid(statsDf: pd.DataFrame, expId: int) -> float:
@@ -1192,7 +1315,7 @@ def drawGuideCircles(
 def plotCrosshairRotated(
     center: tuple[float, float],
     angle: float,
-    axs: plt.Axes | None = None,
+    axs: plt.Axes,
     color: str = "grey",
     size: int = 30,
 ) -> None:
@@ -1212,8 +1335,6 @@ def plotCrosshairRotated(
     size : `int`, optional
         Size scaling factor.
     """
-    if axs is None:
-        axs = plt.gca()
     # make a cross rotated by the camera rotation angle
     cross_length = 1.5 * size if size > 0 else 30
     theta = np.radians(angle)
