@@ -1010,6 +1010,8 @@ def renderStampPanel(
         extent=(0, cutout.shape[1], 0, cutout.shape[0]),
         animated=True,
     )
+    ax.set_ylim(0, cutout.shape[0])
+    ax.set_xlim(0, cutout.shape[1])
     ax.set_aspect("equal", "box")
 
     # 5) optional label
