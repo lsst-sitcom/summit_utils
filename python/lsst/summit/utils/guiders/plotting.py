@@ -391,7 +391,7 @@ class GuiderPlotter:
     def _makeAnimation(
         self,
         saveAs: str,
-        cutoutSize: int = 30,
+        cutoutSize: int,
         fps: int = 5,
         dpi: int = 80,
         plo: float = 50,
@@ -449,6 +449,7 @@ class GuiderPlotter:
     def makeGif(
         self,
         saveAs: str,
+        cutoutSize: int = 16,
         figsize: tuple[float, float] = (9.0, 9.0),
         fps: int = 5,
         dpi: int = 100,
@@ -462,6 +463,8 @@ class GuiderPlotter:
         ----------
         saveAs : `str`
             Output filepath for the GIF.
+        cutoutSize : `int`, optional
+            Size scale used for arrow lengths and framing.
         figsize : `tuple[float, float]`, optional
             Figure size in inches.
         fps : `int`, optional
@@ -482,6 +485,7 @@ class GuiderPlotter:
             raise ValueError(f"Output filename {saveAs!r} does not end with .gif")
         return self._makeAnimation(
             saveAs,
+            cutoutSize,
             fps=fps,
             dpi=dpi,
             plo=plo,
@@ -494,6 +498,7 @@ class GuiderPlotter:
     def makeMp4(
         self,
         saveAs: str,
+        cutoutSize: int = 16,
         figsize: tuple[float, float] = (9.0, 9.0),
         fps: int = 5,
         dpi: int = 100,
@@ -507,6 +512,8 @@ class GuiderPlotter:
         ----------
         saveAs : `str`
             Output filepath for the GIF.
+        cutoutSize : `int`, optional
+            Size scale used for arrow lengths and framing.
         figsize : `tuple[float, float]`, optional
             Figure size in inches.
         fps : `int`, optional
@@ -527,6 +534,7 @@ class GuiderPlotter:
             raise ValueError(f"Output filename {saveAs!r} does not end with .mp4")
         return self._makeAnimation(
             saveAs,
+            cutoutSize,
             fps=fps,
             dpi=dpi,
             plo=plo,
@@ -758,85 +766,6 @@ class GuiderDataPlotter:
             saveAs, fps=fps, dpi=dpi, plo=plo, phi=phi, figsize=figsize, writer="pillow"
         )
 
-<<<<<<< HEAD
-        Parameters
-        ----------
-        saveAs : `str`
-            Output file path (GIF); required to save.
-        fps : `int`, optional
-            Frames per second.
-        dpi : `int`, optional
-            Output resolution.
-        plo : `float`, optional
-            Lower percentile for scaling.
-        phi : `float`, optional
-            Upper percentile for scaling.
-        figsize : `tuple[float, float]`, optional
-            Figure size passed to setup.
-
-        Returns
-        -------
-        ani : `matplotlib.animation.ArtistAnimation`
-            Created animation.
-        """
-        # Create the animation
-        fig, axs = self.setupFigure(figsize=figsize)
-        nStamps = self.nStamps
-
-        # plot the stacked image
-        artists0 = self.plotStackedStampArray(fig=fig, axs=axs, plo=plo, phi=phi)
-        frameList = 5 * [artists0]
-
-        # loop over the stamps
-        for i in range(1, nStamps - 1):
-            artists = self.plotStampArray(stampNum=i, fig=fig, axs=axs, plo=plo, phi=phi, isAnimated=True)
-            frameList.append(artists)
-
-        frameList += 5 * [artists0]
-
-        # update the stamps
-        ani = animation.ArtistAnimation(fig, frameList, interval=1000 / fps, blit=True, repeat_delay=1000)
-
-        ani.save(saveAs, fps=fps, dpi=dpi, writer="pillow")
-        return ani
-
-    def makeMp4(self, saveAs: str, fps: int = 5, dpi: int = 80) -> animation.ArtistAnimation:
-        """
-        Create an MP4 animation over all stamps for this exposure.
-
-        Parameters
-        ----------
-        saveAs : `str`
-            Output MP4 filename.
-        fps : `int`, optional
-            Frames per second.
-        dpi : `int`, optional
-            Output resolution in dots per inch.
-
-        Returns
-        -------
-        ani : `matplotlib.animation.ArtistAnimation`
-            Created animation.
-        """
-        # Create the animation
-        fig, axs = self.setupFigure(figsize=(9, 9))
-        nStamps = self.nStamps
-
-        # plot the stacked image
-        artists0 = self.plotStackedStampArray(fig=fig, axs=axs)
-        frameList = 5 * [artists0]
-
-        # loop over the stamps
-        for i in range(nStamps):
-            artists = self.plotStampArray(stampNum=i, fig=fig, axs=axs)
-            frameList.append(artists)
-        frameList += 5 * [artists0]
-
-        # update the stamps
-        ani = animation.ArtistAnimation(fig, frameList, interval=1000 / fps, blit=True, repeat_delay=1000)
-        ani.save(saveAs, fps=fps, dpi=dpi)
-        return ani
-=======
     def makeMp4(
         self,
         saveAs: str,
@@ -849,7 +778,6 @@ class GuiderDataPlotter:
         if not saveAs.lower().endswith(".mp4"):
             raise ValueError(f"Output filename {saveAs!r} does not end with .mp4")
         return self._makeAnimation(saveAs, fps=fps, dpi=dpi, plo=plo, phi=phi, figsize=figsize, writer=None)
->>>>>>> d7de0ff (Add lsst.summit.utils plot figure; Unify makeGif and makeMp4 method)
 
 
 def getStdCentroid(statsDf: pd.DataFrame, expId: int) -> float:

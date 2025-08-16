@@ -583,10 +583,7 @@ def makeEllipticalGaussianStar(
     return image
 
 
-<<<<<<< HEAD
-=======
 # Reference Catalog Construction
->>>>>>> f7f9377 (Fix type annotations; mypy errors)
 def buildReferenceCatalog(
     guiderData: GuiderData,
     log: logging.Logger,

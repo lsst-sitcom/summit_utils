@@ -60,7 +60,7 @@ if TYPE_CHECKING:
 def make_subplot(nrows=1, ncols=1, **fig_kwargs):
     """Return (fig, axs) using LSST's make_figure."""
     fig = make_figure(**fig_kwargs)
-    axs = fig.subplots(nrows=nrows, ncols=ncols, squeeze=False)
+    axs = fig.subplots(nrows=nrows, ncols=ncols, squeeze=True)
     return fig, axs
 
 
@@ -616,7 +616,7 @@ class GuiderData:
             Figure size.
         """
         _, axs = make_subplot(nrows=1, ncols=1, figsize=figsize)
-        _ = self.plotter.plotStampCcd(axs, detName, stampNum=stampNum, plo=plo, phi=phi, isTicks=True)
+        _ = self.plotter.plotStampCcd(axs, detName, stampNum=stampNum, plo=plo, phi=phi, removeTicks=True)
         axs.set_xlabel("X (pixels)", fontsize=11)
         axs.set_ylabel("Y (pixels)", fontsize=11)
         axs.set_title(f"{self.expid}")

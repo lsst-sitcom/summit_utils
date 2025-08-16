@@ -438,7 +438,7 @@ def computeExposureCounts(stars: pd.DataFrame, expid: int) -> pd.DataFrame:
         Single-row DataFrame with counts for the exposure.
     """
     s = stars.loc[stars["expid"].eq(expid)]
-    exptime = float(s["elapsed_tiem"].max())
+    exptime = float(s["elapsed_time"].max())
 
     # Guiders and stars per guider
     nGuiders = s["detector"].nunique()
