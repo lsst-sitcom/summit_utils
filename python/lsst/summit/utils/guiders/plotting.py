@@ -564,9 +564,9 @@ class GuiderDataPlotter:
         self.header = guiderData.header
 
         # get the last 5 digits of expId as seqNum
-        self.seqNum = int(str(self.expId)[-5:])
+        self.seqNum = guiderData.seqNum
         # get the dayObs from the first 8 digits of expId
-        self.dayObs = int(str(self.expId)[:8])
+        self.dayObs = guiderData.dayObs
         self.mosaic = MosaicLayout()
 
     def setupFigure(self, figsize: tuple[float, float] = (12, 12)) -> tuple[plt.Figure, dict[str, plt.Axes]]:

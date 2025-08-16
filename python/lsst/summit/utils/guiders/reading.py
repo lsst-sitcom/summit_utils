@@ -140,7 +140,8 @@ class GuiderData:
             names.
         """
         return (
-            f"GuiderData(expid={self.expid}, "
+            f"GuiderData(seqNum={self.seqNum}, "
+            f"dayObs={self.dayObs}, "
             f"nStamps={len(self)}, view='{self.view}', "
             f"guiders={self.guiderNames})"
         )
@@ -225,6 +226,10 @@ class GuiderData:
         # Ensure DAYOBS and SEQNUM are ints before math, keep ≤79 chars
         dayobs = int(md.get("DAYOBS", 0))
         seqnum = int(md.get("SEQNUM", 0))
+        if dayobs == 0 or seqnum == 0:
+            raise ValueError("Missing DAYOBS or SEQNUM in metadata.")
+        info["dayobs"] = int(dayobs)
+        info["seqnum"] = int(seqnum)
         info["expid"] = dayobs * 100000 + seqnum
         info["filter"] = md.get("FILTBAND", "Unknown")
         info["cam_rot_angle"] = self.camRotAngle
@@ -253,6 +258,34 @@ class GuiderData:
         if self.header["expid"] is None:
             raise ValueError("Missing expid in header.")
         return int(self.header["expid"])
+
+    @cached_property
+    def seqNum(self) -> int:
+        """
+        Sequence number.
+
+        Returns
+        -------
+        seqNum : `int`
+            The sequence number.
+        """
+        if self.header["seqnum"] is None:
+            raise ValueError("Missing SEQNUM in header.")
+        return int(self.header["seqnum"])
+
+    @cached_property
+    def dayObs(self) -> int:
+        """
+        Day of observation.
+
+        Returns
+        -------
+        dayObs : `int`
+            The day of observation (YYYYMMDD).
+        """
+        if self.header["dayobs"] is None:
+            raise ValueError("Missing DAYOBS in header.")
+        return int(self.header["dayobs"])
 
     def printHeaderInfo(self) -> None:
         """Print a concise summary of key header fields."""
