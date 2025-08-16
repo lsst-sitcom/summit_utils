@@ -10,6 +10,9 @@ passThrough = ['DAF_BUTLER_REPOSITORY_INDEX',  # for repo locations
                'JENKINS_HOME',  # needed to determine site location - see utils.getSite()
                'PGPASSFILE',  # needed for butler authentication
                'PGUSER',  # needed for butler authentication
+               'AWS_SHARED_CREDENTIALS_FILE',  # needed for embargo butler
+               'LSST_RESOURCES_S3_PROFILE_embargo',  # needed for embargo butler
+               'S3_ENDPOINT_URL',  # needed for embargo butler
                ]
 
 for item in passThrough:
