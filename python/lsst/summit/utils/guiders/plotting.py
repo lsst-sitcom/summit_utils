@@ -374,7 +374,7 @@ class GuiderPlotter:
         cutoutSize: int = 30,
         saveAs: str | None = None,
         figsize: tuple[float, float] = (9, 9),
-    ) -> plt.figure:
+    ) -> plt.Figure:
         """
         Plot a mosaic of guider stamps (a single stamp or a stacked image).
 

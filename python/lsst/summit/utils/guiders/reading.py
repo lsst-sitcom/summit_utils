@@ -21,7 +21,7 @@
 from __future__ import annotations
 
 import logging
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 __all__ = [
     "GuiderReader",
@@ -54,7 +54,6 @@ from .transformation import (
 
 if TYPE_CHECKING:
     from lsst.afw.cameraGeom import Camera, Detector
-    from lsst.daf.base import PropertyList
     from lsst.geom import SkyWcs
 
 
@@ -885,8 +884,8 @@ def _makeRoiTransforms(metadata: dict, detector: Detector, camera: Camera) -> tu
 
 def _convertMaskedImage(
     maskedImage: MaskedImageF,
-    stampMetadata: dict,
-    metadata: dict,
+    stampMetadata: dict[str, Any],
+    metadata: dict[str, Any],
     transforms: tuple,
     detector: Detector,
     ampName: str,
@@ -930,7 +929,7 @@ def _convertMaskedImage(
 
 def _blankStamp(
     stampIdx: int,
-    metadata: PropertyList,
+    metadata: dict[str, Any],
     transforms: tuple,
 ) -> Stamp:
     """
@@ -940,7 +939,7 @@ def _blankStamp(
     ----------
     stampIdx : `int`
         Missing stamp index.
-    metadata : `PropertyList`
+    metadata : `dict`
         Original metadata container.
     transforms : `tuple`
         (ccdViewBbox, forwardTransform, inverseTransform).
@@ -954,7 +953,7 @@ def _blankStamp(
     nRows, nCols = int(metadata["ROIROWS"]), int(metadata["ROICOLS"])
     blankArray = np.zeros((nRows, nCols), dtype=np.float32)
     blankImg = ExposureF(MaskedImageF(ImageF(array=blankArray)))
-    missingMetadata = metadata.toDict().copy()
+    missingMetadata = metadata.copy()
     missingMetadata["DAQSTAMP"] = stampIdx
     missingMetadata["STMPTMJD"] = np.nan
     archiveElement = [ccdViewBbox, fwd, back]
@@ -990,6 +989,7 @@ def convertRawStampsToView(
     camera = LsstCam.getCamera()
     detector = camera[detName]
     metadata = rawStamps.metadata
+    metadataDict = metadata.toDict()
 
     # Ensure CCDSLOT matches swapped name if applicable
     metadata["CCDSLOT"] = detName[4:7]
@@ -1000,7 +1000,7 @@ def convertRawStampsToView(
     missingIndices = np.where(timestamps.mask)[0].tolist()
 
     # Pre‑compute transforms once
-    transforms, ampName = _makeRoiTransforms(metadata, detector, camera)
+    transforms, ampName = _makeRoiTransforms(metadataDict, detector, camera)
 
     stampsDict: dict[int, Stamp] = {}
     mIdx = 0  # index into masked images list
@@ -1012,7 +1012,7 @@ def convertRawStampsToView(
         stampsDict[idx] = _convertMaskedImage(
             maskedImage,
             stampMeta,
-            metadata,
+            metadataDict,
             transforms,
             detector,
             ampName,
@@ -1023,7 +1023,7 @@ def convertRawStampsToView(
 
     # Fill gaps with blanks
     for idx in missingIndices:
-        stampsDict[idx] = _blankStamp(idx, metadata, transforms)
+        stampsDict[idx] = _blankStamp(idx, metadataDict, transforms)
 
     # Assemble in order
     stampList = [stampsDict[i] for i in range(nStamps)]
