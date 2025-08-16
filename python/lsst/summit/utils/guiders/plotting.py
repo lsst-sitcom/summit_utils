@@ -59,10 +59,10 @@ STRIP_PLOT_KWARGS: dict[str, dict] = {
         "title": "CCD Pixel Centroid Offsets",
     },
     "flux": {
-        "ylabel": "Magnitude Offset [mag]",
+        "ylabel": "Magnitude Offset [mmag]",
         "col": ["magoffset"],
         "unit": "mmag",
-        "scale": 1e3,  # scale to mmag
+        "scale": 1,  # keep scale to mmag
         "title": "Flux Magnitude Offsets",
     },
     "ellip": {
@@ -211,6 +211,7 @@ class GuiderPlotter:
 
         n = len(cfg["col"])
         fig = make_figure(figsize=(8 * n, 6))
+        fig.subplots_adjust(hspace=0.0, wspace=0.0)
         axes = fig.subplots(nrows=1, ncols=n, sharex=True, sharey=True)
         axes = np.atleast_1d(axes)
 
@@ -287,7 +288,7 @@ class GuiderPlotter:
             fig.savefig(saveAs, dpi=120)
         return fig
 
-    def starMosaic(
+    def _starMosaic(
         self,
         stampNum: int = 2,
         fig: plt.Figure | None = None,
@@ -299,31 +300,8 @@ class GuiderPlotter:
         saveAs: str | None = None,
     ) -> list[Artist]:
         """
-        Plot a mosaic of guider stamps (a single stamp or a stacked image).
-
-        Parameters
-        ----------
-        stampNum : `int`, optional
-            Stamp index; values < 0 select the stacked (coadd) image.
-        fig : `matplotlib.figure.Figure`, optional
-            Existing figure to draw on; created if ``None``.
-        axs : `dict[str, matplotlib.axes.Axes]`, optional
-            Axes dictionary for the mosaic; created if ``None``.
-        plo : `float`, optional
-            Lower percentile for intensity scaling.
-        phi : `float`, optional
-            Upper percentile for intensity scaling.
-        cutoutSize : `int`, optional
-            Square cutout size around star center; -1 uses full frame.
-        isAnimated : `bool`, optional
-            If True, skip static overlays intended only for static displays.
-        saveAs : `str`, optional
-            If provided, path and filename to which the figure is saved.
-
-        Returns
-        -------
-        artists : `list[matplotlib.artist.Artist]`
-            Artists added for this mosaic frame.
+        Internal: plot a mosaic of guider stamps for a given stamp index.
+        Wraps the plotting logic for static and animated frames.
         """
         nStamps = len(self.guiderData)
         view = self.guiderData.view
@@ -353,7 +331,7 @@ class GuiderPlotter:
                 cutoutSize=cutoutSize,
                 plo=plo,
                 phi=phi,
-                annotate=True,
+                annotate=False,
             )
             # Static overlays (when not animating)
             if not isAnimated:
@@ -388,6 +366,55 @@ class GuiderPlotter:
 
         return artists
 
+    def starMosaic(
+        self,
+        stampNum: int = 2,
+        plo: float = 90.0,
+        phi: float = 99.0,
+        cutoutSize: int = 30,
+        saveAs: str | None = None,
+        figsize: tuple[float, float] = (9, 9),
+    ) -> plt.figure:
+        """
+        Plot a mosaic of guider stamps (a single stamp or a stacked image).
+
+        Parameters
+        ----------
+        stampNum : `int`, optional
+            Stamp index; values < 0 select the stacked (coadd) image.
+        fig : `matplotlib.figure.Figure`, optional
+            Existing figure to draw on; created if ``None``.
+        axs : `dict[str, matplotlib.axes.Axes]`, optional
+            Axes dictionary for the mosaic; created if ``None``.
+        plo : `float`, optional
+            Lower percentile for intensity scaling.
+        phi : `float`, optional
+            Upper percentile for intensity scaling.
+        cutoutSize : `int`, optional
+            Square cutout size around star center; -1 uses full frame.
+        isAnimated : `bool`, optional
+            If True, skip static overlays intended only for static displays.
+        saveAs : `str`, optional
+            If provided, path and filename to which the figure is saved.
+
+        Returns
+        -------
+        fig : `matplotlib.figure.Figure`
+            The resulting figure.
+        """
+        fig, axs = self.setupFigure(figsize=figsize)
+        self._starMosaic(
+            stampNum=stampNum,
+            fig=fig,
+            axs=axs,
+            plo=plo,
+            phi=phi,
+            cutoutSize=cutoutSize,
+            isAnimated=False,
+            saveAs=saveAs,
+        )
+        return fig
+
     def _makeAnimation(
         self,
         saveAs: str,
@@ -414,7 +441,7 @@ class GuiderPlotter:
         total = len(self.guiderData)
 
         # initial (stacked) frame
-        artists0 = self.starMosaic(
+        artists0 = self._starMosaic(
             stampNum=-1,
             fig=fig,
             axs=axs,
@@ -428,7 +455,7 @@ class GuiderPlotter:
 
         # sequential stamps
         for i in range(1, total):
-            artists = self.starMosaic(
+            artists = self._starMosaic(
                 stampNum=i,
                 fig=fig,
                 axs=axs,
@@ -593,8 +620,8 @@ class GuiderDataPlotter:
         axs: plt.Axes,
         detName: str,
         stampNum: int = -1,
-        plo: float = 50.0,
-        phi: float = 99.0,
+        plo: float = 90.0,
+        phi: float = 99.5,
         removeTicks: bool = False,
     ) -> plt.AxesImage:
         """
@@ -632,8 +659,8 @@ class GuiderDataPlotter:
         stampNum: int = 0,
         fig: plt.Figure | None = None,
         axs: dict[str, plt.Axes] | None = None,
-        plo: float = 50,
-        phi: float = 99,
+        plo: float = 90,
+        phi: float = 99.5,
         isAnimated: bool = False,
     ) -> list[Artist]:
         """
@@ -691,7 +718,7 @@ class GuiderDataPlotter:
         self,
         fig: plt.Figure | None = None,
         axs: dict[str, plt.Axes] | None = None,
-        plo: float = 50,
+        plo: float = 90,
         phi: float = 99,
     ) -> list[Artist]:
         """
@@ -721,7 +748,7 @@ class GuiderDataPlotter:
         saveAs: str,
         fps: int = 5,
         dpi: int = 80,
-        plo: float = 50,
+        plo: float = 90,
         phi: float = 99,
         figsize: tuple[float, float] = (9, 9),
         hold_frames: int = 2,
@@ -756,10 +783,34 @@ class GuiderDataPlotter:
         saveAs: str,
         fps: int = 5,
         dpi: int = 80,
-        plo: float = 50,
+        plo: float = 90,
         phi: float = 99,
         figsize: tuple[float, float] = (9, 9),
     ) -> animation.ArtistAnimation:
+        """
+        Create an animated GIF of the guider mosaic across sequential stamps.
+
+        Parameters
+        ----------
+        saveAs : `str`
+            Output filepath for the GIF.
+        fps : `int`, optional
+            Frames per second.
+        dpi : `int`, optional
+            Output resolution in dots per inch.
+        plo : `float`, optional
+            Lower percentile for image scaling.
+        phi : `float`, optional
+            Upper percentile for image scaling.
+        figsize : `tuple[float, float]`, optional
+            Figure size in inches.
+
+        Returns
+        -------
+        ani : `matplotlib.animation.ArtistAnimation`
+            The created animation object.
+        """
+
         if not saveAs.lower().endswith(".gif"):
             raise ValueError(f"Output filename {saveAs!r} does not end with .gif")
         return self._makeAnimation(
@@ -771,10 +822,33 @@ class GuiderDataPlotter:
         saveAs: str,
         fps: int = 5,
         dpi: int = 80,
-        plo: float = 50,
+        plo: float = 90,
         phi: float = 99,
         figsize: tuple[float, float] = (9, 9),
     ) -> animation.ArtistAnimation:
+        """
+        Create a Mp4 video of the guider mosaic across sequential stamps.
+
+        Parameters
+        ----------
+        saveAs : `str`
+            Output filepath for the mp4 file.
+        fps : `int`, optional
+            Frames per second.
+        dpi : `int`, optional
+            Output resolution in dots per inch.
+        plo : `float`, optional
+            Lower percentile for image scaling.
+        phi : `float`, optional
+            Upper percentile for image scaling.
+        figsize : `tuple[float, float]`, optional
+            Figure size in inches.
+
+        Returns
+        -------
+        ani : `matplotlib.animation.ArtistAnimation`
+            The created animation object.
+        """
         if not saveAs.lower().endswith(".mp4"):
             raise ValueError(f"Output filename {saveAs!r} does not end with .mp4")
         return self._makeAnimation(saveAs, fps=fps, dpi=dpi, plo=plo, phi=phi, figsize=figsize, writer=None)
@@ -1025,7 +1099,7 @@ def labelDetector(
     name: str,
     *,
     corner: str = "tl",
-    color: str = "grey",
+    color: str = LIGHT_BLUE,
     fontsize: int = 9,
     weight: str = "bold",
     pad: tuple[float, float] = (0.025, 0.025),

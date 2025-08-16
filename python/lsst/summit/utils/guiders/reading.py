@@ -32,6 +32,7 @@ __all__ = [
 from dataclasses import dataclass
 from functools import cached_property
 
+import matplotlib.pyplot as plt
 import numpy as np
 from astropy.time import Time
 
@@ -75,6 +76,10 @@ class GuiderData:
 
     Parameters
     ----------
+    seqNum : `int`
+        Sequence number.
+    dayObs : `int`
+        Day of observation (YYYYMMDD).
     guiderNameMap : `dict[str, int]`
         Detector name to detector number map.
     rawStampsMap : `dict[str, Stamps]`
@@ -83,7 +88,7 @@ class GuiderData:
         Detector name to SkyWcs map.
     camRotAngle : `float`
         Camera rotation angle in degrees.
-    subtractMedian : `bool`, optional
+    isMedianSubtracted : `bool`, optional
         If True, subtract median row (bias) per stamp upon array extraction.
     view : `str`, optional
         Output view: 'dvcs', 'ccd', or 'roi'.
@@ -122,11 +127,13 @@ class GuiderData:
     guiderData[3]                # stamp from detNameMax
     """
 
+    seqNum: int
+    dayObs: int
     guiderNameMap: dict[str, int]
     rawStampsMap: dict[str, Stamps]
     wcsMap: dict[str, "SkyWcs"]
     camRotAngle: float
-    subtractMedian: bool = True
+    isMedianSubtracted: bool = True
     view: str = "dvcs"  # view type, either 'dvcs' or 'ccd' or 'roi'
 
     def __repr__(self) -> str:
@@ -157,6 +164,18 @@ class GuiderData:
             detector.
         """
         return len(self.rawStampsMap[self.detNameMax])
+
+    @cached_property
+    def expid(self) -> int:
+        """
+        Exposure identifier.
+
+        Returns
+        -------
+        expid : `int`
+            The exposure id.
+        """
+        return self.dayObs * 100000 + self.seqNum
 
     @cached_property
     def guiderNames(self) -> list[str]:
@@ -224,13 +243,7 @@ class GuiderData:
         info["n_stamps"] = len(self)
         info["freq"] = self.guiderFrequency
         # Ensure DAYOBS and SEQNUM are ints before math, keep ≤79 chars
-        dayobs = int(md.get("DAYOBS", 0))
-        seqnum = int(md.get("SEQNUM", 0))
-        if dayobs == 0 or seqnum == 0:
-            raise ValueError("Missing DAYOBS or SEQNUM in metadata.")
-        info["dayobs"] = int(dayobs)
-        info["seqnum"] = int(seqnum)
-        info["expid"] = dayobs * 100000 + seqnum
+        info["expid"] = self.expid
         info["filter"] = md.get("FILTBAND", "Unknown")
         info["cam_rot_angle"] = self.camRotAngle
         info["start_time"] = md.get("GDSSTART", None)
@@ -244,48 +257,6 @@ class GuiderData:
         info["el_end"] = md.get("ELEND", np.nan)
         info["seeing"] = md.get("SEEING", np.nan)
         return info
-
-    @cached_property
-    def expid(self) -> int:
-        """
-        Exposure identifier.
-
-        Returns
-        -------
-        expid : `int`
-            The exposure id.
-        """
-        if self.header["expid"] is None:
-            raise ValueError("Missing expid in header.")
-        return int(self.header["expid"])
-
-    @cached_property
-    def seqNum(self) -> int:
-        """
-        Sequence number.
-
-        Returns
-        -------
-        seqNum : `int`
-            The sequence number.
-        """
-        if self.header["seqnum"] is None:
-            raise ValueError("Missing SEQNUM in header.")
-        return int(self.header["seqnum"])
-
-    @cached_property
-    def dayObs(self) -> int:
-        """
-        Day of observation.
-
-        Returns
-        -------
-        dayObs : `int`
-            The day of observation (YYYYMMDD).
-        """
-        if self.header["dayobs"] is None:
-            raise ValueError("Missing DAYOBS in header.")
-        return int(self.header["dayobs"])
 
     def printHeaderInfo(self) -> None:
         """Print a concise summary of key header fields."""
@@ -428,7 +399,7 @@ class GuiderData:
         Get the median-stacked stamp across time for the specified detector.
 
         The stack is computed across the time axis after optional median-row
-        bias removal (controlled by ``self.subtractMedian``).
+        bias removal (controlled by ``self.isMedianSubtracted``).
 
         Parameters
         ----------
@@ -606,7 +577,7 @@ class GuiderData:
             2D image array (bias-corrected if configured).
         """
         arr = stamp.stamp_im.image.array
-        if self.subtractMedian:
+        if self.isMedianSubtracted:
             axis = self.getRowAxis(detName)
             arr = arr - np.nanmedian(arr, axis=axis)
         return arr
@@ -616,7 +587,7 @@ class GuiderData:
     def plotter(self):
         return GuiderDataPlotter(self)
 
-    def plotMosaic(self, stampNum: int = -1, plo: float = 50, phi: float = 99):
+    def plotMosaic(self, stampNum: int = -1, plo: float = 50, phi: float = 99) -> plt.Figure:
         """
         Plot mosaic of guider stamps.
 
@@ -628,10 +599,19 @@ class GuiderData:
             Lower percentile stretch.
         phi : `float`, optional
             Upper percentile stretch.
-        """
-        self.plotter.plotStampArray(stampNum=stampNum, plo=plo, phi=phi)
 
-    def plotStamp(self, detName: str, stampNum: int, plo: float = 50, phi: float = 99, figsize=(10, 8)):
+        Returns
+        -------
+        fig : `plt.Figure`
+            The resulting figure.
+        """
+        fig, axs = self.plotter.setupFigure(figsize=(9.5, 9.5))
+        self.plotter.plotStampArray(stampNum=stampNum, plo=plo, phi=phi, fig=fig, axs=axs)
+        return fig
+
+    def plotStamp(
+        self, detName: str, stampNum: int, plo: float = 90, phi: float = 99.5, figsize=(10, 8)
+    ) -> plt.Figure:
         """
         Plot a single guider stamp.
 
@@ -647,12 +627,18 @@ class GuiderData:
             Upper percentile stretch.
         figsize : `tuple`, optional
             Figure size.
+
+        Returns
+        -------
+        fig : `plt.Figure`
+            The resulting figure.
         """
-        _, axs = make_subplot(nrows=1, ncols=1, figsize=figsize)
-        _ = self.plotter.plotStampCcd(axs, detName, stampNum=stampNum, plo=plo, phi=phi, removeTicks=True)
+        fig, axs = make_subplot(nrows=1, ncols=1, figsize=figsize)
+        _ = self.plotter.plotStampCcd(axs, detName, stampNum=stampNum, plo=plo, phi=phi, removeTicks=False)
         axs.set_xlabel("X (pixels)", fontsize=11)
         axs.set_ylabel("Y (pixels)", fontsize=11)
         axs.set_title(f"{self.expid}")
+        return fig
 
     def makeGif(self, saveAs: str, fps: int = 5, plo: float = 50.0, phi: float = 99.0, figsize=(9, 9)):
         """
@@ -725,7 +711,7 @@ class GuiderReader:
         self.nGuiders = len(self.guiderNameMap)
 
     def get(
-        self, dayObs: int, seqNum: int, subtractMedian: bool = True, scienceDetNum: int = 94
+        self, dayObs: int, seqNum: int, isMedianSubtracted: bool = True, scienceDetNum: int = 94
     ) -> GuiderData:
         """
         Retrieve guider data for a given dayObs / seqNum.
@@ -736,7 +722,7 @@ class GuiderReader:
             Day of observation in YYYYMMDD format.
         seqNum : `int`
             Sequence number.
-        subtractMedian : `bool`, optional
+        isMedianSubtracted : `bool`, optional
             If True, subtract median row bias from each stamp upon access.
         scienceDetNum : `int`, optional
             Science detector number for WCS reference.
@@ -775,12 +761,14 @@ class GuiderReader:
 
         # 4. Pack everything into a GuiderData object
         guiderData = GuiderData(
+            seqNum=seqNum,
+            dayObs=dayObs,
             view=self.view,
             rawStampsMap=rawStampsDict,
             guiderNameMap=self.guiderNameMap,
             wcsMap=wcsMapDict,
             camRotAngle=camRotAngle,
-            subtractMedian=subtractMedian,
+            isMedianSubtracted=isMedianSubtracted,
         )
         return guiderData
 
@@ -840,7 +828,7 @@ class GuiderReader:
             self._guiderNameMapSwapped = True
 
 
-def getVisitInfo(butler: Butler, dayObs: int, seqNum: int, scienceDetNum: int = 94) -> VisitInfo:
+def getVisitInfo(butler: Butler, dayObs: int, seqNum: int, scienceDetNum: int) -> VisitInfo:
     """
     Retrieve VisitInfo for a given dayObs / seqNum.
 
@@ -852,7 +840,7 @@ def getVisitInfo(butler: Butler, dayObs: int, seqNum: int, scienceDetNum: int = 
         Observation day (YYYYMMDD).
     seqNum : `int`
         Sequence number.
-    scienceDetNum : `int`, optional
+    scienceDetNum : `int`
         Science detector number.
 
     Returns
@@ -871,7 +859,7 @@ def getVisitInfo(butler: Butler, dayObs: int, seqNum: int, scienceDetNum: int = 
 
 
 # Helper functions for stamp conversion
-def _makeRoiTransforms(metadata: dict, detector: Detector, camera: Camera, view: str) -> tuple[tuple, str]:
+def _makeRoiTransforms(metadata: dict, detector: Detector, camera: Camera) -> tuple[tuple, str]:
     """
     Construct ROI transforms and derive amplifier name.
 
@@ -883,8 +871,6 @@ def _makeRoiTransforms(metadata: dict, detector: Detector, camera: Camera, view:
         The detector.
     camera : `Camera`
         The camera object.
-    view : `str`
-        Requested output view ('dvcs', 'ccd', or 'roi').
 
     Returns
     -------
@@ -1014,7 +1000,7 @@ def convertRawStampsToView(
     missingIndices = np.where(timestamps.mask)[0].tolist()
 
     # Pre‑compute transforms once
-    transforms, ampName = _makeRoiTransforms(metadata, detector, camera, view)
+    transforms, ampName = _makeRoiTransforms(metadata, detector, camera)
 
     stampsDict: dict[int, Stamp] = {}
     mIdx = 0  # index into masked images list
