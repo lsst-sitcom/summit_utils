@@ -1438,6 +1438,7 @@ class RobustFitResult:
     interceptPValue: float
     interceptStdErr: float
     interceptTValue: float
+    outlierMask: np.ndarray
 
 
 class RobustFitter:
@@ -1583,6 +1584,7 @@ class RobustFitter:
             interceptPValue=float(ols.pvalues[0]) if np.isfinite(ols.pvalues[0]) else np.nan,
             interceptStdErr=float(ols.bse[0]) if np.isfinite(ols.bse[0]) else np.nan,
             interceptTValue=float(ols.tvalues[0]) if np.isfinite(ols.tvalues[0]) else np.nan,
+            outlierMask=self.outlierMask,
         )
 
     def reset(self) -> None:

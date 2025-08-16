@@ -27,7 +27,7 @@ import numpy as np
 import pandas as pd
 from astropy.stats import mad_std
 
-from lsst.summit.utils.utils import RobustFitter
+from lsst.summit.utils.utils import RobustFitResult, RobustFitter
 
 __all__ = ["GuiderMetricsBuilder"]
 
@@ -98,11 +98,11 @@ class GuiderMetricsBuilder:
 
         # build metrics
         self.countsDf = computeExposureCounts(stars, expid)
-        self.altDriftData: MetricResult = computeTrendMetrics(stars, "elapsed_time", "dalt", expid)
-        self.azDriftData: MetricResult = computeTrendMetrics(stars, "elapsed_time", "daz", expid)
-        self.rotatorData: MetricResult = computeTrendMetrics(stars, "elapsed_time", "dtheta", expid)
-        self.magData: MetricResult = computeTrendMetrics(stars, "elapsed_time", "magoffset", expid)
-        self.psfData: MetricResult = computeTrendMetrics(stars, "elapsed_time", "fwhm", expid)
+        self.altDriftData: guiderDriftResult = computeTrendMetrics(stars, "elapsed_time", "dalt", expid)
+        self.azDriftData: guiderDriftResult = computeTrendMetrics(stars, "elapsed_time", "daz", expid)
+        self.rotatorData: guiderDriftResult = computeTrendMetrics(stars, "elapsed_time", "dtheta", expid)
+        self.magData: guiderDriftResult = computeTrendMetrics(stars, "elapsed_time", "magoffset", expid)
+        self.psfData: guiderDriftResult = computeTrendMetrics(stars, "elapsed_time", "fwhm", expid)
 
         # Set the built state to true
         self.isBuilt = True
@@ -126,7 +126,7 @@ class GuiderMetricsBuilder:
         if not self.isBuilt:
             raise RuntimeError("Metrics have not been built. Call buildMetrics(expid) first.")
 
-        trendsDf = mergeMetricResults(
+        trendsDf = mergeGuiderDriftResults(
             [
                 ("alt_drift", self.altDriftData),
                 ("az_drift", self.azDriftData),
@@ -210,7 +210,7 @@ def computeTrendMetrics(
     timeCol: str,
     yCol: str,
     expid: int,
-) -> MetricResult:
+) -> guiderDriftResult:
     """
     Compute robust linear trend metrics for a given measurement column versus
     time within a single exposure.
@@ -245,89 +245,128 @@ def computeTrendMetrics(
     KeyError
         If `timeCol` or `yCol` are not present in `stars`.
     """
-    if timeCol not in stars.columns or yCol not in stars.columns:
-        raise KeyError(f"Columns '{timeCol}' and/or '{yCol}' not found in stars DataFrame.")
-
     s = stars.loc[stars["expid"].eq(expid), [timeCol, yCol]].dropna()
     if s.empty or s[yCol].nunique() < 2:
-        return MetricResult(
-            slope=np.nan,
-            intercept=np.nan,
-            trend_rmse=np.nan,
-            global_std=np.nan,
-            outlier_frac=np.nan,
-            slope_significance=None,
+        empty_mask = np.zeros((0,), dtype=bool)
+        return guiderDriftResult(
+            fit=RobustFitResult(
+                slope=np.nan,
+                intercept=np.nan,
+                scatter=np.nan,
+                outlierMask=empty_mask,
+                slopePValue=np.nan,
+                slopeStdErr=np.nan,
+                slopeTValue=np.nan,
+                interceptPValue=np.nan,
+                interceptStdErr=np.nan,
+                interceptTValue=np.nan,
+            ),
+            globalStd=np.nan,
             nsize=0,
+            units="",
+            exptime=1.0,
         )
 
+    x = s[timeCol].to_numpy()
+    y = s[yCol].to_numpy()
     exptime = float(s[timeCol].max())
-    xArr = s[timeCol].to_numpy()
-    yArr = s[yCol].to_numpy()
-    stdGlobal = float(mad_std(yArr))
+    global_std = float(mad_std(y))
+
     fitter = RobustFitter()
+    fit_res = fitter.fit(x, y)
 
-    coefs = fitter.fit(xArr, yArr)
-    mask = fitter.outlierMask
-    if mask is None:
-        mask = np.zeros_like(xArr, dtype=bool)
-    inlierMask = ~mask
-    slopeT = fitter.slopeTValue
-    slope_sig = abs(float(slopeT))
-
-    return MetricResult(
-        slope=float(coefs.slope),
-        intercept=float(coefs.intercept),
-        trend_rmse=float(coefs.scatter),
-        global_std=stdGlobal,
-        outlier_frac=1.0 - (inlierMask.sum() / len(xArr)),
-        slope_significance=slope_sig,
-        nsize=int(yArr.size),
+    return guiderDriftResult(
+        fit=fit_res,
+        globalStd=global_std,
+        nsize=int(y.size),
+        units="",
         exptime=exptime,
     )
 
 
 @dataclass(slots=True)
-class MetricResult:
+class guiderDriftResult:
     """
-    Container for trend metrics of a single quantity y(t) in an exposure.
+    Metrics for guider data derived from a robust linear trend fit.
 
-    Holds the results of fitting a robust linear trend to a measurement column
-    (`yCol`) as a function of time (`timeCol`), along with descriptive
-    statistics for the distribution and fit quality.
+    This dataclass wraps a `RobustFitResult` with guider-specific
+    fields. It stores the global scatter, number of valid points,
+    and domain metadata such as units and exposure time. Properties
+    provide easy access to slope, intercept, trend RMSE, outlier
+    fraction, and slope significance.
 
     Parameters
     ----------
-    slope : `float`
-        Best-fit slope dy/dx from robust regression, in `yCol` units per unit
-        time.
-    intercept : `float`
-        Best-fit intercept (y at x = 0) from robust regression, in `yCol`
-        units.
-    trend_rmse : `float`
-        RMS of residuals from the fitted trend, in `yCol` units.
-    global_std : `float`
-        Robust global standard deviation of `yCol`, ignoring the trend.
-    outlier_frac : `float`
-        Fraction of data points flagged as outliers by the fitter.
-    slope_significance : `float`, optional
-        t-statistic for the slope significance, or `None` if not available.
+    fit : `RobustFitResult`
+        The result of the robust fit containing slope and intercept.
+    globalStd : `float`
+        Robust global standard deviation of the dependent values.
     nsize : `int`
         Number of valid points used in the fit.
-    units : `str`
-        Units of the dependent variable. Empty string if none.
-    exptime : `float`
-        Exposure time in seconds. Default is 1.0 (per-second slope).
+    units : `str`, optional
+        Units of the dependent variable. Default is empty string.
+    exptime : `float`, optional
+        Exposure time in seconds. Default is 1.0.
     """
 
-    slope: float
-    intercept: float
-    trend_rmse: float
-    global_std: float
-    outlier_frac: float
-    slope_significance: float | None = None
-    nsize: int = 0
-    exptime: float = 1.0
+    fit: RobustFitResult  # composition, not duplication
+    globalStd: float  # robust global std of y
+    nsize: int
     units: str = ""
+    exptime: float = 1.0
+
+    def __post_init__(self) -> None:
+        assert self.fit is not None, "fit must be provided"
+
+    @property
+    def slope(self) -> float:
+        return self.fit.slope
+
+    @property
+    def intercept(self) -> float:
+        return self.fit.intercept
+
+    @property
+    def trendRmse(self) -> float:
+        return self.fit.scatter
+
+    @property
+    def outlierFrac(self) -> float:
+        m = self.fit.outlierMask
+        return float(np.count_nonzero(m)) / float(m.size) if m.size else np.nan
+
+    @property
+    def slopeSignificance(self) -> float | None:
+        t = self.fit.slopeTValue
+        return abs(float(t)) if t is not None else None
+
+    def toDataFrame(self, prefix: str, index: int = 0) -> pd.DataFrame:
+        """
+        Convert the stored metrics into a single-row DataFrame.
+
+        Parameters
+        ----------
+        prefix : `str`
+            Prefix to add to each metric's column name in the output.
+        index : `int`, optional
+            Index value for the returned DataFrame row.
+
+        Returns
+        -------
+        metrics : `pandas.DataFrame`
+            Single-row DataFrame containing the numeric/statistical fields of
+            this result, prefixed with `prefix`.
+        """
+        row = {
+            f"{prefix}_slope": self.slope,
+            f"{prefix}_intercept": self.intercept,
+            f"{prefix}_trend_rmse": self.trendRmse,
+            f"{prefix}_global_std": self.globalStd,
+            f"{prefix}_outlier_frac": self.outlierFrac,
+            f"{prefix}_slope_significance": self.slopeSignificance,
+            f"{prefix}_nsize": self.nsize,
+        }
+        return pd.DataFrame([row], index=[index])
 
     def pprint(self, title: str) -> None:
         """
@@ -347,47 +386,16 @@ class MetricResult:
         print("\n".join(header))
         slope_per_exp = self.slope * exptime
         print(f"  Slope          : {slope_per_exp:.3f} {units} per exposure")
-        sig = "—" if self.slope_significance is None else f"{self.slope_significance:.1f}"
+        sig = "—" if self.slopeSignificance is None else f"{self.slopeSignificance:.1f}"
         print(f"  Slope signif.  : {sig} sigma")
         print(f"  Intercept      : {self.intercept:.3f} {units}")
-        print(f"  Trend RMSE     : {self.trend_rmse:.3f} {units}")
-        print(f"  Global std     : {self.global_std:.3f} {units}")
-        print(f"  Outlier frac   : {self.outlier_frac:.2%}")
+        print(f"  Trend RMSE     : {self.trendRmse:.3f} {units}")
+        print(f"  Global std     : {self.globalStd:.3f} {units}")
+        print(f"  Outlier frac   : {self.outlierFrac:.2%}")
         print(f"  N (points)     : {self.nsize:d}\n")
 
-    def toDataFrame(self, prefix: str, index: int = 0) -> pd.DataFrame:
-        """
-        Convert the stored metrics into a single-row DataFrame.
 
-        Parameters
-        ----------
-        prefix : `str`
-            Prefix to add to each metric's column name in the output.
-        index : `int`, optional
-            Index value for the returned DataFrame row.
-
-        Returns
-        -------
-        metrics : `pandas.DataFrame`
-            Single-row DataFrame containing the numeric/statistical fields of
-            this result, prefixed with `prefix`.
-        """
-        prefix = prefix
-        resDict = asdict(self)
-        keep = (
-            "slope",
-            "intercept",
-            "trend_rmse",
-            "global_std",
-            "outlier_frac",
-            "slope_significance",
-            "nsize",
-        )
-        row = _prefixKeys({k: resDict[k] for k in keep}, prefix)
-        return pd.DataFrame([row], index=[index])
-
-
-def mergeMetricResults(pairs: list[tuple[str, MetricResult]], index: int) -> pd.DataFrame:
+def mergeGuiderDriftResults(pairs: list[tuple[str, guiderDriftResult]], index: int) -> pd.DataFrame:
     """
     Merge multiple `MetricResult` objects into a single-row DataFrame with
     prefixed column names.
@@ -413,7 +421,7 @@ def mergeMetricResults(pairs: list[tuple[str, MetricResult]], index: int) -> pd.
         the form ``<prefix>_<metric_field>``.
     """
     row: dict[str, float | int | None] = {}
-    keep = ("slope", "intercept", "trend_rmse", "global_std", "outlier_frac", "slope_significance", "nsize")
+    keep = ("slope", "intercept", "trendRmse", "globalStd", "outlierFrac", "slopeSignificance", "nsize")
     for prefix, mr in pairs:
         d = asdict(mr)
         filtered = {k: d.get(k) for k in keep}
