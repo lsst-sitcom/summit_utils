@@ -332,7 +332,7 @@ class ImageExaminer:
 
     def getMeshGrid(
         self, data: npt.NDArray[np.float64]
-    ) -> tuple[npt.NDArray[np.float64], npt.NDArray[np.float64]]:
+    ) -> tuple[npt.NDArray[np.floating], npt.NDArray[np.floating]]:
         """Get the meshgrid for a data array.
 
         Parameters
@@ -346,9 +346,9 @@ class ImageExaminer:
             The xx, yy as calculated by np.meshgrid
         """
         xlen, ylen = data.shape
-        xx = np.arange(-1 * xlen / 2, xlen / 2, 1)
-        yy = np.arange(-1 * ylen / 2, ylen / 2, 1)
-        xx, yy = np.meshgrid(xx, yy)
+        x = np.arange(-1 * xlen / 2, xlen / 2, 1)
+        y = np.arange(-1 * ylen / 2, ylen / 2, 1)
+        xx, yy = np.meshgrid(x, y)
         return xx, yy
 
     def radialAverageAndFit(self) -> None:
