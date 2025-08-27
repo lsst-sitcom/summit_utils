@@ -20,7 +20,6 @@
 # along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
 import copy
-import logging
 from typing import Any
 
 import astropy.units as u
@@ -32,6 +31,7 @@ from astropy.coordinates import Angle
 import lsst.afw.image as afwImage
 import lsst.afw.table as afwTable
 from lsst.obs.lsst.translators.latiss import AUXTEL_LOCATION
+from lsst.utils.plotting.figures import make_figure
 
 from .. import quickSmooth
 
@@ -76,12 +76,8 @@ def plot(
         The figure to plot on. If not supplied, a new figure is created.
     """
     if fig is None:
-        log = logging.getLogger(__name__)
-        log.warning(
-            "No figure supplied, creating a new one -"
-            " if you see this in a loop you're going to have a bad time"
-        )
-        fig = plt.figure(figsize=(16, 16))
+        fig = make_figure(figsize=(16, 16))
+
     fig.clear()
     ax = fig.gca()
     ax.clear()
@@ -204,7 +200,7 @@ def plot(
     plt.tight_layout()
 
     if saveAs:
-        plt.savefig(saveAs)
+        fig.savefig(saveAs)
     plt.show()
 
     plt.gcf().clear()

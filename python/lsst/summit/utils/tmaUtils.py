@@ -41,6 +41,7 @@ from matplotlib.ticker import FuncFormatter
 from scipy.optimize import minimize
 
 from lsst.utils.iteration import ensure_iterable
+from lsst.utils.plotting.figures import make_figure
 
 from .blockUtils import BlockParser
 from .efdUtils import (
@@ -473,7 +474,7 @@ def plotEvent(
         raise TypeError("commands must be a dict of command names with values as" " astropy.time.Time values")
 
     if fig is None:
-        fig = plt.figure(figsize=(10, 8))
+        fig = make_figure(figsize=(10, 8))
         log = logging.getLogger(__name__)
         log.warning(
             "Making new matplotlib figure - if this is in a loop you're going to have a bad time."

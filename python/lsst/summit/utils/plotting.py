@@ -26,7 +26,6 @@ from typing import TYPE_CHECKING
 import astropy.visualization as vis
 import matplotlib
 import matplotlib.colors as colors
-import matplotlib.pyplot as plt
 import numpy as np
 from mpl_toolkits.axes_grid1.axes_divider import make_axes_locatable
 
@@ -36,6 +35,7 @@ import lsst.afw.image as afwImage
 import lsst.afw.table as afwTable
 import lsst.geom as geom
 from lsst.summit.utils.utils import getImageArray, getQuantiles
+from lsst.utils.plotting.figures import make_figure
 
 if TYPE_CHECKING:
     from matplotlib.figure import Figure
@@ -196,7 +196,7 @@ def plot(
     """
 
     if not figure:
-        figure = plt.figure(figsize=(10, 10))
+        figure = make_figure(figsize=(10, 10))
 
     ax = figure.add_subplot(111)
 
@@ -316,7 +316,7 @@ def plot(
         ax.set_title(title)
 
     if savePlotAs:
-        plt.savefig(savePlotAs)
+        figure.savefig(savePlotAs)
 
     return figure
 
