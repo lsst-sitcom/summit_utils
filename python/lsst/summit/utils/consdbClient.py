@@ -21,6 +21,7 @@
 
 import logging
 import os
+from collections.abc import Mapping
 from dataclasses import dataclass
 from typing import Any
 from urllib.parse import quote, urlparse
@@ -480,9 +481,9 @@ class ConsDbClient:
         instrument: str,
         table: str,
         obs_id: tuple[int, int] | int,
-        values: dict[str, Any],
+        values: Mapping[str, Any],
         *,
-        allow_update=False,
+        allow_update: bool = False,
         **kwargs,
     ) -> requests.Response:
         """Insert values into a single ConsDB fixed metadata table.
@@ -495,8 +496,9 @@ class ConsDbClient:
             Name of the table to insert into.
         obs_id : `tuple` [ `int`, `int`] or `int`
             Unique observation id or day_obs and seq_num.
-        values : `dict` [ `str`, `Any` ], optional
-            Dictionary of column/value pairs to add for the observation.
+        values : `Mapping` [ `str`, `Any` ]
+            Dictionary-like mapping of column/value pairs to add for the
+            observation.
         allow_update : `bool`, optional
             If ``True``, allow replacement of values of existing columns.
         **kwargs : `dict`
@@ -516,16 +518,14 @@ class ConsDbClient:
         requests.HTTPError
             Raised if a non-successful status is returned.
         """
-        if values:
-            values.update(kwargs)
-        else:
-            values = kwargs
-        if not values:
+        # Build a new merged dict to avoid mutating the incoming Mapping.
+        merged_values: dict[str, Any] = {**(dict(values) if values else {}), **kwargs}
+        if not merged_values:
             raise ValueError(f"No values to insert for {instrument} {table} {obs_id}")
 
         data: dict[str, Any]
         if isinstance(obs_id, tuple):
-            data = {"table": table, "values": values}
+            data = {"table": table, "values": merged_values}
             url = _urljoin(
                 self.url,
                 "insert",
@@ -536,7 +536,7 @@ class ConsDbClient:
                 quote(str(obs_id[1])),
             )
         else:
-            data = {"table": table, "obs_id": obs_id, "values": values}
+            data = {"table": table, "obs_id": obs_id, "values": merged_values}
             url = _urljoin(
                 self.url,
                 "insert",
