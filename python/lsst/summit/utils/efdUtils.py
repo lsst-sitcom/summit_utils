@@ -24,7 +24,7 @@ import asyncio
 import datetime
 import logging
 import re
-from typing import TYPE_CHECKING, Callable
+from typing import TYPE_CHECKING, Any, Callable
 
 import astropy
 import pandas as pd
@@ -430,7 +430,7 @@ def getMostRecentRowWithDataBefore(
     return lastRow
 
 
-def makeEfdClient(testing: bool | None = False) -> EfdClient:
+def makeEfdClient(testing: bool | None = False, databaseName: str | None = None) -> EfdClient:
     """Automatically create an EFD client based on the site.
 
     Parameters
@@ -442,32 +442,39 @@ def makeEfdClient(testing: bool | None = False) -> EfdClient:
         outside the USDF when the package/data changes, due to the use of a
         proxy meaning that the web requests are different depending on whether
         the EFD is being contacted from inside and outside the USDF.
+    databaseName : `str`, optional
+        Name of the database within influxDB to query. If not provided, the
+        default specified by EfdClient() is used.
 
     Returns
     -------
     efdClient : `lsst_efd_client.efd_helper.EfdClient`, optional
         The EFD client to use for the current site.
     """
+    efdKwargs: dict[str, Any] = {}
+    if databaseName is not None:
+        efdKwargs["db_name"] = databaseName
+
     if not HAS_EFD_CLIENT:
         raise RuntimeError("Could not create EFD client because importing lsst_efd_client failed.")
 
     if testing:
-        return EfdClient("usdf_efd")
+        return EfdClient("usdf_efd", **efdKwargs)
 
     site = getSite()
     if site == "UNKNOWN":
         raise RuntimeError("Could not create EFD client as the site could not be determined")
 
     if site == "summit":
-        return EfdClient("summit_efd")
+        return EfdClient("summit_efd", **efdKwargs)
     if site == "tucson":
-        return EfdClient("tucson_teststand_efd")
+        return EfdClient("tucson_teststand_efd", **efdKwargs)
     if site == "base":
-        return EfdClient("base_efd")
+        return EfdClient("base_efd", **efdKwargs)
     if site in ["staff-rsp", "rubin-devl", "usdf-k8s"]:
-        return EfdClient("usdf_efd")
+        return EfdClient("usdf_efd", **efdKwargs)
     if site == "jenkins":
-        return EfdClient("usdf_efd")
+        return EfdClient("usdf_efd", **efdKwargs)
 
     raise RuntimeError(f"Could not create EFD client as the {site=} is not recognized")
 
