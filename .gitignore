@@ -22,3 +22,9 @@ pytest_session.txt
 .pytest_cache
 .coverage
 python/*.dist-info/
+
+# Ignore Jupyter notebook checkpoints everywhere
+**/.ipynb_checkpoints/
+
+# Ignore __pycache__ directories everywhere
+**/__pycache__/

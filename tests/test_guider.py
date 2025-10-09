@@ -33,6 +33,7 @@ from lsst.summit.utils.butlerUtils import makeDefaultButler
 from lsst.summit.utils.guiders.metrics import GuiderMetricsBuilder
 from lsst.summit.utils.guiders.plotting import GuiderPlotter
 from lsst.summit.utils.guiders.reading import GuiderData, GuiderReader
+from lsst.summit.utils.guiders.seeing import CorrelationAnalysis, GuiderSeeing
 from lsst.summit.utils.guiders.tracking import GuiderStarTracker
 from lsst.summit.utils.utils import getSite
 
@@ -274,6 +275,15 @@ class GuiderTestCase(unittest.TestCase):
 
         # check this runs without error
         self.metricsBuilder.printSummary()
+
+    def testTomographicSeeing(self) -> None:
+        analysis = CorrelationAnalysis(self.stars, self.expId)
+        variance = np.nanmedian(analysis.measureVariance())
+        self.assertGreater(variance, 0, "Variance should be positive and non-zero")
+        self.assertIsInstance(variance, float)
+
+        seeing = analysis.measureTomographicSeeing()
+        self.assertIsInstance(seeing, GuiderSeeing)
 
 
 class TestMemory(lsst.utils.tests.MemoryTestCase):
