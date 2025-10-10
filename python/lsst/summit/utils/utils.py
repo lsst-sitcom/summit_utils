@@ -60,9 +60,11 @@ from lsst.obs.lsst.translators.latiss import AUXTEL_LOCATION
 from lsst.obs.lsst.translators.lsst import FILTER_DELIMITER, SIMONYI_LOCATION
 
 from .astrometry.utils import genericCameraHeaderToWcs
+from .efdUtils import offsetDayObs
 
 if TYPE_CHECKING:
     from lsst.afw.cameraGeom import Camera
+    from lsst.daf.butler import Butler
 
 __all__ = [
     "SIGMATOFWHM",
@@ -121,6 +123,96 @@ GOOGLE_CLOUD_MISSING_MSG = (
     "ImportError: Google cloud storage not found. Please install with:\n"
     "    pip install google-cloud-storage"
 )
+
+
+def summarizeDays(butler: Butler, startDay: int | None = None, lookback: int = 60) -> None:
+    """
+    Summarize exposures by day_obs and print a table of observation_type counts
+    and visit totals.
+
+    The table includes one column per observation_type seen in the query window
+    (superset across all days), plus visits and exposures columns.
+
+    Parameters
+    ----------
+    butler : `lsst.daf.butler.Butler`
+        The butler used to query dimension records.
+    startDay : `int`, optional
+        The most recent day_obs to include (YYYYMMDD). If ``None``, uses the
+        current day_obs.
+    lookback : `int`
+        Number of days to look back from startDay (inclusive).
+    """
+    if startDay is None:
+        startDay = getCurrentDayObs_int()
+
+    stopDay = offsetDayObs(startDay, -lookback)
+
+    w = f"exposure.day_obs>={stopDay} and exposure.day_obs<={startDay}"
+    expRecords = list(butler.query_dimension_records("exposure", where=w, explain=False, limit=999999))
+
+    w = f"visit.day_obs>={stopDay} and visit.day_obs<={startDay}"
+    visitRecords = list(butler.query_dimension_records("visit", where=w, explain=False, limit=999999))
+
+    # Superset of observation types present in exposures over the window
+    obsTypes: set[str] = set()
+    # day_obs -> {observation_type -> count}
+    dayTypeCounts: dict[int, dict[str, int]] = {}
+    for r in expRecords:
+        day = int(r.day_obs)
+        obsType = r.observation_type
+        obsTypes.add(obsType)
+        dayTypeCounts.setdefault(day, {})
+        dayTypeCounts[day][obsType] = dayTypeCounts[day].get(obsType, 0) + 1
+
+    # day_obs -> visit count
+    dayVisitCounts: dict[int, int] = {}
+    for r in visitRecords:
+        day = int(r.day_obs)
+        dayVisitCounts[day] = dayVisitCounts.get(day, 0) + 1
+
+    # day_obs -> total exposure count
+    dayExposureCounts: dict[int, int] = {
+        d: sum(typeCounts.values()) for d, typeCounts in dayTypeCounts.items()
+    }
+
+    # All days seen in either exposures or visits
+    days = sorted(set(dayTypeCounts.keys()) | set(dayVisitCounts.keys()))
+
+    # Requested type column order if present
+    typePriority = ["science", "acq", "engtest", "cwfs", "bias", "dark", "flat"]
+    orderedPresent = [t for t in typePriority if t in obsTypes]
+    otherTypes = sorted(t for t in obsTypes if t not in typePriority)
+    typeCols = orderedPresent + otherTypes
+
+    # Header: day_obs, visits, exposures, then ordered types
+    header = ["day_obs", "exposures", "visits"] + typeCols
+
+    def _width(colName: str, values: list[str]) -> int:
+        return max(len(colName), max((len(v) for v in values), default=0))
+
+    colValues: list[list[str]] = []
+    colValues.append([str(d) for d in days])  # day_obs column
+    colValues.append([str(dayVisitCounts.get(d, 0)) for d in days])  # visits column
+    colValues.append([str(dayExposureCounts.get(d, 0)) for d in days])  # exposures column
+    for t in typeCols:
+        colValues.append([str(dayTypeCounts.get(d, {}).get(t, 0)) for d in days])  # per-type columns
+
+    widths = [_width(h, vals) for h, vals in zip(header, colValues)]
+
+    # Print table
+    headerLine = "  ".join(h.rjust(w) for h, w in zip(header, widths))
+    print(headerLine)
+    print("-" * len(headerLine))
+    for d in days:
+        rowVals = [
+            str(d),
+            str(dayExposureCounts.get(d, 0)),
+            str(dayVisitCounts.get(d, 0)),
+            *[str(dayTypeCounts.get(d, {}).get(t, 0)) for t in typeCols],
+        ]
+        line = "  ".join(v.rjust(w) for v, w in zip(rowVals, widths))
+        print(line)
 
 
 def countPixels(maskedImage: afwImage.MaskedImage, maskPlane: str) -> int:
