@@ -125,13 +125,15 @@ GOOGLE_CLOUD_MISSING_MSG = (
 )
 
 
-def summarizeDays(butler: Butler, startDay: int | None = None, lookback: int = 60) -> None:
+def summarizeDaysData(butler: Butler, startDay: int | None = None, lookback: int = 60) -> dict:
     """
-    Summarize exposures by day_obs and print a table of observation_type counts
-    and visit totals.
+    Summarize exposures by day_obs and return observation_type counts and visit
+    totals.
 
-    The table includes one column per observation_type seen in the query window
-    (superset across all days), plus visits and exposures columns.
+    The returned dict contains one entry per summary component and can be used
+    programmatically. The table includes one column per observation_type seen
+    in the query window (superset across all days), plus visits and exposures
+    columns.
 
     Parameters
     ----------
@@ -142,6 +144,20 @@ def summarizeDays(butler: Butler, startDay: int | None = None, lookback: int = 6
         current day_obs.
     lookback : `int`
         Number of days to look back from startDay (inclusive).
+
+    Returns
+    -------
+    summary : `dict`
+        A dictionary with: - 'days' : `list` of `int`
+            Sorted list of day_obs values included.
+        - 'typeCols' : `list` of `str`
+            Ordered list of observation_type columns present across the window.
+        - 'dayTypeCounts' : `dict`
+            Mapping day_obs -> {observation_type: count}.
+        - 'dayVisitCounts' : `dict`
+            Mapping day_obs -> visit count.
+        - 'dayExposureCounts' : `dict`
+            Mapping day_obs -> total exposure count.
     """
     if startDay is None:
         startDay = getCurrentDayObs_int()
@@ -185,7 +201,42 @@ def summarizeDays(butler: Butler, startDay: int | None = None, lookback: int = 6
     otherTypes = sorted(t for t in obsTypes if t not in typePriority)
     typeCols = orderedPresent + otherTypes
 
-    # Header: day_obs, visits, exposures, then ordered types
+    return {
+        "days": days,
+        "typeCols": typeCols,
+        "dayTypeCounts": dayTypeCounts,
+        "dayVisitCounts": dayVisitCounts,
+        "dayExposureCounts": dayExposureCounts,
+    }
+
+
+def summarizeDays(butler: Butler, startDay: int | None = None, lookback: int = 60) -> None:
+    """
+    Summarize exposures by day_obs and print a table of observation_type counts
+    and visit totals.
+
+    The table includes one column per observation_type seen in the query window
+    (superset across all days), plus visits and exposures columns.
+
+    Parameters
+    ----------
+    butler : `lsst.daf.butler.Butler`
+        The butler used to query dimension records.
+    startDay : `int`, optional
+        The most recent day_obs to include (YYYYMMDD). If ``None``, uses the
+        current day_obs.
+    lookback : `int`
+        Number of days to look back from startDay (inclusive).
+    """
+    summary = summarizeDaysData(butler=butler, startDay=startDay, lookback=lookback)
+
+    days: list[int] = summary["days"]
+    typeCols: list[str] = summary["typeCols"]
+    dayTypeCounts: dict[int, dict[str, int]] = summary["dayTypeCounts"]
+    dayVisitCounts: dict[int, int] = summary["dayVisitCounts"]
+    dayExposureCounts: dict[int, int] = summary["dayExposureCounts"]
+
+    # Header: day_obs, exposures, visits, then ordered types
     header = ["day_obs", "exposures", "visits"] + typeCols
 
     def _width(colName: str, values: list[str]) -> int:
@@ -193,8 +244,8 @@ def summarizeDays(butler: Butler, startDay: int | None = None, lookback: int = 6
 
     colValues: list[list[str]] = []
     colValues.append([str(d) for d in days])  # day_obs column
-    colValues.append([str(dayVisitCounts.get(d, 0)) for d in days])  # visits column
     colValues.append([str(dayExposureCounts.get(d, 0)) for d in days])  # exposures column
+    colValues.append([str(dayVisitCounts.get(d, 0)) for d in days])  # visits column
     for t in typeCols:
         colValues.append([str(dayTypeCounts.get(d, {}).get(t, 0)) for d in days])  # per-type columns
 
