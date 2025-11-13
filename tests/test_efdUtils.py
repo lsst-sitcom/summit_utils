@@ -33,6 +33,7 @@ from utils import getVcr
 import lsst.utils.tests
 from lsst.summit.utils.efdUtils import (
     astropyToEfdTimestamp,
+    calcDayOffset,
     clipDataToEvent,
     efdTimestampToAstropy,
     getDayObsEndTime,
@@ -115,6 +116,17 @@ class EfdUtilsTestCase(lsst.utils.tests.TestCase):
 
             self.assertGreater(dayEnd, dayStart)
             self.assertEqual(dayEnd.jd, dayStart.jd + 1)
+
+    def test_calcDayOffset(self):
+        self.assertEqual(calcDayOffset(20230531, 20230601), 1)
+        self.assertEqual(calcDayOffset(20230531, 20230530), -1)
+        self.assertEqual(calcDayOffset(20230531, 20230531), 0)
+        self.assertEqual(calcDayOffset(20231231, 20240101), 1)
+        self.assertEqual(calcDayOffset(20240228, 20240301), 2)  # leap year
+        self.assertEqual(calcDayOffset(20240229, 20240301), 1)  # leap year
+        self.assertEqual(calcDayOffset(20240228, 20240302), 3)  # leap year
+
+        self.assertNotEqual(calcDayOffset(20230531, 20230601), -1)
 
     @vcr.use_cassette()
     def test_getTopics(self):
