@@ -57,6 +57,7 @@ __all__ = [
     "astropyToEfdTimestamp",
     "clipDataToEvent",
     "calcNextDay",
+    "calcDayOffset",
     "getDayObsStartTime",
     "getDayObsEndTime",
     "getDayObsForTime",
@@ -638,6 +639,28 @@ def calcPreviousDay(dayObs: int) -> int:
         The next dayObs, as an integer, e.g. 20240101
     """
     return offsetDayObs(dayObs, -1)
+
+
+def calcDayOffset(startDay: int, endDay: int) -> int:
+    """Calculate the number of days between two dayObs values.
+
+    Positive if endDay is after startDay, negative if before, zero if equal.
+
+    Parameters
+    ----------
+    startDay : `int`
+        The starting dayObs, e.g. 20231225.
+    endDay : `int`
+        The ending dayObs, e.g. 20240101.
+
+    Returns
+    -------
+    offset : `int`
+        The number of days from startDay to endDay.
+    """
+    dStart = datetime.datetime.strptime(str(startDay), "%Y%m%d")
+    dEnd = datetime.datetime.strptime(str(endDay), "%Y%m%d")
+    return (dEnd - dStart).days
 
 
 def getDayObsStartTime(dayObs: int) -> astropy.time.Time:
