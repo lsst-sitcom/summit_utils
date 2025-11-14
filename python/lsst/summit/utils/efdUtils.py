@@ -62,7 +62,6 @@ __all__ = [
     "getDayObsStartTime",
     "getDayObsEndTime",
     "getDayObsForTime",
-    "getSubTopics",  # deprecated, being removed in w_2023_50
     "getTopics",
     "getCommands",
 ]
@@ -765,37 +764,6 @@ def getDayObsForTime(time: Time) -> int:
         The dayObs, as an integer, e.g. 20231225
     """
     return newLocation.getDayObsForTime(time)
-
-
-@deprecated(
-    reason="getSubTopics() has been replaced by getTopics() and using wildcards. "
-    "Will be removed after w_2023_50.",
-    version="w_2023_40",
-    category=FutureWarning,
-)
-def getSubTopics(client: EfdClient, topic: str) -> list[str]:
-    """Get all the sub topics within a given topic.
-
-    Note that the topic need not be a complete one, for example, rather than
-    doing `getSubTopics(client, 'lsst.sal.ATMCS')` to get all the topics for
-    the AuxTel Mount Control System, you can do `getSubTopics(client,
-    'lsst.sal.AT')` to get all which relate to the AuxTel in general.
-
-    Parameters
-    ----------
-    client : `lsst_efd_client.efd_helper.EfdClient`
-        The EFD client to use.
-    topic : `str`
-        The topic to query.
-
-    Returns
-    -------
-    subTopics : `list` of `str`
-        The sub topics.
-    """
-    loop = asyncio.get_event_loop()
-    topics = loop.run_until_complete(client.get_topics())
-    return sorted([t for t in topics if t.startswith(topic)])
 
 
 def getTopics(client: EfdClient, toFind: str, caseSensitive: bool = False) -> list[str]:
