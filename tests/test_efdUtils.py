@@ -31,14 +31,14 @@ from astropy.time import Time
 from utils import getVcr
 
 import lsst.utils.tests
-from lsst.summit.utils.efdUtils import (
+from lsst.summit.utils.dateTime import (
     astropyToEfdTimestamp,
-    calcDayOffset,
-    clipDataToEvent,
     efdTimestampToAstropy,
     getDayObsEndTime,
-    getDayObsForTime,
     getDayObsStartTime,
+)
+from lsst.summit.utils.efdUtils import (
+    clipDataToEvent,
     getEfdData,
     getMostRecentRowWithDataBefore,
     getTopics,
@@ -92,41 +92,6 @@ class EfdUtilsTestCase(lsst.utils.tests.TestCase):
     @vcr.use_cassette()
     def test_makeEfdClient(self):
         self.assertIsInstance(self.client, lsst_efd_client.efd_helper.EfdClient)
-
-    def test_getDayObsAsTimes(self):
-        """This tests getDayObsStartTime and getDayObsEndTime explicitly,
-        but the days we loop over are chosen to test calcNextDay() which is
-        called by getDayObsEndTime().
-        """
-        for dayObs in (
-            self.dayObs,  # the nominal value
-            20200228,  # day before end of Feb on a leap year
-            20200229,  # end of Feb on a leap year
-            20210227,  # day before end of Feb on a non-leap year
-            20200228,  # end of Feb on a non-leap year
-            20200430,  # end of a month with 30 days
-            20200530,  # end of a month with 31 days
-            20201231,  # year rollover
-        ):
-            dayStart = getDayObsStartTime(dayObs)
-            self.assertIsInstance(dayStart, astropy.time.Time)
-
-            dayEnd = getDayObsEndTime(dayObs)
-            self.assertIsInstance(dayStart, astropy.time.Time)
-
-            self.assertGreater(dayEnd, dayStart)
-            self.assertEqual(dayEnd.jd, dayStart.jd + 1)
-
-    def test_calcDayOffset(self):
-        self.assertEqual(calcDayOffset(20230531, 20230601), 1)
-        self.assertEqual(calcDayOffset(20230531, 20230530), -1)
-        self.assertEqual(calcDayOffset(20230531, 20230531), 0)
-        self.assertEqual(calcDayOffset(20231231, 20240101), 1)
-        self.assertEqual(calcDayOffset(20240228, 20240301), 2)  # leap year
-        self.assertEqual(calcDayOffset(20240229, 20240301), 1)  # leap year
-        self.assertEqual(calcDayOffset(20240228, 20240302), 3)  # leap year
-
-        self.assertNotEqual(calcDayOffset(20230531, 20230601), -1)
 
     @vcr.use_cassette()
     def test_getTopics(self):
@@ -289,18 +254,6 @@ class EfdUtilsTestCase(lsst.utils.tests.TestCase):
         # not infinite.
         self.assertAlmostEqual(startTimeUnpadded - startTimePadded, 1, delta=0.1)
         self.assertAlmostEqual(endTimePadded - endTimeUnpadded, 2, delta=0.1)
-        return
-
-    def test_getDayObsForTime(self):
-        pydate = datetime.datetime(2023, 2, 5, 13, 30, 1)
-        time = Time(pydate)
-        dayObs = getDayObsForTime(time)
-        self.assertEqual(dayObs, 20230205)
-
-        pydate = datetime.datetime(2023, 2, 5, 11, 30, 1)
-        time = Time(pydate)
-        dayObs = getDayObsForTime(time)
-        self.assertEqual(dayObs, 20230204)
         return
 
 
