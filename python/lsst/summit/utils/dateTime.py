@@ -26,6 +26,7 @@ from typing import TYPE_CHECKING
 import astropy
 from astropy import units as u
 from astropy.time import Time, TimeDelta
+from dateutil.tz import gettz
 
 if TYPE_CHECKING:
     from lsst.daf.butler import DimensionRecord
@@ -42,6 +43,11 @@ __all__ = [
     "getDayObsStartTime",
     "getDayObsEndTime",
     "getDayObsForTime",
+    "dayObsIntToString",
+    "getCurrentDayObsDatetime",
+    "getCurrentDayObsInt",
+    "getCurrentDayObsHumanStr",
+    "getExpRecordAge",
 ]
 
 
@@ -234,3 +240,62 @@ def getDayObsForTime(time: Time) -> int:
     twelveHours = datetime.timedelta(hours=-12)
     offset = TimeDelta(twelveHours, format="datetime")
     return int((time + offset).utc.isot[:10].replace("-", ""))
+
+
+def dayObsIntToString(dayObs: int) -> str:
+    """Convert an integer dayObs to a dash-delimited string.
+
+    e.g. convert the hard to read 20210101 to 2021-01-01
+
+    Parameters
+    ----------
+    dayObs : `int`
+        The dayObs.
+
+    Returns
+    -------
+    dayObs : `str`
+        The dayObs as a string.
+    """
+    assert isinstance(dayObs, int)
+    dStr = str(dayObs)
+    assert len(dStr) == 8
+    return "-".join([dStr[0:4], dStr[4:6], dStr[6:8]])
+
+
+def getCurrentDayObsDatetime() -> datetime.date:
+    """Get the current day_obs - the observatory rolls the date over at UTC-12
+
+    Returned as datetime.date(2022, 4, 28)
+    """
+    utc = gettz("UTC")
+    nowUtc = datetime.datetime.now().astimezone(utc)
+    offset = datetime.timedelta(hours=-12)
+    dayObs = (nowUtc + offset).date()
+    return dayObs
+
+
+def getCurrentDayObsInt() -> int:
+    """Return the current dayObs as an int in the form 20220428"""
+    return int(getCurrentDayObsDatetime().strftime("%Y%m%d"))
+
+
+def getCurrentDayObsHumanStr() -> str:
+    """Return the current dayObs as a string in the form '2022-04-28'"""
+    return dayObsIntToString(getCurrentDayObsInt())
+
+
+def getExpRecordAge(expRecord: DimensionRecord) -> float:
+    """Get the time, in seconds, since the end of exposure.
+
+    Parameters
+    ----------
+    expRecord : `lsst.daf.butler.DimensionRecord`
+        The exposure record.
+
+    Returns
+    -------
+    age : `float`
+        The age of the exposure, in seconds.
+    """
+    return -1 * (expRecord.timespan.end - Time.now()).sec

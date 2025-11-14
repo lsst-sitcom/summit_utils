@@ -36,7 +36,6 @@ from astro_metadata_translator import ObservationInfo
 from astropy.coordinates import AltAz, EarthLocation, SkyCoord, get_sun
 from astropy.stats import mad_std
 from astropy.time import Time
-from dateutil.tz import gettz
 from deprecated.sphinx import deprecated
 from matplotlib.patches import Rectangle
 from scipy.ndimage import gaussian_filter
@@ -59,6 +58,7 @@ from lsst.obs.lsst import Latiss, LsstCam, LsstComCam, LsstComCamSim
 from lsst.obs.lsst.translators.latiss import AUXTEL_LOCATION
 from lsst.obs.lsst.translators.lsst import FILTER_DELIMITER, SIMONYI_LOCATION
 
+from . import dateTime as newLocation
 from .astrometry.utils import genericCameraHeaderToWcs
 
 if TYPE_CHECKING:
@@ -73,7 +73,7 @@ __all__ = [
     "countPixels",
     "quickSmooth",
     "argMax2d",
-    "dayObsIntToString",
+    "dayObsIntToString",  # deprecated
     "dayObsSeqNumToVisitId",
     "getImageStats",
     "detectObjectsInExp",
@@ -83,10 +83,10 @@ __all__ = [
     "getFocusFromHeader",
     "checkStackSetup",
     "setupLogging",
-    "getCurrentDayObs_datetime",
-    "getCurrentDayObs_int",
-    "getCurrentDayObs_humanStr",
-    "getExpRecordAge",
+    "getCurrentDayObs_datetime",  # deprecated
+    "getCurrentDayObs_int",  # deprecated
+    "getCurrentDayObs_humanStr",  # deprecated
+    "getExpRecordAge",  # deprecated
     "getSite",
     "getAltAzFromSkyPosition",
     "getExpPositionOffset",
@@ -197,6 +197,12 @@ def argMax2d(array: npt.NDArray[np.float64]) -> tuple[tuple[float, float], bool,
     return listMaxCoords[0], uniqueMaximum, listMaxCoords[1:]
 
 
+@deprecated(
+    reason="dayObsIntToString() has moved to lsst.summit.utils.dateTime. The function is unchanged, "
+    "but you should change to import from there. This function will be removed after w_2026_01.",
+    version="w_2026_01",
+    category=FutureWarning,
+)
 def dayObsIntToString(dayObs: int) -> str:
     """Convert an integer dayObs to a dash-delimited string.
 
@@ -212,10 +218,7 @@ def dayObsIntToString(dayObs: int) -> str:
     dayObs : `str`
         The dayObs as a string.
     """
-    assert isinstance(dayObs, int)
-    dStr = str(dayObs)
-    assert len(dStr) == 8
-    return "-".join([dStr[0:4], dStr[4:6], dStr[6:8]])
+    return newLocation.dayObsIntToString(dayObs)
 
 
 def dayObsSeqNumToVisitId(dayObs: int, seqNum: int) -> int:
@@ -566,28 +569,51 @@ def setupLogging(longlog: bool = False) -> None:
     CliLog.initLog(longlog=longlog)
 
 
+@deprecated(
+    reason="getCurrentDayObs_datetime() has moved to lsst.summit.utils.dateTime. The function is unchanged,"
+    " but renamed to getCurrentDayObsDatetime and you should change to import from there. This function will"
+    " be removed after w_2026_01.",
+    version="w_2026_01",
+    category=FutureWarning,
+)
 def getCurrentDayObs_datetime() -> datetime.date:
     """Get the current day_obs - the observatory rolls the date over at UTC-12
 
     Returned as datetime.date(2022, 4, 28)
     """
-    utc = gettz("UTC")
-    nowUtc = datetime.datetime.now().astimezone(utc)
-    offset = datetime.timedelta(hours=-12)
-    dayObs = (nowUtc + offset).date()
-    return dayObs
+    return newLocation.getCurrentDayObsDatetime()
 
 
+@deprecated(
+    reason="getCurrentDayObs_int() has moved to lsst.summit.utils.dateTime. The function is unchanged,"
+    " but renamed to getCurrentDayObsInt and you should change to import from there. This function will"
+    " be removed after w_2026_01.",
+    version="w_2026_01",
+    category=FutureWarning,
+)
 def getCurrentDayObs_int() -> int:
     """Return the current dayObs as an int in the form 20220428"""
-    return int(getCurrentDayObs_datetime().strftime("%Y%m%d"))
+    return newLocation.getCurrentDayObsInt()
 
 
+@deprecated(
+    reason="getCurrentDayObs_humanStr() has moved to lsst.summit.utils.dateTime. The function is unchanged,"
+    " but renamed to getCurrentDayObsHumanStr and you should change to import from there. This function will"
+    " be removed after w_2026_01.",
+    version="w_2026_01",
+    category=FutureWarning,
+)
 def getCurrentDayObs_humanStr() -> str:
     """Return the current dayObs as a string in the form '2022-04-28'"""
-    return dayObsIntToString(getCurrentDayObs_int())
+    return newLocation.getCurrentDayObsHumanStr()
 
 
+@deprecated(
+    reason="getExpRecordAge() has moved to lsst.summit.utils.dateTime. The function is unchanged, "
+    "but you should change to import from there. This function will be removed after w_2026_01.",
+    version="w_2026_01",
+    category=FutureWarning,
+)
 def getExpRecordAge(expRecord: dafButler.DimensionRecord) -> float:
     """Get the time, in seconds, since the end of exposure.
 
