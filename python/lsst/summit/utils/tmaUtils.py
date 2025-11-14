@@ -44,17 +44,8 @@ from lsst.utils.iteration import ensure_iterable
 from lsst.utils.plotting.figures import make_figure
 
 from .blockUtils import BlockParser
-from .efdUtils import (
-    COMMAND_ALIASES,
-    clipDataToEvent,
-    efdTimestampToAstropy,
-    getCommands,
-    getDayObsEndTime,
-    getDayObsForTime,
-    getDayObsStartTime,
-    getEfdData,
-    makeEfdClient,
-)
+from .dateTime import efdTimestampToAstropy, getDayObsEndTime, getDayObsForTime, getDayObsStartTime
+from .efdUtils import COMMAND_ALIASES, clipDataToEvent, getCommands, getEfdData, makeEfdClient
 from .enums import AxisMotionState, PowerState
 from .utils import dayObsIntToString, getCurrentDayObs_int
 
