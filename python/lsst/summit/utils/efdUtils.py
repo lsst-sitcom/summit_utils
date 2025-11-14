@@ -39,6 +39,7 @@ if TYPE_CHECKING:
     from lsst.daf.butler import DimensionRecord
     from pandas import DataFrame, Series, Timestamp
 
+from . import dateTime as newLocation
 from .utils import getSite
 
 HAS_EFD_CLIENT = True
@@ -480,6 +481,12 @@ def makeEfdClient(testing: bool | None = False, databaseName: str | None = None)
     raise RuntimeError(f"Could not create EFD client as the {site=} is not recognized")
 
 
+@deprecated(
+    reason="expRecordToTimespan() has moved to lsst.summit.utils.dateTime. The function is unchanged, "
+    "but you should change to import from there. This function will be removed after w_2026_01.",
+    version="w_2026_01",
+    category=FutureWarning,
+)
 def expRecordToTimespan(expRecord: DimensionRecord) -> dict:
     """Get the timespan from an exposure record.
 
@@ -497,12 +504,15 @@ def expRecordToTimespan(expRecord: DimensionRecord) -> dict:
         The timespan in a format that can be used to directly unpack into a
         efdClient.select_time_series() call.
     """
-    return {
-        "begin": expRecord.timespan.begin.utc,
-        "end": expRecord.timespan.end.utc,
-    }
+    return newLocation.expRecordToTimespan(expRecord)
 
 
+@deprecated(
+    reason="efdTimestampToAstropy() has moved to lsst.summit.utils.dateTime. The function is unchanged, "
+    "but you should change to import from there. This function will be removed after w_2026_01.",
+    version="w_2026_01",
+    category=FutureWarning,
+)
 def efdTimestampToAstropy(timestamp: float) -> Time:
     """Get an efd timestamp as an astropy.time.Time object.
 
@@ -516,9 +526,15 @@ def efdTimestampToAstropy(timestamp: float) -> Time:
     time : `astropy.time.Time`
         The timestamp as an astropy.time.Time object.
     """
-    return Time(timestamp, format="unix")
+    return newLocation.efdTimestampToAstropy(timestamp)
 
 
+@deprecated(
+    reason="astropyToEfdTimestamp() has moved to lsst.summit.utils.dateTime. The function is unchanged, "
+    "but you should change to import from there. This function will be removed after w_2026_01.",
+    version="w_2026_01",
+    category=FutureWarning,
+)
 def astropyToEfdTimestamp(time: Time) -> float:
     """Get astropy Time object as an efd timestamp
 
@@ -533,7 +549,7 @@ def astropyToEfdTimestamp(time: Time) -> float:
         The timestamp, in UTC, in unix seconds.
     """
 
-    return time.utc.unix
+    return newLocation.astropyToEfdTimestamp(time)
 
 
 def clipDataToEvent(
@@ -581,6 +597,12 @@ def clipDataToEvent(
     return clipped_df
 
 
+@deprecated(
+    reason="offsetDayObs() has moved to lsst.summit.utils.dateTime. The function is unchanged, "
+    "but you should change to import from there. This function will be removed after w_2026_01.",
+    version="w_2026_01",
+    category=FutureWarning,
+)
 def offsetDayObs(dayObs: int, nDays: int) -> int:
     """Offset a dayObs by a given number of days.
 
@@ -596,11 +618,15 @@ def offsetDayObs(dayObs: int, nDays: int) -> int:
     newDayObs : `int`
         The new dayObs, as an integer, e.g. 20231225
     """
-    d1 = datetime.datetime.strptime(str(dayObs), "%Y%m%d")
-    oneDay = datetime.timedelta(days=nDays)
-    return int((d1 + oneDay).strftime("%Y%m%d"))
+    return newLocation.offsetDayObs(dayObs, nDays)
 
 
+@deprecated(
+    reason="calcNextDay() has moved to lsst.summit.utils.dateTime. The function is unchanged, "
+    "but you should change to import from there. This function will be removed after w_2026_01.",
+    version="w_2026_01",
+    category=FutureWarning,
+)
 def calcNextDay(dayObs: int) -> int:
     """Given an integer dayObs, calculate the next integer dayObs.
 
@@ -618,9 +644,15 @@ def calcNextDay(dayObs: int) -> int:
     nextDayObs : `int`
         The next dayObs, as an integer, e.g. 20240101
     """
-    return offsetDayObs(dayObs, 1)
+    return newLocation.calcNextDay(dayObs)
 
 
+@deprecated(
+    reason="calcPreviousDay() has moved to lsst.summit.utils.dateTime. The function is unchanged, "
+    "but you should change to import from there. This function will be removed after w_2026_01.",
+    version="w_2026_01",
+    category=FutureWarning,
+)
 def calcPreviousDay(dayObs: int) -> int:
     """Given an integer dayObs, calculate the next integer dayObs.
 
@@ -638,9 +670,15 @@ def calcPreviousDay(dayObs: int) -> int:
     nextDayObs : `int`
         The next dayObs, as an integer, e.g. 20240101
     """
-    return offsetDayObs(dayObs, -1)
+    return newLocation.calcPreviousDay(dayObs)
 
 
+@deprecated(
+    reason="calcDayOffset() has moved to lsst.summit.utils.dateTime. The function is unchanged, "
+    "but you should change to import from there. This function will be removed after w_2026_01.",
+    version="w_2026_01",
+    category=FutureWarning,
+)
 def calcDayOffset(startDay: int, endDay: int) -> int:
     """Calculate the number of days between two dayObs values.
 
@@ -658,11 +696,15 @@ def calcDayOffset(startDay: int, endDay: int) -> int:
     offset : `int`
         The number of days from startDay to endDay.
     """
-    dStart = datetime.datetime.strptime(str(startDay), "%Y%m%d")
-    dEnd = datetime.datetime.strptime(str(endDay), "%Y%m%d")
-    return (dEnd - dStart).days
+    return newLocation.calcDayOffset(startDay, endDay)
 
 
+@deprecated(
+    reason="getDayObsStartTime() has moved to lsst.summit.utils.dateTime. The function is unchanged, "
+    "but you should change to import from there. This function will be removed after w_2026_01.",
+    version="w_2026_01",
+    category=FutureWarning,
+)
 def getDayObsStartTime(dayObs: int) -> astropy.time.Time:
     """Get the start of the given dayObs as an astropy.time.Time object.
 
@@ -678,10 +720,15 @@ def getDayObsStartTime(dayObs: int) -> astropy.time.Time:
     time : `astropy.time.Time`
         The start of the dayObs as an astropy.time.Time object.
     """
-    pythonDateTime = datetime.datetime.strptime(str(dayObs), "%Y%m%d")
-    return Time(pythonDateTime) + 12 * u.hour
+    return newLocation.getDayObsStartTime(dayObs)
 
 
+@deprecated(
+    reason="getDayObsEndTime() has moved to lsst.summit.utils.dateTime. The function is unchanged, "
+    "but you should change to import from there. This function will be removed after w_2026_01.",
+    version="w_2026_01",
+    category=FutureWarning,
+)
 def getDayObsEndTime(dayObs: int) -> Time:
     """Get the end of the given dayObs as an astropy.time.Time object.
 
@@ -695,9 +742,15 @@ def getDayObsEndTime(dayObs: int) -> Time:
     time : `astropy.time.Time`
         The end of the dayObs as an astropy.time.Time object.
     """
-    return getDayObsStartTime(dayObs) + 24 * u.hour
+    return newLocation.getDayObsEndTime(dayObs)
 
 
+@deprecated(
+    reason="getDayObsForTime() has moved to lsst.summit.utils.dateTime. The function is unchanged, "
+    "but you should change to import from there. This function will be removed after w_2026_01.",
+    version="w_2026_01",
+    category=FutureWarning,
+)
 def getDayObsForTime(time: Time) -> int:
     """Get the dayObs in which an astropy.time.Time object falls.
 
@@ -711,9 +764,7 @@ def getDayObsForTime(time: Time) -> int:
     dayObs : `int`
         The dayObs, as an integer, e.g. 20231225
     """
-    twelveHours = datetime.timedelta(hours=-12)
-    offset = TimeDelta(twelveHours, format="datetime")
-    return int((time + offset).utc.isot[:10].replace("-", ""))
+    return newLocation.getDayObsForTime(time)
 
 
 @deprecated(
