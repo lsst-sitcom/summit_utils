@@ -43,6 +43,7 @@ from lsst.obs.base import createInitialSkyWcsFromBoresight
 from lsst.obs.base.makeRawVisitInfoViaObsInfo import MakeRawVisitInfoViaObsInfo
 from lsst.obs.lsst import Latiss
 from lsst.obs.lsst.translators.latiss import AUXTEL_LOCATION
+from lsst.summit.utils.dateTime import getCurrentDayObsDatetime, getCurrentDayObsHumanStr, getCurrentDayObsInt
 from lsst.summit.utils.utils import getFilterSeeingCorrection  # deprecated
 from lsst.summit.utils.utils import (
     calcEclipticCoords,
@@ -51,9 +52,6 @@ from lsst.summit.utils.utils import (
     fluxesFromFootprints,
     getAirmassSeeingCorrection,
     getBandpassSeeingCorrection,
-    getCurrentDayObs_datetime,
-    getCurrentDayObs_humanStr,
-    getCurrentDayObs_int,
     getExpPositionOffset,
     getFieldNameAndTileNumber,
     getQuantiles,
@@ -221,27 +219,27 @@ class MiscUtilsTestCase(lsst.utils.tests.TestCase):
         data = quickSmooth(data, 5.0)
         self.assertEqual(data.shape, (100, 100))
 
-    def test_getCurrentDayObs_datetime(self):
+    def test_getCurrentDayObsDatetime(self):
         """Just a type check and a basic sanity check on the range.
 
         Setting days=3 as the tolerance just because of timezones and who knows
         what really.
         """
-        dt = getCurrentDayObs_datetime()
+        dt = getCurrentDayObsDatetime()
         self.assertIsInstance(dt, datetime.date)
         self.assertLess(dt, datetime.date.today() + datetime.timedelta(days=3))
         self.assertGreater(dt, datetime.date.today() - datetime.timedelta(days=3))
 
-    def test_getCurrentDayObs_int(self):
+    def test_getCurrentDayObsInt(self):
         """Just a type check and a basic sanity check on the range."""
-        dayObs = getCurrentDayObs_int()
+        dayObs = getCurrentDayObsInt()
         self.assertIsInstance(dayObs, int)
         self.assertLess(dayObs, 21000101)
         self.assertGreater(dayObs, 19700101)
 
-    def test_getCurrentDayObs_humanStr(self):
+    def test_getCurrentDayObsHumanStr(self):
         """Just a basic formatting check."""
-        dateStr = getCurrentDayObs_humanStr()
+        dateStr = getCurrentDayObsHumanStr()
         self.assertIsInstance(dateStr, str)
         self.assertEqual(len(dateStr), 10)
         self.assertRegex(dateStr, r"\d{4}-\d{2}-\d{2}")
