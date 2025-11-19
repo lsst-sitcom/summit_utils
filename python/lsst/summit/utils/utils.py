@@ -1140,7 +1140,7 @@ def getCdf(data: np.ndarray, scale: int, nBinsMax: int = 300_000) -> tuple[np.nd
     return cdf, minVal, maxVal
 
 
-def getQuantiles(data: npt.NDArray[np.float64], nColors: int) -> npt.NDArray[np.float64]:
+def getQuantiles(data: npt.NDArray[np.float64], nColors: int) -> npt.NDArray[np.floating[Any]]:
     """Get a set of boundaries that equally distribute data into
     nColors intervals. The output can be used to make a colormap of nColors
     colors.
