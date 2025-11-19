@@ -30,7 +30,7 @@ from PIL import Image
 import lsst.afw.image as afwImage
 import lsst.daf.base as dafBase
 from lsst.afw.image import ExposureInfo, VisitInfo
-from lsst.summit.utils.utils import dayObsIntToString
+from lsst.summit.utils.dateTime import dayObsIntToString
 
 __all__ = (
     "KNOWN_CAMERAS",

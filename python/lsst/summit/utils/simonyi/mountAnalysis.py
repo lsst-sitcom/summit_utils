@@ -44,8 +44,8 @@ from astropy.coordinates import AltAz, EarthLocation, SkyCoord
 from matplotlib.dates import num2date
 from matplotlib.ticker import FuncFormatter
 
+from lsst.summit.utils.dateTime import dayObsIntToString
 from lsst.summit.utils.tmaUtils import filterBadValues
-from lsst.summit.utils.utils import dayObsIntToString
 from lsst.utils.plotting.figures import make_figure
 
 from .mountData import getAzElRotHexDataForExposure

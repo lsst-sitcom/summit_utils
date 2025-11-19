@@ -44,19 +44,16 @@ from lsst.utils.iteration import ensure_iterable
 from lsst.utils.plotting.figures import make_figure
 
 from .blockUtils import BlockParser
-from .efdUtils import (
-    COMMAND_ALIASES,
-    clipDataToEvent,
+from .dateTime import (
+    dayObsIntToString,
     efdTimestampToAstropy,
-    getCommands,
+    getCurrentDayObsInt,
     getDayObsEndTime,
     getDayObsForTime,
     getDayObsStartTime,
-    getEfdData,
-    makeEfdClient,
 )
+from .efdUtils import COMMAND_ALIASES, clipDataToEvent, getCommands, getEfdData, makeEfdClient
 from .enums import AxisMotionState, PowerState
-from .utils import dayObsIntToString, getCurrentDayObs_int
 
 if TYPE_CHECKING:
     try:
@@ -1437,7 +1434,7 @@ class TMAEventMaker:
         Raises
             ValueError: if the dayObs is in the future.
         """
-        todayDayObs = getCurrentDayObs_int()
+        todayDayObs = getCurrentDayObsInt()
         if dayObs == todayDayObs:
             return True
         if dayObs > todayDayObs:

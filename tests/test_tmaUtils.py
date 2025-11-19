@@ -32,7 +32,8 @@ from astropy.time import TimeDelta
 from utils import getVcr
 
 import lsst.utils.tests
-from lsst.summit.utils.efdUtils import calcNextDay, getDayObsStartTime, makeEfdClient
+from lsst.summit.utils.dateTime import calcNextDay, getDayObsStartTime
+from lsst.summit.utils.efdUtils import makeEfdClient
 from lsst.summit.utils.enums import PowerState
 from lsst.summit.utils.tmaUtils import (
     AxisMotionState,

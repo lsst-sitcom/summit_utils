@@ -30,7 +30,8 @@ import numpy as np
 import pandas as pd
 from astropy.time import Time
 
-from .efdUtils import efdTimestampToAstropy, getEfdData, makeEfdClient
+from .dateTime import efdTimestampToAstropy
+from .efdUtils import getEfdData, makeEfdClient
 from .enums import ScriptState
 
 if TYPE_CHECKING:
