@@ -882,6 +882,7 @@ def _convertMaskedImage(
     ampName: str,
     camera: Camera,
     view: str,
+    mask: None or np.ndarray = None
 ) -> Stamp:
     """
     Convert one masked image ROI and build a Stamp.
@@ -904,6 +905,8 @@ def _convertMaskedImage(
         Camera object.
     view : `str`
         Output view ('dvcs', 'ccd', or 'roi').
+    mask: None or `ndarray`
+        Masked bad columns.
 
     Returns
     -------
@@ -912,6 +915,9 @@ def _convertMaskedImage(
     """
     ccdViewBbox, fwd, back = transforms
     rawArray = maskedImage.getImage().getArray()
+    if mask is not None:
+        median = np.nanmedian(rawArray[~mask].flatten())
+        rawArray[mask] = median
     dvcsArray = roiImageToDvcs(rawArray, metadata, detector, ampName, camera, view=view)
     outImg = MaskedImageF(dvcsArray)
     archiveElement = [ccdViewBbox, fwd, back]
@@ -996,6 +1002,10 @@ def convertRawStampsToView(
     stampsDict: dict[int, Stamp] = {}
     mIdx = 0  # index into masked images list
 
+    # get bad columns
+    img0 =  rawStamps.getMaskedImages()[mIdx].getImage().getArray()
+    mask = maskBadColumns(img0, k=6)
+
     for idx in validIndices:
         maskedImage = rawStamps.getMaskedImages()[mIdx]
         stampMeta = rawStamps[mIdx].metadata
@@ -1009,6 +1019,7 @@ def convertRawStampsToView(
             ampName,
             camera,
             view,
+            mask
         )
         mIdx += 1
 
@@ -1152,3 +1163,17 @@ def metadata_to_float(metadata: dict, key: str, default: float = np.nan) -> floa
         return default
     else:
         return float(value)
+
+
+def mad(x):
+    med = np.nanmedian(x)
+    return 1.4826*np.nanmedian(np.abs(x - med))
+
+def maskBadColumns(img, k=6):
+    # column medians and their robust scatter
+    col_med = np.nanmedian(img, axis=0)
+    s = mad(col_med)
+    center = np.nanmedian(col_med)
+    bad_cols = np.abs(col_med - center) > k*s               # works for low or high bands
+    mask = np.broadcast_to(bad_cols, img.shape)             # expand to full image
+    return mask
