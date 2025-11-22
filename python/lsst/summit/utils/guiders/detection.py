@@ -89,9 +89,9 @@ class GuiderStarTrackerConfig:
     """
 
     minSnr: float = 10.0
-    minValidStampFraction: float = 0.7
-    edgeMargin: int = 25
-    maxEllipticity: float = 0.3
+    minValidStampFraction: float = 0.5
+    edgeMargin: int = 5
+    maxEllipticity: float = 0.5
     cutOutSize: int = 50
     aperSizeArcsec: float = 3.0
     gain: float = 1.0
