@@ -1157,12 +1157,28 @@ def metadata_to_float(metadata: dict, key: str, default: float = np.nan) -> floa
         return float(value)
 
 
-def mad(x):
+def mad(x: np.ndarray) -> float:
+    """
+    Median absolute deviation metric for std
+
+    Returns
+    -------
+    value : `float`
+        Robust standard deviation
+    """
     med = np.nanmedian(x)
     return 1.4826 * np.nanmedian(np.abs(x - med))
 
 
-def maskBadColumns(img, k=6):
+def maskBadColumns(img: np.ndarray, k: int = 6) -> np.ndarray:
+    """
+    Mask bad columns based on the median values
+
+    Returns
+    -------
+    value : `ndarray`
+        Mask imaged
+    """
     # column medians and their robust scatter
     col_med = np.nanmedian(img, axis=0)
     s = mad(col_med)

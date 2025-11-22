@@ -305,7 +305,7 @@ def runSourceDetection(
     # Step 2: Detect sources
     # we assume that we have bright stars
     # filter out stamps with no stars
-    if not isBlankImage(image, fluxMin=200):
+    if not isBlankImage(image):
         footprints = detectObjectsInExp(exposure, nSigma=threshold)
     else:
         footprints = None
@@ -665,7 +665,7 @@ def getCutouts(imageArray: np.ndarray, refCenter: tuple[float, float], cutoutSiz
     return Cutout2D(imageArray, (refX, refY), size=cutoutSize, mode="partial", fill_value=np.nan)
 
 
-def isBlankImage(image, fluxMin=500):
+def isBlankImage(image: np.ndarray, fluxMin: int = 500) -> bool:
     """
     Returns True if the image has no significant source (e.g., no star).
 
