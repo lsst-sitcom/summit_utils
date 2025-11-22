@@ -73,9 +73,9 @@ class GuiderStarTrackerConfig:
     ----------
     minSnr : `float`
         Minimum signal-to-noise ratio for star detection.
-    minStampDetections : `int`
-        Minimum number of detections across all stamps for a star to be
-        considered valid.
+    minValidStampFraction : `float`
+        Minimum fraction (0–1) of stamps that must yield a valid detection per detector.
+        If provided, this is used instead of `minStampDetections`.
     edgeMargin : `int`
         Margin in pixels to avoid edge effects in the image.
     maxEllipticity : `float`
@@ -89,13 +89,12 @@ class GuiderStarTrackerConfig:
     """
 
     minSnr: float = 10.0
-    minStampDetections: int = 30
+    minValidStampFraction: float = 0.7
     edgeMargin: int = 25
     maxEllipticity: float = 0.3
     cutOutSize: int = 50
     aperSizeArcsec: float = 3.0
     gain: float = 1.0
-
 
 def trackStarAcrossStamp(
     refCenter: tuple[float, float],

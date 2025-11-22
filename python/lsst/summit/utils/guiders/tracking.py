@@ -168,7 +168,6 @@ class GuiderStarTracker:
         gd = self.guiderData
         shape = self.shape
         cfg = self.config
-        minStampDetections = cfg.minStampDetections
 
         # Select the brightest star from the reference catalog
         refCenter = _selectBrighestStar(refCatalog, guiderName)
@@ -180,6 +179,7 @@ class GuiderStarTracker:
         stars = applyQualityCuts(starStamps, shape, cfg)
 
         # Filter by minimum number of detections
+        minStampDetections = int(len(gd) * cfg.minValidStampFraction)
         mask = stars["stamp"].groupby(stars["detector"]).transform("count") >= minStampDetections
         stars = stars[mask].copy()
 
