@@ -882,7 +882,7 @@ def _convertMaskedImage(
     ampName: str,
     camera: Camera,
     view: str,
-    mask: None or np.ndarray = None
+    mask: None | np.ndarray = None,
 ) -> Stamp:
     """
     Convert one masked image ROI and build a Stamp.
@@ -905,7 +905,7 @@ def _convertMaskedImage(
         Camera object.
     view : `str`
         Output view ('dvcs', 'ccd', or 'roi').
-    mask: None or `ndarray`
+    mask: `ndarray or None`
         Masked bad columns.
 
     Returns
@@ -1003,7 +1003,7 @@ def convertRawStampsToView(
     mIdx = 0  # index into masked images list
 
     # get bad columns
-    img0 =  rawStamps.getMaskedImages()[mIdx].getImage().getArray()
+    img0 = rawStamps.getMaskedImages()[mIdx].getImage().getArray()
     mask = maskBadColumns(img0, k=6)
 
     for idx in validIndices:
@@ -1011,15 +1011,7 @@ def convertRawStampsToView(
         stampMeta = rawStamps[mIdx].metadata
         stampMeta["DAQSTAMP"] = stampMeta.get("DAQSTAMP", idx)
         stampsDict[idx] = _convertMaskedImage(
-            maskedImage,
-            stampMeta,
-            metadataDict,
-            transforms,
-            detector,
-            ampName,
-            camera,
-            view,
-            mask
+            maskedImage, stampMeta, metadataDict, transforms, detector, ampName, camera, view, mask
         )
         mIdx += 1
 
@@ -1167,13 +1159,14 @@ def metadata_to_float(metadata: dict, key: str, default: float = np.nan) -> floa
 
 def mad(x):
     med = np.nanmedian(x)
-    return 1.4826*np.nanmedian(np.abs(x - med))
+    return 1.4826 * np.nanmedian(np.abs(x - med))
+
 
 def maskBadColumns(img, k=6):
     # column medians and their robust scatter
     col_med = np.nanmedian(img, axis=0)
     s = mad(col_med)
     center = np.nanmedian(col_med)
-    bad_cols = np.abs(col_med - center) > k*s               # works for low or high bands
-    mask = np.broadcast_to(bad_cols, img.shape)             # expand to full image
+    bad_cols = np.abs(col_med - center) > k * s  # works for low or high bands
+    mask = np.broadcast_to(bad_cols, img.shape)  # expand to full image
     return mask

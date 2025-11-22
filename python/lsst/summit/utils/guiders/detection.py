@@ -74,7 +74,7 @@ class GuiderStarTrackerConfig:
     minSnr : `float`
         Minimum signal-to-noise ratio for star detection.
     minValidStampFraction : `float`
-        Minimum fraction (0–1) of stamps that must yield a valid detection per detector.
+        Minimum fraction of stamps of valid detection per detector.
         If provided, this is used instead of `minStampDetections`.
     edgeMargin : `int`
         Margin in pixels to avoid edge effects in the image.
@@ -95,6 +95,7 @@ class GuiderStarTrackerConfig:
     cutOutSize: int = 50
     aperSizeArcsec: float = 3.0
     gain: float = 1.0
+
 
 def trackStarAcrossStamp(
     refCenter: tuple[float, float],
@@ -663,6 +664,7 @@ def getCutouts(imageArray: np.ndarray, refCenter: tuple[float, float], cutoutSiz
     refX, refY = refCenter
     return Cutout2D(imageArray, (refX, refY), size=cutoutSize, mode="partial", fill_value=np.nan)
 
+
 def isBlankImage(image, fluxMin=500):
     """
     Returns True if the image has no significant source (e.g., no star).
@@ -677,7 +679,8 @@ def isBlankImage(image, fluxMin=500):
     Returns
     -------
     bool
-        True if the image is blank (no pixel deviates more than flux_min), False otherwise.
+        True if the image is blank, False otherwise.
+        (no pixel deviates more than flux_min)
     """
     med = np.nanmedian(image)
     diff = np.abs(image - med)
