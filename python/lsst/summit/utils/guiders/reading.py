@@ -1159,7 +1159,12 @@ def metadata_to_float(metadata: dict, key: str, default: float = np.nan) -> floa
 
 def mad(x: np.ndarray) -> float:
     """
-    Median absolute deviation metric for std
+    Median absolute deviation metric for std.
+
+    Parameters
+    ----------
+    x : `ndarray`
+        Input array.
 
     Returns
     -------
@@ -1172,7 +1177,14 @@ def mad(x: np.ndarray) -> float:
 
 def maskBadColumns(img: np.ndarray, k: int = 6) -> np.ndarray:
     """
-    Mask bad columns based on the median values
+    Mask bad columns based on the median values.
+
+    Parameters
+    ----------
+    img : `ndarray`
+        Input image array.
+    k : `int`, optional
+        Threshold factor for masking.
 
     Returns
     -------
