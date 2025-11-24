@@ -45,7 +45,7 @@ class GuiderTestCase(unittest.TestCase):
         try:
             if getSite() == "jenkins":
                 raise unittest.SkipTest("Skip running butler-driven tests in Jenkins.")
-            self.butler = makeDefaultButler("LSSTCam")
+            self.butler = makeDefaultButler("LSSTCam", embargo=False)
         except FileNotFoundError:
             raise unittest.SkipTest("Skipping tests that require the LSSTCam butler repo.")
         self.assertIsInstance(self.butler, Butler)

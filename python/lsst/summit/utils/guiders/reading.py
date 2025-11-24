@@ -35,6 +35,7 @@ from functools import cached_property
 import matplotlib.pyplot as plt
 import numpy as np
 from astropy.time import Time
+from numpy.typing import NDArray
 
 from lsst.afw import cameraGeom
 from lsst.afw.image import ExposureF, ImageF, MaskedImageF, VisitInfo
@@ -882,6 +883,7 @@ def _convertMaskedImage(
     ampName: str,
     camera: Camera,
     view: str,
+    mask: None | np.ndarray = None,
 ) -> Stamp:
     """
     Convert one masked image ROI and build a Stamp.
@@ -904,6 +906,8 @@ def _convertMaskedImage(
         Camera object.
     view : `str`
         Output view ('dvcs', 'ccd', or 'roi').
+    mask: `ndarray or None`
+        Masked bad columns.
 
     Returns
     -------
@@ -912,6 +916,9 @@ def _convertMaskedImage(
     """
     ccdViewBbox, fwd, back = transforms
     rawArray = maskedImage.getImage().getArray()
+    if mask is not None:
+        median = np.nanmedian(rawArray[~mask].flatten())
+        rawArray[mask] = median
     dvcsArray = roiImageToDvcs(rawArray, metadata, detector, ampName, camera, view=view)
     outImg = MaskedImageF(dvcsArray)
     archiveElement = [ccdViewBbox, fwd, back]
@@ -996,19 +1003,16 @@ def convertRawStampsToView(
     stampsDict: dict[int, Stamp] = {}
     mIdx = 0  # index into masked images list
 
+    # get bad columns
+    img0 = rawStamps.getMaskedImages()[mIdx].getImage().getArray()
+    mask = getColumnMask(img0, k=6)
+
     for idx in validIndices:
         maskedImage = rawStamps.getMaskedImages()[mIdx]
         stampMeta = rawStamps[mIdx].metadata
         stampMeta["DAQSTAMP"] = stampMeta.get("DAQSTAMP", idx)
         stampsDict[idx] = _convertMaskedImage(
-            maskedImage,
-            stampMeta,
-            metadataDict,
-            transforms,
-            detector,
-            ampName,
-            camera,
-            view,
+            maskedImage, stampMeta, metadataDict, transforms, detector, ampName, camera, view, mask
         )
         mIdx += 1
 
@@ -1152,3 +1156,50 @@ def metadata_to_float(metadata: dict, key: str, default: float = np.nan) -> floa
         return default
     else:
         return float(value)
+
+
+def mad(x: np.ndarray) -> float:
+    """
+    Median absolute deviation metric for std.
+
+    Parameters
+    ----------
+    x : `ndarray`
+        Input array.
+
+    Returns
+    -------
+    value : `float`
+        Robust standard deviation
+    """
+    med = np.nanmedian(x)
+    return 1.4826 * np.nanmedian(np.abs(x - med))
+
+
+def getColumnMask(img: NDArray[np.floating], k: int = 6) -> NDArray[np.bool_]:
+    """Return a boolean mask for bad columns based on robust median statistics.
+
+    Parameters
+    ----------
+    img : `ndarray`
+        2D image array.
+    k : `int`, optional
+        Threshold factor for MAD.
+
+    Returns
+    -------
+    mask : `ndarray`
+        Boolean mask of same shape as img, ``True`` for bad columns.
+    """
+    columnMedian = np.nanmedian(img, axis=0)
+    center = np.nanmedian(columnMedian)
+
+    # MAD of column medians
+    diffs = np.abs(columnMedian - center)
+    s = np.nanmedian(diffs)
+
+    if s == 0 or not np.isfinite(s):
+        return np.zeros(img.shape, dtype=bool)
+
+    badCols = diffs > k * s
+    return np.broadcast_to(badCols, img.shape).copy()

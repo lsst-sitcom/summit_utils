@@ -73,9 +73,9 @@ class GuiderStarTrackerConfig:
     ----------
     minSnr : `float`
         Minimum signal-to-noise ratio for star detection.
-    minStampDetections : `int`
-        Minimum number of detections across all stamps for a star to be
-        considered valid.
+    minValidStampFraction : `float`
+        Minimum fraction of stamps of valid detection per detector.
+        If provided, this is used instead of `minStampDetections`.
     edgeMargin : `int`
         Margin in pixels to avoid edge effects in the image.
     maxEllipticity : `float`
@@ -89,9 +89,9 @@ class GuiderStarTrackerConfig:
     """
 
     minSnr: float = 10.0
-    minStampDetections: int = 30
-    edgeMargin: int = 25
-    maxEllipticity: float = 0.3
+    minValidStampFraction: float = 0.5
+    edgeMargin: int = 5
+    maxEllipticity: float = 0.5
     cutOutSize: int = 50
     aperSizeArcsec: float = 3.0
     gain: float = 1.0
@@ -303,17 +303,18 @@ def runSourceDetection(
     exposure = ExposureF(MaskedImageF(ImageF(image)))
 
     # Step 2: Detect sources
-    footprints = detectObjectsInExp(exposure, nSigma=threshold)
+    # we assume that we have bright stars
+    # filter out stamps with no stars
+    if not isBlankImage(image):
+        footprints = detectObjectsInExp(exposure, nSigma=threshold)
+    else:
+        footprints = None
 
     if not footprints:
         return pd.DataFrame(columns=DEFAULT_COLUMNS)
 
     results = []
     for fp in footprints.getFootprints():
-        # only single peaked stars
-        if len(fp.getPeaks()) > 1:
-            continue
-
         # Create a cutout of the image around the footprint
         refCenter = tuple(fp.getCentroid())
         star = measureStarOnStamp(image, refCenter, cutOutSize, apertureRadius, gain).toDataFrame()
@@ -662,3 +663,25 @@ def getCutouts(imageArray: np.ndarray, refCenter: tuple[float, float], cutoutSiz
     """
     refX, refY = refCenter
     return Cutout2D(imageArray, (refX, refY), size=cutoutSize, mode="partial", fill_value=np.nan)
+
+
+def isBlankImage(image: np.ndarray, fluxMin: int = 500) -> bool:
+    """
+    Returns True if the image has no significant source (e.g., no star).
+
+    Parameters
+    ----------
+    image : 2D array
+        Image data (float or int).
+    fluxMin : float
+        Minimum deviation from the background median to be considered a source.
+
+    Returns
+    -------
+    bool
+        True if the image is blank, False otherwise.
+        (no pixel deviates more than flux_min)
+    """
+    med = np.nanmedian(image)
+    diff = np.abs(image - med)
+    return not np.any(diff > fluxMin)
