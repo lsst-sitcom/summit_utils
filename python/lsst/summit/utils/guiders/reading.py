@@ -35,6 +35,7 @@ from functools import cached_property
 import matplotlib.pyplot as plt
 import numpy as np
 from astropy.time import Time
+from numpy.typing import NDArray
 
 from lsst.afw import cameraGeom
 from lsst.afw.image import ExposureF, ImageF, MaskedImageF, VisitInfo
@@ -1004,7 +1005,7 @@ def convertRawStampsToView(
 
     # get bad columns
     img0 = rawStamps.getMaskedImages()[mIdx].getImage().getArray()
-    mask = maskBadColumns(img0, k=6)
+    mask = getColumnMask(img0, k=6)
 
     for idx in validIndices:
         maskedImage = rawStamps.getMaskedImages()[mIdx]
@@ -1175,26 +1176,30 @@ def mad(x: np.ndarray) -> float:
     return 1.4826 * np.nanmedian(np.abs(x - med))
 
 
-def maskBadColumns(img: np.ndarray, k: int = 6) -> np.ndarray:
-    """
-    Mask bad columns based on the median values.
+def getColumnMask(img: NDArray[np.floating], k: int = 6) -> NDArray[np.bool_]:
+    """Return a boolean mask for bad columns based on robust median statistics.
 
     Parameters
     ----------
     img : `ndarray`
-        Input image array.
+        2D image array.
     k : `int`, optional
-        Threshold factor for masking.
+        Threshold factor for MAD.
 
     Returns
     -------
-    value : `ndarray`
-        Mask imaged
+    mask : `ndarray`
+        Boolean mask of same shape as img, ``True`` for bad columns.
     """
-    # column medians and their robust scatter
-    col_med = np.nanmedian(img, axis=0)
-    s = mad(col_med)
-    center = np.nanmedian(col_med)
-    bad_cols = np.abs(col_med - center) > k * s  # works for low or high bands
-    mask = np.broadcast_to(bad_cols, img.shape)  # expand to full image
-    return mask
+    columnMedian = np.nanmedian(img, axis=0)
+    center = np.nanmedian(columnMedian)
+
+    # MAD of column medians
+    diffs = np.abs(columnMedian - center)
+    s = np.nanmedian(diffs)
+
+    if s == 0 or not np.isfinite(s):
+        return np.zeros(img.shape, dtype=bool)
+
+    badCols = diffs > k * s
+    return np.broadcast_to(badCols, img.shape).copy()
