@@ -142,8 +142,8 @@ def _getBeginEnd(
         forbiddenOpts = [begin, end, timespan]
         if any(x is not None for x in forbiddenOpts):
             raise ValueError("You can't specify both a dayObs and a begin/end or timespan")
-        begin = getDayObsStartTime(dayObs)
-        end = getDayObsEndTime(dayObs)
+        begin = newLocation.getDayObsStartTime(dayObs)
+        end = newLocation.getDayObsEndTime(dayObs)
         return begin, end
     # can now disregard dayObs entirely
 
@@ -388,7 +388,7 @@ def getMostRecentRowWithDataBefore(
     """
     staleAge = datetime.timedelta(warnStaleAfterNMinutes)
 
-    earliest = getDayObsStartTime(20190101)
+    earliest = newLocation.getDayObsStartTime(20190101)
 
     if timeToLookBefore < earliest:
         raise ValueError(f"Requested time {timeToLookBefore} is before any data was put in the EFD")
@@ -419,7 +419,7 @@ def getMostRecentRowWithDataBefore(
         raise ValueError(out)
 
     lastRow = df.iloc[-1]
-    commandTime = efdTimestampToAstropy(lastRow["private_efdStamp"])
+    commandTime = newLocation.efdTimestampToAstropy(lastRow["private_efdStamp"])
 
     commandAge = timeToLookBefore - commandTime
     if commandAge > staleAge:
