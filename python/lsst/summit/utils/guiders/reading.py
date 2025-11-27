@@ -756,12 +756,11 @@ class GuiderReader:
         Parameters
         ----------
         rawStampsDict : `dict[str, Stamps]`
-            Mapping from detector name to raw Stamps object.
+            ROI view of stamps that come from butler `guider_raw`.
         """
-        axisRowMap = self.getAxisRowMap()
         for detName, stamps in rawStampsDict.items():
             # Subtract median along the row axis
-            rowAxis = axisRowMap[detName]
+            rowAxis = 0
             for i in range(len(stamps)):
                 # Get the stamp image array
                 data = stamps[i].stamp_im.image.array
