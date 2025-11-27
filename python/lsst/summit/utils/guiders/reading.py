@@ -489,6 +489,22 @@ class GuiderData:
         """
         return sum(self.missingStampsMap.values())
 
+    @cached_property
+    def alt(self) -> float:
+        """Return altitude (el_start) from the guider data header."""
+        raw = self.header.get("el_start")
+        if raw is None:
+            raise KeyError("Header key 'el_start' is missing or None")
+        return float(raw)
+
+    @cached_property
+    def az(self) -> float:
+        """Return azimuth (az_start) from the guider data header."""
+        raw = self.header.get("az_start")
+        if raw is None:
+            raise KeyError("Header key 'az_start' is missing or None")
+        return float(raw)
+
     # Iterable / dict-like helpers
     def __iter__(self):
         """Iterate over detector names in guiderNames order."""
@@ -756,12 +772,11 @@ class GuiderReader:
         Parameters
         ----------
         rawStampsDict : `dict[str, Stamps]`
-            Mapping from detector name to raw Stamps object.
+            ROI view of stamps that come from butler `guider_raw`.
         """
-        axisRowMap = self.getAxisRowMap()
         for detName, stamps in rawStampsDict.items():
             # Subtract median along the row axis
-            rowAxis = axisRowMap[detName]
+            rowAxis = 0
             for i in range(len(stamps)):
                 # Get the stamp image array
                 data = stamps[i].stamp_im.image.array

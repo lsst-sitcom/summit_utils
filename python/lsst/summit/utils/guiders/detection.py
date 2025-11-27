@@ -665,7 +665,7 @@ def getCutouts(imageArray: np.ndarray, refCenter: tuple[float, float], cutoutSiz
     return Cutout2D(imageArray, (refX, refY), size=cutoutSize, mode="partial", fill_value=np.nan)
 
 
-def isBlankImage(image: np.ndarray, fluxMin: int = 500) -> bool:
+def isBlankImage(image: np.ndarray, fluxMin: int = 300) -> bool:
     """
     Returns True if the image has no significant source (e.g., no star).
 
