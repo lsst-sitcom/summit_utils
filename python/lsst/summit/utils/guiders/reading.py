@@ -489,6 +489,22 @@ class GuiderData:
         """
         return sum(self.missingStampsMap.values())
 
+    @cached_property
+    def alt(self) -> float:
+        """Return altitude (el_start) from the guider data header."""
+        raw = self.header.get("el_start")
+        if raw is None:
+            raise KeyError("Header key 'el_start' is missing or None")
+        return float(raw)
+
+    @cached_property
+    def az(self) -> float:
+        """Return azimuth (az_start) from the guider data header."""
+        raw = self.header.get("az_start")
+        if raw is None:
+            raise KeyError("Header key 'az_start' is missing or None")
+        return float(raw)
+
     # Iterable / dict-like helpers
     def __iter__(self):
         """Iterate over detector names in guiderNames order."""
