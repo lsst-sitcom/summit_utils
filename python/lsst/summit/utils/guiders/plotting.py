@@ -515,10 +515,6 @@ class GuiderPlotter:
         # build canvas
         fig, axs = self.setupFigure(figsize=figsize)
 
-        if self.starsDf.empty:
-            self.log.warning("stars_df is empty. No data to plot.")
-            return animation.ArtistAnimation(fig, [], interval=1000 / fps, blit=True, repeat_delay=1000)
-
         # number of frames
         total = len(self.guiderData)
 
