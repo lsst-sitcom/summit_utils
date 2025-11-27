@@ -248,6 +248,10 @@ class GuiderPlotter:
         # from here, tell mypy it’s a dict[str, Any]
         cfg = cast(dict[str, Any], cfg)
 
+        # get alt/az
+        alt = self.guiderData.alt
+        az = self.guiderData.az
+
         n = len(cfg["col"])
         fig = make_figure(figsize=(8 * n, 6))
         fig.subplots_adjust(hspace=0.0, wspace=0.0)
@@ -269,8 +273,8 @@ class GuiderPlotter:
 
         def _zero(ax, c):
             label = {
-                "daz": "Az",
-                "dalt": "Alt",
+                "daz": f"Az: {az:0.5f} deg",
+                "dalt": f"Alt: {alt:0.5f} deg",
                 "dx": "CCD X",
                 "dy": "CCD Y",
                 "e1_altaz": "e1",
@@ -323,7 +327,8 @@ class GuiderPlotter:
             ax.set_ylim(*ylims)
             ax.legend(fontsize=10, ncol=4, loc="lower left")
 
-        fig.suptitle(cfg["title"] or "", fontsize=14, fontweight="bold")
+        title = cfg["title"] + f"\n Expid: {self.expId}"
+        fig.suptitle(title, fontsize=14, fontweight="bold")
         if saveAs:
             fig.savefig(saveAs, dpi=120)
         return fig
