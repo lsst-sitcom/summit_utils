@@ -427,7 +427,7 @@ class CorrelationAnalysis:
         """
         # TODO: add ROI position dependence
         return {
-            "low": ((0.458, 0.332), (0.21, 0), (0, 0)),
+            "low": ((0, 0.51), (0.49, 0), (0, 0)),
             "high": ((0, 0), (0, 0), (0.872, 0.128)),
         }
 
@@ -480,11 +480,16 @@ class CorrelationAnalysis:
         )
         weightsMid = 1.0 - weightsLow - weightsHigh
 
+        def safeGuard(w: float) -> float:
+            if np.isnan(w):
+                return np.nan
+            return np.sqrt(max(0.0, float(w)))
+
         return GuiderSeeing(
             total=fwhmTot,
-            low=fwhmTot * float(np.sqrt(max(0.0, weightsLow))),
-            mid=fwhmTot * float(np.sqrt(max(0.0, weightsMid))),
-            high=fwhmTot * float(np.sqrt(max(0.0, weightsHigh))),
+            low=fwhmTot * safeGuard(weightsLow),
+            mid=fwhmTot * safeGuard(weightsMid),
+            high=fwhmTot * safeGuard(weightsHigh),
         )
 
 
