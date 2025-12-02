@@ -427,7 +427,7 @@ class CorrelationAnalysis:
         """
         # TODO: add ROI position dependence
         return {
-            "low": ((0.458, 0.332), (0.21, 0), (0, 0)),
+            "low": ((0, 0.51), (0.49, 0), (0, 0)),
             "high": ((0, 0), (0, 0), (0.872, 0.128)),
         }
 
