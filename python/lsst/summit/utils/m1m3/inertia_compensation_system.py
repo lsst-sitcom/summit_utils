@@ -286,13 +286,13 @@ class M1M3ICSAnalysis:
         data : `pd.DataFrame`
             A DataFrame containing calculated statistics for each column in the
             dataset. For each column, the statistics include minimum, maximum,
-            and peak-to-peak values.
+            mean, and peak-to-peak values.
 
         Notes
         -----
         This function computes statistics for each column in the provided
         dataset. It utilizes the `get_minmax` function to calculate minimum,
-        maximum, and peak-to-peak values for each column's data.
+        maximum, mean, and peak-to-peak values for each column's data.
         """
         cols = self.measured_forces_topics
         stats = DataFrame(data=[self.get_slew_minmax(self.df[col]) for col in cols], index=cols)
@@ -302,7 +302,8 @@ class M1M3ICSAnalysis:
     @staticmethod
     def get_slew_minmax(s: Series) -> Series:
         """
-        Calculates the min, max, and peak-to-peak values for a data series.
+        Calculates the min, max, mean, and peak-to-peak values for a data
+        series.
 
         Parameters
         ----------
@@ -316,11 +317,12 @@ class M1M3ICSAnalysis:
             halves of the input Series:
             - min: Minimum value of the Series.
             - max: Maximum value of the Series.
+            - mean: Mean value of the Series.
             - ptp: Peak-to-peak (ptp) value of the Series (abs(max - min)).
         """
         result = Series(
-            data=[s.min(), s.max(), np.ptp(s)],
-            index=["min", "max", "ptp"],
+            data=[s.min(), s.max(), s.mean(), np.ptp(s)],
+            index=["min", "max", "mean", "ptp"],
             name=s.name,
         )
         return result
