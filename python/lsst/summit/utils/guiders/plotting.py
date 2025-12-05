@@ -66,7 +66,7 @@ class StarInfo:
     starCenter: tuple[float, float]
 
     @classmethod
-    def from_stars_df(cls, starsDf: pd.DataFrame, detName: str, stampNum: int) -> "StarInfo":
+    def from_stars_df(cls, starsDf: pd.DataFrame, detName: str, stampNum: int) -> StarInfo:
         """Create StarInfo from stars DataFrame.
 
         Parameters
@@ -109,7 +109,7 @@ class StarInfo:
         return cls(hasData=True, refCenter=refCenter, starCenter=starCenter)
 
     @classmethod
-    def from_image_center(cls, shape: tuple[int, int]) -> "StarInfo":
+    def from_image_center(cls, shape: tuple[int, int]) -> StarInfo:
         """Create StarInfo centered on image.
 
         Parameters
