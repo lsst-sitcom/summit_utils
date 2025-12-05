@@ -45,6 +45,87 @@ if TYPE_CHECKING:
 __all__ = ["GuiderPlotter"]
 
 LIGHT_BLUE = "#6495ED"
+DEFAULT_CUTOUT_SIZE = 30
+
+
+@dataclass
+class StarInfo:
+    """Container for star position information in a detector panel.
+
+    Attributes
+    ----------
+    hasData : bool
+        Whether valid star measurement data exists.
+    refCenter : tuple[float, float]
+        Reference center (median xroi_ref, yroi_ref) for the fixed frame.
+    starCenter : tuple[float, float]
+        Actual star centroid (xroi, yroi) for the current stamp.
+    """
+
+    hasData: bool
+    refCenter: tuple[float, float]
+    starCenter: tuple[float, float]
+
+    @classmethod
+    def from_stars_df(cls, starsDf: pd.DataFrame, detName: str, stampNum: int) -> StarInfo:
+        """Create StarInfo from stars DataFrame.
+
+        Parameters
+        ----------
+        starsDf : pandas.DataFrame
+            Star measurements table.
+        detName : str
+            Detector name.
+        stampNum : int
+            Stamp index; negative implies stacked image.
+
+        Returns
+        -------
+        StarInfo
+            Star position information.
+
+        Raises
+        ------
+        ValueError
+            If no rows exist for the detector.
+        """
+        mask1 = starsDf["detector"] == detName
+        if not mask1.any():
+            raise ValueError(f"No rows for detector {detName!r}")
+
+        # Reference center (fixed frame)
+        refX = float(starsDf.loc[mask1, "xroi_ref"].median())
+        refY = float(starsDf.loc[mask1, "yroi_ref"].median())
+        refCenter = (refX, refY)
+
+        mask2 = starsDf["stamp"] == stampNum
+        mask = mask1 & mask2
+
+        # Fallback: no row for that stamp or stacked request
+        if (not mask.any()) or (stampNum < 0):
+            return cls(hasData=True, refCenter=refCenter, starCenter=refCenter)
+
+        row = starsDf.loc[mask, ["xroi", "yroi"]].iloc[0]
+        starCenter = (float(row["xroi"]), float(row["yroi"]))
+        return cls(hasData=True, refCenter=refCenter, starCenter=starCenter)
+
+    @classmethod
+    def from_image_center(cls, shape: tuple[int, int]) -> StarInfo:
+        """Create StarInfo centered on image.
+
+        Parameters
+        ----------
+        shape : tuple[int, int]
+            Image shape (height, width).
+
+        Returns
+        -------
+        StarInfo
+            Star position centered on image.
+        """
+        center = (shape[1] / 2.0, shape[0] / 2.0)
+        return cls(hasData=False, refCenter=center, starCenter=center)
+
 
 STRIP_PLOT_KWARGS: dict[str, dict] = {
     "centroidAltAz": {
@@ -351,10 +432,9 @@ class GuiderPlotter:
         if fig is None or axs is None:
             fig, axs = self.setupFigure(figsize=(9, 9))
 
-        if not self.withStars:
-            if cutoutSize > 0:
-                self.log.warning("No stars data available. Using full frame cutout.")
-                cutoutSize = -1
+        if not self.withStars and cutoutSize > 0:
+            self.log.warning("No stars data available. Using full frame.")
+            cutoutSize = -1
 
         nStamps = len(self.guiderData)
         view = self.guiderData.view
@@ -362,69 +442,91 @@ class GuiderPlotter:
 
         jitter: float | None = None
         artists: list[Artist] = []
-        cutoutShapeList = []
+
         for detName in self.guiderData.guiderNames:
-            if self.withStars:
-                # check if detector has data
-                withStars: bool = bool(np.any(self.starsDf["detector"] == detName))
-            else:
-                withStars = False
+            ax = axs[detName]
 
-            if withStars:
-                refCenter, centroidOffset = getReferenceCenter(self.starsDf, detName, stampNum)
-            else:
-                shape = self.guiderData[detName, 0].shape
-                refCenter = (float(shape[1] // 2), float(shape[0] // 2))
-                centroidOffset = (0.0, 0.0)
+            # Get star info for this detector
+            starInfo = self._getStarInfo(detName, stampNum)
 
-            # Render the stamp panel
-            imObj, centerCutout, shape, _ = renderStampPanel(
-                axs[detName],
+            # Render the stamp
+            imObj = renderStampPanel(
+                ax,
                 self.guiderData,
                 detName,
                 stampNum,
-                center=refCenter,
+                viewCenter=starInfo.refCenter,
                 cutoutSize=cutoutSize,
                 plo=plo,
                 phi=phi,
-                annotate=False,
             )
-            # Static overlays (when not animating)
-            if not isAnimated:
-                addStaticOverlays(axs[detName], detName, centerCutout, cutoutSize, camRotAngle=camAngle)
-
             artists.append(imObj)
 
-            if withStars:
-                starCross = plotStarCentroid(
-                    axs[detName],
-                    centerCutout,
-                    deltaXY=centroidOffset,
-                    markerSize=8 if cutoutSize > 0 else 0,
-                )
-                jitter = getStdCentroid(self.starsDf, self.expId)
+            # Static overlays (reference frame elements)
+            if not isAnimated:
+                addReferenceOverlays(ax, detName, starInfo.refCenter, cutoutSize)
 
+            # Animated overlays (star position elements)
+            if starInfo.hasData and cutoutSize > 0:
+                # Rotated crosshair follows the star
+                crosshairArtists = plotCrosshairRotated(
+                    starInfo.starCenter,
+                    90 + camAngle,
+                    ax,
+                    color="grey",
+                    size=cutoutSize,
+                )
+                artists.extend(crosshairArtists)
+
+                # Star centroid marker
+                starCross = plotStarCentroid(
+                    ax,
+                    starInfo.starCenter,
+                    markerSize=8,
+                )
                 artists.extend(starCross)
 
-            cutoutShapeList.append(shape)
+                jitter = getStdCentroid(self.starsDf, self.expId)
 
+        # Center panel annotation
         stampInfo = annotateStampInfo(
             axs["center"], expid=self.expId, stampNum=stampNum, nStamps=nStamps, view=view, jitter=jitter
         )
         artists.append(stampInfo)
 
-        cutoutSize = np.max(cutoutShapeList) if cutoutShapeList else 30
-
+        # Arrow panel
         if not isAnimated:
-            drawArrows(axs["arrow"], cutoutSize, 90.0 + self.camRotAngle)
+            drawArrows(
+                axs["arrow"],
+                cutoutSize if cutoutSize > 0 else DEFAULT_CUTOUT_SIZE,
+                90.0 + self.camRotAngle,
+            )
 
-        for ax in axs.values():
-            clearAxisTicks(ax, isSpine=cutoutSize < 0)
+        # Clear ticks - detector panels keep spines for full frame,
+        # center/arrow never have spines
+        for name, ax in axs.items():
+            isDetector = name not in ("center", "arrow")
+            clearAxisTicks(ax, isSpine=isDetector and cutoutSize < 0)
 
         if saveAs:
             fig.savefig(saveAs, dpi=120)
 
         return artists
+
+    def _getStarInfo(self, detName: str, stampNum: int) -> StarInfo:
+        """Get star info for a detector, falling back to image center
+        if unavailable.
+        """
+        if not self.withStars:
+            shape = self.guiderData[detName, 0].shape
+            return StarInfo.from_image_center(shape)
+
+        detMask = self.starsDf["detector"] == detName
+        if not detMask.any():
+            shape = self.guiderData[detName, 0].shape
+            return StarInfo.from_image_center(shape)
+
+        return StarInfo.from_stars_df(self.starsDf, detName, stampNum)
 
     def plotMosaic(
         self,
@@ -648,76 +750,19 @@ def drawArrows(
     ax.set_axis_off()
 
 
-def getReferenceCenter(
-    starsDf: pd.DataFrame,
-    detName: str,
-    stampNum: int,
-) -> tuple[tuple[float, float], tuple[float, float]]:
-    """
-    Determine reference (x,y) center and centroid offset for a detector/stamp.
-
-    If there is no measurement for that stamp, or stampNum < 0 (a stacked
-    image), the offset is (0, 0).
-
-    Parameters
-    ----------
-    starsDf : `pandas.DataFrame`
-        Star measurements table.
-    detName : `str`
-        Detector name.
-    stampNum : `int`
-        Stamp index; negative implies stacked image (zero offset).
-
-    Returns
-    -------
-    center_ref : `tuple[float, float]`
-        Reference center coordinates.
-    delta : `tuple[float, float]`
-        Centroid offset (dX, dY) relative to the reference center.
-    """
-    mask1 = starsDf["detector"] == detName
-    if not mask1.any():
-        raise ValueError(f"No rows for detector {detName!r}")
-
-    # Reference center (use .iloc[0] to avoid IndexError)
-    refX = float(starsDf.loc[mask1, "xroi_ref"].median())
-    refY = float(starsDf.loc[mask1, "yroi_ref"].median())
-
-    mask2 = starsDf["stamp"] == stampNum
-    mask = mask1 & mask2
-
-    # Fallback: no row for that stamp or stacked request
-    if (not mask.any()) or (stampNum < 0):
-        return (refX, refY), (0.0, 0.0)
-
-    row = starsDf.loc[mask, ["xroi", "yroi"]].iloc[0]
-    dX = float(row["xroi"]) - refX
-    dY = float(row["yroi"]) - refY
-    return (refX, refY), (dX, dY)
-
-
 def renderStampPanel(
     ax: plt.Axes,
     guiderData: GuiderData,
     detName: str,
     stampNum: int,
     *,
-    center: tuple[float, float] | None = None,
+    viewCenter: tuple[float, float],
     cutoutSize: int = -1,
     plo: float = 50.0,
     phi: float = 99.0,
-    annotate: bool = True,
-) -> tuple[plt.AxesImage, tuple[float, float], tuple[int, int], plt.Text | None]:
+) -> plt.AxesImage:
     """
-    Render a single detector stamp (or stacked image) with optional cropping
-    and annotation.
-
-    Steps:
-      1. Select stamp or coadd.
-      2. Optionally crop around center.
-      3. Apply percentile scaling.
-      4. Display with imshow.
-      5. Optionally annotate detector label.
+    Render a single detector stamp with zoom around viewCenter.
 
     Parameters
     ----------
@@ -729,69 +774,59 @@ def renderStampPanel(
         Detector name.
     stampNum : `int`
         Stamp index; negative for stacked/coadd.
-    center : `tuple[float, float]`, optional
-        Center for cropping; image center if None.
+    viewCenter : `tuple[float, float]`
+        Center for the view (xlim/ylim) and intensity scaling.
     cutoutSize : `int`, optional
-        Square cutout size; -1 for full frame.
+        Zoom size; -1 for full frame.
     plo : `float`, optional
-        Lower percentile for scaling.
+        Lower percentile for intensity scaling.
     phi : `float`, optional
-        Upper percentile for scaling.
-    annotate : `bool`, optional
-        If True, add detector label text.
+        Upper percentile for intensity scaling.
 
     Returns
     -------
     image : `matplotlib.image.AxesImage`
-        Image artist.
-    centerCutout : `tuple[float, float]`
-        Center coordinates within the (possibly cropped) image.
-    shape : `tuple[int, int]`
-        Shape of the displayed (possibly cropped) image.
-    label : `matplotlib.text.Text` or `None`
-        Detector label artist if added.
+        The image artist (for animation).
     """
-    # 1) image
+    # Get image
     img = guiderData.getStampArrayCoadd(detName) if stampNum < 0 else guiderData[detName, stampNum]
+    h, w = img.shape
 
-    # 2) center + crop
-    # Always produce concrete floats (fallback = image center)
-    mx, my = img.shape[1] // 2, img.shape[0] // 2  # x=cols, y=rows
-    if center is None:
-        cx, cy = float(mx), float(my)
-    else:
-        cx_raw, cy_raw = center
-        cx = float(cx_raw) if cx_raw is not None else float(mx)
-        cy = float(cy_raw) if cy_raw is not None else float(my)
-
+    # Crop and calculate scaling
     if cutoutSize > 0:
-        cutout, centerCutout = cropAroundCenter(img, (cx, cy), cutoutSize)
+        cx, cy = int(viewCenter[0]), int(viewCenter[1])
+        half = cutoutSize // 2
+        # Crop bounds (clamped to image)
+        y0, y1 = max(0, cy - half), min(h, cy + half)
+        x0, x1 = max(0, cx - half), min(w, cx + half)
     else:
-        cutout = img  # ndarray
-        centerCutout = (cx, cy)  # tuple[float, float]
+        y0, y1 = 0, h
+        x0, x1 = 0, w
 
-    # 3) scaling
-    vmin, vmax = np.nanpercentile(cutout, [plo, phi])
+    region = img[y0:y1, x0:x1]
+    vmin, vmax = np.nanpercentile(region, [plo, phi])
+    extent: tuple[float, float, float, float] = (float(x0), float(x1), float(y0), float(y1))
 
-    # 4) render
+    # Render only the visible region
     im = ax.imshow(
-        cutout,
+        region,
         origin="lower",
         cmap="Greys",
         vmin=vmin,
         vmax=vmax,
         interpolation="nearest",
-        extent=(0, cutout.shape[1], 0, cutout.shape[0]),
+        extent=extent,
         animated=True,
     )
-    ax.set_ylim(0, cutout.shape[0])
-    ax.set_xlim(0, cutout.shape[1])
+
+    # Set zoom limits
+    if cutoutSize > 0:
+        halfF = cutoutSize / 2.0
+        ax.set_xlim(viewCenter[0] - halfF, viewCenter[0] + halfF)
+        ax.set_ylim(viewCenter[1] - halfF, viewCenter[1] + halfF)
+
     ax.set_aspect("equal", "box")
-
-    # 5) optional label
-    label = labelDetector(ax, detName) if annotate else None
-
-    return im, centerCutout, cutout.shape, label
+    return im
 
 
 def labelDetector(
@@ -913,44 +948,36 @@ def annotateStampInfo(
     return txt
 
 
-def addStaticOverlays(
-    axsImg: plt.Axes,
+def addReferenceOverlays(
+    ax: plt.Axes,
     detName: str,
-    centerCutout: tuple[float, float],
+    refCenter: tuple[float, float],
     cutoutSize: int,
-    camRotAngle: float,
 ) -> None:
-    """
-    Add detector label, crosshairs, and guide circles to a guider panel.
+    """Add static reference overlays: detector label, crosshairs,
+    and guide circles.
+
+    These are static elements that don't change during animation.
 
     Parameters
     ----------
-    axsImg : `matplotlib.axes.Axes`
+    ax : `matplotlib.axes.Axes`
         Target axes.
     detName : `str`
         Detector name.
-    centerCutout : `tuple[float, float]`
-        Center coordinates in the displayed cutout.
+    refCenter : `tuple[float, float]`
+        Reference center coordinates (fixed frame).
     cutoutSize : `int`
         Cutout size; influences overlay scaling.
-    camRotAngle : `float`
-        Camera rotation angle (degrees).
     """
-    _ = labelDetector(axsImg, detName)
+    labelDetector(ax, detName)
     if cutoutSize > 0:
-        axsImg.axvline(centerCutout[0], color=LIGHT_BLUE, lw=1.25, linestyle="--", alpha=0.75)
-        axsImg.axhline(centerCutout[1], color=LIGHT_BLUE, lw=1.25, linestyle="--", alpha=0.75)
-        plotCrosshairRotated(
-            centerCutout,
-            90 + camRotAngle,
-            axs=axsImg,
-            color="grey",
-            size=cutoutSize,
-        )
+        ax.axvline(refCenter[0], color=LIGHT_BLUE, lw=1.25, linestyle="--", alpha=0.75)
+        ax.axhline(refCenter[1], color=LIGHT_BLUE, lw=1.25, linestyle="--", alpha=0.75)
         radii = [10, 5]
-        _ = drawGuideCircles(
-            axsImg,
-            centerCutout,
+        drawGuideCircles(
+            ax,
+            refCenter,
             radii=radii,
             colors=[LIGHT_BLUE, LIGHT_BLUE],
             labels=["2″", "1″"],
@@ -1020,10 +1047,10 @@ def drawGuideCircles(
 def plotCrosshairRotated(
     center: tuple[float, float],
     angle: float,
-    axs: plt.Axes,
+    ax: plt.Axes,
     color: str = "grey",
     size: int = 30,
-) -> None:
+) -> list[Line2D]:
     """
     Plot a rotated crosshair centered on given coordinates.
 
@@ -1033,23 +1060,26 @@ def plotCrosshairRotated(
         Center (x, y) in image coordinates.
     angle : `float`
         Rotation angle in degrees.
-    axs : `matplotlib.axes.Axes`, optional
-        Target axes or None to use current.
+    ax : `matplotlib.axes.Axes`
+        Target axes.
     color : `str`, optional
         Line color.
     size : `int`, optional
         Size scaling factor.
+
+    Returns
+    -------
+    artists : `list[matplotlib.lines.Line2D]`
+        Line artists for animation.
     """
-    # make a cross rotated by the camera rotation angle
     cross_length = 1.5 * size if size > 0 else 30
     theta = np.radians(angle)
 
-    # Cross center
     cx, cy = center
     # Horizontal line (rotated)
     dx = cross_length * np.cos(theta) / 2
     dy = cross_length * np.sin(theta) / 2
-    axs.plot(
+    (hline,) = ax.plot(
         [cx - dx, cx + dx],
         [cy - dy, cy + dy],
         color=color,
@@ -1060,7 +1090,7 @@ def plotCrosshairRotated(
     # Vertical line (rotated)
     dx_v = cross_length * np.cos(theta + np.pi / 2) / 2
     dy_v = cross_length * np.sin(theta + np.pi / 2) / 2
-    axs.plot(
+    (vline,) = ax.plot(
         [cx - dx_v, cx + dx_v],
         [cy - dy_v, cy + dy_v],
         color=color,
@@ -1068,13 +1098,13 @@ def plotCrosshairRotated(
         lw=1.0,
         alpha=0.5,
     )
+    return [hline, vline]
 
 
 def plotStarCentroid(
     ax: plt.Axes,
     centerCutout: tuple[float, float],
     *,
-    deltaXY: tuple[float, float],
     markerSize: int = 8,
     errXY: tuple[float, float] | None = None,
     color: str = "firebrick",
@@ -1088,8 +1118,6 @@ def plotStarCentroid(
         Target axes.
     centerCutout : `tuple[float, float]`
         Reference center in the cutout.
-    deltaXY : `tuple[float, float]`
-        Offset (dx, dy) from center to centroid.
     markerSize : `int`, optional
         Marker size; <=0 disables plotting.
     errXY : `tuple[float, float]`, optional
@@ -1105,9 +1133,7 @@ def plotStarCentroid(
     if markerSize <= 0:
         return []
 
-    x_c, y_c = centerCutout
-    dx, dy = deltaXY
-    x_star, y_star = x_c + dx, y_c + dy
+    x_star, y_star = centerCutout
     xerr, yerr = errXY if errXY is not None else (0.0, 0.0)
 
     (marker,) = ax.plot(x_star, y_star, "o", color=color, markersize=markerSize)
@@ -1185,5 +1211,5 @@ def cropAroundCenter(
         )
 
     # New center in cropped image
-    newCenter = (x - x0 + padLeft, y - y0 + padTop)
+    newCenter = (center[0] - x0 + padLeft, center[1] - y0 + padTop)
     return cropped, newCenter
