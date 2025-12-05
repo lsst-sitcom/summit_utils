@@ -45,6 +45,7 @@ if TYPE_CHECKING:
 __all__ = ["GuiderPlotter"]
 
 LIGHT_BLUE = "#6495ED"
+DEFAULT_CUTOUT_SIZE = 30
 
 
 @dataclass
@@ -122,7 +123,7 @@ class StarInfo:
         StarInfo
             Star position centered on image.
         """
-        center = (float(shape[1] // 2), float(shape[0] // 2))
+        center = (shape[1] / 2.0, shape[0] / 2.0)
         return cls(hasData=False, refCenter=center, starCenter=center)
 
 
@@ -495,7 +496,11 @@ class GuiderPlotter:
 
         # Arrow panel
         if not isAnimated:
-            drawArrows(axs["arrow"], cutoutSize if cutoutSize > 0 else 30, 90.0 + self.camRotAngle)
+            drawArrows(
+                axs["arrow"],
+                cutoutSize if cutoutSize > 0 else DEFAULT_CUTOUT_SIZE,
+                90.0 + self.camRotAngle,
+            )
 
         # Clear ticks - detector panels keep spines for full frame,
         # center/arrow never have spines
@@ -794,14 +799,13 @@ def renderStampPanel(
         # Crop bounds (clamped to image)
         y0, y1 = max(0, cy - half), min(h, cy + half)
         x0, x1 = max(0, cx - half), min(w, cx + half)
-        region = img[y0:y1, x0:x1]
-        vmin, vmax = np.nanpercentile(region, [plo, phi])
-        # Use cropped region with extent mapping back to full coordinates
-        extent: tuple[float, float, float, float] = (float(x0), float(x1), float(y0), float(y1))
     else:
-        region = img
-        vmin, vmax = np.nanpercentile(img, [plo, phi])
-        extent = (0.0, float(w), 0.0, float(h))
+        y0, y1 = 0, h
+        x0, x1 = 0, w
+
+    region = img[y0:y1, x0:x1]
+    vmin, vmax = np.nanpercentile(region, [plo, phi])
+    extent: tuple[float, float, float, float] = (float(x0), float(x1), float(y0), float(y1))
 
     # Render only the visible region
     im = ax.imshow(
