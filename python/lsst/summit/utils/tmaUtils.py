@@ -86,8 +86,8 @@ TRACKING_RESIDUAL_TAIL_CLIP = -0.15  # seconds
 
 MOUNT_IMAGE_WARNING_LEVEL = 0.01  # this determines the colouring of the cells in the table, yellow for this
 MOUNT_IMAGE_BAD_LEVEL = 0.05  # and red for this
-HARDPOINT_FORCE_WARNING_LEVEL = 500.0  # for colouring of the cells in the table, yellow for this
-HARDPOINT_FORCE_BAD_LEVEL = 1000.0  # and red for this
+HARDPOINT_FORCE_WARNING_LEVEL = 900.0  # for colouring of the cells in the table, yellow for this
+HARDPOINT_FORCE_BAD_LEVEL = 1100.0  # and red for this
 
 
 def getSlewsFromEventList(
