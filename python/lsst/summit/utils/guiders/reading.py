@@ -822,10 +822,10 @@ class GuiderReader:
                 # Replace NaN medians (fully masked columns) with global median
                 medianRows = np.where(np.isnan(medianRows), medianValue, medianRows)
 
-                # 1. Apply column mask FIRST - set masked pixels to NaN for median calc
+                # 1. Apply column mask FIRST - set masked pixels to NaN
                 colMask = getColumnMask(data - medianRows[np.newaxis, :], k=columnMaskK)
 
-                # Create mask array for MaskedImageF (uint32 with BAD=1 for masked cols)
+                # Create mask array for MaskedImageF (BAD=1 for masked cols)
                 nRows, nCols = data.shape
                 maskArray = np.zeros((nRows, nCols), dtype=np.uint32)
                 maskArray[colMask] = 1  # Set BAD bit for masked columns
@@ -1252,14 +1252,14 @@ def mad(x: np.ndarray) -> float:
     return 1.4826 * np.nanmedian(np.abs(x - med))
 
 
-def getColumnMask(img: NDArray[np.floating], k: int = 6) -> NDArray[np.bool_]:
+def getColumnMask(img: NDArray[np.floating], k: float = 6.0) -> NDArray[np.bool_]:
     """Return a boolean mask for bad columns based on robust median statistics.
 
     Parameters
     ----------
     img : `ndarray`
         2D image array.
-    k : `int`, optional
+    k : `float`, optional
         Threshold factor for MAD.
 
     Returns

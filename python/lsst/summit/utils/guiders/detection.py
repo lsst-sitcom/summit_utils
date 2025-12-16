@@ -91,9 +91,9 @@ class GuiderStarTrackerConfig:
     minSnr: float = 10.0
     minValidStampFraction: float = 0.5
     edgeMargin: int = 5
-    maxEllipticity: float = 0.5
+    maxEllipticity: float = 0.7
     cutOutSize: int = 50
-    aperSizeArcsec: float = 3.0
+    aperSizeArcsec: float = 5.0
     gain: float = 1.0
 
 
@@ -623,7 +623,7 @@ def buildReferenceCatalog(
             gain=gain,
         )
         if sources.empty:
-            log.warning(f"No sources detected in `buildReferenceCatalog`" f"for {guiderName} in {expId}. ")
+            log.warning(f"No sources detected in `buildReferenceCatalog`for {guiderName} in {expId}. ")
             continue
 
         sources.sort_values(by=["snr"], ascending=False, inplace=True)
