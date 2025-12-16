@@ -91,7 +91,7 @@ class GuiderData:
     isMedianSubtracted : `bool`, optional
         If True, the raw stamps have been subtracted.
     columnMaskK : `float`, optional
-        Threshold factor used for column mask detection (default 30.0).
+        Threshold factor used for column mask detection.
     view : `str`, optional
         Output view: 'dvcs', 'ccd', or 'roi'.
 
@@ -690,8 +690,8 @@ class GuiderReader:
         doSubtractMedian : `bool`, optional
             If True, subtract median row bias from each stamp.
         columnMaskK : `float`, optional
-            Threshold factor for column mask detection (default 30.0).
-            Column masking is applied BEFORE median row bias subtraction.
+            Threshold factor for column mask detection. Column masking is
+            applied BEFORE median row bias subtraction.
         scienceDetNum : `int`, optional
             Science detector number for WCS reference.
 
