@@ -38,7 +38,7 @@ from astropy.time import Time
 from numpy.typing import NDArray
 
 from lsst.afw import cameraGeom
-from lsst.afw.image import ExposureF, ImageF, MaskedImageF, VisitInfo
+from lsst.afw.image import ExposureF, ImageF, MaskedImageF, MaskX, VisitInfo
 from lsst.daf.butler import Butler, DatasetNotFoundError
 from lsst.meas.algorithms.stamps import Stamp, Stamps
 from lsst.obs.lsst import LsstCam
@@ -90,6 +90,8 @@ class GuiderData:
         Camera rotation angle in degrees.
     isMedianSubtracted : `bool`, optional
         If True, the raw stamps have been subtracted.
+    columnMaskK : `float`, optional
+        Threshold factor used for column mask detection (default 30.0).
     view : `str`, optional
         Output view: 'dvcs', 'ccd', or 'roi'.
 
@@ -132,6 +134,7 @@ class GuiderData:
     wcsMap: dict[str, "SkyWcs"]
     camRotAngle: float
     isMedianSubtracted: bool = False
+    columnMaskK: float = 50.0
     view: str = "dvcs"  # view type, either 'dvcs' or 'ccd' or 'roi'
 
     def __repr__(self) -> str:
@@ -258,8 +261,8 @@ class GuiderData:
     def printHeaderInfo(self) -> None:
         """Print a concise summary of key header fields."""
         print(f"Data Id: {self.expid}, filter-band: {self.header['filter']}")
-        print(f"ROI Shape (row, col): {self.header['roi_rows']}, " f"{self.header['roi_cols']}")
-        print(f"With nStamps {len(self)}" f" at {self.guiderFrequency} Hz")
+        print(f"ROI Shape (row, col): {self.header['roi_rows']}, {self.header['roi_cols']}")
+        print(f"With nStamps {len(self)} at {self.guiderFrequency} Hz")
         print(
             f"Acq. Start Time: {self.header['start_time']} \n"
             f"with readout duration: {self.header['guider_duration']:.2f} sec"
@@ -668,7 +671,12 @@ class GuiderReader:
         self.nGuiders = len(self.guiderNameMap)
 
     def get(
-        self, dayObs: int, seqNum: int, doSubtractMedian: bool = True, scienceDetNum: int = 94
+        self,
+        dayObs: int,
+        seqNum: int,
+        doSubtractMedian: bool = True,
+        columnMaskK: float = 50.0,
+        scienceDetNum: int = 94,
     ) -> GuiderData:
         """
         Retrieve guider data for a given dayObs / seqNum.
@@ -680,7 +688,10 @@ class GuiderReader:
         seqNum : `int`
             Sequence number.
         doSubtractMedian : `bool`, optional
-            If True, subtract median row bias from each stamp upon access.
+            If True, subtract median row bias from each stamp.
+        columnMaskK : `float`, optional
+            Threshold factor for column mask detection (default 30.0).
+            Column masking is applied BEFORE median row bias subtraction.
         scienceDetNum : `int`, optional
             Science detector number for WCS reference.
 
@@ -689,47 +700,47 @@ class GuiderReader:
         guiderData : `GuiderData`
             Assembled guider data object.
         """
-        # check if the guider name is swaped (dayObs < 20250509)
+        # Check if the guider name is swapped (dayObs < 20250509)
         # modifies self.guiderNameMap in place if necessary
         self.applyGuiderNameSwapIfNeeded(dayObs)
 
-        # 1. Get guider_raw stamps all guiders
+        # 1. Get guider_raw stamps for all guiders (never modified)
         rawStampsDict = self.getGuiderRawStamps(dayObs, seqNum)
 
-        # set the number of stamps
-        # determine the maximum number of stamps among all guiders
+        # Determine the maximum number of stamps among all guiders
         nStampsList = [len(stamps) for stamps in rawStampsDict.values()]
-        self.nStamps = max(nStampsList)
+        nStamps = max(nStampsList)
 
-        if self.nStamps <= 1:
+        if nStamps <= 1:
             raise RuntimeError(
-                f"Only {self.nStamps} stamps found for dayObs {dayObs}, seqNum {seqNum}. "
+                f"Only {nStamps} stamps found for dayObs {dayObs}, seqNum {seqNum}. "
                 "At least 2 stamps are required to create GuiderData."
             )
 
-        # Create a visitinfo dataId to get the WCS and camera rotation angle
+        # 2. Get WCS map and camera rotation angle
         visitInfo = getVisitInfo(self.butler, dayObs, seqNum, scienceDetNum)
-
-        # 2. Get WCS map for all guiders
         wcsMapDict = makeInitGuiderWcs(self.camera, visitInfo)
-
-        # 3. Get camera rotation angle
         camRotAngle = getCamRotAngle(visitInfo)
 
-        # 4. subtract median row bias if requested
-        if doSubtractMedian:
-            rawStampsDict = self.subtractMedianRowBias(rawStampsDict)
+        # 3. Process stamps: column mask FIRST, then median row bias
+        # This creates copies - raw stamps are never modified
+        processedStampsDict = self.processStamps(
+            rawStampsDict,
+            doSubtractMedian=doSubtractMedian,
+            columnMaskK=columnMaskK,
+        )
 
         # 4. Pack everything into a GuiderData object
         guiderData = GuiderData(
             seqNum=seqNum,
             dayObs=dayObs,
             view=self.view,
-            rawStampsMap=rawStampsDict,
+            rawStampsMap=processedStampsDict,
             guiderNameMap=self.guiderNameMap,
             wcsMap=wcsMapDict,
             camRotAngle=camRotAngle,
             isMedianSubtracted=doSubtractMedian,
+            columnMaskK=columnMaskK,
         )
         return guiderData
 
@@ -763,30 +774,87 @@ class GuiderReader:
                 raise DatasetNotFoundError(f"No data for {detName} on {dayObs=} {seqNum=}") from e
         return rawStamps
 
-    def subtractMedianRowBias(self, rawStampsDict: dict[str, Stamps]) -> dict[str, Stamps]:
+    def processStamps(
+        self,
+        rawStampsDict: dict[str, Stamps],
+        doSubtractMedian: bool = True,
+        columnMaskK: float = 50.0,
+    ) -> dict[str, Stamps]:
         """
-        Subtract median row bias from all raw stamps in-place.
+        Apply median row bias subtraction and per-stamp column masking.
 
-        This modifies the rawStampsMap of the GuiderReader instance.
+        Processing order: median row bias FIRST, then per-stamp column mask.
+        The mask is built on the bias-subtracted data to detect only residual
+        bad columns (e.g., bright saturated star trails) that were NOT removed
+        by the bias subtraction. Original stamps are never modified.
 
         Parameters
         ----------
         rawStampsDict : `dict[str, Stamps]`
-            ROI view of stamps that come from butler `guider_raw`.
+            ROI view of stamps from butler `guider_raw`.
+        doSubtractMedian : `bool`, optional
+            If True, subtract median row bias.
+        columnMaskK : `float`, optional
+            Threshold factor for column mask detection (default 50.0).
+            Higher values mask only brighter outlier columns.
+
+        Returns
+        -------
+        processedStamps : `dict[str, Stamps]`
+            New Stamps objects with processed (copied) data.
+            Per-stamp column masks are included in each stamp's MaskedImageF.
         """
+        processedStamps: dict[str, Stamps] = {}
+
         for detName, stamps in rawStampsDict.items():
-            # Subtract median along the row axis
-            rowAxis = 0
+            if len(stamps) == 0:
+                processedStamps[detName] = stamps
+                continue
+
+            stampList: list[Stamp] = []
             for i in range(len(stamps)):
-                # Get the stamp image array
-                data = stamps[i].stamp_im.image.array
-                # Subtract median along the specified row axis
-                medianRow = np.nanmedian(data, axis=rowAxis, keepdims=True)
-                # Update the stamp with the new data
-                stamps[i].stamp_im.image.array = data - medianRow
-            # Update the rawStampsMap in-place
-            rawStampsDict[detName] = stamps
-        return rawStampsDict
+                # Work on a copy - never modify original
+                data = stamps[i].stamp_im.image.array.copy()
+
+                # 0. Compute median row bias
+                medianRows = np.nanmedian(data, axis=0)
+                medianValue = np.nanmedian(data)
+                # Replace NaN medians (fully masked columns) with global median
+                medianRows = np.where(np.isnan(medianRows), medianValue, medianRows)
+
+                # 1. Apply column mask FIRST - set masked pixels to NaN for median calc
+                colMask = getColumnMask(data - medianRows[np.newaxis, :], k=columnMaskK)
+
+                # Create mask array for MaskedImageF (uint32 with BAD=1 for masked cols)
+                nRows, nCols = data.shape
+                maskArray = np.zeros((nRows, nCols), dtype=np.uint32)
+                maskArray[colMask] = 1  # Set BAD bit for masked columns
+
+                if doSubtractMedian:
+                    data = data - medianRows[np.newaxis, :]
+
+                # 3. Fill masked columns with global median
+                if colMask.any():
+                    medianValue = np.nanmedian(data[~colMask]) if (~colMask).any() else 0.0
+                    data[colMask] = medianValue
+
+                # Create MaskedImageF with image and mask
+                image = ImageF(array=data.astype(np.float32))
+                mask = MaskX(nCols, nRows)
+                mask.array[:] = maskArray
+                outImg = MaskedImageF(image, mask)
+
+                stampList.append(
+                    Stamp(
+                        stamp_im=outImg,
+                        archive_element=stamps[i].archive_element,
+                        metadata=stamps[i].metadata,
+                    )
+                )
+
+            processedStamps[detName] = Stamps(stampList, stamps.metadata, use_mask=True, use_archive=True)
+
+        return processedStamps
 
     def getAxisRowMap(self) -> dict[str, int]:
         """
@@ -898,7 +966,6 @@ def _convertMaskedImage(
     ampName: str,
     camera: Camera,
     view: str,
-    mask: None | np.ndarray = None,
 ) -> Stamp:
     """
     Convert one masked image ROI and build a Stamp.
@@ -921,8 +988,6 @@ def _convertMaskedImage(
         Camera object.
     view : `str`
         Output view ('dvcs', 'ccd', or 'roi').
-    mask: `ndarray or None`
-        Masked bad columns.
 
     Returns
     -------
@@ -931,9 +996,6 @@ def _convertMaskedImage(
     """
     ccdViewBbox, fwd, back = transforms
     rawArray = maskedImage.getImage().getArray()
-    if mask is not None:
-        median = np.nanmedian(rawArray[~mask].flatten())
-        rawArray[mask] = median
     dvcsArray = roiImageToDvcs(rawArray, metadata, detector, ampName, camera, view=view)
     outImg = MaskedImageF(dvcsArray)
     archiveElement = [ccdViewBbox, fwd, back]
@@ -1018,16 +1080,15 @@ def convertRawStampsToView(
     stampsDict: dict[int, Stamp] = {}
     mIdx = 0  # index into masked images list
 
-    # get bad columns
-    img0 = rawStamps.getMaskedImages()[mIdx].getImage().getArray()
-    mask = getColumnMask(img0, k=6)
+    # Column masking is now done in GuiderReader.processStamps() before this
+    # function is called, so we no longer need to compute or apply it here.
 
     for idx in validIndices:
         maskedImage = rawStamps.getMaskedImages()[mIdx]
         stampMeta = rawStamps[mIdx].metadata
         stampMeta["DAQSTAMP"] = stampMeta.get("DAQSTAMP", idx)
         stampsDict[idx] = _convertMaskedImage(
-            maskedImage, stampMeta, metadataDict, transforms, detector, ampName, camera, view, mask
+            maskedImage, stampMeta, metadataDict, transforms, detector, ampName, camera, view
         )
         mIdx += 1
 
