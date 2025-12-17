@@ -36,6 +36,7 @@ import matplotlib.pyplot as plt
 import numpy as np
 from astropy.time import Time
 from numpy.typing import NDArray
+from pydantic import BaseModel, ConfigDict, computed_field
 
 from lsst.afw import cameraGeom
 from lsst.afw.image import ExposureF, ImageF, MaskedImageF, MaskX, VisitInfo
@@ -65,8 +66,7 @@ def make_subplot(nrows=1, ncols=1, **fig_kwargs):
     return fig, axs
 
 
-@dataclass
-class GuiderData:
+class GuiderData(BaseModel):
     """
     LSST guider data container.
 
@@ -88,11 +88,11 @@ class GuiderData:
         Detector name to SkyWcs map.
     camRotAngle : `float`
         Camera rotation angle in degrees.
-    isMedianSubtracted : `bool`, optional
-        If True, the raw stamps have been subtracted.
-    columnMaskK : `float`, optional
+    isMedianSubtracted : `bool`
+        If True, the raw stamps have been median-subtracted.
+    columnMaskK : `float`
         Threshold factor used for column mask detection.
-    view : `str`, optional
+    view : `str`
         Output view: 'dvcs', 'ccd', or 'roi'.
 
     Cached properties
@@ -127,15 +127,17 @@ class GuiderData:
     guiderData[3]                # stamp from detNameMax
     """
 
+    model_config = ConfigDict(frozen=True, arbitrary_types_allowed=True)
+
     seqNum: int
     dayObs: int
     guiderNameMap: dict[str, int]
     rawStampsMap: dict[str, Stamps]
-    wcsMap: dict[str, "SkyWcs"]
+    wcsMap: dict[str, Any]
     camRotAngle: float
     isMedianSubtracted: bool = False
     columnMaskK: float = 50.0
-    view: str = "dvcs"  # view type, either 'dvcs' or 'ccd' or 'roi'
+    view: str = "dvcs"
 
     def __repr__(self) -> str:
         """
@@ -166,6 +168,7 @@ class GuiderData:
         """
         return len(self.rawStampsMap[self.detNameMax])
 
+    @computed_field  # type: ignore[prop-decorator]
     @cached_property
     def expid(self) -> int:
         """
@@ -178,6 +181,7 @@ class GuiderData:
         """
         return self.dayObs * 100000 + self.seqNum
 
+    @computed_field  # type: ignore[prop-decorator]
     @cached_property
     def guiderNames(self) -> list[str]:
         """
@@ -190,6 +194,7 @@ class GuiderData:
         """
         return sorted(list(self.guiderNameMap.keys()))
 
+    @computed_field  # type: ignore[prop-decorator]
     @cached_property
     def guiderIds(self) -> list[int]:
         """
@@ -202,6 +207,7 @@ class GuiderData:
         """
         return sorted(list(self.guiderNameMap.values()))
 
+    @computed_field  # type: ignore[prop-decorator]
     @cached_property
     def detNameMax(self) -> str:
         """
@@ -214,6 +220,7 @@ class GuiderData:
         """
         return max(self.rawStampsMap, key=lambda k: len(self.rawStampsMap[k]))
 
+    @computed_field  # type: ignore[prop-decorator]
     @cached_property
     def metadata(self) -> dict:
         """
@@ -226,6 +233,7 @@ class GuiderData:
         """
         return self.rawStampsMap[self.detNameMax].metadata.toDict()
 
+    @computed_field  # type: ignore[prop-decorator]
     @cached_property
     def header(self) -> dict[str, str | float | None]:
         """
@@ -268,6 +276,7 @@ class GuiderData:
             f"with readout duration: {self.header['guider_duration']:.2f} sec"
         )
 
+    @computed_field  # type: ignore[prop-decorator]
     @cached_property
     def weather(self) -> WeatherInfo:
         """
@@ -280,6 +289,7 @@ class GuiderData:
         """
         return WeatherInfo.fromMetadata(self.metadata)
 
+    @computed_field  # type: ignore[prop-decorator]
     @cached_property
     def timestampMap(self) -> dict[str, Time]:
         """
@@ -296,6 +306,7 @@ class GuiderData:
             timestampMap[detName] = standardizeGuiderTimestamps(stamps, nStamps)
         return timestampMap
 
+    @computed_field  # type: ignore[prop-decorator]
     @cached_property
     def guiderFrequency(self) -> float:
         """
@@ -312,6 +323,7 @@ class GuiderData:
         period_sec = np.median(np.diff(jd)) * 86400.0
         return float(1.0 / period_sec)
 
+    @computed_field  # type: ignore[prop-decorator]
     @cached_property
     def guiderDurationSec(self) -> float:
         """
@@ -327,6 +339,7 @@ class GuiderData:
         duration_sec = (jd[-1] - jd[0]) * 86400.0 + 1 / self.guiderFrequency
         return float(duration_sec)
 
+    @computed_field  # type: ignore[prop-decorator]
     @cached_property
     def stampsMap(self) -> dict[str, Stamps]:
         """
@@ -350,6 +363,7 @@ class GuiderData:
                 )
             return result
 
+    @computed_field  # type: ignore[prop-decorator]
     @cached_property
     def roiAmpNames(self) -> dict[str, str]:
         """
@@ -452,6 +466,7 @@ class GuiderData:
         except KeyError as e:
             raise KeyError(f"{detName!r} not found in wcsMap") from e
 
+    @computed_field  # type: ignore[prop-decorator]
     @cached_property
     def obsTime(self) -> Time:
         """
@@ -465,6 +480,7 @@ class GuiderData:
         gdstart = self.header["start_time"]
         return Time(gdstart, format="isot", scale="tai")
 
+    @computed_field  # type: ignore[prop-decorator]
     @cached_property
     def missingStampsMap(self) -> dict[str, int]:
         """
@@ -480,6 +496,7 @@ class GuiderData:
             nMissing[detName] = np.sum(timestamps.mask)
         return nMissing
 
+    @computed_field  # type: ignore[prop-decorator]
     @cached_property
     def nMissingStamps(self) -> int:
         """
@@ -492,6 +509,7 @@ class GuiderData:
         """
         return sum(self.missingStampsMap.values())
 
+    @computed_field  # type: ignore[prop-decorator]
     @cached_property
     def alt(self) -> float:
         """Return altitude (el_start) from the guider data header."""
@@ -500,6 +518,7 @@ class GuiderData:
             raise KeyError("Header key 'el_start' is missing or None")
         return float(raw)
 
+    @computed_field  # type: ignore[prop-decorator]
     @cached_property
     def az(self) -> float:
         """Return azimuth (az_start) from the guider data header."""
@@ -595,8 +614,9 @@ class GuiderData:
         arr = stamp.stamp_im.image.array
         return arr
 
+    @computed_field  # type: ignore[prop-decorator]
     @cached_property
-    def plotter(self):
+    def plotter(self) -> GuiderPlotter:
         return GuiderPlotter(self)
 
     def plotStamp(
@@ -690,8 +710,7 @@ class GuiderReader:
         doSubtractMedian : `bool`, optional
             If True, subtract median row bias from each stamp.
         columnMaskK : `float`, optional
-            Threshold factor for column mask detection. Column masking is
-            applied BEFORE median row bias subtraction.
+            Threshold factor for column mask detection.
         scienceDetNum : `int`, optional
             Science detector number for WCS reference.
 
@@ -704,7 +723,6 @@ class GuiderReader:
         # modifies self.guiderNameMap in place if necessary
         self.applyGuiderNameSwapIfNeeded(dayObs)
 
-        # 1. Get guider_raw stamps for all guiders (never modified)
         rawStampsDict = self.getGuiderRawStamps(dayObs, seqNum)
 
         # Determine the maximum number of stamps among all guiders
@@ -717,20 +735,15 @@ class GuiderReader:
                 "At least 2 stamps are required to create GuiderData."
             )
 
-        # 2. Get WCS map and camera rotation angle
         visitInfo = getVisitInfo(self.butler, dayObs, seqNum, scienceDetNum)
         wcsMapDict = makeInitGuiderWcs(self.camera, visitInfo)
         camRotAngle = getCamRotAngle(visitInfo)
 
-        # 3. Process stamps: column mask FIRST, then median row bias
-        # This creates copies - raw stamps are never modified
         processedStampsDict = self.processStamps(
             rawStampsDict,
-            doSubtractMedian=doSubtractMedian,
-            columnMaskK=columnMaskK,
+            doSubtractMedian,
+            columnMaskK,
         )
-
-        # 4. Pack everything into a GuiderData object
         guiderData = GuiderData(
             seqNum=seqNum,
             dayObs=dayObs,
@@ -777,16 +790,12 @@ class GuiderReader:
     def processStamps(
         self,
         rawStampsDict: dict[str, Stamps],
-        doSubtractMedian: bool = True,
-        columnMaskK: float = 50.0,
+        doSubtractMedian: bool,
+        columnMaskK: float,
     ) -> dict[str, Stamps]:
         """
         Apply median row bias subtraction and per-stamp column masking.
 
-        Processing order: median row bias FIRST, then per-stamp column mask.
-        The mask is built on the bias-subtracted data to detect only residual
-        bad columns (e.g., bright saturated star trails) that were NOT removed
-        by the bias subtraction. Original stamps are never modified.
 
         Parameters
         ----------
@@ -795,8 +804,7 @@ class GuiderReader:
         doSubtractMedian : `bool`, optional
             If True, subtract median row bias.
         columnMaskK : `float`, optional
-            Threshold factor for column mask detection (default 50.0).
-            Higher values mask only brighter outlier columns.
+            Threshold factor for column mask detection.
 
         Returns
         -------
@@ -816,13 +824,13 @@ class GuiderReader:
                 # Work on a copy - never modify original
                 data = stamps[i].stamp_im.image.array.copy()
 
-                # 0. Compute median row bias
+                # Compute median row bias
                 medianRows = np.nanmedian(data, axis=0)
                 medianValue = np.nanmedian(data)
                 # Replace NaN medians (fully masked columns) with global median
                 medianRows = np.where(np.isnan(medianRows), medianValue, medianRows)
 
-                # 1. Apply column mask FIRST - set masked pixels to NaN
+                # Compute column mask on bias-subtracted data
                 colMask = getColumnMask(data - medianRows[np.newaxis, :], k=columnMaskK)
 
                 # Create mask array for MaskedImageF (BAD=1 for masked cols)
@@ -830,12 +838,13 @@ class GuiderReader:
                 maskArray = np.zeros((nRows, nCols), dtype=np.uint32)
                 maskArray[colMask] = 1  # Set BAD bit for masked columns
 
+                # Apply median row bias subtraction
                 if doSubtractMedian:
                     data = data - medianRows[np.newaxis, :]
 
-                # 3. Fill masked columns with global median
+                # Fill masked columns with global median
                 if colMask.any():
-                    medianValue = np.nanmedian(data[~colMask]) if (~colMask).any() else 0.0
+                    medianValue = np.nanmedian(data[~colMask]) if (~colMask).any() else np.nan
                     data[colMask] = medianValue
 
                 # Create MaskedImageF with image and mask
