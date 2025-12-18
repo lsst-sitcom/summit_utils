@@ -36,27 +36,6 @@ if TYPE_CHECKING:
 from .detection import GuiderStarTrackerConfig, buildReferenceCatalog, makeBlankCatalog, trackStarAcrossStamp
 
 
-def _selectBrighestStar(refCatalog: pd.DataFrame, guiderName: str) -> tuple[float, float]:
-    """
-    Select the brightest star from the reference catalog for a given guider.
-
-    Parameters
-    ----------
-    refCatalog : `pd.DataFrame`
-        Reference catalog with star positions and SNR.
-    guiderName : `str`
-        Name of the guider.
-
-    Returns
-    -------
-    (xroi, yroi) : `tuple[float, float]`
-        Coordinates of the brightest star in the ROI.
-    """
-    ref = refCatalog[refCatalog["detector"] == guiderName].copy()
-    ref.sort_values(by=["snr"], ascending=False, inplace=True)
-    return (ref["xroi"].values[0], ref["yroi"].values[0])
-
-
 class GuiderStarTracker:
     """
     Class to track stars in the Guider data.
@@ -153,6 +132,9 @@ class GuiderStarTracker:
         """
         Track stars for a single guider using the reference catalog.
 
+        Iteratively tries to track stars starting with the highest SNR,
+        and falls back to the next best candidates if quality cuts fail.
+
         Parameters
         ----------
         refCatalog : `pd.DataFrame`
@@ -169,23 +151,45 @@ class GuiderStarTracker:
         shape = self.shape
         cfg = self.config
 
-        # Select the brightest star from the reference catalog
-        refCenter = _selectBrighestStar(refCatalog, guiderName)
+        # Sort by SNR (brightest first) for iterative fallback
+        refCatalogSorted = refCatalog.sort_values(by="snr", ascending=False).reset_index(drop=True)
 
-        # Measure the stars across all stamps for this guider
-        starStamps = trackStarAcrossStamp(refCenter, gd, guiderName, cfg)
+        stars = None
+        for idx, row in refCatalogSorted.iterrows():
+            refCenter = (row["xroi"], row["yroi"])
+            starSnr = row["snr"]
 
-        # Apply quality cuts to the tracked stars
-        stars = applyQualityCuts(starStamps, shape, cfg)
+            self.log.debug(f"Attempting to track star {idx + 1} (SNR={starSnr:.2f}) for {guiderName}")
 
-        # Filter by minimum number of detections
-        minStampDetections = int(len(gd) * cfg.minValidStampFraction)
-        mask = stars["stamp"].groupby(stars["detector"]).transform("count") >= minStampDetections
-        stars = stars[mask].copy()
+            # Measure the stars across all stamps for this guider
+            starStamps = trackStarAcrossStamp(refCenter, gd, guiderName, cfg)
 
-        if stars.empty:
+            if starStamps.empty:
+                self.log.debug(f"Star {idx + 1} produced no detections")
+                continue
+
+            # Apply quality cuts to the tracked stars
+            stars = applyQualityCuts(starStamps, shape, cfg)
+
+            # Filter by minimum number of detections
+            minStampDetections = int(len(gd) * cfg.minValidStampFraction)
+            mask = stars["stamp"].groupby(stars["detector"]).transform("count") >= minStampDetections
+            stars = stars[mask].copy()
+
+            if not stars.empty:
+                self.log.debug(
+                    f"Successfully tracked star {idx + 1} (SNR={starSnr:.2f}) "
+                    f"for {guiderName} with {len(stars)} detections"
+                )
+                break
+            else:
+                self.log.debug(f"Star {idx + 1} (SNR={starSnr:.2f}) failed quality cuts for {guiderName}")
+                stars = None
+
+        if stars is None or stars.empty:
             self.log.warning(
-                f"No tracked stars passed the quality cuts" f" for {guiderName} in {self.expid}."
+                f"No stars passed quality cuts for {guiderName} in {self.expid}. "
+                f"Tried {len(refCatalogSorted)} candidates."
             )
             return self.blankStars
 
