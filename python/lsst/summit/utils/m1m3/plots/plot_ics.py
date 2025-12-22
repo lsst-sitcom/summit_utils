@@ -45,8 +45,10 @@ __all__ = [
     "plot_stable_region",
     "plot_hp_measured_data",
     "HP_BREAKAWAY_LIMIT",
-    "HP_FATIGUE_LIMIT",
-    "HP_OPERATIONAL_LIMIT",
+    "HP_FATIGUE_LIMIT_COMPRESSION",
+    "HP_FATIGUE_LIMIT_TENSION",
+    "HP_OPERATIONAL_LIMIT_COMPRESSION",
+    "HP_OPERATIONAL_LIMIT_TENSION",
     "FIGURE_WIDTH",
     "FIGURE_HEIGHT",
 ]
@@ -55,10 +57,12 @@ __all__ = [
 HP_BREAKAWAY_LIMIT: float = 3000  # [N]
 
 # limit that can still damage the mirror with fatigue
-HP_FATIGUE_LIMIT: float = 900  # [N]
+HP_FATIGUE_LIMIT_COMPRESSION: float = 1042  # [N]
+HP_FATIGUE_LIMIT_TENSION: float = -1163.25  # [N]
 
 # desired operational limit
-HP_OPERATIONAL_LIMIT: float = 450  # [N]
+HP_OPERATIONAL_LIMIT_COMPRESSION: float = 521  # [N]
+HP_OPERATIONAL_LIMIT_TENSION: float = 581  # [N]
 
 FIGURE_WIDTH = 10
 FIGURE_HEIGHT = 7
@@ -221,13 +225,13 @@ def add_hp_limits(ax: plt.Axes) -> list[plt.Line2D]:
             "ls": "-",
         },
         "Repeated Load Limit (30% breakaway)": {
-            "pos_limit": HP_FATIGUE_LIMIT,
-            "neg_limit": -HP_FATIGUE_LIMIT,
+            "pos_limit": HP_FATIGUE_LIMIT_COMPRESSION,
+            "neg_limit": HP_FATIGUE_LIMIT_TENSION,
             "ls": "--",
         },
         "Normal Ops Limit (15% breakaway)": {
-            "pos_limit": HP_OPERATIONAL_LIMIT,
-            "neg_limit": -HP_OPERATIONAL_LIMIT,
+            "pos_limit": HP_OPERATIONAL_LIMIT_COMPRESSION,
+            "neg_limit": HP_OPERATIONAL_LIMIT_TENSION,
             "ls": ":",
         },
     }
