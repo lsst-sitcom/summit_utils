@@ -20,7 +20,7 @@
 # along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
 import dataclasses
-import os
+import importlib.resources
 from typing import Any
 
 import numpy as np
@@ -35,7 +35,6 @@ from lsst.ip.isr import IsrTask
 from lsst.ip.isr.isrTask import IsrTaskConnections
 from lsst.meas.algorithms.installGaussianPsf import InstallGaussianPsfTask
 from lsst.pipe.tasks.characterizeImage import CharacterizeImageTask
-from lsst.utils import getPackageDir
 
 __all__ = ["QuickLookIsrTask", "QuickLookIsrTaskConfig"]
 
@@ -206,8 +205,8 @@ class QuickLookIsrTask(pipeBase.PipelineTask):
         """
         if not isrBaseConfig:
             isrConfig = IsrTask.ConfigClass()
-            packageDir = getPackageDir("summit_utils")
-            isrConfig.load(os.path.join(packageDir, "config", "quickLookIsr.py"))
+            with importlib.resources.path("lsst.summit.utils", "resources/config/quickLookIsr.py") as cfgPath:
+                isrConfig.load(cfgPath)
         else:
             isrConfig = isrBaseConfig
 
