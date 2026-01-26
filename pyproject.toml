@@ -27,5 +27,4 @@ target-version = "py311"
 exclude = [
     "__init__.py",
     "config/*",
-    "python/lsst/summit/utils/resources/*/*.py",
 ]

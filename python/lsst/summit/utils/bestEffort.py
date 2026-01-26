@@ -19,8 +19,8 @@
 # You should have received a copy of the GNU General Public License
 # along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
-import importlib.resources
 import logging
+import os
 from typing import Any
 
 import lsst.afw.image as afwImage
@@ -30,6 +30,7 @@ from lsst.ip.isr import IsrTask
 from lsst.pex.config import Config
 from lsst.summit.utils.butlerUtils import getLatissDefaultCollections
 from lsst.summit.utils.quickLook import QuickLookIsrTask
+from lsst.utils import getPackageDir
 
 # TODO: add attempt for fringe once registry & templates are fixed
 
@@ -239,8 +240,8 @@ class BestEffortIsr:
 
         # default options that are probably good for most engineering time
         isrConfig = IsrTask.ConfigClass()
-        with importlib.resources.path("lsst.summit.utils", "resources/config/quickLookIsr.py") as cfgPath:
-            isrConfig.load(cfgPath)
+        packageDir = getPackageDir("summit_utils")
+        isrConfig.load(os.path.join(packageDir, "config", "quickLookIsr.py"))
 
         # apply general overrides
         self._applyConfigOverrides(isrConfig, self.defaultExtraIsrOptions)
