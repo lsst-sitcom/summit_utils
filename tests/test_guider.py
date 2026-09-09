@@ -288,7 +288,7 @@ class GuiderTestCase(unittest.TestCase):
 
 
 class IsBlankImageTestCase(unittest.TestCase):
-    """Pure-function tests for isBlankImage; no butler required."""
+    """Pure-function tests for isBlankImage (no butler)."""
 
     def test_blank_image_is_blank(self) -> None:
         rng = np.random.default_rng(0)
@@ -314,7 +314,7 @@ class IsBlankImageTestCase(unittest.TestCase):
 
 
 class DiagnoseQualityCutRejectionsTestCase(unittest.TestCase):
-    """Pure-function tests for _diagnoseQualityCutRejections; no butler required."""
+    """Pure-function tests for _diagnoseQualityCutRejections (no butler)."""
 
     def setUp(self) -> None:
         self.config = GuiderStarTrackerConfig()
@@ -322,8 +322,15 @@ class DiagnoseQualityCutRejectionsTestCase(unittest.TestCase):
 
     def test_low_snr_reported(self) -> None:
         stars = pd.DataFrame(
-            {"snr": [1.0], "flux": [100.0], "flux_err": [10.0], "e1": [0.0], "e2": [0.0],
-             "xroi": [200.0], "yroi": [200.0]}
+            {
+                "snr": [1.0],
+                "flux": [100.0],
+                "flux_err": [10.0],
+                "e1": [0.0],
+                "e2": [0.0],
+                "xroi": [200.0],
+                "yroi": [200.0],
+            }
         )
         reasons = _diagnoseQualityCutRejections(stars, self.shape, self.config)
         self.assertEqual(len(reasons), 1)
@@ -331,24 +338,45 @@ class DiagnoseQualityCutRejectionsTestCase(unittest.TestCase):
 
     def test_high_ellipticity_reported(self) -> None:
         stars = pd.DataFrame(
-            {"snr": [50.0], "flux": [100.0], "flux_err": [10.0], "e1": [0.9], "e2": [0.0],
-             "xroi": [200.0], "yroi": [200.0]}
+            {
+                "snr": [50.0],
+                "flux": [100.0],
+                "flux_err": [10.0],
+                "e1": [0.9],
+                "e2": [0.0],
+                "xroi": [200.0],
+                "yroi": [200.0],
+            }
         )
         reasons = _diagnoseQualityCutRejections(stars, self.shape, self.config)
         self.assertIn("e=", reasons[0])
 
     def test_edge_position_reported(self) -> None:
         stars = pd.DataFrame(
-            {"snr": [50.0], "flux": [100.0], "flux_err": [10.0], "e1": [0.0], "e2": [0.0],
-             "xroi": [1.0], "yroi": [1.0]}
+            {
+                "snr": [50.0],
+                "flux": [100.0],
+                "flux_err": [10.0],
+                "e1": [0.0],
+                "e2": [0.0],
+                "xroi": [1.0],
+                "yroi": [1.0],
+            }
         )
         reasons = _diagnoseQualityCutRejections(stars, self.shape, self.config)
         self.assertIn("edge", reasons[0])
 
     def test_passing_star_has_no_reason_string(self) -> None:
         stars = pd.DataFrame(
-            {"snr": [50.0], "flux": [100.0], "flux_err": [10.0], "e1": [0.0], "e2": [0.0],
-             "xroi": [200.0], "yroi": [200.0]}
+            {
+                "snr": [50.0],
+                "flux": [100.0],
+                "flux_err": [10.0],
+                "e1": [0.0],
+                "e2": [0.0],
+                "xroi": [200.0],
+                "yroi": [200.0],
+            }
         )
         reasons = _diagnoseQualityCutRejections(stars, self.shape, self.config)
         self.assertEqual(reasons[0], "?")
