@@ -870,7 +870,7 @@ class GuiderReader:
 
                 # Compute column mask on bias-subtracted data
                 colMask = getColumnMask(
-                    data - percRows[np.newaxis, :] - (rPerc - medianValue),
+                    data - percRows[np.newaxis, :] + (rPerc - medianValue),
                     k=columnMaskK,
                 )
 
@@ -881,7 +881,7 @@ class GuiderReader:
 
                 # Apply column bias subtraction
                 if doSubtractMedian:
-                    data = data - percRows[np.newaxis, :] - (rPerc - medianValue)
+                    data = data - percRows[np.newaxis, :] + (rPerc - medianValue)
 
                 # Fill masked columns with global median
                 if colMask.any():
