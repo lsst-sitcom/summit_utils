@@ -28,6 +28,7 @@ from lsst.geom import LinearTransform, radians
 
 __all__ = [
     "convertE1E2",
+    "convertIxxIyyIxy"
 ]
 
 logger = logging.getLogger(__name__)
