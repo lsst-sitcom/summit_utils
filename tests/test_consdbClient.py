@@ -167,6 +167,19 @@ def test_insert_flexible_metadata(client: ConsDbClient) -> None:
     obs_type = "exposure"
     with pytest.raises(ValueError):
         client.insert_flexible_metadata(instrument, obs_type, 271828)
+    responses.post(
+        "http://example.com/consdb/flex/latiss/exposure/obs/271828/update",
+        json={"message": "Flexible metadata inserted"},
+        match=[responses.matchers.json_params_matcher({"values": {"int_key": 42}})],
+    )
+    responses.post(
+        "http://example.com/consdb/flex/latiss/exposure/obs/271828/update?u=1",
+        json={"message": "Flexible metadata inserted"},
+        match=[responses.matchers.query_param_matcher({"u": "1"})],
+    )
+    client.insert_flexible_metadata(instrument, obs_type, 271828, {"int_key": 42})
+    client.insert_flexible_metadata(instrument, obs_type, 271828, int_key=43, allow_update=True)
+    assert len(responses.calls) == 2
     # TODO: more POST tests
 
 

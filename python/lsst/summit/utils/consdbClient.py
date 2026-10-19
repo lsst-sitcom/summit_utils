@@ -520,6 +520,7 @@ class ConsDbClient:
             quote(obs_type),
             "obs",
             quote(str(obs_id)),
+            "update",
         )
         if allow_update:
             url += "?u=1"
